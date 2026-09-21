@@ -545,7 +545,7 @@ class AudioEngine {
   // dipakai, dan HAPUS file SF2 lama dari /public supaya tidak ada
   // kemungkinan tersandung nama file basi lagi.
   // -------------------------------------------------------------------
-  private static readonly PRIMARY_SOUNDFONT_PATH = '/just t4.sf2'; // TODO: ganti ke nama file PERSIS (lihat catatan di bawah)
+  private static readonly PRIMARY_SOUNDFONT_PATH = 'https://huggingface.co/Laerous77/playmuzeck-assets/resolve/main/soundfont.sf2'; 
   private static readonly FALLBACK_SOUNDFONT_PATHS = [
     '/just t4.sf2',
     '/soundfont.sf2',
@@ -557,7 +557,6 @@ class AudioEngine {
 
     const candidatePaths = [
       AudioEngine.PRIMARY_SOUNDFONT_PATH,
-      encodeURI(AudioEngine.PRIMARY_SOUNDFONT_PATH),
       ...AudioEngine.FALLBACK_SOUNDFONT_PATHS,
     ];
 
