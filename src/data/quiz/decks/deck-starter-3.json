@@ -1,0 +1,143 @@
+{
+  "id": "deck-starter-3",
+  "topicId": "musik",
+  "title": "Teori Musik & Gelombang Akustik",
+  "description": "Struktur progresi harmoni, notasi partitur, interval tangga nada, dan dinamika resonansi suara.",
+  "cardCount": 10,
+  "difficulty": "Sulit",
+  "isFree": true,
+  "price": 0,
+  "badge": "Musik",
+  "questions": [
+    {
+      "id": "q-s3-1",
+      "question": "Jarak interval nada antara C ke G pada tangga nada diatonik mayor disebut...",
+      "options": [
+        "Terts Mayor",
+        "Kuart Murni",
+        "Kuint Murni",
+        "Sekst Minor"
+      ],
+      "correctIndex": 2,
+      "explanation": "Jarak C ke G berjarak 7 semitone (Perfect Fifth).",
+      "category": "Teori Musik"
+    },
+    {
+      "id": "q-s3-2",
+      "question": "Tanda kunci yang paling umum digunakan untuk instrumen bernada tinggi seperti biola adalah...",
+      "options": [
+        "Kunci Bass",
+        "Kunci G (Treble)",
+        "Kunci Alto",
+        "Kunci Tenor"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kunci G atau kunci treble umum dipakai untuk instrumen bernada tinggi seperti biola dan flute.",
+      "category": "Notasi Musik"
+    },
+    {
+      "id": "q-s3-3",
+      "question": "Akor yang terdiri dari nada dasar, terts mayor, dan kuint murni disebut akor...",
+      "options": [
+        "Minor",
+        "Mayor",
+        "Diminished",
+        "Augmented"
+      ],
+      "correctIndex": 1,
+      "explanation": "Akor mayor tersusun dari nada dasar, interval terts mayor, dan kuint murni.",
+      "category": "Harmoni"
+    },
+    {
+      "id": "q-s3-4",
+      "question": "Satuan yang digunakan untuk mengukur frekuensi gelombang bunyi adalah...",
+      "options": [
+        "Desibel",
+        "Hertz",
+        "Ohm",
+        "Watt"
+      ],
+      "correctIndex": 1,
+      "explanation": "Hertz (Hz) adalah satuan frekuensi yang menunjukkan jumlah gelombang bunyi per detik.",
+      "category": "Akustik"
+    },
+    {
+      "id": "q-s3-5",
+      "question": "Tempo musik yang berjalan sangat lambat, sekitar 40-60 BPM, disebut...",
+      "options": [
+        "Allegro",
+        "Largo",
+        "Presto",
+        "Vivace"
+      ],
+      "correctIndex": 1,
+      "explanation": "Largo adalah istilah tempo yang menunjukkan kecepatan sangat lambat dalam musik.",
+      "category": "Teori Musik"
+    },
+    {
+      "id": "q-s3-6",
+      "question": "Progresi akor populer I-IV-V-I dalam tangga nada C Mayor terdiri dari akor...",
+      "options": [
+        "C-F-G-C",
+        "C-D-E-C",
+        "C-Am-F-C",
+        "C-G-Am-C"
+      ],
+      "correctIndex": 0,
+      "explanation": "Progresi I-IV-V-I dalam C Mayor menghasilkan urutan akor C-F-G-C.",
+      "category": "Harmoni"
+    },
+    {
+      "id": "q-s3-7",
+      "question": "Fenomena akustik ketika suara memantul kembali setelah mengenai permukaan keras disebut...",
+      "options": [
+        "Resonansi",
+        "Gema (Echo)",
+        "Interferensi",
+        "Distorsi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Gema atau echo terjadi saat gelombang bunyi dipantulkan kembali oleh permukaan keras.",
+      "category": "Akustik"
+    },
+    {
+      "id": "q-s3-8",
+      "question": "Tanda birama 3/4 pada partitur musik menunjukkan bahwa setiap birama terdiri dari...",
+      "options": [
+        "3 ketuk not seperempat",
+        "4 ketuk not seperempat",
+        "3 ketuk not seperdelapan",
+        "4 ketuk not setengah"
+      ],
+      "correctIndex": 0,
+      "explanation": "Tanda birama 3/4 berarti setiap birama berisi 3 ketukan bernilai not seperempat, umum dipakai pada musik waltz.",
+      "category": "Notasi Musik"
+    },
+    {
+      "id": "q-s3-9",
+      "question": "Instrumen yang menghasilkan bunyi dengan cara digesek adalah...",
+      "options": [
+        "Gitar",
+        "Biola",
+        "Piano",
+        "Drum"
+      ],
+      "correctIndex": 1,
+      "explanation": "Biola menghasilkan bunyi dengan cara digesek menggunakan busur (bow) pada senarnya.",
+      "category": "Organologi"
+    },
+    {
+      "id": "q-s3-10",
+      "question": "Komposer legendaris yang menciptakan \"Symphony No. 9\" meski dalam kondisi tuli adalah...",
+      "options": [
+        "Wolfgang Amadeus Mozart",
+        "Ludwig van Beethoven",
+        "Johann Sebastian Bach",
+        "Franz Schubert"
+      ],
+      "correctIndex": 1,
+      "explanation": "Ludwig van Beethoven menggubah Symphony No. 9 di masa ia sudah kehilangan pendengarannya secara total.",
+      "category": "Sejarah Musik"
+    }
+  ]
+}

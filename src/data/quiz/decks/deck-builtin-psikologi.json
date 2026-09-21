@@ -1,0 +1,431 @@
+{
+  "id": "deck-builtin-psikologi",
+  "topicId": "psikologi",
+  "title": "Psikologi: Perilaku, Pikiran & Kepribadian",
+  "description": "Jelajahi teori tokoh besar psikologi, eksperimen klasik, ilusi optik, dan cara kerja pikiran manusia.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Psikologi",
+  "questions": [
+    {
+      "id": "q-psi-01",
+      "question": "Neurolog Austria pada foto ini dikenal sebagai bapak psikoanalisis. Namanya ...",
+      "options": [
+        "Carl Jung",
+        "Sigmund Freud",
+        "Alfred Adler",
+        "Erik Erikson"
+      ],
+      "correctIndex": 1,
+      "explanation": "Sigmund Freud (1856–1939) mengembangkan teori alam bawah sadar dan struktur id, ego, superego.",
+      "category": "Tokoh Psikologi",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Sigmund Freud LIFE.jpg",
+      "mediaCredit": "Sigmund Freud LIFE.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Sigmund_Freud_LIFE.jpg"
+    },
+    {
+      "id": "q-psi-02",
+      "question": "Ilmuwan Rusia pada foto ini terkenal dengan eksperimen anjing dan bel. Ia menemukan ...",
+      "options": [
+        "Pengkondisian klasik",
+        "Pengkondisian operan",
+        "Belajar sosial",
+        "Psikoanalisis"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ivan Pavlov menunjukkan bahwa stimulus netral (bel) bisa memicu air liur setelah dipasangkan dengan makanan.",
+      "category": "Behaviorisme",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Ivan Pavlov LIFE.jpg",
+      "mediaCredit": "Ivan Pavlov LIFE.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Ivan_Pavlov_LIFE.jpg"
+    },
+    {
+      "id": "q-psi-03",
+      "question": "Psikolog Amerika pada foto ini mengembangkan 'kotak Skinner' dan teori pengkondisian operan. Namanya ...",
+      "options": [
+        "John B. Watson",
+        "B.F. Skinner",
+        "Albert Bandura",
+        "Edward Thorndike"
+      ],
+      "correctIndex": 1,
+      "explanation": "B.F. Skinner (1904–1990) meneliti bagaimana perilaku dibentuk oleh penguat dan hukuman.",
+      "category": "Behaviorisme",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/B.F. Skinner at Harvard circa 1950.jpg",
+      "mediaCredit": "B.F. Skinner at Harvard circa 1950.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:B.F._Skinner_at_Harvard_circa_1950.jpg"
+    },
+    {
+      "id": "q-psi-04",
+      "question": "Diagram piramida kebutuhan pada gambar ini dikembangkan oleh ...",
+      "options": [
+        "Abraham Maslow",
+        "Carl Rogers",
+        "Erik Erikson",
+        "Jean Piaget"
+      ],
+      "correctIndex": 0,
+      "explanation": "Hierarki kebutuhan Maslow bergerak dari kebutuhan fisiologis hingga aktualisasi diri.",
+      "category": "Motivasi",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/MaslowsHierarchyOfNeeds.svg",
+      "mediaCredit": "MaslowsHierarchyOfNeeds.svg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:MaslowsHierarchyOfNeeds.svg"
+    },
+    {
+      "id": "q-psi-05",
+      "question": "Pada ilusi optik ini, dua garis tampak berbeda panjang padahal sama. Ilusi ini bernama ...",
+      "options": [
+        "Ilusi Müller-Lyer",
+        "Ilusi Ponzo",
+        "Ilusi Kubus Necker",
+        "Ilusi Ebbinghaus"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ilusi Müller-Lyer menunjukkan persepsi kita dipengaruhi konteks visual, bukan hanya ukuran nyata.",
+      "category": "Persepsi",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Müller-Lyer illusion.svg",
+      "mediaCredit": "Müller-Lyer illusion.svg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Müller-Lyer_illusion.svg"
+    },
+    {
+      "id": "q-psi-06",
+      "question": "Gambar 'vas Rubin' ini bisa dilihat sebagai vas atau dua wajah. Fenomena ini menggambarkan prinsip ...",
+      "options": [
+        "Figur–latar (figure-ground)",
+        "Disonansi kognitif",
+        "Efek halo",
+        "Pengkondisian klasik"
+      ],
+      "correctIndex": 0,
+      "explanation": "Prinsip figur–latar dari psikologi Gestalt menjelaskan bagaimana otak memisahkan objek dari latarnya.",
+      "category": "Persepsi",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Rubin2.jpg",
+      "mediaCredit": "Rubin2.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Rubin2.jpg"
+    },
+    {
+      "id": "q-psi-07",
+      "question": "Grafik ini menunjukkan penurunan ingatan seiring waktu. Kurva ini dikembangkan oleh ...",
+      "options": [
+        "Hermann Ebbinghaus",
+        "William James",
+        "Wilhelm Wundt",
+        "Ulric Neisser"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ebbinghaus (1885) meneliti kecepatan orang melupakan informasi baru tanpa pengulangan.",
+      "category": "Memori",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Forgetting curve.svg",
+      "mediaCredit": "Forgetting curve.svg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Forgetting_curve.svg"
+    },
+    {
+      "id": "q-psi-08",
+      "question": "Teori perkembangan kognitif empat tahap (sensorimotor, praoperasional, dll.) dikemukakan oleh ...",
+      "options": [
+        "Lev Vygotsky",
+        "Jean Piaget",
+        "Jerome Bruner",
+        "Erik Erikson"
+      ],
+      "correctIndex": 1,
+      "explanation": "Jean Piaget membagi perkembangan kognitif anak menjadi empat tahap.",
+      "category": "Perkembangan"
+    },
+    {
+      "id": "q-psi-09",
+      "question": "Tipe kepribadian 'introvert' dan 'ekstrovert' dipopulerkan oleh ...",
+      "options": [
+        "Carl Jung",
+        "Hans Eysenck",
+        "Sigmund Freud",
+        "Gordon Allport"
+      ],
+      "correctIndex": 0,
+      "explanation": "Carl Jung memperkenalkan istilah ini dalam teori tipe psikologisnya.",
+      "category": "Kepribadian"
+    },
+    {
+      "id": "q-psi-10",
+      "question": "Model kepribadian 'Big Five' terdiri dari keterbukaan, kehati-hatian, ekstroversi, keramahan, dan ...",
+      "options": [
+        "Neurotisisme",
+        "Psikotisisme",
+        "Introversi",
+        "Kreativitas"
+      ],
+      "correctIndex": 0,
+      "explanation": "Lima faktornya sering disingkat OCEAN.",
+      "category": "Kepribadian"
+    },
+    {
+      "id": "q-psi-11",
+      "question": "Tes kecerdasan modern pertama dikembangkan oleh Alfred Binet dan Théodore Simon di negara ...",
+      "options": [
+        "Jerman",
+        "Prancis",
+        "Inggris",
+        "Austria"
+      ],
+      "correctIndex": 1,
+      "explanation": "Tes Binet–Simon (1905) dirancang untuk mengidentifikasi anak yang butuh bantuan belajar.",
+      "category": "Tes Psikologi"
+    },
+    {
+      "id": "q-psi-12",
+      "question": "Eksperimen kepatuhan pada figur otoritas dengan 'kejutan listrik' dilakukan oleh ...",
+      "options": [
+        "Stanley Milgram",
+        "Philip Zimbardo",
+        "Solomon Asch",
+        "Leon Festinger"
+      ],
+      "correctIndex": 0,
+      "explanation": "Milgram (1961) menemukan banyak orang bersedia patuh meski diminta menyakiti orang lain.",
+      "category": "Psikologi Sosial"
+    },
+    {
+      "id": "q-psi-13",
+      "question": "Eksperimen 'Penjara Stanford' (1971) dipimpin oleh ...",
+      "options": [
+        "Philip Zimbardo",
+        "Stanley Milgram",
+        "Albert Bandura",
+        "Harry Harlow"
+      ],
+      "correctIndex": 0,
+      "explanation": "Zimbardo meneliti bagaimana peran sosial memengaruhi perilaku.",
+      "category": "Psikologi Sosial"
+    },
+    {
+      "id": "q-psi-14",
+      "question": "Kecenderungan orang enggan menolong saat banyak saksi hadir disebut efek ...",
+      "options": [
+        "Bystander",
+        "Halo",
+        "Placebo",
+        "Dunning-Kruger"
+      ],
+      "correctIndex": 0,
+      "explanation": "Efek penonton (bystander) muncul karena difusi tanggung jawab.",
+      "category": "Psikologi Sosial"
+    },
+    {
+      "id": "q-psi-15",
+      "question": "Ketidaknyamanan mental saat keyakinan dan tindakan seseorang saling bertentangan disebut ...",
+      "options": [
+        "Disonansi kognitif",
+        "Efek halo",
+        "Amnesia disosiatif",
+        "Bias retrospeksi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Leon Festinger memperkenalkan teori disonansi kognitif pada 1957.",
+      "category": "Psikologi Sosial"
+    },
+    {
+      "id": "q-psi-16",
+      "question": "Efek di mana orang berkemampuan rendah cenderung melebih-lebihkan kemampuannya disebut efek ...",
+      "options": [
+        "Dunning-Kruger",
+        "Mozart",
+        "Barnum",
+        "Pygmalion"
+      ],
+      "correctIndex": 0,
+      "explanation": "Efek Dunning-Kruger dideskripsikan David Dunning dan Justin Kruger pada 1999.",
+      "category": "Kognisi"
+    },
+    {
+      "id": "q-psi-17",
+      "question": "Kecenderungan mencari informasi yang mendukung keyakinan yang sudah ada disebut bias ...",
+      "options": [
+        "Konfirmasi",
+        "Sintas",
+        "Jangkar",
+        "Ketersediaan"
+      ],
+      "correctIndex": 0,
+      "explanation": "Bias konfirmasi membuat kita mengabaikan bukti yang bertentangan.",
+      "category": "Kognisi"
+    },
+    {
+      "id": "q-psi-18",
+      "question": "Perbaikan kondisi setelah menerima pengobatan tanpa zat aktif disebut efek ...",
+      "options": [
+        "Plasebo",
+        "Nosebo",
+        "Halo",
+        "Rebound"
+      ],
+      "correctIndex": 0,
+      "explanation": "Efek plasebo menunjukkan kuatnya pengaruh ekspektasi terhadap kondisi tubuh.",
+      "category": "Kesehatan Mental"
+    },
+    {
+      "id": "q-psi-19",
+      "question": "Bagian otak yang berperan utama dalam pengolahan emosi seperti rasa takut adalah ...",
+      "options": [
+        "Amigdala",
+        "Serebelum",
+        "Korpus kalosum",
+        "Talamus"
+      ],
+      "correctIndex": 0,
+      "explanation": "Amigdala terlibat dalam respons ketakutan dan pemrosesan emosi.",
+      "category": "Otak"
+    },
+    {
+      "id": "q-psi-20",
+      "question": "Bagian otak yang penting untuk pembentukan ingatan jangka panjang baru adalah ...",
+      "options": [
+        "Hipokampus",
+        "Medula",
+        "Hipotalamus",
+        "Pons"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kerusakan hipokampus dapat menyebabkan amnesia anterograde.",
+      "category": "Otak"
+    },
+    {
+      "id": "q-psi-21",
+      "question": "Fase tidur ketika mimpi paling jelas terjadi adalah ...",
+      "options": [
+        "REM",
+        "NREM tahap 1",
+        "NREM tahap 3",
+        "Tidur delta"
+      ],
+      "correctIndex": 0,
+      "explanation": "REM (Rapid Eye Movement) ditandai gerak mata cepat dan aktivitas otak tinggi.",
+      "category": "Tidur & Mimpi"
+    },
+    {
+      "id": "q-psi-22",
+      "question": "Bobo doll experiment membuktikan bahwa anak belajar agresi lewat ...",
+      "options": [
+        "Meniru model",
+        "Hukuman",
+        "Pembiaran",
+        "Hadiah langsung"
+      ],
+      "correctIndex": 0,
+      "explanation": "Albert Bandura menunjukkan pembelajaran observasional (belajar sosial).",
+      "category": "Belajar"
+    },
+    {
+      "id": "q-psi-23",
+      "question": "Tes bercak tinta yang digunakan untuk menilai kepribadian dikenal sebagai tes ...",
+      "options": [
+        "Rorschach",
+        "MMPI",
+        "Stanford-Binet",
+        "TAT"
+      ],
+      "correctIndex": 0,
+      "explanation": "Hermann Rorschach mengembangkan tes bercak tinta pada 1921.",
+      "category": "Tes Psikologi"
+    },
+    {
+      "id": "q-psi-24",
+      "question": "Eksperimen Asch tentang panjang garis meneliti fenomena ...",
+      "options": [
+        "Konformitas",
+        "Altruisme",
+        "Empati",
+        "Agresi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Asch (1951) menunjukkan banyak orang menyesuaikan jawaban dengan mayoritas.",
+      "category": "Psikologi Sosial"
+    },
+    {
+      "id": "q-psi-25",
+      "question": "Delapan tahap perkembangan psikososial sepanjang hidup dirumuskan oleh ...",
+      "options": [
+        "Erik Erikson",
+        "Lawrence Kohlberg",
+        "Sigmund Freud",
+        "Albert Ellis"
+      ],
+      "correctIndex": 0,
+      "explanation": "Teori Erikson dimulai dari kepercayaan vs ketidakpercayaan pada bayi.",
+      "category": "Perkembangan"
+    },
+    {
+      "id": "q-psi-26",
+      "question": "Pandangan bahwa persepsi merupakan pola menyeluruh dan bukan sekadar bagian-bagian (\"keseluruhan lebih dari jumlah bagiannya\") berasal dari psikologi ...",
+      "options": [
+        "Gestalt",
+        "Behavioris",
+        "Psikoanalisis",
+        "Humanistik"
+      ],
+      "correctIndex": 0,
+      "explanation": "Psikologi Gestalt berkembang di Jerman awal abad ke-20.",
+      "category": "Persepsi"
+    },
+    {
+      "id": "q-psi-27",
+      "question": "Sebutan untuk penilaian menyeluruh yang dipengaruhi satu ciri menonjol (misalnya tampan lalu dianggap pintar) adalah efek ...",
+      "options": [
+        "Halo",
+        "Placebo",
+        "Zeigarnik",
+        "Bystander"
+      ],
+      "correctIndex": 0,
+      "explanation": "Efek halo membuat satu kesan positif memengaruhi penilaian sifat lainnya.",
+      "category": "Psikologi Sosial"
+    },
+    {
+      "id": "q-psi-28",
+      "question": "Psikolog yang mendirikan laboratorium psikologi eksperimental pertama di Leipzig (1879) adalah ...",
+      "options": [
+        "Wilhelm Wundt",
+        "William James",
+        "Ivan Pavlov",
+        "G. Stanley Hall"
+      ],
+      "correctIndex": 0,
+      "explanation": "Wundt dianggap bapak psikologi eksperimental modern.",
+      "category": "Sejarah Psikologi"
+    },
+    {
+      "id": "q-psi-29",
+      "question": "Eksperimen 'Little Albert' yang menanamkan rasa takut pada bayi dilakukan oleh ...",
+      "options": [
+        "John B. Watson",
+        "Carl Rogers",
+        "Harry Harlow",
+        "Jean Piaget"
+      ],
+      "correctIndex": 0,
+      "explanation": "John B. Watson dan Rosalie Rayner (1920) menunjukkan rasa takut bisa dipelajari lewat pengkondisian.",
+      "category": "Behaviorisme"
+    },
+    {
+      "id": "q-psi-30",
+      "question": "Eksperimen monyet rhesus dengan 'ibu' kawat dan kain menunjukkan pentingnya ... bagi perkembangan bayi.",
+      "options": [
+        "Kelekatan dan kenyamanan",
+        "Makanan",
+        "Latihan fisik",
+        "Hukuman"
+      ],
+      "correctIndex": 0,
+      "explanation": "Harry Harlow menemukan bayi monyet lebih memilih ibu kain yang nyaman daripada ibu kawat pemberi susu.",
+      "category": "Perkembangan"
+    }
+  ]
+}

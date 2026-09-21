@@ -1,0 +1,257 @@
+{
+  "id": "deck-builtin-fiksi",
+  "topicId": "fiksi-imajinasi",
+  "title": "Fiksi: Novel, Dongeng & Dunia Imajinasi",
+  "description": "Kenali karya sastra klasik, penulis legendaris, dongeng, dan tokoh-tokoh fiksi terkenal dunia maupun Nusantara.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Fiksi",
+  "questions": [
+    {
+      "id": "q-fik-01",
+      "question": "Lukisan potret ini dikenal sebagai satu-satunya gambaran wajah yang diyakini paling mendekati sosok aslinya. Tokoh yang digambarkan adalah penulis drama dan penyair legendaris asal Inggris bernama ...",
+      "options": ["Charles Dickens", "William Shakespeare", "Jane Austen", "Oscar Wilde"],
+      "correctIndex": 1,
+      "explanation": "Lukisan ini dikenal sebagai 'Chandos portrait', potret yang dipercaya paling mendekati wajah asli William Shakespeare.",
+      "category": "Penulis Dunia",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Shakespeare.jpg",
+      "mediaCredit": "Shakespeare.jpg (Chandos portrait) — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Shakespeare.jpg"
+    },
+    {
+      "id": "q-fik-02",
+      "question": "Karya Shakespeare yang mengisahkan sepasang kekasih dari dua keluarga yang bermusuhan di Verona berjudul ...",
+      "options": ["Hamlet", "Macbeth", "Romeo dan Juliet", "Othello"],
+      "correctIndex": 2,
+      "explanation": "Romeo dan Juliet adalah salah satu tragedi cinta paling terkenal karya William Shakespeare.",
+      "category": "Sastra Klasik"
+    },
+    {
+      "id": "q-fik-03",
+      "question": "Novel fantasi karya J.R.R. Tolkien yang menceritakan perjalanan menghancurkan cincin kekuasaan berjudul ...",
+      "options": ["The Chronicles of Narnia", "The Lord of the Rings", "Harry Potter", "The Hobbit saja"],
+      "correctIndex": 1,
+      "explanation": "The Lord of the Rings adalah trilogi epik fantasi karya J.R.R. Tolkien yang menjadi dasar genre fantasi modern.",
+      "category": "Sastra Fantasi"
+    },
+    {
+      "id": "q-fik-04",
+      "question": "Tokoh detektif fiksi ciptaan Sir Arthur Conan Doyle yang terkenal dengan kecerdasan deduksinya adalah ...",
+      "options": ["Hercule Poirot", "Sherlock Holmes", "Sam Spade", "Philip Marlowe"],
+      "correctIndex": 1,
+      "explanation": "Sherlock Holmes, bersama asistennya Dr. Watson, adalah tokoh detektif fiksi paling ikonik dalam sastra dunia.",
+      "category": "Sastra Detektif"
+    },
+    {
+      "id": "q-fik-05",
+      "question": "Novel karya Pramoedya Ananta Toer yang menjadi bagian pertama dari Tetralogi Buru berjudul ...",
+      "options": ["Bumi Manusia", "Anak Semua Bangsa", "Jejak Langkah", "Rumah Kaca"],
+      "correctIndex": 0,
+      "explanation": "Bumi Manusia adalah novel pembuka Tetralogi Buru yang mengisahkan tokoh Minke di masa kolonial Hindia Belanda.",
+      "category": "Sastra Indonesia"
+    },
+    {
+      "id": "q-fik-06",
+      "question": "Dongeng klasik tentang seorang gadis yang tertidur akibat kutukan dan dibangunkan oleh ciuman pangeran berjudul ...",
+      "options": ["Cinderella", "Putri Salju", "Sleeping Beauty", "Rapunzel"],
+      "correctIndex": 2,
+      "explanation": "Sleeping Beauty (Putri Tidur) adalah dongeng klasik Eropa yang dipopulerkan oleh Charles Perrault dan Brothers Grimm.",
+      "category": "Dongeng"
+    },
+    {
+      "id": "q-fik-07",
+      "question": "Penulis novel 'Laskar Pelangi' yang mengisahkan perjuangan anak-anak sekolah di Belitung adalah ...",
+      "options": ["Tere Liye", "Andrea Hirata", "Dee Lestari", "Ahmad Tohari"],
+      "correctIndex": 1,
+      "explanation": "Andrea Hirata menulis Laskar Pelangi berdasarkan pengalaman masa kecilnya di Belitung.",
+      "category": "Sastra Indonesia"
+    },
+    {
+      "id": "q-fik-08",
+      "question": "Tokoh penyihir muda dalam serial novel karya J.K. Rowling yang bersekolah di Hogwarts bernama ...",
+      "options": ["Percy Jackson", "Harry Potter", "Eragon", "Artemis Fowl"],
+      "correctIndex": 1,
+      "explanation": "Harry Potter adalah tokoh utama serial novel fantasi karya J.K. Rowling yang sangat populer di seluruh dunia.",
+      "category": "Sastra Fantasi"
+    },
+    {
+      "id": "q-fik-09",
+      "question": "Cerita rakyat Nusantara tentang asal-usul Danau Toba berkaitan dengan seorang pemuda yang menikahi seekor ...",
+      "options": ["Kera", "Ikan yang berubah jadi wanita", "Burung", "Ular naga"],
+      "correctIndex": 1,
+      "explanation": "Legenda Danau Toba mengisahkan Toba yang menikahi seekor ikan yang berubah menjadi wanita, dengan syarat merahasiakan asal-usulnya.",
+      "category": "Cerita Rakyat"
+    },
+    {
+      "id": "q-fik-10",
+      "question": "Novel distopia karya George Orwell yang menggambarkan pengawasan totaliter lewat sosok 'Big Brother' berjudul ...",
+      "options": ["Brave New World", "1984", "Fahrenheit 451", "Animal Farm"],
+      "correctIndex": 1,
+      "explanation": "1984 karya George Orwell menggambarkan negara totaliter yang mengawasi setiap gerak-gerik warganya.",
+      "category": "Sastra Distopia"
+    },
+    {
+      "id": "q-fik-11",
+      "question": "Kisah petualangan Bilbo Baggins yang bertemu naga Smaug ditulis dalam novel karya J.R.R. Tolkien berjudul ...",
+      "options": ["The Hobbit", "The Silmarillion", "The Two Towers", "The Return of the King"],
+      "correctIndex": 0,
+      "explanation": "The Hobbit adalah novel prekuel The Lord of the Rings yang mengisahkan petualangan Bilbo Baggins.",
+      "category": "Sastra Fantasi"
+    },
+    {
+      "id": "q-fik-12",
+      "question": "Tokoh utama dalam kisah 'Malin Kundang', cerita rakyat dari Sumatra Barat, dikutuk menjadi batu karena ...",
+      "options": ["Mencuri harta kerajaan", "Durhaka kepada ibunya", "Berbohong pada raja", "Melanggar sumpah pernikahan"],
+      "correctIndex": 1,
+      "explanation": "Malin Kundang dikutuk menjadi batu oleh ibunya karena tidak mau mengakui ibunya yang miskin setelah ia sukses dan kaya.",
+      "category": "Cerita Rakyat"
+    },
+    {
+      "id": "q-fik-13",
+      "question": "Novel roman klasik karya Jane Austen yang mengisahkan Elizabeth Bennet dan Mr. Darcy berjudul ...",
+      "options": ["Sense and Sensibility", "Pride and Prejudice", "Emma", "Persuasion"],
+      "correctIndex": 1,
+      "explanation": "Pride and Prejudice adalah salah satu novel roman paling terkenal dalam sastra Inggris.",
+      "category": "Sastra Klasik"
+    },
+    {
+      "id": "q-fik-14",
+      "question": "Kisah kancil yang cerdik dan sering mengelabui buaya merupakan tokoh populer dalam ...",
+      "options": ["Fabel Nusantara", "Sage Nusantara", "Mitos Nusantara", "Legenda Nusantara"],
+      "correctIndex": 0,
+      "explanation": "Fabel adalah cerita yang tokohnya hewan berperilaku seperti manusia, dan kancil adalah tokoh fabel populer di Nusantara.",
+      "category": "Cerita Rakyat"
+    },
+    {
+      "id": "q-fik-15",
+      "question": "Novel karya Leo Tolstoy yang mengisahkan kehidupan bangsawan Rusia pada masa invasi Napoleon berjudul ...",
+      "options": ["Anna Karenina", "War and Peace", "Crime and Punishment", "The Brothers Karamazov"],
+      "correctIndex": 1,
+      "explanation": "War and Peace adalah novel epik karya Leo Tolstoy yang menggambarkan Rusia selama era Napoleon.",
+      "category": "Sastra Klasik"
+    },
+    {
+      "id": "q-fik-16",
+      "question": "Tokoh utama dalam 'Alice's Adventures in Wonderland' jatuh ke dunia ajaib setelah mengejar seekor ...",
+      "options": ["Kucing berwarna-warni", "Kelinci putih berjas", "Burung hantu bijak", "Rubah licik"],
+      "correctIndex": 1,
+      "explanation": "Alice mengikuti Kelinci Putih yang terburu-buru dan jatuh ke lubang menuju Wonderland dalam novel karya Lewis Carroll.",
+      "category": "Sastra Fantasi"
+    },
+    {
+      "id": "q-fik-17",
+      "question": "Hikayat klasik Melayu yang mengisahkan petualangan seorang putra mahkota dan dianggap salah satu karya sastra Melayu tertua adalah ...",
+      "options": ["Hikayat Hang Tuah", "Hikayat Bayan Budiman", "Hikayat Si Miskin", "Hikayat Indraputra"],
+      "correctIndex": 0,
+      "explanation": "Hikayat Hang Tuah mengisahkan kepahlawanan seorang laksamana legendaris dalam sastra Melayu klasik.",
+      "category": "Sastra Klasik Nusantara"
+    },
+    {
+      "id": "q-fik-18",
+      "question": "Novel fiksi ilmiah karya Jules Verne yang mengisahkan perjalanan mengelilingi bumi dalam waktu terbatas berjudul ...",
+      "options": ["Journey to the Center of the Earth", "Around the World in Eighty Days", "Twenty Thousand Leagues Under the Sea", "From the Earth to the Moon"],
+      "correctIndex": 1,
+      "explanation": "Around the World in Eighty Days mengisahkan Phileas Fogg yang bertaruh mampu mengelilingi dunia dalam 80 hari.",
+      "category": "Sastra Fiksi Ilmiah"
+    },
+    {
+      "id": "q-fik-19",
+      "question": "Karya sastra epik dari India yang mengisahkan Rama, Sinta, dan Rahwana adalah ...",
+      "options": ["Mahabharata", "Ramayana", "Bhagavad Gita", "Panchatantra"],
+      "correctIndex": 1,
+      "explanation": "Ramayana adalah epos kuno India yang juga dikenal luas dan diadaptasi dalam budaya Nusantara, termasuk sendratari.",
+      "category": "Sastra Epik"
+    },
+    {
+      "id": "q-fik-20",
+      "question": "Naskah drama karya Shakespeare tentang pangeran Denmark yang berusaha membalas kematian ayahnya berjudul ...",
+      "options": ["King Lear", "Hamlet", "Julius Caesar", "The Tempest"],
+      "correctIndex": 1,
+      "explanation": "Hamlet mengisahkan pangeran Denmark yang dihantui arwah ayahnya dan bertekad membalas dendam atas pembunuhannya.",
+      "category": "Sastra Klasik"
+    },
+    {
+      "id": "q-fik-21",
+      "question": "Novel klasik Indonesia karya Marah Rusli yang mengangkat konflik adat dan cinta antarsuku berjudul ...",
+      "options": ["Layar Terkembang", "Sitti Nurbaya", "Salah Asuhan", "Tenggelamnya Kapal Van der Wijck"],
+      "correctIndex": 1,
+      "explanation": "Sitti Nurbaya (1922) adalah novel klasik Balai Pustaka yang mengangkat isu perjodohan paksa dan adat Minangkabau.",
+      "category": "Sastra Indonesia"
+    },
+    {
+      "id": "q-fik-22",
+      "question": "Tokoh vampir fiksi paling terkenal, ciptaan penulis Irlandia Bram Stoker, bernama ...",
+      "options": ["Nosferatu", "Count Dracula", "Edward Cullen", "Lestat"],
+      "correctIndex": 1,
+      "explanation": "Count Dracula dalam novel karya Bram Stoker (1897) menjadi arketipe utama karakter vampir dalam sastra dan budaya pop.",
+      "category": "Sastra Horor"
+    },
+    {
+      "id": "q-fik-23",
+      "question": "Kumpulan cerita rakyat Timur Tengah yang salah satu kisahnya adalah Aladdin dan Sinbad dikenal dengan judul ...",
+      "options": ["Kalilah wa Dimnah", "Seribu Satu Malam", "Layla dan Majnun", "Kitab Kehidupan"],
+      "correctIndex": 1,
+      "explanation": "Seribu Satu Malam (One Thousand and One Nights) adalah kumpulan cerita rakyat yang dinarasikan oleh Sheherazade.",
+      "category": "Cerita Rakyat"
+    },
+    {
+      "id": "q-fik-24",
+      "question": "Novel dunia fantasi karya C.S. Lewis yang bermula dari sebuah lemari pakaian ajaib berjudul ...",
+      "options": ["Percy Jackson", "The Chronicles of Narnia", "Eragon", "His Dark Materials"],
+      "correctIndex": 1,
+      "explanation": "The Chronicles of Narnia karya C.S. Lewis dimulai dengan anak-anak yang menemukan dunia Narnia lewat lemari ajaib.",
+      "category": "Sastra Fantasi"
+    },
+    {
+      "id": "q-fik-25",
+      "question": "Sage atau cerita kepahlawanan dari tanah Batak yang mengisahkan tokoh sakti bernama Si Boru Deak Parujar termasuk dalam kategori ...",
+      "options": ["Mitos penciptaan", "Fabel", "Legenda modern", "Anekdot"],
+      "correctIndex": 0,
+      "explanation": "Kisah Si Boru Deak Parujar adalah mitos penciptaan dalam kepercayaan tradisional masyarakat Batak.",
+      "category": "Cerita Rakyat"
+    },
+    {
+      "id": "q-fik-26",
+      "question": "Novel karya Herman Melville yang mengisahkan perburuan paus putih raksasa berjudul ...",
+      "options": ["Moby-Dick", "The Old Man and the Sea", "Treasure Island", "Robinson Crusoe"],
+      "correctIndex": 0,
+      "explanation": "Moby-Dick mengisahkan obsesi Kapten Ahab memburu paus putih raksasa bernama Moby Dick.",
+      "category": "Sastra Klasik"
+    },
+    {
+      "id": "q-fik-27",
+      "question": "Tokoh utama fiksi ilmiah 'Percy Jackson' karya Rick Riordan digambarkan sebagai anak dari dewa Yunani, yaitu ...",
+      "options": ["Zeus", "Poseidon", "Hades", "Apollo"],
+      "correctIndex": 1,
+      "explanation": "Percy Jackson adalah putra Poseidon, dewa laut dalam mitologi Yunani, dalam serial novel karya Rick Riordan.",
+      "category": "Sastra Fantasi"
+    },
+    {
+      "id": "q-fik-28",
+      "question": "Naskah drama Indonesia berjudul 'Bunga Rumah Makan' dan banyak karya realis lain ditulis oleh sastrawan ...",
+      "options": ["W.S. Rendra", "Utuy Tatang Sontani", "Ajip Rosidi", "Putu Wijaya"],
+      "correctIndex": 1,
+      "explanation": "Utuy Tatang Sontani dikenal sebagai penulis naskah drama realis Indonesia, salah satunya 'Bunga Rumah Makan'.",
+      "category": "Sastra Indonesia"
+    },
+    {
+      "id": "q-fik-29",
+      "question": "Novel fiksi ilmiah karya Mary Shelley yang mengisahkan ilmuwan yang menciptakan makhluk hidup dari bagian tubuh mati berjudul ...",
+      "options": ["Frankenstein", "Dracula", "The Invisible Man", "Dr. Jekyll and Mr. Hyde"],
+      "correctIndex": 0,
+      "explanation": "Frankenstein (1818) karya Mary Shelley sering disebut sebagai salah satu karya fiksi ilmiah pertama dalam sastra dunia.",
+      "category": "Sastra Fiksi Ilmiah"
+    },
+    {
+      "id": "q-fik-30",
+      "question": "Tokoh peri kecil dalam kisah Peter Pan yang selalu setia menemani petualangannya bernama ...",
+      "options": ["Tinker Bell", "Wendy", "Tiger Lily", "Nana"],
+      "correctIndex": 0,
+      "explanation": "Tinker Bell adalah peri kecil pendamping setia Peter Pan dalam karya J.M. Barrie.",
+      "category": "Dongeng"
+    }
+  ]
+}

@@ -1,0 +1,143 @@
+{
+  "id": "deck-starter-2",
+  "topicId": "sejarah",
+  "title": "Peradaban Dunia & Jalur Sutra",
+  "description": "Lintasan kronologi kebangkitan imperium kuno, pertukaran pengetahuan, dan revolusi peradaban manusia.",
+  "cardCount": 10,
+  "difficulty": "Sedang",
+  "isFree": true,
+  "price": 0,
+  "badge": "Sosial",
+  "questions": [
+    {
+      "id": "q-s2-1",
+      "question": "Baitul Hikmah yang menjadi mercusuar penerjemahan ilmu terletak di kota...",
+      "options": [
+        "Kairo",
+        "Damaskus",
+        "Baghdad",
+        "Kordoba"
+      ],
+      "correctIndex": 2,
+      "explanation": "Baitul Hikmah didirikan di Baghdad pada masa Dinasti Abbasiyah.",
+      "category": "Sejarah Islam"
+    },
+    {
+      "id": "q-s2-2",
+      "question": "Jalur Sutra utamanya digunakan pedagang kuno untuk memperdagangkan komoditas...",
+      "options": [
+        "Minyak Bumi",
+        "Sutra dan Rempah",
+        "Besi dan Baja",
+        "Kertas Uang"
+      ],
+      "correctIndex": 1,
+      "explanation": "Jalur Sutra terkenal sebagai jalur perdagangan sutra, rempah-rempah, dan barang berharga lain antara Asia dan Eropa.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-s2-3",
+      "question": "Piramida Giza yang megah dibangun oleh peradaban kuno...",
+      "options": [
+        "Mesopotamia",
+        "Mesir Kuno",
+        "Yunani Kuno",
+        "Romawi Kuno"
+      ],
+      "correctIndex": 1,
+      "explanation": "Piramida Giza merupakan makam para Firaun yang dibangun oleh peradaban Mesir Kuno.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-s2-4",
+      "question": "Kekaisaran Romawi terbagi menjadi Romawi Barat dan Romawi Timur, ibu kota Romawi Timur adalah...",
+      "options": [
+        "Roma",
+        "Athena",
+        "Konstantinopel",
+        "Alexandria"
+      ],
+      "correctIndex": 2,
+      "explanation": "Konstantinopel (kini Istanbul) menjadi ibu kota Kekaisaran Romawi Timur atau Bizantium.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-s2-5",
+      "question": "Kerajaan maritim Nusantara yang menguasai jalur perdagangan Selat Malaka adalah...",
+      "options": [
+        "Majapahit",
+        "Sriwijaya",
+        "Mataram Kuno",
+        "Kutai"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kerajaan Sriwijaya dikenal sebagai kerajaan maritim yang menguasai jalur perdagangan di Selat Malaka.",
+      "category": "Sejarah Nusantara"
+    },
+    {
+      "id": "q-s2-6",
+      "question": "Penjelajah yang tercatat pertama kali mengelilingi dunia lewat jalur laut adalah ekspedisi milik...",
+      "options": [
+        "Christopher Columbus",
+        "Vasco da Gama",
+        "Ferdinand Magellan",
+        "Marco Polo"
+      ],
+      "correctIndex": 2,
+      "explanation": "Ekspedisi Ferdinand Magellan (dilanjutkan Juan Sebastian Elcano) tercatat sebagai yang pertama mengelilingi dunia lewat laut.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-s2-7",
+      "question": "Revolusi Industri pertama kali dimulai di negara...",
+      "options": [
+        "Prancis",
+        "Jerman",
+        "Inggris",
+        "Amerika Serikat"
+      ],
+      "correctIndex": 2,
+      "explanation": "Revolusi Industri bermula di Inggris pada abad ke-18 dengan mekanisasi tenaga manusia menjadi mesin uap.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-s2-8",
+      "question": "Peristiwa proklamasi kemerdekaan Indonesia dibacakan pada tanggal...",
+      "options": [
+        "17 Agustus 1945",
+        "28 Oktober 1928",
+        "20 Mei 1908",
+        "1 Juni 1945"
+      ],
+      "correctIndex": 0,
+      "explanation": "Proklamasi kemerdekaan Indonesia dibacakan oleh Soekarno-Hatta pada 17 Agustus 1945.",
+      "category": "Sejarah Nusantara"
+    },
+    {
+      "id": "q-s2-9",
+      "question": "Tembok besar yang dibangun untuk melindungi Tiongkok dari invasi utara disebut...",
+      "options": [
+        "Tembok Berlin",
+        "Tembok Besar Tiongkok",
+        "Tembok Hadrian",
+        "Tembok Konstantinopel"
+      ],
+      "correctIndex": 1,
+      "explanation": "Tembok Besar Tiongkok dibangun selama berabad-abad untuk melindungi wilayah utara Tiongkok.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-s2-10",
+      "question": "Peradaban kuno yang menciptakan sistem tulisan paku (cuneiform) adalah...",
+      "options": [
+        "Mesir Kuno",
+        "Mesopotamia",
+        "Yunani Kuno",
+        "Peradaban Lembah Indus"
+      ],
+      "correctIndex": 1,
+      "explanation": "Peradaban Mesopotamia menciptakan sistem tulisan paku atau cuneiform, salah satu sistem tulisan tertua di dunia.",
+      "category": "Sejarah Dunia"
+    }
+  ]
+}

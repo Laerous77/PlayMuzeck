@@ -1,0 +1,143 @@
+{
+  "id": "deck-starter-1",
+  "topicId": "sains",
+  "title": "Sains Fundamental & Kosmologi",
+  "description": "Eksplorasi hukum gerak Newton, struktur inti atom, tata surya, dan fenomena evolusi alam semesta.",
+  "cardCount": 10,
+  "difficulty": "Mudah",
+  "isFree": true,
+  "price": 0,
+  "badge": "Alam",
+  "questions": [
+    {
+      "id": "q-s1-1",
+      "question": "Partikel subatomik bermuatan netral yang berada di dalam inti atom adalah...",
+      "options": [
+        "Elektron",
+        "Proton",
+        "Neutron",
+        "Positron"
+      ],
+      "correctIndex": 2,
+      "explanation": "Neutron berada di dalam inti atom bersama proton dan tidak bermuatan listrik.",
+      "category": "Fisika & Kimia"
+    },
+    {
+      "id": "q-s1-2",
+      "question": "Hukum gerak Newton yang menyatakan \"aksi sama dengan reaksi berlawanan arah\" adalah hukum ke-...",
+      "options": [
+        "Hukum I Newton",
+        "Hukum II Newton",
+        "Hukum III Newton",
+        "Hukum Gravitasi"
+      ],
+      "correctIndex": 2,
+      "explanation": "Hukum III Newton menyatakan setiap aksi menimbulkan reaksi yang sama besar namun berlawanan arah.",
+      "category": "Fisika & Kimia"
+    },
+    {
+      "id": "q-s1-3",
+      "question": "Planet terbesar di tata surya kita adalah...",
+      "options": [
+        "Saturnus",
+        "Neptunus",
+        "Jupiter",
+        "Uranus"
+      ],
+      "correctIndex": 2,
+      "explanation": "Jupiter merupakan planet terbesar di tata surya dengan massa lebih dari 300 kali massa Bumi.",
+      "category": "Astronomi"
+    },
+    {
+      "id": "q-s1-4",
+      "question": "Unsur kimia dengan lambang \"O\" pada tabel periodik adalah...",
+      "options": [
+        "Emas",
+        "Oksigen",
+        "Osmium",
+        "Perak"
+      ],
+      "correctIndex": 1,
+      "explanation": "Lambang \"O\" pada tabel periodik merujuk pada unsur Oksigen.",
+      "category": "Fisika & Kimia"
+    },
+    {
+      "id": "q-s1-5",
+      "question": "Peristiwa awal mula alam semesta yang diyakini para kosmolog disebut...",
+      "options": [
+        "Big Crunch",
+        "Big Bang",
+        "Black Hole",
+        "Supernova"
+      ],
+      "correctIndex": 1,
+      "explanation": "Big Bang adalah teori kosmologi utama tentang ekspansi awal alam semesta dari titik singularitas.",
+      "category": "Kosmologi"
+    },
+    {
+      "id": "q-s1-6",
+      "question": "Kecepatan cahaya di ruang hampa udara adalah sekitar...",
+      "options": [
+        "300.000 km/detik",
+        "150.000 km/detik",
+        "3.000 km/detik",
+        "30.000 km/detik"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kecepatan cahaya di ruang hampa adalah sekitar 299.792 km/detik, dibulatkan menjadi 300.000 km/detik.",
+      "category": "Fisika & Kimia"
+    },
+    {
+      "id": "q-s1-7",
+      "question": "Proses tumbuhan mengubah cahaya matahari menjadi energi kimia disebut...",
+      "options": [
+        "Respirasi",
+        "Fotosintesis",
+        "Transpirasi",
+        "Fermentasi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Fotosintesis adalah proses tumbuhan mengonversi cahaya matahari, air, dan CO2 menjadi glukosa dan oksigen.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-s1-8",
+      "question": "Satelit alami yang mengorbit Bumi kita disebut...",
+      "options": [
+        "Mars",
+        "Bulan",
+        "Titan",
+        "Europa"
+      ],
+      "correctIndex": 1,
+      "explanation": "Bulan adalah satu-satunya satelit alami yang mengorbit planet Bumi.",
+      "category": "Astronomi"
+    },
+    {
+      "id": "q-s1-9",
+      "question": "Bagian sel yang berfungsi sebagai pusat pengendali aktivitas sel adalah...",
+      "options": [
+        "Mitokondria",
+        "Ribosom",
+        "Nukleus (Inti Sel)",
+        "Sitoplasma"
+      ],
+      "correctIndex": 2,
+      "explanation": "Nukleus atau inti sel menyimpan materi genetik dan mengatur seluruh aktivitas sel.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-s1-10",
+      "question": "Skala yang digunakan untuk mengukur kekuatan gempa bumi disebut skala...",
+      "options": [
+        "Celsius",
+        "Richter",
+        "Fahrenheit",
+        "Beaufort"
+      ],
+      "correctIndex": 1,
+      "explanation": "Skala Richter digunakan untuk mengukur magnitudo atau kekuatan gempa bumi.",
+      "category": "Geografi & Geologi"
+    }
+  ]
+}

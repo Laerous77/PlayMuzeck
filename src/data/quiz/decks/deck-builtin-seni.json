@@ -1,0 +1,261 @@
+{
+  "id": "deck-builtin-seni",
+  "topicId": "seni-budaya",
+  "title": "Seni & Budaya: Lukisan, Musik & Pertunjukan",
+  "description": "Uji wawasanmu tentang lukisan legendaris, alat musik, tarian, dan budaya seni dunia maupun Nusantara.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Seni",
+  "questions": [
+    {
+      "id": "q-sni-01",
+      "question": "Lukisan pada gambar ini adalah salah satu karya paling terkenal di dunia. Siapakah pelukisnya?",
+      "options": ["Michelangelo", "Leonardo da Vinci", "Raphael", "Sandro Botticelli"],
+      "correctIndex": 1,
+      "explanation": "Mona Lisa dilukis oleh Leonardo da Vinci sekitar tahun 1503–1506 dan kini dipajang di Museum Louvre, Paris.",
+      "category": "Seni Rupa",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Leonardo da Vinci - Mona Lisa.jpg",
+      "mediaCredit": "Leonardo da Vinci - Mona Lisa.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Leonardo_da_Vinci_-_Mona_Lisa.jpg"
+    },
+    {
+      "id": "q-sni-02",
+      "question": "Lukisan bergaya pasca-impresionis pada gambar ini, dengan langit malam berpusar, berjudul ...",
+      "options": ["The Scream", "The Starry Night", "Sunflowers", "Guernica"],
+      "correctIndex": 1,
+      "explanation": "The Starry Night dilukis oleh Vincent van Gogh pada 1889 saat ia dirawat di rumah sakit jiwa Saint-Rémy.",
+      "category": "Seni Rupa",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Van Gogh - Starry Night - Google Art Project.jpg",
+      "mediaCredit": "Van Gogh - Starry Night - Google Art Project.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Van_Gogh_-_Starry_Night_-_Google_Art_Project.jpg"
+    },
+    {
+      "id": "q-sni-03",
+      "question": "Alat musik tradisional Jawa Barat yang terbuat dari bambu dan dimainkan dengan cara digoyangkan adalah ...",
+      "options": ["Gamelan", "Angklung", "Sasando", "Kolintang"],
+      "correctIndex": 1,
+      "explanation": "Angklung berasal dari Jawa Barat dan telah diakui UNESCO sebagai warisan budaya takbenda dunia.",
+      "category": "Musik Tradisional"
+    },
+    {
+      "id": "q-sni-04",
+      "question": "Aliran seni lukis yang menekankan kesan cahaya dan warna sekilas, dipelopori Claude Monet, disebut ...",
+      "options": ["Kubisme", "Impresionisme", "Surealisme", "Realisme"],
+      "correctIndex": 1,
+      "explanation": "Impresionisme muncul di Prancis akhir abad ke-19, menangkap 'kesan' cahaya alami dalam sapuan kuas cepat.",
+      "category": "Seni Rupa"
+    },
+    {
+      "id": "q-sni-05",
+      "question": "Tarian tradisional Bali yang menampilkan gerakan mata dan jari tangan yang lincah, biasanya dibawakan penari perempuan, adalah tari ...",
+      "options": ["Tari Kecak", "Tari Legong", "Tari Saman", "Tari Jaipong"],
+      "correctIndex": 1,
+      "explanation": "Tari Legong dikenal dengan gerakan halus, ekspresi mata, dan permainan jari yang khas.",
+      "category": "Tari Tradisional"
+    },
+    {
+      "id": "q-sni-06",
+      "question": "Komponis tuli yang tetap menciptakan simfoni-simfoni besar, termasuk Symphony No. 9, adalah ...",
+      "options": ["Wolfgang Amadeus Mozart", "Johann Sebastian Bach", "Ludwig van Beethoven", "Franz Schubert"],
+      "correctIndex": 2,
+      "explanation": "Beethoven kehilangan pendengarannya secara bertahap namun tetap menggubah karya-karya monumental.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-sni-07",
+      "question": "Wayang kulit merupakan kesenian tradisional yang berasal dari pulau ...",
+      "options": ["Sumatra", "Jawa", "Sulawesi", "Kalimantan"],
+      "correctIndex": 1,
+      "explanation": "Wayang kulit berkembang pesat di Jawa dan diakui UNESCO sebagai warisan budaya dunia sejak 2003.",
+      "category": "Seni Pertunjukan"
+    },
+    {
+      "id": "q-sni-08",
+      "question": "Patung 'David' yang megah merupakan karya pematung Renaisans bernama ...",
+      "options": ["Donatello", "Michelangelo", "Bernini", "Raphael"],
+      "correctIndex": 1,
+      "explanation": "Patung marmer David karya Michelangelo diselesaikan pada 1504 dan kini berada di Galleria dell'Accademia, Florence.",
+      "category": "Seni Rupa"
+    },
+    {
+      "id": "q-sni-09",
+      "question": "Alat musik petik tradisional dari Nusa Tenggara Timur yang terbuat dari daun lontar adalah ...",
+      "options": ["Kecapi", "Sasando", "Rebab", "Siter"],
+      "correctIndex": 1,
+      "explanation": "Sasando menggunakan resonator dari daun lontar dan senar yang dipetik untuk menghasilkan nada khas.",
+      "category": "Musik Tradisional"
+    },
+    {
+      "id": "q-sni-10",
+      "question": "Gerakan seni yang menggambarkan objek dengan bentuk-bentuk geometris terfragmentasi, dipelopori Pablo Picasso, disebut ...",
+      "options": ["Kubisme", "Fauvisme", "Dadaisme", "Pointilisme"],
+      "correctIndex": 0,
+      "explanation": "Kubisme memecah objek menjadi bentuk geometris dan menampilkannya dari berbagai sudut sekaligus.",
+      "category": "Seni Rupa"
+    },
+    {
+      "id": "q-sni-11",
+      "question": "Batik sebagai warisan budaya Indonesia telah diakui UNESCO sebagai warisan budaya takbenda pada tahun ...",
+      "options": ["2003", "2009", "2015", "1998"],
+      "correctIndex": 1,
+      "explanation": "UNESCO menetapkan batik Indonesia sebagai Masterpiece of Oral and Intangible Heritage pada 2 Oktober 2009.",
+      "category": "Kriya"
+    },
+    {
+      "id": "q-sni-12",
+      "question": "Genre musik yang lahir dari komunitas Afrika-Amerika di New Orleans, ditandai improvisasi dan sinkopasi, adalah ...",
+      "options": ["Reggae", "Jazz", "Blues", "Country"],
+      "correctIndex": 1,
+      "explanation": "Jazz berkembang di awal abad ke-20 dengan ciri khas improvisasi bebas dan ritme sinkopasi.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-sni-13",
+      "question": "Candi Borobudur, salah satu karya seni arsitektur terbesar dunia, terletak di provinsi ...",
+      "options": ["Jawa Timur", "Jawa Tengah", "Yogyakarta", "Jawa Barat"],
+      "correctIndex": 1,
+      "explanation": "Candi Borobudur berada di Magelang, Jawa Tengah, dan merupakan candi Buddha terbesar di dunia.",
+      "category": "Arsitektur"
+    },
+    {
+      "id": "q-sni-14",
+      "question": "Teknik seni menggambar atau melukis menggunakan titik-titik kecil untuk membentuk gambar disebut ...",
+      "options": ["Pointilisme", "Sketsa", "Kolase", "Mozaik"],
+      "correctIndex": 0,
+      "explanation": "Pointilisme dipelopori Georges Seurat, membentuk gambar dari susunan titik-titik warna murni.",
+      "category": "Seni Rupa"
+    },
+    {
+      "id": "q-sni-15",
+      "question": "Alat musik gesek berdawai empat yang menjadi tulang punggung orkestra klasik adalah ...",
+      "options": ["Cello", "Biola", "Gitar", "Harpa"],
+      "correctIndex": 1,
+      "explanation": "Biola adalah instrumen gesek bernada tertinggi dalam keluarga string dan sering menjadi pemimpin melodi orkestra.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-sni-16",
+      "question": "Tari Saman yang terkenal dengan kekompakan gerak tepuk tangan berasal dari daerah ...",
+      "options": ["Aceh", "Minangkabau", "Batak", "Riau"],
+      "correctIndex": 0,
+      "explanation": "Tari Saman berasal dari suku Gayo, Aceh, dan diakui UNESCO sebagai warisan budaya takbenda sejak 2011.",
+      "category": "Tari Tradisional"
+    },
+    {
+      "id": "q-sni-17",
+      "question": "Lukisan 'The Scream' yang menggambarkan sosok menjerit dengan latar langit oranye dilukis oleh ...",
+      "options": ["Edvard Munch", "Gustav Klimt", "Salvador Dalí", "Wassily Kandinsky"],
+      "correctIndex": 0,
+      "explanation": "The Scream (1893) karya pelukis Norwegia Edvard Munch menjadi salah satu ikon seni ekspresionisme.",
+      "category": "Seni Rupa"
+    },
+    {
+      "id": "q-sni-18",
+      "question": "Alat musik pukul dari Sulawesi Utara yang terbuat dari kayu dan disusun berjajar seperti gambang disebut ...",
+      "options": ["Kolintang", "Talempong", "Gong", "Saluang"],
+      "correctIndex": 0,
+      "explanation": "Kolintang adalah alat musik perkusi bernada khas Minahasa, Sulawesi Utara.",
+      "category": "Musik Tradisional"
+    },
+    {
+      "id": "q-sni-19",
+      "question": "Genre tari modern yang menekankan kebebasan ekspresi tubuh tanpa aturan baku, berbeda dari balet klasik, disebut ...",
+      "options": ["Tari kontemporer", "Tari balet", "Tari rakyat", "Tari istana"],
+      "correctIndex": 0,
+      "explanation": "Tari kontemporer mengedepankan eksplorasi gerak bebas dan ekspresi personal penarinya.",
+      "category": "Tari"
+    },
+    {
+      "id": "q-sni-20",
+      "question": "Karya seni relief dan patung naratif pada dinding Candi Borobudur menceritakan tentang ...",
+      "options": ["Riwayat hidup Buddha dan ajaran karma", "Perang Baratayuda", "Sejarah kerajaan Majapahit", "Kisah Ramayana saja"],
+      "correctIndex": 0,
+      "explanation": "Relief Borobudur menggambarkan riwayat hidup Buddha (Lalitavistara) dan hukum sebab-akibat (karmawibhangga).",
+      "category": "Arsitektur"
+    },
+    {
+      "id": "q-sni-21",
+      "question": "Opera 'The Magic Flute' dan puluhan simfoni terkenal lainnya diciptakan oleh komponis ...",
+      "options": ["Joseph Haydn", "Wolfgang Amadeus Mozart", "Antonio Vivaldi", "Franz Liszt"],
+      "correctIndex": 1,
+      "explanation": "Mozart adalah komponis jenius era Klasik yang mulai mencipta musik sejak usia sangat muda.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-sni-22",
+      "question": "Seni membentuk dan melipat kertas menjadi berbagai bentuk tanpa gunting maupun lem berasal dari budaya ...",
+      "options": ["Tiongkok", "Jepang", "Korea", "Thailand"],
+      "correctIndex": 1,
+      "explanation": "Origami adalah seni melipat kertas tradisional Jepang.",
+      "category": "Kriya"
+    },
+    {
+      "id": "q-sni-23",
+      "question": "Teater tradisional Betawi yang memadukan dialog, lawakan, musik gambang kromong, dan lakon disebut ...",
+      "options": ["Ludruk", "Lenong", "Ketoprak", "Randai"],
+      "correctIndex": 1,
+      "explanation": "Lenong adalah teater rakyat Betawi yang diiringi musik gambang kromong.",
+      "category": "Seni Pertunjukan"
+    },
+    {
+      "id": "q-sni-24",
+      "question": "Gaya seni arsitektur dengan ciri kubah besar, lengkungan, dan ornamen megah yang berkembang di era kekaisaran Romawi Suci disebut ...",
+      "options": ["Gotik", "Barok", "Minimalis", "Brutalisme"],
+      "correctIndex": 1,
+      "explanation": "Gaya Barok (Baroque) ditandai kemewahan, dramatisasi cahaya, dan ornamen rumit pada abad ke-17–18.",
+      "category": "Arsitektur"
+    },
+    {
+      "id": "q-sni-25",
+      "question": "Instrumen musik yang terdiri dari susunan bilah logam atau bambu dan dimainkan dengan dipukul dalam ansambel Gamelan disebut ...",
+      "options": ["Saron", "Rebana", "Suling", "Kendang"],
+      "correctIndex": 0,
+      "explanation": "Saron adalah instrumen bilah logam dalam gamelan Jawa yang dipukul dengan tabuh untuk memainkan melodi pokok.",
+      "category": "Musik Tradisional"
+    },
+    {
+      "id": "q-sni-26",
+      "question": "Aliran seni yang menggambarkan dunia mimpi dan bawah sadar dengan visual ganjil, dipelopori Salvador Dalí, disebut ...",
+      "options": ["Surealisme", "Ekspresionisme", "Minimalisme", "Neoklasik"],
+      "correctIndex": 0,
+      "explanation": "Surealisme mengeksplorasi imajinasi, mimpi, dan alam bawah sadar dalam bentuk visual tidak lazim.",
+      "category": "Seni Rupa"
+    },
+    {
+      "id": "q-sni-27",
+      "question": "Reog yang menampilkan topeng singa berbulu merak berukuran raksasa berasal dari daerah ...",
+      "options": ["Ponorogo", "Solo", "Malang", "Blitar"],
+      "correctIndex": 0,
+      "explanation": "Reog Ponorogo berasal dari Ponorogo, Jawa Timur, dengan topeng Barongan yang sangat berat dan besar.",
+      "category": "Seni Pertunjukan"
+    },
+    {
+      "id": "q-sni-28",
+      "question": "Batik dengan motif dan teknik pewarnaan menggunakan malam (lilin) panas yang dituliskan langsung dengan canting disebut batik ...",
+      "options": ["Cap", "Tulis", "Print", "Jumputan"],
+      "correctIndex": 1,
+      "explanation": "Batik tulis dibuat manual menggunakan canting sehingga membutuhkan waktu dan ketelitian tinggi.",
+      "category": "Kriya"
+    },
+    {
+      "id": "q-sni-29",
+      "question": "Karya musik yang ditulis untuk dimainkan oleh orkestra penuh dalam beberapa bagian (movement) disebut ...",
+      "options": ["Sonata", "Simfoni", "Konserto", "Nokturn"],
+      "correctIndex": 1,
+      "explanation": "Simfoni adalah karya musik orkestra besar yang biasanya terdiri dari 3–4 movement.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-sni-30",
+      "question": "Gerakan seni modern yang menolak logika dan nilai estetika konvensional sebagai bentuk protes usai Perang Dunia I disebut ...",
+      "options": ["Dadaisme", "Romantisisme", "Rokoko", "Neoklasikisme"],
+      "correctIndex": 0,
+      "explanation": "Dadaisme muncul sekitar 1916 sebagai gerakan anti-seni yang memprotes kekacauan akibat perang.",
+      "category": "Seni Rupa"
+    }
+  ]
+}

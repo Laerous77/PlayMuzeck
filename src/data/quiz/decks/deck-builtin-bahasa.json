@@ -1,0 +1,261 @@
+{
+  "id": "deck-builtin-bahasa",
+  "topicId": "bahasa-sastra",
+  "title": "Bahasa: Tata Bahasa, Asal-usul & Ragam Dunia",
+  "description": "Jelajahi asal-usul aksara, tata bahasa Indonesia, peribahasa, dan keragaman bahasa di dunia.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Bahasa",
+  "questions": [
+    {
+      "id": "q-bhs-01",
+      "question": "Batu prasasti pada gambar ini menjadi kunci penting dalam menerjemahkan hieroglif Mesir kuno karena memuat tiga naskah berbeda. Nama batu ini adalah ...",
+      "options": ["Batu Nabta", "Batu Rosetta", "Prasasti Behistun", "Lempeng Fenisia"],
+      "correctIndex": 1,
+      "explanation": "Batu Rosetta memuat teks yang sama dalam hieroglif Mesir, aksara Demotik, dan bahasa Yunani sehingga membantu Jean-François Champollion memecahkan kode hieroglif pada 1822.",
+      "category": "Sejarah Bahasa",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Rosetta Stone.JPG",
+      "mediaCredit": "Rosetta Stone.JPG — Hans Hillewaert, Wikimedia Commons (CC BY-SA 4.0)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Rosetta_Stone.JPG"
+    },
+    {
+      "id": "q-bhs-02",
+      "question": "Rekaman audio ini adalah lagu kebangsaan tidak resmi dari sebuah bahasa buatan (konstruksi) yang dirancang agar mudah dipelajari sebagai bahasa internasional kedua. Bahasa tersebut adalah ...",
+      "options": ["Interlingua", "Volapük", "Esperanto", "Klingon"],
+      "correctIndex": 2,
+      "explanation": "'La Espero' adalah himne resmi gerakan Esperanto, bahasa buatan yang diciptakan L. L. Zamenhof pada 1887.",
+      "category": "Bahasa Dunia",
+      "mediaType": "audio",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/LaEspero.ogg",
+      "mediaCredit": "LaEspero.ogg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:LaEspero.ogg"
+    },
+    {
+      "id": "q-bhs-03",
+      "question": "Bahasa Indonesia diresmikan sebagai bahasa persatuan lewat ikrar yang dikenal sebagai ...",
+      "options": ["Piagam Jakarta", "Sumpah Pemuda", "Dekret Presiden", "Proklamasi Kemerdekaan"],
+      "correctIndex": 1,
+      "explanation": "Sumpah Pemuda 28 Oktober 1928 menegaskan bahasa Indonesia sebagai bahasa persatuan bangsa.",
+      "category": "Bahasa Indonesia"
+    },
+    {
+      "id": "q-bhs-04",
+      "question": "Bahasa Indonesia berakar dari rumpun bahasa ...",
+      "options": ["Austronesia", "Indo-Eropa", "Sino-Tibet", "Afro-Asiatik"],
+      "correctIndex": 0,
+      "explanation": "Bahasa Indonesia dikembangkan dari bahasa Melayu yang termasuk rumpun bahasa Austronesia.",
+      "category": "Sejarah Bahasa"
+    },
+    {
+      "id": "q-bhs-05",
+      "question": "Kata yang memiliki makna lebih dari satu, tergantung konteks kalimatnya, disebut kata ...",
+      "options": ["Homonim", "Sinonim", "Antonim", "Akronim"],
+      "correctIndex": 0,
+      "explanation": "Homonim adalah kata yang ejaan dan/atau lafalnya sama tetapi maknanya berbeda, misalnya 'bisa' (racun ular) dan 'bisa' (mampu).",
+      "category": "Tata Bahasa"
+    },
+    {
+      "id": "q-bhs-06",
+      "question": "Peribahasa 'berat sama dipikul, ringan sama dijinjing' memiliki makna ...",
+      "options": ["Bekerja sendiri tanpa bantuan", "Kebersamaan dalam suka maupun duka", "Mencari keuntungan sepihak", "Menghindari tanggung jawab"],
+      "correctIndex": 1,
+      "explanation": "Peribahasa ini menggambarkan semangat gotong royong dan kebersamaan menanggung beban bersama.",
+      "category": "Peribahasa"
+    },
+    {
+      "id": "q-bhs-07",
+      "question": "Bahasa dengan jumlah penutur asli terbanyak di dunia saat ini adalah ...",
+      "options": ["Bahasa Inggris", "Bahasa Spanyol", "Bahasa Mandarin", "Bahasa Hindi"],
+      "correctIndex": 2,
+      "explanation": "Bahasa Mandarin memiliki jumlah penutur asli (native speaker) terbanyak di dunia.",
+      "category": "Bahasa Dunia"
+    },
+    {
+      "id": "q-bhs-08",
+      "question": "Imbuhan pada kata 'mempelajari' terdiri dari awalan dan akhiran, yaitu ...",
+      "options": ["me- dan -kan", "mem- dan -i", "ber- dan -an", "pe- dan -an"],
+      "correctIndex": 1,
+      "explanation": "Kata 'mempelajari' berasal dari 'pelajar' + awalan mem- dan akhiran -i.",
+      "category": "Tata Bahasa"
+    },
+    {
+      "id": "q-bhs-09",
+      "question": "Kalimat yang hanya terdiri dari satu subjek dan satu predikat disebut kalimat ...",
+      "options": ["Majemuk", "Tunggal", "Kompleks", "Interogatif"],
+      "correctIndex": 1,
+      "explanation": "Kalimat tunggal hanya memiliki satu struktur subjek-predikat, tanpa anak kalimat lain.",
+      "category": "Tata Bahasa"
+    },
+    {
+      "id": "q-bhs-10",
+      "question": "Aksara tradisional yang digunakan untuk menulis bahasa Jawa dan Bali disebut aksara ...",
+      "options": ["Pallawa", "Hanacaraka", "Lontara", "Rejang"],
+      "correctIndex": 1,
+      "explanation": "Aksara Hanacaraka (Carakan) digunakan untuk menuliskan bahasa Jawa dan berkerabat dengan aksara Bali.",
+      "category": "Aksara Nusantara"
+    },
+    {
+      "id": "q-bhs-11",
+      "question": "Bahasa isyarat yang digunakan komunitas tuli di Indonesia secara resmi disebut ...",
+      "options": ["BISINDO", "SIBI saja", "ASL Indonesia", "Bahasa Kode"],
+      "correctIndex": 0,
+      "explanation": "BISINDO (Bahasa Isyarat Indonesia) adalah bahasa isyarat alami yang berkembang di kalangan komunitas tuli Indonesia.",
+      "category": "Bahasa Dunia"
+    },
+    {
+      "id": "q-bhs-12",
+      "question": "Gabungan dua kata yang membentuk makna baru dan tidak bisa dipisah maknanya, seperti 'kambing hitam', disebut ...",
+      "options": ["Idiom", "Sinonim", "Homograf", "Polisemi"],
+      "correctIndex": 0,
+      "explanation": "Idiom memiliki makna kiasan yang berbeda dari makna harfiah kata-kata penyusunnya.",
+      "category": "Tata Bahasa"
+    },
+    {
+      "id": "q-bhs-13",
+      "question": "Kamus resmi yang menjadi acuan utama kosakata bahasa Indonesia adalah ...",
+      "options": ["Tesaurus Bahasa Indonesia", "Ensiklopedia Nusantara", "Kamus Besar Bahasa Indonesia (KBBI)", "Glosarium Nasional"],
+      "correctIndex": 2,
+      "explanation": "KBBI disusun dan diterbitkan oleh Badan Bahasa, Kementerian Pendidikan, sebagai acuan baku bahasa Indonesia.",
+      "category": "Bahasa Indonesia"
+    },
+    {
+      "id": "q-bhs-14",
+      "question": "Bahasa resmi yang digunakan di sebagian besar negara Amerika Latin, selain Brasil, adalah ...",
+      "options": ["Portugis", "Prancis", "Spanyol", "Italia"],
+      "correctIndex": 2,
+      "explanation": "Sebagian besar negara Amerika Latin berbahasa Spanyol, kecuali Brasil yang berbahasa Portugis.",
+      "category": "Bahasa Dunia"
+    },
+    {
+      "id": "q-bhs-15",
+      "question": "Ilmu yang mempelajari struktur, makna, dan penggunaan bahasa secara ilmiah disebut ...",
+      "options": ["Filologi", "Linguistik", "Semiotika", "Etimologi saja"],
+      "correctIndex": 1,
+      "explanation": "Linguistik adalah cabang ilmu yang mempelajari bahasa secara sistematis, mencakup fonologi, morfologi, sintaksis, dan semantik.",
+      "category": "Linguistik"
+    },
+    {
+      "id": "q-bhs-16",
+      "question": "Kata serapan 'kantor' dalam bahasa Indonesia berasal dari bahasa ...",
+      "options": ["Arab", "Belanda", "Sanskerta", "Portugis"],
+      "correctIndex": 1,
+      "explanation": "'Kantor' diserap dari kata Belanda 'kantoor' akibat pengaruh kolonial selama ratusan tahun.",
+      "category": "Sejarah Bahasa"
+    },
+    {
+      "id": "q-bhs-17",
+      "question": "Ejaan resmi bahasa Indonesia yang digunakan saat ini disebut ...",
+      "options": ["Ejaan Van Ophuijsen", "Ejaan Soewandi", "Ejaan Yang Disempurnakan (EYD)", "Ejaan Republik"],
+      "correctIndex": 2,
+      "explanation": "EYD (kini disebut Ejaan Bahasa Indonesia/EBI) adalah pedoman ejaan resmi yang berlaku sejak beberapa kali revisi terakhir.",
+      "category": "Bahasa Indonesia"
+    },
+    {
+      "id": "q-bhs-18",
+      "question": "Bahasa Latin, meskipun sudah tidak dipakai sebagai bahasa sehari-hari, masih dipakai luas dalam bidang ...",
+      "options": ["Kuliner", "Ilmu hukum dan biologi (tata nama ilmiah)", "Teknologi informasi", "Perdagangan modern"],
+      "correctIndex": 1,
+      "explanation": "Bahasa Latin masih digunakan dalam istilah hukum dan sistem penamaan ilmiah makhluk hidup (binomial nomenclature).",
+      "category": "Bahasa Dunia"
+    },
+    {
+      "id": "q-bhs-19",
+      "question": "Kata yang berlawanan makna, seperti 'besar' dan 'kecil', disebut ...",
+      "options": ["Antonim", "Sinonim", "Homonim", "Hiponim"],
+      "correctIndex": 0,
+      "explanation": "Antonim adalah pasangan kata dengan makna berlawanan.",
+      "category": "Tata Bahasa"
+    },
+    {
+      "id": "q-bhs-20",
+      "question": "Dialek atau logat bahasa Indonesia yang khas dari wilayah Betawi sering ditandai akhiran vokal seperti ...",
+      "options": ["-e menjadi -a", "-a menjadi -e", "-i menjadi -u", "-u menjadi -o"],
+      "correctIndex": 1,
+      "explanation": "Dialek Betawi cenderung mengubah bunyi akhir -a menjadi -e, misalnya 'apa' menjadi 'ape'.",
+      "category": "Dialek Nusantara"
+    },
+    {
+      "id": "q-bhs-21",
+      "question": "Huruf braille yang digunakan penyandang tunanetra untuk membaca dan menulis diciptakan oleh ...",
+      "options": ["Louis Braille", "Alexander Graham Bell", "Samuel Morse", "Thomas Edison"],
+      "correctIndex": 0,
+      "explanation": "Louis Braille, tunanetra asal Prancis, menciptakan sistem tulisan titik timbul ini pada abad ke-19.",
+      "category": "Aksara & Komunikasi"
+    },
+    {
+      "id": "q-bhs-22",
+      "question": "Bahasa daerah dengan jumlah penutur terbanyak di Indonesia adalah bahasa ...",
+      "options": ["Sunda", "Bugis", "Jawa", "Minang"],
+      "correctIndex": 2,
+      "explanation": "Bahasa Jawa memiliki penutur terbanyak di antara ratusan bahasa daerah di Indonesia.",
+      "category": "Bahasa Nusantara"
+    },
+    {
+      "id": "q-bhs-23",
+      "question": "Kalimat yang bertujuan menanyakan sesuatu dan biasanya diakhiri tanda tanya disebut kalimat ...",
+      "options": ["Imperatif", "Deklaratif", "Interogatif", "Eksklamatif"],
+      "correctIndex": 2,
+      "explanation": "Kalimat interogatif digunakan untuk bertanya, biasanya diawali kata tanya seperti apa, siapa, atau bagaimana.",
+      "category": "Tata Bahasa"
+    },
+    {
+      "id": "q-bhs-24",
+      "question": "Sistem tulisan yang digunakan bahasa Arab dibaca dari arah ...",
+      "options": ["Kiri ke kanan", "Kanan ke kiri", "Atas ke bawah", "Bawah ke atas"],
+      "correctIndex": 1,
+      "explanation": "Aksara Arab, seperti Ibrani, ditulis dan dibaca dari kanan ke kiri.",
+      "category": "Aksara Dunia"
+    },
+    {
+      "id": "q-bhs-25",
+      "question": "Gaya bahasa yang membandingkan dua hal secara langsung menggunakan kata 'bagai', 'seperti', atau 'laksana' disebut ...",
+      "options": ["Metafora", "Simile (perumpamaan)", "Personifikasi", "Hiperbola"],
+      "correctIndex": 1,
+      "explanation": "Simile membandingkan dua hal secara eksplisit menggunakan kata penghubung perbandingan.",
+      "category": "Gaya Bahasa"
+    },
+    {
+      "id": "q-bhs-26",
+      "question": "Bahasa resmi kedua yang banyak dipakai di Filipina selain bahasa Filipino (Tagalog) adalah ...",
+      "options": ["Spanyol", "Inggris", "Mandarin", "Melayu"],
+      "correctIndex": 1,
+      "explanation": "Bahasa Inggris menjadi bahasa resmi kedua di Filipina akibat sejarah kolonial Amerika Serikat.",
+      "category": "Bahasa Dunia"
+    },
+    {
+      "id": "q-bhs-27",
+      "question": "Gaya bahasa yang melebih-lebihkan suatu keadaan untuk memberi kesan dramatis, misalnya 'banjir air mata', disebut ...",
+      "options": ["Hiperbola", "Litotes", "Ironi", "Eufemisme"],
+      "correctIndex": 0,
+      "explanation": "Hiperbola menggunakan pernyataan berlebihan untuk menekankan efek dramatis atau emosional.",
+      "category": "Gaya Bahasa"
+    },
+    {
+      "id": "q-bhs-28",
+      "question": "Kata halus untuk menggantikan kata yang dianggap kurang sopan, misalnya 'wafat' untuk 'mati', disebut ...",
+      "options": ["Eufemisme", "Disfemisme", "Pleonasme", "Tautologi"],
+      "correctIndex": 0,
+      "explanation": "Eufemisme adalah penghalusan kata agar terdengar lebih sopan atau tidak menyinggung.",
+      "category": "Gaya Bahasa"
+    },
+    {
+      "id": "q-bhs-29",
+      "question": "Bahasa Melayu yang menjadi cikal bakal bahasa Indonesia digunakan sebagai bahasa perdagangan (lingua franca) di Nusantara sejak masa kerajaan ...",
+      "options": ["Sriwijaya", "Kutai", "Tarumanagara", "Demak"],
+      "correctIndex": 0,
+      "explanation": "Kerajaan Sriwijaya menjadikan bahasa Melayu Kuno sebagai bahasa perdagangan dan penyebaran agama di Nusantara sejak abad ke-7.",
+      "category": "Sejarah Bahasa"
+    },
+    {
+      "id": "q-bhs-30",
+      "question": "Bahasa yang dipakai oleh generasi kedua imigran yang sudah kehilangan sebagian penutur bahasa aslinya, dan terancam punah, disebut bahasa ...",
+      "options": ["Terancam punah (endangered)", "Kreol", "Pidgin", "Lingua franca"],
+      "correctIndex": 0,
+      "explanation": "Bahasa terancam punah adalah bahasa dengan jumlah penutur yang terus menurun dan berisiko tidak diwariskan ke generasi berikutnya.",
+      "category": "Linguistik"
+    }
+  ]
+}

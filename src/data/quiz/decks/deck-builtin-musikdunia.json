@@ -1,0 +1,423 @@
+{
+  "id": "deck-builtin-musikdunia",
+  "topicId": "musik-dunia",
+  "title": "Musik Dunia: Tokoh, Genre & Instrumen",
+  "description": "Kenali komponis legendaris, genre musik dari berbagai benua, dan lagu-lagu ikonik. Ada soal audio rekaman domain publik.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Musik",
+  "questions": [
+    {
+      "id": "q-msk-01",
+      "question": "Dengarkan rekaman ini, bagian lambat (Adagio) dari Piano Concerto No. 5 \"Emperor\". Siapakah komponisnya?",
+      "options": [
+        "Franz Schubert",
+        "Ludwig van Beethoven",
+        "Johannes Brahms",
+        "Frédéric Chopin"
+      ],
+      "correctIndex": 1,
+      "explanation": "Piano Concerto No. 5 in E-flat major, Op. 73 digubah Beethoven sekitar 1809–1811.",
+      "category": "Musik Klasik",
+      "mediaType": "audio",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Beethoven Op. 73 - 2 Adagio.ogg",
+      "mediaCredit": "Beethoven Op. 73 - 2 Adagio.ogg — Wikimedia Commons (CC BY-SA / Musopen, Ursula Oppens & DuPage Symphony Orchestra)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Beethoven_Op._73_-_2_Adagio.ogg"
+    },
+    {
+      "id": "q-msk-02",
+      "question": "Rekaman ini adalah movement ketiga (Rondo) dari karya untuk piano solo yang berdialog dengan orkestra. Bentuk komposisi ini disebut ...",
+      "options": [
+        "Simfoni",
+        "Sonata",
+        "Konserto",
+        "Nokturn"
+      ],
+      "correctIndex": 2,
+      "explanation": "Konserto adalah karya untuk instrumen solo yang diiringi orkestra. Ini Piano Concerto No. 1 karya Beethoven.",
+      "category": "Musik Klasik",
+      "mediaType": "audio",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Ludwig van Beethoven - piano concerto no. 1 in c major, op. 15 - iii. rondo (allegro scherzando).ogg",
+      "mediaCredit": "Ludwig van Beethoven - piano concerto no. 1 in c major, op. 15 - iii. rondo (allegro scherzando).ogg — Wikimedia Commons (Musopen, Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Ludwig_van_Beethoven_-_piano_concerto_no._1_in_c_major,_op._15_-_iii._rondo_(allegro_scherzando).ogg"
+    },
+    {
+      "id": "q-msk-03",
+      "question": "Komponis Austria pada potret ini menggubah opera 'The Marriage of Figaro' dan 'Don Giovanni'. Namanya ...",
+      "options": [
+        "Wolfgang Amadeus Mozart",
+        "Joseph Haydn",
+        "Antonio Salieri",
+        "Franz Liszt"
+      ],
+      "correctIndex": 0,
+      "explanation": "Mozart (1756–1791) menggubah lebih dari 600 karya meski wafat di usia 35 tahun.",
+      "category": "Musik Klasik",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Wolfgang-amadeus-mozart 1.jpg",
+      "mediaCredit": "Wolfgang-amadeus-mozart 1.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Wolfgang-amadeus-mozart_1.jpg"
+    },
+    {
+      "id": "q-msk-04",
+      "question": "Komponis Barok Jerman pada potret ini terkenal dengan 'Brandenburg Concertos' dan 'The Well-Tempered Clavier'. Siapakah dia?",
+      "options": [
+        "George Frideric Handel",
+        "Johann Sebastian Bach",
+        "Antonio Vivaldi",
+        "Claudio Monteverdi"
+      ],
+      "correctIndex": 1,
+      "explanation": "J.S. Bach (1685–1750) dianggap puncak musik Barok, terutama dalam kontrapung.",
+      "category": "Musik Klasik",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Johann Sebastian Bach.jpg",
+      "mediaCredit": "Johann Sebastian Bach.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Johann_Sebastian_Bach.jpg"
+    },
+    {
+      "id": "q-msk-05",
+      "question": "Trompetis dan penyanyi jazz asal New Orleans pada foto ini, terkenal lewat lagu 'What a Wonderful World', adalah ...",
+      "options": [
+        "Miles Davis",
+        "Duke Ellington",
+        "Louis Armstrong",
+        "Dizzy Gillespie"
+      ],
+      "correctIndex": 2,
+      "explanation": "Louis Armstrong (1901–1971) sangat berpengaruh dalam perkembangan jazz dan scat singing.",
+      "category": "Musik Modern",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Louis Armstrong NYWTS.jpg",
+      "mediaCredit": "Louis Armstrong NYWTS.jpg — Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Louis_Armstrong_NYWTS.jpg"
+    },
+    {
+      "id": "q-msk-06",
+      "question": "'Empat Musim' (The Four Seasons), rangkaian konserto biola yang sangat populer, digubah oleh ...",
+      "options": [
+        "Antonio Vivaldi",
+        "Tomaso Albinoni",
+        "Arcangelo Corelli",
+        "Giuseppe Verdi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Vivaldi, komponis Venesia era Barok, menerbitkan The Four Seasons pada 1725.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-07",
+      "question": "Komponis Polandia yang dijuluki 'penyair piano' dan terkenal dengan Nokturn serta Polonaise adalah ...",
+      "options": [
+        "Franz Liszt",
+        "Robert Schumann",
+        "Frédéric Chopin",
+        "Sergei Rachmaninoff"
+      ],
+      "correctIndex": 2,
+      "explanation": "Chopin (1810–1849) menulis hampir seluruh karyanya untuk piano.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-08",
+      "question": "Balet 'Swan Lake' (Danau Angsa) digubah oleh komponis Rusia ...",
+      "options": [
+        "Igor Stravinsky",
+        "Pyotr Ilyich Tchaikovsky",
+        "Nikolai Rimsky-Korsakov",
+        "Modest Mussorgsky"
+      ],
+      "correctIndex": 1,
+      "explanation": "Swan Lake karya Tchaikovsky pertama dipentaskan tahun 1877 di Moskow.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-09",
+      "question": "Waltz 'The Blue Danube' yang terkenal digubah oleh ...",
+      "options": [
+        "Johann Strauss II",
+        "Johannes Brahms",
+        "Richard Wagner",
+        "Gustav Mahler"
+      ],
+      "correctIndex": 0,
+      "explanation": "Johann Strauss II dijuluki 'Raja Waltz' dari Wina; The Blue Danube dirilis 1867.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-10",
+      "question": "Genre musik dan tarian yang lahir di Buenos Aires, Argentina, serta terkenal dengan gaya dramatis adalah ...",
+      "options": [
+        "Samba",
+        "Tango",
+        "Salsa",
+        "Flamenco"
+      ],
+      "correctIndex": 1,
+      "explanation": "Tango berkembang di kawasan Río de la Plata (Argentina–Uruguay) akhir abad ke-19.",
+      "category": "Musik Dunia"
+    },
+    {
+      "id": "q-msk-11",
+      "question": "Musik reggae yang mendunia lewat Bob Marley berasal dari negara ...",
+      "options": [
+        "Kuba",
+        "Jamaika",
+        "Brasil",
+        "Trinidad"
+      ],
+      "correctIndex": 1,
+      "explanation": "Reggae muncul di Jamaika akhir 1960-an, berakar dari ska dan rocksteady.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-msk-12",
+      "question": "Genre bossa nova yang halus dan santai, misalnya 'The Girl from Ipanema', berasal dari negara ...",
+      "options": [
+        "Portugal",
+        "Meksiko",
+        "Brasil",
+        "Spanyol"
+      ],
+      "correctIndex": 2,
+      "explanation": "Bossa nova lahir di Rio de Janeiro akhir 1950-an, memadukan samba dan jazz.",
+      "category": "Musik Dunia"
+    },
+    {
+      "id": "q-msk-13",
+      "question": "Band asal Liverpool, Inggris, yang beranggotakan John Lennon, Paul McCartney, George Harrison, dan Ringo Starr adalah ...",
+      "options": [
+        "The Rolling Stones",
+        "The Beatles",
+        "Led Zeppelin",
+        "The Who"
+      ],
+      "correctIndex": 1,
+      "explanation": "The Beatles terbentuk 1960 dan menjadi band terlaris sepanjang masa.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-msk-14",
+      "question": "Elvis Presley dijuluki 'The King of ...'",
+      "options": [
+        "Pop",
+        "Rock and Roll",
+        "Country",
+        "Soul"
+      ],
+      "correctIndex": 1,
+      "explanation": "Elvis (1935–1977) mempopulerkan rock and roll pada 1950-an.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-msk-15",
+      "question": "Album 'Thriller' (1982) yang menjadi album terlaris sepanjang masa adalah karya ...",
+      "options": [
+        "Prince",
+        "Michael Jackson",
+        "Stevie Wonder",
+        "Whitney Houston"
+      ],
+      "correctIndex": 1,
+      "explanation": "Thriller karya Michael Jackson terjual puluhan juta kopi di seluruh dunia.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-msk-16",
+      "question": "Vokalis band Queen yang membawakan 'Bohemian Rhapsody' adalah ...",
+      "options": [
+        "Robert Plant",
+        "Freddie Mercury",
+        "Mick Jagger",
+        "David Bowie"
+      ],
+      "correctIndex": 1,
+      "explanation": "Freddie Mercury (1946–1991) dikenal dengan jangkauan vokal dan penampilan panggung memukau.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-msk-17",
+      "question": "Hip-hop sebagai budaya musik lahir pada 1970-an di distrik ... New York.",
+      "options": [
+        "Harlem",
+        "Bronx",
+        "Brooklyn",
+        "Queens"
+      ],
+      "correctIndex": 1,
+      "explanation": "Hip-hop lahir dari pesta jalanan di South Bronx, dipelopori DJ Kool Herc.",
+      "category": "Musik Modern"
+    },
+    {
+      "id": "q-msk-18",
+      "question": "Alat musik petik bersenar panjang dari India yang dipopulerkan Ravi Shankar adalah ...",
+      "options": [
+        "Sitar",
+        "Sarod",
+        "Tabla",
+        "Veena"
+      ],
+      "correctIndex": 0,
+      "explanation": "Sitar dimainkan Ravi Shankar, yang membawa musik India ke panggung dunia dan mempengaruhi The Beatles.",
+      "category": "Instrumen"
+    },
+    {
+      "id": "q-msk-19",
+      "question": "Alat musik tiup panjang dari kayu milik suku Aborigin Australia adalah ...",
+      "options": [
+        "Didgeridoo",
+        "Ocarina",
+        "Shakuhachi",
+        "Panpipe"
+      ],
+      "correctIndex": 0,
+      "explanation": "Didgeridoo telah dimainkan suku Aborigin di Australia utara selama ribuan tahun.",
+      "category": "Instrumen"
+    },
+    {
+      "id": "q-msk-20",
+      "question": "Musik flamenco yang penuh ekspresi, dengan gitar dan hentakan kaki, berasal dari ...",
+      "options": [
+        "Portugal",
+        "Andalusia, Spanyol",
+        "Italia Selatan",
+        "Yunani"
+      ],
+      "correctIndex": 1,
+      "explanation": "Flamenco berkembang di Andalusia, Spanyol selatan, dan diakui UNESCO tahun 2010.",
+      "category": "Musik Dunia"
+    },
+    {
+      "id": "q-msk-21",
+      "question": "Penyanyi berjangkauan suara tertinggi pada paduan suara wanita disebut ...",
+      "options": [
+        "Alto",
+        "Sopran",
+        "Tenor",
+        "Bariton"
+      ],
+      "correctIndex": 1,
+      "explanation": "Sopran adalah register suara tertinggi, sedangkan alto lebih rendah.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-22",
+      "question": "Alat musik piano standar modern memiliki tuts sebanyak ...",
+      "options": [
+        "76",
+        "88",
+        "92",
+        "100"
+      ],
+      "correctIndex": 1,
+      "explanation": "Piano modern memiliki 88 tuts: 52 putih dan 36 hitam.",
+      "category": "Instrumen"
+    },
+    {
+      "id": "q-msk-23",
+      "question": "Orang yang memimpin orkestra dengan gerakan tangan atau tongkat disebut ...",
+      "options": [
+        "Solois",
+        "Konduktor",
+        "Arranger",
+        "Komposer"
+      ],
+      "correctIndex": 1,
+      "explanation": "Konduktor mengatur tempo, dinamika, dan keselarasan seluruh pemain orkestra.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-24",
+      "question": "Lagu kebangsaan 'Indonesia Raya' diciptakan oleh ...",
+      "options": [
+        "Ismail Marzuki",
+        "W.R. Supratman",
+        "Ibu Sud",
+        "C. Simanjuntak"
+      ],
+      "correctIndex": 1,
+      "explanation": "W.R. Supratman pertama kali memperdengarkan Indonesia Raya pada Kongres Pemuda II, 28 Oktober 1928.",
+      "category": "Musik Indonesia"
+    },
+    {
+      "id": "q-msk-25",
+      "question": "Komponis lagu perjuangan 'Halo, Halo Bandung' dan 'Gugur Bunga' adalah ...",
+      "options": [
+        "Ismail Marzuki",
+        "Kusbini",
+        "Cornel Simanjuntak",
+        "Ibu Sud"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ismail Marzuki (1914–1958) menciptakan ratusan lagu dan dinobatkan Pahlawan Nasional.",
+      "category": "Musik Indonesia"
+    },
+    {
+      "id": "q-msk-26",
+      "question": "Musik dangdut yang identik dengan gendang khas dan diwarnai musik India–Melayu, dijuluki 'Raja Dangdut' untuk ...",
+      "options": [
+        "Rhoma Irama",
+        "Meggy Z",
+        "Elvy Sukaesih",
+        "A. Rafiq"
+      ],
+      "correctIndex": 0,
+      "explanation": "Rhoma Irama dengan grup Soneta mempopulerkan dangdut sejak 1970-an.",
+      "category": "Musik Indonesia"
+    },
+    {
+      "id": "q-msk-27",
+      "question": "Gamelan diakui UNESCO sebagai warisan budaya takbenda pada tahun ...",
+      "options": [
+        "2003",
+        "2010",
+        "2021",
+        "2015"
+      ],
+      "correctIndex": 2,
+      "explanation": "UNESCO menetapkan Gamelan sebagai Intangible Cultural Heritage pada Desember 2021.",
+      "category": "Musik Indonesia"
+    },
+    {
+      "id": "q-msk-28",
+      "question": "Musik keroncong yang lembut di Indonesia dipengaruhi tradisi musik dari ...",
+      "options": [
+        "Portugis",
+        "Belanda",
+        "Spanyol",
+        "Prancis"
+      ],
+      "correctIndex": 0,
+      "explanation": "Keroncong berakar dari musik Portugis yang dibawa pelaut dan budak ke Nusantara.",
+      "category": "Musik Indonesia"
+    },
+    {
+      "id": "q-msk-29",
+      "question": "Opera 'La Traviata' dan 'Aida' digubah oleh komponis Italia ...",
+      "options": [
+        "Giacomo Puccini",
+        "Giuseppe Verdi",
+        "Gioachino Rossini",
+        "Gaetano Donizetti"
+      ],
+      "correctIndex": 1,
+      "explanation": "Giuseppe Verdi (1813–1901) adalah maestro opera Italia abad ke-19.",
+      "category": "Musik Klasik"
+    },
+    {
+      "id": "q-msk-30",
+      "question": "Genre musik pop asal Korea Selatan yang memadukan vokal, koreografi, dan visual, kini mendunia dengan sebutan ...",
+      "options": [
+        "J-pop",
+        "K-pop",
+        "C-pop",
+        "Mandopop"
+      ],
+      "correctIndex": 1,
+      "explanation": "K-pop berkembang sejak 1990-an dan mendunia lewat grup seperti BTS dan BLACKPINK.",
+      "category": "Musik Modern"
+    }
+  ]
+}

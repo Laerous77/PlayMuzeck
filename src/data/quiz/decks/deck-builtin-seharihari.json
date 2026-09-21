@@ -1,0 +1,407 @@
+{
+  "id": "deck-builtin-seharihari",
+  "topicId": "sehari-hari-praktis",
+  "title": "Hidup Sehari-hari: Rumah, Uang & Kesehatan",
+  "description": "Pengetahuan praktis seputar kesehatan, keuangan pribadi, keselamatan, lalu lintas, dan urusan rumah tangga.",
+  "cardCount": 30,
+  "difficulty": "Mudah",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Kehidupan Sehari hari",
+  "questions": [
+    {
+      "id": "q-shr-01",
+      "question": "Simbol pada gambar ini, tiga panah yang saling mengejar, biasanya menandakan bahwa bahan atau kemasan tersebut ...",
+      "options": [
+        "Beracun",
+        "Mudah terbakar",
+        "Dapat didaur ulang",
+        "Hanya sekali pakai"
+      ],
+      "correctIndex": 2,
+      "explanation": "Simbol tiga panah membentuk segitiga adalah simbol universal daur ulang.",
+      "category": "Lingkungan",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Recycling_symbol,_white_on_blue.svg",
+      "mediaCredit": "Recycling symbol, white on blue.svg — Wikimedia Commons (simbol daur ulang universal, domain publik)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Recycling_symbol,_white_on_blue.svg"
+    },
+    {
+      "id": "q-shr-02",
+      "question": "Menurut anjuran umum, orang dewasa sebaiknya minum air putih sekitar berapa gelas per hari?",
+      "options": [
+        "Sekitar 8 gelas",
+        "1 gelas",
+        "15 gelas",
+        "3 gelas"
+      ],
+      "correctIndex": 0,
+      "explanation": "Anjuran umum sekitar 8 gelas (± 2 liter) per hari, tergantung aktivitas dan cuaca.",
+      "category": "Kesehatan"
+    },
+    {
+      "id": "q-shr-03",
+      "question": "Nomor telepon darurat kepolisian di Indonesia adalah ...",
+      "options": [
+        "110",
+        "113",
+        "119",
+        "115"
+      ],
+      "correctIndex": 0,
+      "explanation": "110 untuk Polisi, 113 untuk pemadam kebakaran, dan 115 untuk SAR.",
+      "category": "Keselamatan"
+    },
+    {
+      "id": "q-shr-04",
+      "question": "Nomor telepon darurat pemadam kebakaran di Indonesia adalah ...",
+      "options": [
+        "112",
+        "113",
+        "110",
+        "115"
+      ],
+      "correctIndex": 1,
+      "explanation": "113 adalah nomor layanan pemadam kebakaran di Indonesia.",
+      "category": "Keselamatan"
+    },
+    {
+      "id": "q-shr-05",
+      "question": "Berapa lama minimal mencuci tangan dengan sabun agar efektif?",
+      "options": [
+        "Sekitar 20 detik",
+        "5 detik",
+        "2 menit",
+        "2 detik"
+      ],
+      "correctIndex": 0,
+      "explanation": "Gosok telapak, punggung tangan, sela jari, dan kuku minimal 20 detik lalu bilas.",
+      "category": "Kesehatan"
+    },
+    {
+      "id": "q-shr-06",
+      "question": "Suhu tubuh normal manusia sehat berada di sekitar ...",
+      "options": [
+        "25 °C",
+        "42 °C",
+        "30 °C",
+        "37 °C"
+      ],
+      "correctIndex": 3,
+      "explanation": "Suhu tubuh normal sekitar 36,5–37,5 °C.",
+      "category": "Kesehatan"
+    },
+    {
+      "id": "q-shr-07",
+      "question": "Jenis lampu rumah tangga yang paling hemat energi saat ini adalah lampu ...",
+      "options": [
+        "Neon panjang tanpa ballast",
+        "Pijar",
+        "LED",
+        "Halogen"
+      ],
+      "correctIndex": 2,
+      "explanation": "Lampu LED menghasilkan cahaya yang sama dengan daya jauh lebih kecil dan awet.",
+      "category": "Rumah Tangga"
+    },
+    {
+      "id": "q-shr-08",
+      "question": "Pada tabungan atau investasi, 'bunga majemuk' berarti bunga dihitung dari ...",
+      "options": [
+        "Bunga terakhir saja",
+        "Saldo rata-rata tahunan",
+        "Pokok saja",
+        "Pokok ditambah bunga sebelumnya"
+      ],
+      "correctIndex": 3,
+      "explanation": "Bunga majemuk membuat bunga ikut berbunga sehingga saldo tumbuh lebih cepat.",
+      "category": "Keuangan"
+    },
+    {
+      "id": "q-shr-09",
+      "question": "Dana darurat yang ideal umumnya setara dengan pengeluaran selama ...",
+      "options": [
+        "10 hari",
+        "5 tahun",
+        "1 minggu",
+        "3–6 bulan"
+      ],
+      "correctIndex": 3,
+      "explanation": "Perencana keuangan umumnya menyarankan 3–6 bulan pengeluaran rutin.",
+      "category": "Keuangan"
+    },
+    {
+      "id": "q-shr-10",
+      "question": "Inflasi adalah ...",
+      "options": [
+        "Kenaikan harga barang dan jasa secara umum dan terus-menerus",
+        "Bertambahnya jumlah penduduk",
+        "Turunnya nilai tukar rupiah saja",
+        "Naiknya harga satu barang saat hari raya"
+      ],
+      "correctIndex": 0,
+      "explanation": "Inflasi menurunkan daya beli uang dari waktu ke waktu.",
+      "category": "Keuangan"
+    },
+    {
+      "id": "q-shr-11",
+      "question": "Dalam aturan anggaran 50/30/20, angka 50 persen dialokasikan untuk ...",
+      "options": [
+        "Tabungan",
+        "Kebutuhan pokok",
+        "Utang konsumtif",
+        "Hiburan"
+      ],
+      "correctIndex": 1,
+      "explanation": "50% kebutuhan, 30% keinginan, 20% tabungan atau pelunasan utang.",
+      "category": "Keuangan"
+    },
+    {
+      "id": "q-shr-12",
+      "question": "Keterangan 'best before' pada kemasan makanan menunjukkan ...",
+      "options": [
+        "Harga terbaik",
+        "Tanggal produk pasti beracun",
+        "Batas waktu kualitas terbaik produk",
+        "Tanggal produksi"
+      ],
+      "correctIndex": 2,
+      "explanation": "'Best before' terkait mutu terbaik, sedangkan 'expiry date' terkait batas aman konsumsi.",
+      "category": "Belanja"
+    },
+    {
+      "id": "q-shr-13",
+      "question": "Pada tekanan udara normal di permukaan laut, air mendidih pada suhu ...",
+      "options": [
+        "90 °C",
+        "120 °C",
+        "80 °C",
+        "100 °C"
+      ],
+      "correctIndex": 3,
+      "explanation": "Titik didih air murni di permukaan laut adalah 100 °C.",
+      "category": "Dapur"
+    },
+    {
+      "id": "q-shr-14",
+      "question": "Rata-rata durasi tidur yang dianjurkan untuk orang dewasa adalah ...",
+      "options": [
+        "11–12 jam",
+        "7–9 jam",
+        "4–5 jam",
+        "2–3 jam"
+      ],
+      "correctIndex": 1,
+      "explanation": "Sebagian besar orang dewasa membutuhkan 7–9 jam tidur setiap malam.",
+      "category": "Kesehatan"
+    },
+    {
+      "id": "q-shr-15",
+      "question": "Menyikat gigi sebaiknya dilakukan minimal berapa kali sehari?",
+      "options": [
+        "1 kali seminggu",
+        "5 kali",
+        "1 kali sebulan",
+        "2 kali"
+      ],
+      "correctIndex": 3,
+      "explanation": "Sikat gigi pagi setelah sarapan dan malam sebelum tidur.",
+      "category": "Kesehatan"
+    },
+    {
+      "id": "q-shr-16",
+      "question": "Lampu lalu lintas berwarna apa yang berarti kendaraan harus berhenti?",
+      "options": [
+        "Putih",
+        "Hijau",
+        "Merah",
+        "Biru"
+      ],
+      "correctIndex": 2,
+      "explanation": "Merah = berhenti, kuning = hati-hati, hijau = jalan.",
+      "category": "Lalu Lintas"
+    },
+    {
+      "id": "q-shr-17",
+      "question": "Zebra cross adalah marka jalan yang diperuntukkan bagi ...",
+      "options": [
+        "Jalur balap",
+        "Parkir motor",
+        "Pemberhentian bus",
+        "Penyeberang jalan"
+      ],
+      "correctIndex": 3,
+      "explanation": "Kendaraan wajib memberi kesempatan pejalan kaki yang menyeberang di zebra cross.",
+      "category": "Lalu Lintas"
+    },
+    {
+      "id": "q-shr-18",
+      "question": "Fungsi utama MCB atau sekering di instalasi listrik rumah adalah ...",
+      "options": [
+        "Menghemat tagihan listrik",
+        "Menambah tegangan listrik",
+        "Memutus arus saat terjadi korsleting atau beban berlebih",
+        "Menyimpan energi listrik"
+      ],
+      "correctIndex": 2,
+      "explanation": "MCB melindungi kabel dan perangkat dari kelebihan arus sehingga mencegah kebakaran.",
+      "category": "Rumah Tangga"
+    },
+    {
+      "id": "q-shr-19",
+      "question": "Tempe, makanan khas Indonesia, dibuat dari fermentasi ...",
+      "options": [
+        "Jagung",
+        "Kacang tanah",
+        "Kedelai",
+        "Singkong"
+      ],
+      "correctIndex": 2,
+      "explanation": "Tempe dibuat dari kedelai yang difermentasi memakai kapang Rhizopus.",
+      "category": "Kuliner"
+    },
+    {
+      "id": "q-shr-20",
+      "question": "Pertolongan pertama yang tepat untuk luka bakar ringan adalah ...",
+      "options": [
+        "Mengoleskan pasta gigi",
+        "Mengalirkan air bersih dingin pada luka",
+        "Mengoleskan mentega",
+        "Menempelkan es batu langsung"
+      ],
+      "correctIndex": 1,
+      "explanation": "Alirkan air mengalir suhu ruang selama beberapa menit, jangan pakai pasta gigi atau mentega.",
+      "category": "Pertolongan Pertama"
+    },
+    {
+      "id": "q-shr-21",
+      "question": "Saat mimisan, posisi yang dianjurkan adalah ...",
+      "options": [
+        "Mendongak ke belakang",
+        "Duduk condong ke depan sambil menekan cuping hidung",
+        "Berdiri sambil menahan napas",
+        "Berbaring telentang"
+      ],
+      "correctIndex": 1,
+      "explanation": "Condong ke depan mencegah darah tertelan; tekan bagian lunak hidung sekitar 10 menit.",
+      "category": "Pertolongan Pertama"
+    },
+    {
+      "id": "q-shr-22",
+      "question": "Garis-garis hitam dengan deretan angka di kemasan produk (barcode) berfungsi untuk ...",
+      "options": [
+        "Membaca kode produk dengan pemindai",
+        "Menandai produk beracun",
+        "Menghias kemasan",
+        "Menunjukkan tanggal kedaluwarsa"
+      ],
+      "correctIndex": 0,
+      "explanation": "Barcode menyimpan kode produk yang dibaca pemindai kasir untuk harga dan stok.",
+      "category": "Belanja"
+    },
+    {
+      "id": "q-shr-23",
+      "question": "Mengapa pakaian putih dan pakaian berwarna gelap sebaiknya dicuci terpisah?",
+      "options": [
+        "Agar pakaian lebih wangi",
+        "Agar zat warna yang luntur tidak menempel",
+        "Agar deterjen lebih hemat",
+        "Agar pakaian cepat kering"
+      ],
+      "correctIndex": 1,
+      "explanation": "Warna gelap yang luntur dapat menodai pakaian putih.",
+      "category": "Rumah Tangga"
+    },
+    {
+      "id": "q-shr-24",
+      "question": "kWh yang tertera pada tagihan listrik adalah satuan untuk ...",
+      "options": [
+        "Suhu peralatan",
+        "Energi listrik yang dipakai",
+        "Tegangan listrik",
+        "Hambatan kabel"
+      ],
+      "correctIndex": 1,
+      "explanation": "1 kWh = pemakaian daya 1 kilowatt selama 1 jam.",
+      "category": "Rumah Tangga"
+    },
+    {
+      "id": "q-shr-25",
+      "question": "Indeks Massa Tubuh (IMT) dihitung dengan cara ...",
+      "options": [
+        "Berat badan dikurangi tinggi badan",
+        "Berat badan dikali tinggi badan",
+        "Berat badan (kg) dibagi tinggi badan (m) kuadrat",
+        "Tinggi badan dibagi berat badan"
+      ],
+      "correctIndex": 2,
+      "explanation": "IMT = kg / m²; digunakan sebagai gambaran awal status berat badan.",
+      "category": "Kesehatan"
+    },
+    {
+      "id": "q-shr-26",
+      "question": "Berapa selisih waktu antara WIB dan WIT di Indonesia?",
+      "options": [
+        "3 jam",
+        "2 jam",
+        "4 jam",
+        "1 jam"
+      ],
+      "correctIndex": 1,
+      "explanation": "WIB = UTC+7, WITA = UTC+8, WIT = UTC+9.",
+      "category": "Waktu"
+    },
+    {
+      "id": "q-shr-27",
+      "question": "NPWP digunakan untuk keperluan ...",
+      "options": [
+        "Kepemilikan kendaraan",
+        "Pembuatan paspor",
+        "Pemilihan umum",
+        "Administrasi perpajakan"
+      ],
+      "correctIndex": 3,
+      "explanation": "NPWP adalah Nomor Pokok Wajib Pajak untuk identitas perpajakan.",
+      "category": "Administrasi"
+    },
+    {
+      "id": "q-shr-28",
+      "question": "Sisa sayuran dan kulit buah dapat diolah menjadi ...",
+      "options": [
+        "Kompos",
+        "Plastik",
+        "Kaca",
+        "Logam"
+      ],
+      "correctIndex": 0,
+      "explanation": "Sampah organik terurai dan dapat dijadikan pupuk kompos.",
+      "category": "Lingkungan"
+    },
+    {
+      "id": "q-shr-29",
+      "question": "Manakah kebiasaan yang membantu menghemat air di rumah?",
+      "options": [
+        "Menutup keran saat menyikat gigi",
+        "Menyiram halaman siang hari terus-menerus",
+        "Mencuci mobil setiap hari",
+        "Membiarkan keran mengalir saat mandi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Menutup keran saat tidak dipakai menghemat banyak liter air tiap hari.",
+      "category": "Lingkungan"
+    },
+    {
+      "id": "q-shr-30",
+      "question": "Zat gizi yang menjadi sumber energi utama bagi tubuh adalah ...",
+      "options": [
+        "Karbohidrat",
+        "Mineral",
+        "Vitamin",
+        "Serat"
+      ],
+      "correctIndex": 0,
+      "explanation": "Karbohidrat dipecah menjadi glukosa untuk energi utama tubuh.",
+      "category": "Gizi"
+    }
+  ]
+}

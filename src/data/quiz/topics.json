@@ -1,0 +1,122 @@
+[
+  {
+    "id": "sains",
+    "title": "Sains & Kosmologi",
+    "description": "Materi fisika dan alam semesta.",
+    "iconName": "Orbit",
+    "price": 0,
+    "badge": "Alam"
+  },
+  {
+    "id": "sejarah",
+    "title": "Peradaban Dunia",
+    "description": "Arkeologi dan sejarah kebudayaan.",
+    "iconName": "Landmark",
+    "price": 0,
+    "badge": "Sosial"
+  },
+  {
+    "id": "musik",
+    "title": "Teori Musik & Akustik",
+    "description": "Harmoni dan gelombang nada.",
+    "iconName": "Music",
+    "price": 0,
+    "badge": "Musik"
+  },
+  {
+    "id": "olahraga-dunia",
+    "title": "Olahraga Dunia",
+    "description": "Aturan, sejarah, dan lambang olahraga dunia.",
+    "iconName": "Trophy",
+    "price": 0,
+    "badge": "Olahraga"
+  },
+  {
+    "id": "sehari-hari-praktis",
+    "title": "Hidup Sehari-hari",
+    "description": "Kesehatan, keuangan, dan urusan rumah tangga.",
+    "iconName": "Home",
+    "price": 0,
+    "badge": "Kehidupan Sehari hari"
+  },
+  {
+    "id": "matematika-esensial",
+    "title": "Matematika Esensial",
+    "description": "Hitungan, geometri, dan logika.",
+    "iconName": "Calculator",
+    "price": 0,
+    "badge": "Matematika"
+  },
+  {
+    "id": "seni-budaya",
+    "title": "Seni & Budaya",
+    "description": "Lukisan, musik, tari, dan warisan budaya dunia.",
+    "iconName": "Palette",
+    "price": 0,
+    "badge": "Seni"
+  },
+  {
+    "id": "teknologi-digital",
+    "title": "Teknologi Digital",
+    "description": "Komputer, internet, AI, dan penemuan teknologi dunia.",
+    "iconName": "Cpu",
+    "price": 0,
+    "badge": "Teknologi"
+  },
+  {
+    "id": "alam-lingkungan",
+    "title": "Alam & Lingkungan",
+    "description": "Geologi, cuaca, hewan, tumbuhan, dan fenomena bumi.",
+    "iconName": "Leaf",
+    "price": 0,
+    "badge": "Alam"
+  },
+  {
+    "id": "bahasa-sastra",
+    "title": "Bahasa & Linguistik",
+    "description": "Tata bahasa, asal-usul aksara, dan ragam bahasa dunia.",
+    "iconName": "Languages",
+    "price": 0,
+    "badge": "Bahasa"
+  },
+  {
+    "id": "fiksi-imajinasi",
+    "title": "Fiksi & Imajinasi",
+    "description": "Novel, dongeng, dan tokoh-tokoh dunia khayal.",
+    "iconName": "BookOpen",
+    "price": 0,
+    "badge": "Fiksi"
+  },
+  {
+    "id": "masyarakat-sosial",
+    "title": "Masyarakat & Organisasi Dunia",
+    "description": "Struktur sosial, organisasi internasional, dan isu kemasyarakatan.",
+    "iconName": "Users",
+    "price": 0,
+    "badge": "Sosial"
+  },
+  {
+    "id": "musik-dunia",
+    "title": "Musik Dunia",
+    "description": "Tokoh, genre, dan instrumen musik dari berbagai benua.",
+    "iconName": "Music",
+    "price": 0,
+    "badge": "Musik"
+  },
+  {
+    "id": "psikologi",
+    "title": "Psikologi",
+    "description": "Perilaku, pikiran, kepribadian, dan eksperimen klasik.",
+    "iconName": "Brain",
+    "price": 0,
+    "badge": "Psikologi"
+  },
+  {
+    "id": "kuliner-dunia",
+    "title": "Kuliner Dunia",
+    "description": "Makanan, rempah, dan minuman khas Nusantara dan dunia.",
+    "iconName": "Utensils",
+    "price": 0,
+    "badge": "Lainnya"
+  }
+]

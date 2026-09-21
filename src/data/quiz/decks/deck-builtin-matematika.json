@@ -1,0 +1,411 @@
+{
+  "id": "deck-builtin-matematika",
+  "topicId": "matematika-esensial",
+  "title": "Matematika Esensial: Hitungan, Geometri & Logika",
+  "description": "Aritmetika, aljabar, geometri, statistika, peluang, dan penalaran logis tingkat menengah.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Matematika",
+  "questions": [
+    {
+      "id": "q-mtk-01",
+      "question": "Animasi pada gambar ini memperlihatkan bukti dari teorema ...",
+      "options": [
+        "Fermat",
+        "Pythagoras",
+        "Thales",
+        "Euclid"
+      ],
+      "correctIndex": 1,
+      "explanation": "Animasi menyusun ulang kotak sisi-sisi segitiga siku-siku untuk menunjukkan a² + b² = c².",
+      "category": "Geometri",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Pythagoras-2a.gif",
+      "mediaCredit": "Pythagoras-2a.gif — Alvesgaspar, Wikimedia Commons (CC BY-SA 3.0)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Pythagoras-2a.gif"
+    },
+    {
+      "id": "q-mtk-02",
+      "question": "Video ini memperlihatkan sebuah polinomial beserta turunannya. Turunan pertama dari f(x) = x³ adalah ...",
+      "options": [
+        "3x²",
+        "3x",
+        "x⁴/4",
+        "x²"
+      ],
+      "correctIndex": 0,
+      "explanation": "Aturan pangkat: turunan xⁿ adalah n·xⁿ⁻¹, sehingga d/dx x³ = 3x².",
+      "category": "Kalkulus",
+      "mediaType": "video",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Gauss_Lucas_Theorem_animation.webm",
+      "mediaCredit": "Gauss Lucas Theorem animation.webm — Wikimedia Commons (CC BY-SA 4.0)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Gauss_Lucas_Theorem_animation.webm"
+    },
+    {
+      "id": "q-mtk-03",
+      "question": "Berapakah 15% dari 200?",
+      "options": [
+        "45",
+        "15",
+        "30",
+        "20"
+      ],
+      "correctIndex": 2,
+      "explanation": "15/100 × 200 = 30.",
+      "category": "Aritmetika"
+    },
+    {
+      "id": "q-mtk-04",
+      "question": "Berapakah hasil dari √144?",
+      "options": [
+        "14",
+        "72",
+        "11",
+        "12"
+      ],
+      "correctIndex": 3,
+      "explanation": "12 × 12 = 144.",
+      "category": "Aritmetika"
+    },
+    {
+      "id": "q-mtk-05",
+      "question": "Jumlah besar seluruh sudut dalam sebuah segitiga adalah ...",
+      "options": [
+        "180°",
+        "90°",
+        "270°",
+        "360°"
+      ],
+      "correctIndex": 0,
+      "explanation": "Jumlah sudut dalam segitiga selalu 180°.",
+      "category": "Geometri"
+    },
+    {
+      "id": "q-mtk-06",
+      "question": "Luas lingkaran dengan jari-jari 7 cm (π = 22/7) adalah ...",
+      "options": [
+        "77 cm²",
+        "308 cm²",
+        "44 cm²",
+        "154 cm²"
+      ],
+      "correctIndex": 3,
+      "explanation": "L = πr² = 22/7 × 7 × 7 = 154 cm².",
+      "category": "Geometri"
+    },
+    {
+      "id": "q-mtk-07",
+      "question": "Keliling persegi dengan panjang sisi 9 cm adalah ...",
+      "options": [
+        "18 cm",
+        "27 cm",
+        "81 cm",
+        "36 cm"
+      ],
+      "correctIndex": 3,
+      "explanation": "Keliling = 4 × sisi = 4 × 9 = 36 cm.",
+      "category": "Geometri"
+    },
+    {
+      "id": "q-mtk-08",
+      "question": "Berapakah hasil dari 2¹⁰?",
+      "options": [
+        "2.048",
+        "512",
+        "1.024",
+        "100"
+      ],
+      "correctIndex": 2,
+      "explanation": "2¹⁰ = 1.024.",
+      "category": "Aritmetika"
+    },
+    {
+      "id": "q-mtk-09",
+      "question": "Bilangan prima terkecil adalah ...",
+      "options": [
+        "1",
+        "2",
+        "0",
+        "3"
+      ],
+      "correctIndex": 1,
+      "explanation": "2 adalah satu-satunya bilangan prima genap dan yang terkecil.",
+      "category": "Teori Bilangan"
+    },
+    {
+      "id": "q-mtk-10",
+      "question": "Faktor Persekutuan Terbesar (FPB) dari 12 dan 18 adalah ...",
+      "options": [
+        "2",
+        "6",
+        "36",
+        "3"
+      ],
+      "correctIndex": 1,
+      "explanation": "Faktor 12 = 1,2,3,4,6,12; faktor 18 = 1,2,3,6,9,18; FPB = 6.",
+      "category": "Teori Bilangan"
+    },
+    {
+      "id": "q-mtk-11",
+      "question": "Kelipatan Persekutuan Terkecil (KPK) dari 4 dan 6 adalah ...",
+      "options": [
+        "12",
+        "24",
+        "10",
+        "2"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kelipatan 4: 4,8,12; kelipatan 6: 6,12. KPK = 12.",
+      "category": "Teori Bilangan"
+    },
+    {
+      "id": "q-mtk-12",
+      "question": "Nilai x yang memenuhi persamaan 3x + 5 = 20 adalah ...",
+      "options": [
+        "3",
+        "6",
+        "5",
+        "15"
+      ],
+      "correctIndex": 2,
+      "explanation": "3x = 15 sehingga x = 5.",
+      "category": "Aljabar"
+    },
+    {
+      "id": "q-mtk-13",
+      "question": "Suku berikutnya dari barisan 2, 4, 8, 16, ... adalah ...",
+      "options": [
+        "20",
+        "32",
+        "30",
+        "24"
+      ],
+      "correctIndex": 1,
+      "explanation": "Setiap suku dikali 2 sehingga 16 × 2 = 32.",
+      "category": "Barisan & Deret"
+    },
+    {
+      "id": "q-mtk-14",
+      "question": "Rata-rata dari data 4, 8, 12, 16, 20 adalah ...",
+      "options": [
+        "16",
+        "14",
+        "12",
+        "10"
+      ],
+      "correctIndex": 2,
+      "explanation": "Jumlah = 60, dibagi 5 data = 12.",
+      "category": "Statistika"
+    },
+    {
+      "id": "q-mtk-15",
+      "question": "Median dari data 3, 7, 1, 9, 5 adalah ...",
+      "options": [
+        "5",
+        "7",
+        "1",
+        "9"
+      ],
+      "correctIndex": 0,
+      "explanation": "Data terurut 1,3,5,7,9; nilai tengah adalah 5.",
+      "category": "Statistika"
+    },
+    {
+      "id": "q-mtk-16",
+      "question": "Peluang muncul mata dadu genap pada pelemparan satu dadu adalah ...",
+      "options": [
+        "1/3",
+        "1/2",
+        "2/3",
+        "1/6"
+      ],
+      "correctIndex": 1,
+      "explanation": "Mata genap ada 3 (2,4,6) dari 6 kemungkinan, jadi 3/6 = 1/2.",
+      "category": "Peluang"
+    },
+    {
+      "id": "q-mtk-17",
+      "question": "Volume kubus dengan panjang rusuk 5 cm adalah ...",
+      "options": [
+        "150 cm³",
+        "25 cm³",
+        "75 cm³",
+        "125 cm³"
+      ],
+      "correctIndex": 3,
+      "explanation": "V = s³ = 5 × 5 × 5 = 125 cm³.",
+      "category": "Geometri"
+    },
+    {
+      "id": "q-mtk-18",
+      "question": "Berapakah hasil dari 5! (lima faktorial)?",
+      "options": [
+        "720",
+        "120",
+        "60",
+        "25"
+      ],
+      "correctIndex": 1,
+      "explanation": "5! = 5 × 4 × 3 × 2 × 1 = 120.",
+      "category": "Kombinatorika"
+    },
+    {
+      "id": "q-mtk-19",
+      "question": "Nilai pendekatan bilangan π (pi) sampai dua desimal adalah ...",
+      "options": [
+        "3,41",
+        "3,14",
+        "1,41",
+        "2,72"
+      ],
+      "correctIndex": 1,
+      "explanation": "π ≈ 3,14159…; sedangkan 2,72 adalah bilangan e dan 1,41 adalah √2.",
+      "category": "Aritmetika"
+    },
+    {
+      "id": "q-mtk-20",
+      "question": "Sebuah segitiga siku-siku memiliki sisi tegak 6 cm dan 8 cm. Panjang sisi miringnya adalah ...",
+      "options": [
+        "10 cm",
+        "12 cm",
+        "9 cm",
+        "14 cm"
+      ],
+      "correctIndex": 0,
+      "explanation": "c = √(6² + 8²) = √100 = 10 cm.",
+      "category": "Geometri"
+    },
+    {
+      "id": "q-mtk-21",
+      "question": "Nilai sin 30° adalah ...",
+      "options": [
+        "1/2",
+        "1",
+        "0",
+        "√3/2"
+      ],
+      "correctIndex": 0,
+      "explanation": "Nilai trigonometri istimewa: sin 30° = 1/2.",
+      "category": "Trigonometri"
+    },
+    {
+      "id": "q-mtk-22",
+      "question": "Harga sebuah tas Rp150.000 mendapat diskon 20%. Berapa yang harus dibayar?",
+      "options": [
+        "Rp120.000",
+        "Rp130.000",
+        "Rp30.000",
+        "Rp100.000"
+      ],
+      "correctIndex": 0,
+      "explanation": "Diskon = 20% × 150.000 = 30.000; bayar 150.000 − 30.000 = 120.000.",
+      "category": "Aritmetika Sosial"
+    },
+    {
+      "id": "q-mtk-23",
+      "question": "Berapa banyak diagonal pada sebuah segi enam?",
+      "options": [
+        "9",
+        "12",
+        "15",
+        "6"
+      ],
+      "correctIndex": 0,
+      "explanation": "Banyak diagonal = n(n−3)/2 = 6 × 3 / 2 = 9.",
+      "category": "Geometri"
+    },
+    {
+      "id": "q-mtk-24",
+      "question": "Berapakah hasil penjumlahan 1 + 2 + 3 + ... + 100?",
+      "options": [
+        "10.100",
+        "5.000",
+        "5.500",
+        "5.050"
+      ],
+      "correctIndex": 3,
+      "explanation": "Rumus Gauss: n(n+1)/2 = 100 × 101 / 2 = 5.050.",
+      "category": "Barisan & Deret"
+    },
+    {
+      "id": "q-mtk-25",
+      "question": "Semua kucing adalah hewan dan Tom adalah seorang kucing. Kesimpulan yang tepat adalah ...",
+      "options": [
+        "Tom adalah anjing",
+        "Semua hewan adalah kucing",
+        "Tom adalah hewan",
+        "Tom bukan hewan"
+      ],
+      "correctIndex": 2,
+      "explanation": "Silogisme: jika semua A adalah B dan x adalah A, maka x adalah B.",
+      "category": "Logika"
+    },
+    {
+      "id": "q-mtk-26",
+      "question": "Akar-akar persamaan kuadrat x² − 5x + 6 = 0 adalah ...",
+      "options": [
+        "x = −2 dan x = −3",
+        "x = 5 dan x = 6",
+        "x = 2 dan x = 3",
+        "x = 1 dan x = 6"
+      ],
+      "correctIndex": 2,
+      "explanation": "Faktorkan: (x − 2)(x − 3) = 0.",
+      "category": "Aljabar"
+    },
+    {
+      "id": "q-mtk-27",
+      "question": "Berapakah nilai log₁₀ 1000?",
+      "options": [
+        "100",
+        "10",
+        "3",
+        "30"
+      ],
+      "correctIndex": 2,
+      "explanation": "10³ = 1000 sehingga log₁₀ 1000 = 3.",
+      "category": "Logaritma"
+    },
+    {
+      "id": "q-mtk-28",
+      "question": "Bilangan biner 1010 sama dengan bilangan desimal ...",
+      "options": [
+        "20",
+        "5",
+        "12",
+        "10"
+      ],
+      "correctIndex": 3,
+      "explanation": "1×8 + 0×4 + 1×2 + 0×1 = 10.",
+      "category": "Sistem Bilangan"
+    },
+    {
+      "id": "q-mtk-29",
+      "question": "Sebuah mobil menempuh 120 km dalam waktu 2 jam. Kecepatan rata-ratanya adalah ...",
+      "options": [
+        "240 km/jam",
+        "120 km/jam",
+        "40 km/jam",
+        "60 km/jam"
+      ],
+      "correctIndex": 3,
+      "explanation": "Kecepatan = jarak / waktu = 120 / 2 = 60 km/jam.",
+      "category": "Aritmetika Sosial"
+    },
+    {
+      "id": "q-mtk-30",
+      "question": "Ada berapa cara memilih 2 orang dari 5 orang tanpa memperhatikan urutan?",
+      "options": [
+        "20 cara",
+        "10 cara",
+        "25 cara",
+        "5 cara"
+      ],
+      "correctIndex": 1,
+      "explanation": "C(5,2) = 5! / (2! × 3!) = 10.",
+      "category": "Kombinatorika"
+    }
+  ]
+}

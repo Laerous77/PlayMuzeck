@@ -1,0 +1,407 @@
+{
+  "id": "deck-builtin-kuliner",
+  "topicId": "kuliner-dunia",
+  "title": "Kuliner Nusantara & Dunia",
+  "description": "Uji wawasanmu tentang makanan, rempah, dan minuman khas Indonesia serta dunia.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Lainnya",
+  "questions": [
+    {
+      "id": "q-kul-01",
+      "question": "Hidangan Italia pada foto ini, dengan saus tomat, mozzarella, dan daun basil, bernama pizza ...",
+      "options": [
+        "Marinara",
+        "Margherita",
+        "Diavola",
+        "Quattro Formaggi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Pizza Margherita konon dibuat di Napoli tahun 1889 dengan warna bendera Italia: merah, putih, hijau.",
+      "category": "Kuliner Dunia",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Pizza Margherita stu spivack.jpg",
+      "mediaCredit": "Pizza Margherita stu spivack.jpg — Wikimedia Commons (CC BY-SA)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Pizza_Margherita_stu_spivack.jpg"
+    },
+    {
+      "id": "q-kul-02",
+      "question": "Rendang dinobatkan CNN sebagai salah satu makanan terlezat dunia. Hidangan ini berasal dari suku ...",
+      "options": [
+        "Batak",
+        "Minangkabau",
+        "Melayu Deli",
+        "Aceh"
+      ],
+      "correctIndex": 1,
+      "explanation": "Rendang khas Minangkabau, Sumatra Barat, dimasak lama dengan santan dan rempah.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-03",
+      "question": "Rempah yang paling mahal di dunia, berasal dari kepala putik bunga Crocus sativus, adalah ...",
+      "options": [
+        "Vanili",
+        "Saffron",
+        "Kapulaga",
+        "Cengkih"
+      ],
+      "correctIndex": 1,
+      "explanation": "Saffron butuh ratusan ribu bunga untuk menghasilkan satu kilogram rempah.",
+      "category": "Rempah"
+    },
+    {
+      "id": "q-kul-04",
+      "question": "Kepulauan Maluku pernah dijuluki 'Kepulauan Rempah' karena menghasilkan pala dan ...",
+      "options": [
+        "Lada",
+        "Cengkih",
+        "Kayu manis",
+        "Jahe"
+      ],
+      "correctIndex": 1,
+      "explanation": "Pala dan cengkih Maluku memicu kedatangan pedagang Eropa ke Nusantara.",
+      "category": "Rempah"
+    },
+    {
+      "id": "q-kul-05",
+      "question": "Makanan fermentasi kedelai khas Jawa yang kaya protein adalah ...",
+      "options": [
+        "Tahu",
+        "Tempe",
+        "Oncom",
+        "Natto"
+      ],
+      "correctIndex": 1,
+      "explanation": "Tempe dibuat dengan fermentasi Rhizopus, dan dikenal luas sebagai makanan sehat.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-06",
+      "question": "Sate Madura umumnya disajikan dengan bumbu ...",
+      "options": [
+        "Kacang",
+        "Kecap dan bawang",
+        "Santan",
+        "Asam pedas"
+      ],
+      "correctIndex": 0,
+      "explanation": "Sate Madura terkenal dengan bumbu kacang atau kecap yang kental.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-07",
+      "question": "Hidangan nasi gulung rumput laut dengan ikan mentah berasal dari negara ...",
+      "options": [
+        "Korea",
+        "Jepang",
+        "Tiongkok",
+        "Thailand"
+      ],
+      "correctIndex": 1,
+      "explanation": "Sushi berkembang di Jepang dari cara mengawetkan ikan dengan nasi fermentasi.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-08",
+      "question": "Kimchi, sayuran fermentasi pedas, adalah makanan khas ...",
+      "options": [
+        "Jepang",
+        "Korea",
+        "Vietnam",
+        "Mongolia"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kimchi dibuat dari sawi putih dan lobak dengan gochugaru.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-09",
+      "question": "Pempek yang disajikan dengan kuah cuko berasal dari kota ...",
+      "options": [
+        "Palembang",
+        "Medan",
+        "Padang",
+        "Jambi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Pempek dibuat dari ikan giling dan sagu.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-10",
+      "question": "Soto Betawi berbeda dari soto lain karena berkuah ...",
+      "options": [
+        "Bening kunyit",
+        "Santan atau susu",
+        "Kaldu tomat",
+        "Pekat kecap"
+      ],
+      "correctIndex": 1,
+      "explanation": "Soto Betawi berkuah santan atau susu dengan daging dan jeroan sapi.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-11",
+      "question": "Kopi luwak diperoleh dari biji kopi yang telah melewati sistem pencernaan hewan ...",
+      "options": [
+        "Musang luwak",
+        "Kelelawar",
+        "Monyet",
+        "Burung"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kopi luwak diproses secara alami; produksinya kini banyak dikritik karena isu kesejahteraan hewan.",
+      "category": "Minuman"
+    },
+    {
+      "id": "q-kul-12",
+      "question": "Minuman teh khas Inggris biasa dinikmati pada waktu ...",
+      "options": [
+        "Afternoon tea",
+        "Brunch",
+        "Supper",
+        "Midnight tea"
+      ],
+      "correctIndex": 0,
+      "explanation": "Tradisi afternoon tea populer sejak abad ke-19 di Inggris.",
+      "category": "Minuman"
+    },
+    {
+      "id": "q-kul-13",
+      "question": "Keju berlubang-lubang yang terkenal dari Swiss adalah ...",
+      "options": [
+        "Emmental",
+        "Cheddar",
+        "Camembert",
+        "Parmesan"
+      ],
+      "correctIndex": 0,
+      "explanation": "Lubangnya terbentuk dari gas bakteri saat pematangan.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-14",
+      "question": "Tortilla, taco, dan burrito adalah makanan khas ...",
+      "options": [
+        "Meksiko",
+        "Peru",
+        "Spanyol",
+        "Kuba"
+      ],
+      "correctIndex": 0,
+      "explanation": "Tortilla dibuat dari jagung atau gandum.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-15",
+      "question": "Rempah kuning yang membuat warna kari dan nasi kuning adalah ...",
+      "options": [
+        "Kunyit",
+        "Jahe",
+        "Lengkuas",
+        "Kencur"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kunyit mengandung kurkumin sebagai pigmen kuning.",
+      "category": "Rempah"
+    },
+    {
+      "id": "q-kul-16",
+      "question": "Gudeg, olahan nangka muda manis, adalah makanan khas ...",
+      "options": [
+        "Yogyakarta",
+        "Bandung",
+        "Pontianak",
+        "Manado"
+      ],
+      "correctIndex": 0,
+      "explanation": "Gudeg dimasak lama dengan santan, gula aren, dan daun jati.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-17",
+      "question": "Kopi terbaik dunia berasal dari daerah kopi pegunungan Etiopia karena spesies kopi ...",
+      "options": [
+        "Arabika",
+        "Robusta",
+        "Liberika",
+        "Excelsa"
+      ],
+      "correctIndex": 0,
+      "explanation": "Arabika dianggap pertama kali ditemukan di Etiopia.",
+      "category": "Minuman"
+    },
+    {
+      "id": "q-kul-18",
+      "question": "Coklat dibuat dari biji tanaman ...",
+      "options": [
+        "Kakao",
+        "Kopi",
+        "Vanili",
+        "Kacang tanah"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kakao dibudidayakan sejak peradaban Maya dan Aztek.",
+      "category": "Bahan Makanan"
+    },
+    {
+      "id": "q-kul-19",
+      "question": "Ayam taliwang, pedas dan berbumbu kuat, berasal dari pulau ...",
+      "options": [
+        "Lombok",
+        "Bali",
+        "Sumbawa",
+        "Flores"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ayam taliwang adalah ikon kuliner Lombok, NTB.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-20",
+      "question": "Nasi liwet adalah makanan tradisional dari ...",
+      "options": [
+        "Solo",
+        "Medan",
+        "Makassar",
+        "Pontianak"
+      ],
+      "correctIndex": 0,
+      "explanation": "Nasi liwet Solo dimasak dengan santan dan disajikan dengan sayur labu siam dan telur.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-21",
+      "question": "Paella berbahan nasi safron berasal dari ...",
+      "options": [
+        "Valencia, Spanyol",
+        "Lisbon, Portugal",
+        "Roma, Italia",
+        "Marseille, Prancis"
+      ],
+      "correctIndex": 0,
+      "explanation": "Paella lahir di wilayah Valencia.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-22",
+      "question": "Tom yum adalah sup asam pedas dari ...",
+      "options": [
+        "Thailand",
+        "Vietnam",
+        "Filipina",
+        "Laos"
+      ],
+      "correctIndex": 0,
+      "explanation": "Tom yum menggunakan serai, daun jeruk, dan lengkuas.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-23",
+      "question": "Pisang goreng dan jajanan bakwan biasa disebut ...",
+      "options": [
+        "Gorengan",
+        "Kue basah",
+        "Camilan panggang",
+        "Dodol"
+      ],
+      "correctIndex": 0,
+      "explanation": "Gorengan adalah jajanan digoreng khas Indonesia.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-24",
+      "question": "Dessert Prancis berbentuk bulan sabit berlapis mentega adalah ...",
+      "options": [
+        "Croissant",
+        "Baguette",
+        "Éclair",
+        "Macaron"
+      ],
+      "correctIndex": 0,
+      "explanation": "Croissant berlapis dan berkulit renyah dari adonan laminasi.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-25",
+      "question": "Bumbu dasar pedas khas Indonesia yang dibuat dari cabai dan terasi yang ditumbuk adalah ...",
+      "options": [
+        "Sambal",
+        "Kecap",
+        "Sambal tomat botolan",
+        "Taoco"
+      ],
+      "correctIndex": 0,
+      "explanation": "Sambal punya ratusan varian di seluruh Nusantara.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-26",
+      "question": "Halal di Indonesia diawasi sertifikasinya oleh ...",
+      "options": [
+        "BPJPH",
+        "BPOM saja",
+        "Kemenkes",
+        "BSN"
+      ],
+      "correctIndex": 0,
+      "explanation": "BPJPH (Badan Penyelenggara Jaminan Produk Halal) di bawah Kementerian Agama.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-27",
+      "question": "Makanan pokok masyarakat Papua yang berasal dari pohon rumbia adalah ...",
+      "options": [
+        "Sagu",
+        "Jagung",
+        "Gandum",
+        "Kentang"
+      ],
+      "correctIndex": 0,
+      "explanation": "Papeda berbahan sagu adalah makanan pokok Maluku dan Papua.",
+      "category": "Kuliner Nusantara"
+    },
+    {
+      "id": "q-kul-28",
+      "question": "Bumbu wasabi yang pedas menyengat biasa disajikan dengan ...",
+      "options": [
+        "Sushi",
+        "Pizza",
+        "Taco",
+        "Rendang"
+      ],
+      "correctIndex": 0,
+      "explanation": "Wasabi berasal dari tanaman Wasabia japonica.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-29",
+      "question": "Ramen adalah mi berkuah kaldu yang terkenal dari ...",
+      "options": [
+        "Jepang",
+        "Korea",
+        "India",
+        "Malaysia"
+      ],
+      "correctIndex": 0,
+      "explanation": "Ramen berkembang di Jepang dari pengaruh mi Tiongkok.",
+      "category": "Kuliner Dunia"
+    },
+    {
+      "id": "q-kul-30",
+      "question": "Buah durian dijuluki 'raja buah', dan aromanya yang tajam paling terkenal di kawasan ...",
+      "options": [
+        "Asia Tenggara",
+        "Eropa",
+        "Afrika",
+        "Amerika Utara"
+      ],
+      "correctIndex": 0,
+      "explanation": "Durian tumbuh di hutan tropis Asia Tenggara.",
+      "category": "Bahan Makanan"
+    }
+  ]
+}

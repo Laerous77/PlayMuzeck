@@ -1,0 +1,6 @@
+{
+  "name": "PlayMuzeck",
+  "description": "Platform modern perpaduan audio studio interaktif, web stem mixer, dan Pusat Kuis edukatif bernuansa gelap elegan.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,261 @@
+{
+  "id": "deck-builtin-teknologi",
+  "topicId": "teknologi-digital",
+  "title": "Teknologi: Komputer, Internet & Penemuan Dunia",
+  "description": "Dari pendaratan di bulan hingga internet dan kecerdasan buatan — uji wawasan teknologimu lewat 30 soal.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Teknologi",
+  "questions": [
+    {
+      "id": "q-tek-01",
+      "question": "Foto ikonik astronaut di permukaan Bulan ini diambil saat misi ...",
+      "options": ["Apollo 8", "Apollo 11", "Gemini 4", "Apollo 13"],
+      "correctIndex": 1,
+      "explanation": "Apollo 11 pada Juli 1969 menjadi misi pertama yang berhasil mendaratkan manusia di Bulan, dengan Neil Armstrong dan Buzz Aldrin.",
+      "category": "Penerbangan Antariksa",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Aldrin Apollo 11 original.jpg",
+      "mediaCredit": "Aldrin Apollo 11 original.jpg — NASA, Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Aldrin_Apollo_11_original.jpg"
+    },
+    {
+      "id": "q-tek-02",
+      "question": "Peta visualisasi ini menggambarkan sebagian kecil jaringan rute internet global (Opte Project). Jaringan komputer sedunia yang saling terhubung ini disebut ...",
+      "options": ["Intranet", "Internet", "LAN", "Bluetooth"],
+      "correctIndex": 1,
+      "explanation": "Internet adalah jaringan global yang menghubungkan miliaran perangkat di seluruh dunia menggunakan protokol TCP/IP.",
+      "category": "Jaringan",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Internet map 1024.jpg",
+      "mediaCredit": "Internet map 1024.jpg — The Opte Project, Wikimedia Commons (CC BY 2.5)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Internet_map_1024.jpg"
+    },
+    {
+      "id": "q-tek-03",
+      "question": "Perusahaan yang menciptakan sistem operasi Windows adalah ...",
+      "options": ["Apple", "Microsoft", "Google", "IBM"],
+      "correctIndex": 1,
+      "explanation": "Microsoft, didirikan Bill Gates dan Paul Allen, merilis Windows pertama kali pada 1985.",
+      "category": "Perangkat Lunak"
+    },
+    {
+      "id": "q-tek-04",
+      "question": "Singkatan CPU dalam komputer adalah ...",
+      "options": ["Central Processing Unit", "Computer Personal Unit", "Central Power Unit", "Core Processing Utility"],
+      "correctIndex": 0,
+      "explanation": "CPU (Central Processing Unit) adalah otak komputer yang mengeksekusi instruksi program.",
+      "category": "Perangkat Keras"
+    },
+    {
+      "id": "q-tek-05",
+      "question": "Bahasa pemrograman yang sering digunakan untuk kecerdasan buatan dan analisis data karena sintaksnya sederhana adalah ...",
+      "options": ["Python", "COBOL", "Assembly", "Fortran"],
+      "correctIndex": 0,
+      "explanation": "Python populer di bidang AI dan data science karena mudah dipelajari dan memiliki banyak pustaka pendukung.",
+      "category": "Pemrograman"
+    },
+    {
+      "id": "q-tek-06",
+      "question": "Penemu telepon yang diakui secara luas pada abad ke-19 adalah ...",
+      "options": ["Thomas Edison", "Alexander Graham Bell", "Nikola Tesla", "Guglielmo Marconi"],
+      "correctIndex": 1,
+      "explanation": "Alexander Graham Bell dipatenkan sebagai penemu telepon pertama pada tahun 1876.",
+      "category": "Sejarah Teknologi"
+    },
+    {
+      "id": "q-tek-07",
+      "question": "Satuan kecepatan proses prosesor komputer, seperti 3,5 GHz, mengukur ...",
+      "options": ["Kapasitas memori", "Frekuensi clock", "Kecepatan internet", "Suhu prosesor"],
+      "correctIndex": 1,
+      "explanation": "GHz (gigahertz) menunjukkan berapa siklus instruksi yang dapat diproses prosesor per detik.",
+      "category": "Perangkat Keras"
+    },
+    {
+      "id": "q-tek-08",
+      "question": "Sistem operasi bersifat open source yang mendasari banyak server dan sebagian besar Android adalah ...",
+      "options": ["Linux", "macOS", "Windows", "iOS"],
+      "correctIndex": 0,
+      "explanation": "Kernel Linux, dikembangkan Linus Torvalds sejak 1991, menjadi dasar banyak sistem operasi termasuk Android.",
+      "category": "Perangkat Lunak"
+    },
+    {
+      "id": "q-tek-09",
+      "question": "Teknologi yang memungkinkan komputer 'belajar' dari data tanpa diprogram secara eksplisit untuk setiap aturan disebut ...",
+      "options": ["Machine learning", "Cloud computing", "Virtual reality", "Blockchain"],
+      "correctIndex": 0,
+      "explanation": "Machine learning adalah cabang kecerdasan buatan yang melatih model dari data untuk mengenali pola.",
+      "category": "Kecerdasan Buatan"
+    },
+    {
+      "id": "q-tek-10",
+      "question": "Chip pertama yang menggabungkan seluruh fungsi CPU dalam satu keping silikon disebut ...",
+      "options": ["Transistor", "Mikroprosesor", "Resistor", "Motherboard"],
+      "correctIndex": 1,
+      "explanation": "Mikroprosesor pertama, Intel 4004, dirilis pada tahun 1971.",
+      "category": "Sejarah Teknologi"
+    },
+    {
+      "id": "q-tek-11",
+      "question": "Protokol keamanan yang ditandai gembok pada alamat situs web (https) berfungsi untuk ...",
+      "options": ["Mempercepat loading halaman", "Mengenkripsi data antara pengguna dan situs", "Memblokir iklan", "Menghemat kuota"],
+      "correctIndex": 1,
+      "explanation": "HTTPS menggunakan enkripsi TLS/SSL untuk melindungi data yang dikirim antara browser dan server.",
+      "category": "Keamanan Siber"
+    },
+    {
+      "id": "q-tek-12",
+      "question": "Perangkat penyimpanan data eksternal berbentuk kecil, tanpa piringan berputar, yang dicolokkan lewat USB disebut ...",
+      "options": ["Hard disk drive", "Flashdisk", "CD-ROM", "Kaset pita"],
+      "correctIndex": 1,
+      "explanation": "Flashdisk menggunakan memori flash tanpa komponen mekanis sehingga lebih ringkas dan tahan guncangan.",
+      "category": "Perangkat Keras"
+    },
+    {
+      "id": "q-tek-13",
+      "question": "World Wide Web (WWW) diciptakan oleh ilmuwan asal Inggris bernama ...",
+      "options": ["Tim Berners-Lee", "Steve Jobs", "Vint Cerf", "Larry Page"],
+      "correctIndex": 0,
+      "explanation": "Tim Berners-Lee menciptakan WWW pada 1989 saat bekerja di CERN, Swiss.",
+      "category": "Sejarah Teknologi"
+    },
+    {
+      "id": "q-tek-14",
+      "question": "Istilah 'bug' dalam pemrograman merujuk pada ...",
+      "options": ["Virus komputer", "Kesalahan atau cacat dalam program", "Fitur baru", "Nama bahasa pemrograman"],
+      "correctIndex": 1,
+      "explanation": "Bug adalah kesalahan dalam kode yang menyebabkan program berperilaku tidak sesuai harapan.",
+      "category": "Pemrograman"
+    },
+    {
+      "id": "q-tek-15",
+      "question": "Teknologi yang menyimpan dan memproses data lewat internet, bukan di perangkat lokal, disebut ...",
+      "options": ["Cloud computing", "Edge computing lokal", "Quantum computing", "Offline storage"],
+      "correctIndex": 0,
+      "explanation": "Cloud computing memungkinkan penyimpanan dan pemrosesan data pada server jarak jauh yang diakses via internet.",
+      "category": "Infrastruktur Digital"
+    },
+    {
+      "id": "q-tek-16",
+      "question": "Robot penjelajah NASA yang mendarat di Mars dan mengirim data ilmiah, salah satunya bernama ...",
+      "options": ["Curiosity", "Voyager", "Hubble", "Sputnik"],
+      "correctIndex": 0,
+      "explanation": "Curiosity Rover mendarat di Mars pada 2012 untuk meneliti geologi dan potensi kehidupan mikroba.",
+      "category": "Penerbangan Antariksa"
+    },
+    {
+      "id": "q-tek-17",
+      "question": "Sistem penomoran yang hanya menggunakan angka 0 dan 1, dasar dari semua data digital, disebut ...",
+      "options": ["Biner", "Desimal", "Heksadesimal", "Oktal"],
+      "correctIndex": 0,
+      "explanation": "Sistem biner menjadi dasar representasi data pada seluruh perangkat digital.",
+      "category": "Dasar Komputer"
+    },
+    {
+      "id": "q-tek-18",
+      "question": "Aplikasi pesan instan dan media sosial umumnya menggunakan jaringan data seluler seperti 4G atau 5G. Angka pada istilah tersebut menunjukkan ...",
+      "options": ["Jumlah operator", "Generasi teknologi jaringan seluler", "Kecepatan baterai", "Jumlah aplikasi terpasang"],
+      "correctIndex": 1,
+      "explanation": "4G dan 5G menandai generasi keempat dan kelima teknologi jaringan komunikasi seluler.",
+      "category": "Jaringan"
+    },
+    {
+      "id": "q-tek-19",
+      "question": "Perusahaan teknologi yang menciptakan iPhone dan MacBook adalah ...",
+      "options": ["Samsung", "Apple", "Sony", "Huawei"],
+      "correctIndex": 1,
+      "explanation": "Apple Inc., didirikan Steve Jobs, Steve Wozniak, dan Ronald Wayne pada 1976, merilis iPhone pertama pada 2007.",
+      "category": "Perangkat Keras"
+    },
+    {
+      "id": "q-tek-20",
+      "question": "Serangan siber yang mengunci data korban dan meminta tebusan agar bisa dibuka kembali disebut ...",
+      "options": ["Phishing", "Ransomware", "Spam", "Adware"],
+      "correctIndex": 1,
+      "explanation": "Ransomware mengenkripsi file korban dan menuntut pembayaran untuk memulihkannya.",
+      "category": "Keamanan Siber"
+    },
+    {
+      "id": "q-tek-21",
+      "question": "Teknologi realitas yang membuat pengguna sepenuhnya masuk ke dunia digital menggunakan headset khusus disebut ...",
+      "options": ["Augmented reality", "Virtual reality", "Mixed signal", "Motion capture"],
+      "correctIndex": 1,
+      "explanation": "Virtual reality (VR) menghadirkan lingkungan tiruan yang sepenuhnya menggantikan persepsi dunia nyata pengguna.",
+      "category": "Teknologi Imersif"
+    },
+    {
+      "id": "q-tek-22",
+      "question": "Satelit buatan pertama yang berhasil mengorbit bumi, diluncurkan Uni Soviet pada 1957, bernama ...",
+      "options": ["Explorer 1", "Sputnik 1", "Voyager 1", "Apollo 1"],
+      "correctIndex": 1,
+      "explanation": "Sputnik 1 diluncurkan Uni Soviet pada 4 Oktober 1957 dan memulai era luar angkasa modern.",
+      "category": "Penerbangan Antariksa"
+    },
+    {
+      "id": "q-tek-23",
+      "question": "Format gambar digital yang mendukung transparansi latar belakang secara umum adalah ...",
+      "options": ["JPG", "PNG", "BMP", "TIFF tanpa alpha"],
+      "correctIndex": 1,
+      "explanation": "PNG mendukung saluran alpha (transparansi), berbeda dengan JPG yang tidak mendukung transparansi.",
+      "category": "Multimedia Digital"
+    },
+    {
+      "id": "q-tek-24",
+      "question": "Mesin pencari yang paling banyak digunakan di dunia saat ini adalah ...",
+      "options": ["Bing", "Yahoo", "Google", "DuckDuckGo"],
+      "correctIndex": 2,
+      "explanation": "Google mendominasi pangsa pasar mesin pencari global sejak awal 2000-an.",
+      "category": "Internet"
+    },
+    {
+      "id": "q-tek-25",
+      "question": "Teknologi pencatatan transaksi terdesentralisasi yang mendasari mata uang kripto disebut ...",
+      "options": ["Blockchain", "Firewall", "API", "VPN"],
+      "correctIndex": 0,
+      "explanation": "Blockchain menyimpan data transaksi dalam rantai blok yang terenkripsi dan tersebar di banyak komputer.",
+      "category": "Teknologi Finansial"
+    },
+    {
+      "id": "q-tek-26",
+      "question": "Perangkat lunak yang dirancang untuk merusak, mencuri data, atau mengganggu sistem komputer disebut secara umum ...",
+      "options": ["Firmware", "Malware", "Driver", "Freeware"],
+      "correctIndex": 1,
+      "explanation": "Malware adalah istilah umum untuk perangkat lunak berbahaya, termasuk virus, worm, dan trojan.",
+      "category": "Keamanan Siber"
+    },
+    {
+      "id": "q-tek-27",
+      "question": "Robot atau program yang bisa melakukan percakapan menyerupai manusia lewat teks disebut ...",
+      "options": ["Chatbot", "Webhook", "Firewall", "Router"],
+      "correctIndex": 0,
+      "explanation": "Chatbot menggunakan pemrosesan bahasa alami untuk merespons percakapan pengguna secara otomatis.",
+      "category": "Kecerdasan Buatan"
+    },
+    {
+      "id": "q-tek-28",
+      "question": "Kapasitas penyimpanan data 1 gigabyte (GB) setara dengan sekitar ... megabyte (MB).",
+      "options": ["10 MB", "100 MB", "1.000 MB", "1.000.000 MB"],
+      "correctIndex": 2,
+      "explanation": "1 GB umumnya dianggap setara dengan 1.000 MB (dalam sistem desimal) atau 1.024 MB (sistem biner).",
+      "category": "Dasar Komputer"
+    },
+    {
+      "id": "q-tek-29",
+      "question": "Perangkat yang menghubungkan beberapa jaringan dan mengarahkan lalu lintas data (misalnya di rumah untuk berbagi WiFi) disebut ...",
+      "options": ["Router", "Scanner", "Speaker", "Proyektor"],
+      "correctIndex": 0,
+      "explanation": "Router mengatur jalur data antar perangkat dalam jaringan dan meneruskannya ke internet.",
+      "category": "Jaringan"
+    },
+    {
+      "id": "q-tek-30",
+      "question": "Perusahaan yang mengembangkan mobil listrik dan roket antariksa yang bisa digunakan kembali (reusable), didirikan oleh Elon Musk, adalah ...",
+      "options": ["Tesla dan SpaceX", "Boeing", "Toyota", "Virgin Galactic saja"],
+      "correctIndex": 0,
+      "explanation": "Elon Musk mendirikan/memimpin Tesla (mobil listrik) dan SpaceX (roket antariksa reusable seperti Falcon 9).",
+      "category": "Inovasi Modern"
+    }
+  ]
+}

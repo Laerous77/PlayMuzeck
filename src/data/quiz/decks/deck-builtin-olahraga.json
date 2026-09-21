@@ -1,0 +1,411 @@
+{
+  "id": "deck-builtin-olahraga",
+  "topicId": "olahraga-dunia",
+  "title": "Olahraga Dunia: Aturan, Lambang & Sejarah",
+  "description": "Uji pengetahuan tentang sepak bola, bulu tangkis, atletik, Olimpiade, hingga bela diri Nusantara.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Olahraga",
+  "questions": [
+    {
+      "id": "q-olr-01",
+      "question": "Berapa jumlah pemain sepak bola dari satu tim yang berada di lapangan saat pertandingan dimulai?",
+      "options": [
+        "11 pemain",
+        "12 pemain",
+        "10 pemain",
+        "9 pemain"
+      ],
+      "correctIndex": 0,
+      "explanation": "Satu tim sepak bola menurunkan 11 pemain, termasuk penjaga gawang.",
+      "category": "Sepak Bola"
+    },
+    {
+      "id": "q-olr-02",
+      "question": "Tim nasional manakah yang menjuarai Piala Dunia FIFA 2022 di Qatar?",
+      "options": [
+        "Argentina",
+        "Brasil",
+        "Prancis",
+        "Kroasia"
+      ],
+      "correctIndex": 0,
+      "explanation": "Argentina mengalahkan Prancis lewat adu penalti pada final 18 Desember 2022.",
+      "category": "Sepak Bola"
+    },
+    {
+      "id": "q-olr-03",
+      "question": "Kota manakah yang menjadi tuan rumah Olimpiade Musim Panas 2020 yang digelar pada tahun 2021?",
+      "options": [
+        "Beijing",
+        "Rio de Janeiro",
+        "Tokyo",
+        "Paris"
+      ],
+      "correctIndex": 2,
+      "explanation": "Olimpiade 2020 ditunda setahun akibat pandemi dan tetap dinamai Tokyo 2020.",
+      "category": "Olimpiade"
+    },
+    {
+      "id": "q-olr-04",
+      "question": "Berapa jumlah cincin yang tampak pada lambang Olimpiade di gambar ini?",
+      "options": [
+        "5 cincin",
+        "4 cincin",
+        "7 cincin",
+        "6 cincin"
+      ],
+      "correctIndex": 0,
+      "explanation": "Lima cincin saling terkait melambangkan lima benua yang bersatu lewat olahraga.",
+      "category": "Olimpiade",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Olympic_rings_without_rims.svg",
+      "mediaCredit": "Olympic rings without rims.svg — Wikimedia Commons (Public Domain Mark 1.0)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Olympic_rings_without_rims.svg"
+    },
+    {
+      "id": "q-olr-05",
+      "question": "Berapa panjang lintasan lari maraton resmi?",
+      "options": [
+        "35 km",
+        "50 km",
+        "42,195 km",
+        "21,097 km"
+      ],
+      "correctIndex": 2,
+      "explanation": "Jarak maraton baku ditetapkan 42,195 km (26 mil 385 yard).",
+      "category": "Atletik"
+    },
+    {
+      "id": "q-olr-06",
+      "question": "Dalam sistem rally point bulu tangkis, satu gim dimenangkan oleh pemain yang lebih dulu meraih ... poin (dengan selisih aturan tertentu).",
+      "options": [
+        "11 poin",
+        "21 poin",
+        "15 poin",
+        "25 poin"
+      ],
+      "correctIndex": 1,
+      "explanation": "Satu gim bulu tangkis berakhir di angka 21 dengan aturan selisih 2 poin dan batas maksimal 30.",
+      "category": "Bulu Tangkis"
+    },
+    {
+      "id": "q-olr-07",
+      "question": "Dalam bola basket, tembakan yang berhasil dari luar garis tiga angka bernilai ... poin.",
+      "options": [
+        "1 poin",
+        "2 poin",
+        "3 poin",
+        "4 poin"
+      ],
+      "correctIndex": 2,
+      "explanation": "Tembakan dari luar garis three-point bernilai 3 poin, dari dalam garis 2 poin, lemparan bebas 1 poin.",
+      "category": "Bola Basket"
+    },
+    {
+      "id": "q-olr-08",
+      "question": "Cabang olahraga apa yang menyumbangkan medali emas Olimpiade pertama bagi Indonesia pada tahun 1992?",
+      "options": [
+        "Panahan",
+        "Bulu tangkis",
+        "Tinju",
+        "Angkat besi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Susi Susanti dan Alan Budikusuma meraih emas bulu tangkis di Barcelona 1992.",
+      "category": "Olimpiade"
+    },
+    {
+      "id": "q-olr-09",
+      "question": "Manakah di antara turnamen berikut yang BUKAN termasuk Grand Slam tenis?",
+      "options": [
+        "Miami Open",
+        "US Open",
+        "Roland Garros",
+        "Wimbledon"
+      ],
+      "correctIndex": 0,
+      "explanation": "Empat Grand Slam adalah Australian Open, Roland Garros, Wimbledon, dan US Open.",
+      "category": "Tenis"
+    },
+    {
+      "id": "q-olr-10",
+      "question": "Berapa jumlah pemain bola voli indoor dari satu tim yang berada di lapangan?",
+      "options": [
+        "9 pemain",
+        "7 pemain",
+        "6 pemain",
+        "5 pemain"
+      ],
+      "correctIndex": 2,
+      "explanation": "Bola voli indoor dimainkan 6 lawan 6 pemain di tiap sisi net.",
+      "category": "Bola Voli"
+    },
+    {
+      "id": "q-olr-11",
+      "question": "Gaya renang manakah yang umumnya paling cepat?",
+      "options": [
+        "Gaya dada",
+        "Gaya punggung",
+        "Gaya kupu-kupu",
+        "Gaya bebas (freestyle)"
+      ],
+      "correctIndex": 3,
+      "explanation": "Gaya bebas atau crawl adalah gaya tercepat sehingga dipakai pada nomor estafet gaya ganti bagian akhir.",
+      "category": "Renang"
+    },
+    {
+      "id": "q-olr-12",
+      "question": "Olahraga bela diri judo berasal dari negara ...",
+      "options": [
+        "Jepang",
+        "Thailand",
+        "Tiongkok",
+        "Korea Selatan"
+      ],
+      "correctIndex": 0,
+      "explanation": "Judo diciptakan oleh Kano Jigoro di Jepang pada tahun 1882.",
+      "category": "Bela Diri"
+    },
+    {
+      "id": "q-olr-13",
+      "question": "Taekwondo merupakan seni bela diri yang berasal dari negara ...",
+      "options": [
+        "Tiongkok",
+        "Vietnam",
+        "Jepang",
+        "Korea"
+      ],
+      "correctIndex": 3,
+      "explanation": "Taekwondo berkembang di Korea dan menjadi cabang resmi Olimpiade sejak Sydney 2000.",
+      "category": "Bela Diri"
+    },
+    {
+      "id": "q-olr-14",
+      "question": "Pemimpin klasemen umum balap sepeda Tour de France mengenakan kaus (maillot) berwarna ...",
+      "options": [
+        "Biru",
+        "Kuning",
+        "Hijau",
+        "Merah"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kaus kuning (maillot jaune) dikenakan pembalap yang memimpin klasemen umum.",
+      "category": "Balap Sepeda"
+    },
+    {
+      "id": "q-olr-15",
+      "question": "Berapa lama waktu normal pertandingan sepak bola untuk orang dewasa?",
+      "options": [
+        "2 × 30 menit",
+        "2 × 45 menit",
+        "4 × 25 menit",
+        "3 × 30 menit"
+      ],
+      "correctIndex": 1,
+      "explanation": "Waktu normal terdiri dari dua babak masing-masing 45 menit, belum termasuk tambahan waktu.",
+      "category": "Sepak Bola"
+    },
+    {
+      "id": "q-olr-16",
+      "question": "Apa konsekuensi bagi pemain sepak bola yang menerima kartu merah langsung?",
+      "options": [
+        "Dikeluarkan dari lapangan",
+        "Tim mendapat 1 gol",
+        "Diganti dan boleh masuk lagi",
+        "Hanya diberi peringatan"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kartu merah berarti pemain harus meninggalkan lapangan dan timnya bermain dengan satu pemain lebih sedikit.",
+      "category": "Sepak Bola"
+    },
+    {
+      "id": "q-olr-17",
+      "question": "Dalam golf, hasil satu pukulan di bawah par pada sebuah lubang disebut ...",
+      "options": [
+        "Eagle",
+        "Bogey",
+        "Albatross",
+        "Birdie"
+      ],
+      "correctIndex": 3,
+      "explanation": "Birdie = satu pukulan di bawah par; eagle = dua; albatross = tiga.",
+      "category": "Golf"
+    },
+    {
+      "id": "q-olr-18",
+      "question": "Teknik lompat tinggi modern yang melewati mistar dengan punggung terlebih dahulu dikenal sebagai ...",
+      "options": [
+        "Western roll",
+        "Fosbury flop",
+        "Scissors",
+        "Straddle"
+      ],
+      "correctIndex": 1,
+      "explanation": "Teknik ini dipopulerkan Dick Fosbury pada Olimpiade 1968 dan kini dipakai hampir semua atlet.",
+      "category": "Atletik"
+    },
+    {
+      "id": "q-olr-19",
+      "question": "Sprinter legendaris Usain Bolt berasal dari negara ...",
+      "options": [
+        "Afrika Selatan",
+        "Kenya",
+        "Amerika Serikat",
+        "Jamaika"
+      ],
+      "correctIndex": 3,
+      "explanation": "Usain Bolt asal Jamaika dan meraih delapan medali emas Olimpiade di nomor lari.",
+      "category": "Atletik"
+    },
+    {
+      "id": "q-olr-20",
+      "question": "Dasalomba (decathlon) terdiri dari berapa nomor perlombaan?",
+      "options": [
+        "7 nomor",
+        "12 nomor",
+        "5 nomor",
+        "10 nomor"
+      ],
+      "correctIndex": 3,
+      "explanation": "Awalan 'deka' berarti sepuluh: lari, lompat, dan lempar dalam sepuluh nomor.",
+      "category": "Atletik"
+    },
+    {
+      "id": "q-olr-21",
+      "question": "Piala Thomas adalah kejuaraan beregu putra tingkat dunia pada cabang olahraga ...",
+      "options": [
+        "Bulu tangkis",
+        "Tenis meja",
+        "Squash",
+        "Tenis lapangan"
+      ],
+      "correctIndex": 0,
+      "explanation": "Piala Thomas untuk beregu putra, Piala Uber untuk beregu putri, keduanya cabang bulu tangkis.",
+      "category": "Bulu Tangkis"
+    },
+    {
+      "id": "q-olr-22",
+      "question": "Indonesia menjadi tuan rumah Asian Games pada tahun 2018 bersama dengan kota Palembang dan ...",
+      "options": [
+        "Jakarta",
+        "Bandung",
+        "Surabaya",
+        "Medan"
+      ],
+      "correctIndex": 0,
+      "explanation": "Asian Games XVIII 2018 diselenggarakan di Jakarta dan Palembang.",
+      "category": "Multi Event"
+    },
+    {
+      "id": "q-olr-23",
+      "question": "Pada permainan sepak takraw, bagian tubuh yang tidak boleh dipakai menyentuh bola adalah ...",
+      "options": [
+        "Dada",
+        "Tangan",
+        "Kepala",
+        "Kaki"
+      ],
+      "correctIndex": 1,
+      "explanation": "Pemain sepak takraw tidak boleh memakai tangan atau lengan untuk menyentuh bola.",
+      "category": "Sepak Takraw"
+    },
+    {
+      "id": "q-olr-24",
+      "question": "Bendera bermotif kotak-kotak hitam putih dikibarkan dalam balap untuk menandakan ...",
+      "options": [
+        "Ada kecelakaan di lintasan",
+        "Balapan telah berakhir (finis)",
+        "Pembalap harus masuk pit",
+        "Cuaca hujan"
+      ],
+      "correctIndex": 1,
+      "explanation": "Bendera finis kotak-kotak dikibarkan kepada pembalap yang menyelesaikan lomba.",
+      "category": "Balap Motor"
+    },
+    {
+      "id": "q-olr-25",
+      "question": "Bintang basket Michael Jordan meraih enam gelar juara NBA bersama klub ...",
+      "options": [
+        "Boston Celtics",
+        "Miami Heat",
+        "Chicago Bulls",
+        "Los Angeles Lakers"
+      ],
+      "correctIndex": 2,
+      "explanation": "Jordan memenangkan enam cincin juara bersama Chicago Bulls pada 1990-an.",
+      "category": "Bola Basket"
+    },
+    {
+      "id": "q-olr-26",
+      "question": "Berapa jumlah pemain bola basket dari satu tim yang berada di lapangan pada satu waktu?",
+      "options": [
+        "6 pemain",
+        "7 pemain",
+        "4 pemain",
+        "5 pemain"
+      ],
+      "correctIndex": 3,
+      "explanation": "Bola basket dimainkan 5 lawan 5 pemain di lapangan.",
+      "category": "Bola Basket"
+    },
+    {
+      "id": "q-olr-27",
+      "question": "Berapa panjang kolam renang standar Olimpiade?",
+      "options": [
+        "100 meter",
+        "50 meter",
+        "33 meter",
+        "25 meter"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kolam Olimpiade memiliki panjang 50 meter; kolam pendek berukuran 25 meter.",
+      "category": "Renang"
+    },
+    {
+      "id": "q-olr-28",
+      "question": "Olimpiade modern pertama yang digelar pada tahun 1896 berlangsung di kota ...",
+      "options": [
+        "Paris",
+        "London",
+        "Athena",
+        "Roma"
+      ],
+      "correctIndex": 2,
+      "explanation": "Olimpiade modern pertama diselenggarakan di Athena, Yunani, pada 1896.",
+      "category": "Olimpiade"
+    },
+    {
+      "id": "q-olr-29",
+      "question": "Manakah seni bela diri tradisional yang berasal dari rumpun Nusantara?",
+      "options": [
+        "Sumo",
+        "Karate",
+        "Judo",
+        "Pencak silat"
+      ],
+      "correctIndex": 3,
+      "explanation": "Pencak silat berkembang di kepulauan Nusantara dan diakui UNESCO sebagai warisan budaya takbenda.",
+      "category": "Bela Diri"
+    },
+    {
+      "id": "q-olr-30",
+      "question": "Musik pada rekaman ini adalah lagu kebangsaan negara mana? Lagu kebangsaan diputar untuk atlet peraih emas di podium.",
+      "options": [
+        "Singapura",
+        "Malaysia",
+        "Indonesia",
+        "Filipina"
+      ],
+      "correctIndex": 2,
+      "explanation": "Rekaman tersebut adalah 'Indonesia Raya' (versi instrumental), lagu kebangsaan Indonesia.",
+      "category": "Olimpiade",
+      "mediaType": "audio",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Indonesia_Raya_instrumental.ogg",
+      "mediaCredit": "Indonesia Raya instrumental.ogg — US Navy Band via Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Indonesia_Raya_instrumental.ogg"
+    }
+  ]
+}

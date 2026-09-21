@@ -1,0 +1,407 @@
+{
+  "id": "deck-builtin-sosial",
+  "topicId": "masyarakat-sosial",
+  "title": "Sosial: Masyarakat, Sejarah & Peradaban Dunia",
+  "description": "Uji wawasanmu tentang organisasi dunia, sejarah peradaban, tokoh sosial, dan isu kemasyarakatan.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Sosial",
+  "questions": [
+    {
+      "id": "q-sos-01",
+      "question": "Foto bersejarah dari tahun 1907 ini memperlihatkan salah satu struktur pertahanan terpanjang yang pernah dibangun manusia. Bangunan ini adalah ...",
+      "options": [
+        "Tembok Hadrian",
+        "Tembok Besar Tiongkok",
+        "Tembok Berlin",
+        "Benteng Kremlin"
+      ],
+      "correctIndex": 1,
+      "explanation": "Tembok Besar Tiongkok dibangun secara bertahap oleh berbagai dinasti untuk melindungi wilayah utara Tiongkok dari serangan luar.",
+      "category": "Sejarah Peradaban",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Greatwall large.jpg",
+      "mediaCredit": "Greatwall large.jpg — Herbert Ponting, 1907, Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Greatwall_large.jpg"
+    },
+    {
+      "id": "q-sos-02",
+      "question": "Organisasi internasional yang didirikan tahun 1945 untuk menjaga perdamaian dan keamanan dunia adalah ...",
+      "options": [
+        "Liga Bangsa-Bangsa",
+        "Perserikatan Bangsa-Bangsa (PBB)",
+        "NATO",
+        "Uni Eropa"
+      ],
+      "correctIndex": 1,
+      "explanation": "PBB didirikan setelah Perang Dunia II sebagai pengganti Liga Bangsa-Bangsa yang gagal mencegah perang.",
+      "category": "Organisasi Dunia"
+    },
+    {
+      "id": "q-sos-03",
+      "question": "Proklamasi Kemerdekaan Indonesia dibacakan oleh Soekarno-Hatta pada tanggal ...",
+      "options": [
+        "17 Agustus 1945",
+        "1 Juni 1945",
+        "28 Oktober 1928",
+        "10 November 1945"
+      ],
+      "correctIndex": 0,
+      "explanation": "Kemerdekaan Indonesia diproklamasikan pada 17 Agustus 1945 di Jalan Pegangsaan Timur 56, Jakarta.",
+      "category": "Sejarah Indonesia"
+    },
+    {
+      "id": "q-sos-04",
+      "question": "Sistem pemerintahan yang kekuasaannya dipegang oleh rakyat melalui perwakilan yang dipilih disebut ...",
+      "options": [
+        "Monarki",
+        "Demokrasi",
+        "Oligarki",
+        "Teokrasi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Demokrasi menempatkan kedaulatan tertinggi di tangan rakyat, umumnya melalui pemilihan umum.",
+      "category": "Ilmu Politik"
+    },
+    {
+      "id": "q-sos-05",
+      "question": "Tembok Berlin yang memisahkan Jerman Barat dan Jerman Timur selama Perang Dingin runtuh pada tahun ...",
+      "options": [
+        "1985",
+        "1989",
+        "1991",
+        "1975"
+      ],
+      "correctIndex": 1,
+      "explanation": "Tembok Berlin runtuh pada 9 November 1989, menjadi simbol berakhirnya Perang Dingin di Eropa.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-sos-06",
+      "question": "Peradaban kuno yang membangun piramida-piramida besar sebagai makam raja (firaun) berasal dari ...",
+      "options": [
+        "Mesopotamia",
+        "Mesir Kuno",
+        "Yunani Kuno",
+        "Persia Kuno"
+      ],
+      "correctIndex": 1,
+      "explanation": "Piramida-piramida besar seperti di Giza dibangun oleh peradaban Mesir Kuno sebagai makam para firaun.",
+      "category": "Sejarah Peradaban"
+    },
+    {
+      "id": "q-sos-07",
+      "question": "Konferensi Asia-Afrika yang mempererat solidaritas negara-negara baru merdeka diselenggarakan di kota ...",
+      "options": [
+        "Jakarta",
+        "Bandung",
+        "Yogyakarta",
+        "Surabaya"
+      ],
+      "correctIndex": 1,
+      "explanation": "Konferensi Asia-Afrika berlangsung di Bandung pada April 1955 dan melahirkan semangat Non-Blok.",
+      "category": "Sejarah Indonesia"
+    },
+    {
+      "id": "q-sos-08",
+      "question": "Ilmu sosial yang mempelajari perilaku dan interaksi manusia dalam masyarakat disebut ...",
+      "options": [
+        "Antropologi",
+        "Sosiologi",
+        "Ekonomi",
+        "Geografi sosial"
+      ],
+      "correctIndex": 1,
+      "explanation": "Sosiologi berfokus pada struktur sosial, interaksi, dan perubahan dalam masyarakat.",
+      "category": "Ilmu Sosial"
+    },
+    {
+      "id": "q-sos-09",
+      "question": "Sistem ekonomi yang menyerahkan sepenuhnya kegiatan produksi dan distribusi kepada mekanisme pasar bebas disebut ...",
+      "options": [
+        "Sosialisme",
+        "Kapitalisme",
+        "Komunisme",
+        "Ekonomi terpusat"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kapitalisme menekankan kepemilikan pribadi atas alat produksi dan persaingan pasar bebas.",
+      "category": "Ekonomi Sosial"
+    },
+    {
+      "id": "q-sos-10",
+      "question": "Revolusi Industri yang mengubah cara produksi dari manual menjadi bermesin pertama kali terjadi di negara ...",
+      "options": [
+        "Prancis",
+        "Jerman",
+        "Inggris",
+        "Amerika Serikat"
+      ],
+      "correctIndex": 2,
+      "explanation": "Revolusi Industri dimulai di Inggris pada akhir abad ke-18 dengan penemuan mesin uap dan mekanisasi tekstil.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-sos-11",
+      "question": "Piagam yang menjadi dasar prinsip hak asasi manusia secara universal, disahkan PBB pada 1948, disebut ...",
+      "options": [
+        "Magna Carta",
+        "Deklarasi Universal Hak Asasi Manusia",
+        "Konvensi Jenewa",
+        "Piagam Atlantik"
+      ],
+      "correctIndex": 1,
+      "explanation": "Deklarasi Universal Hak Asasi Manusia (DUHAM) disahkan Majelis Umum PBB pada 10 Desember 1948.",
+      "category": "Organisasi Dunia"
+    },
+    {
+      "id": "q-sos-12",
+      "question": "Gerakan yang memperjuangkan kesetaraan hak dan peluang antara laki-laki dan perempuan disebut ...",
+      "options": [
+        "Nasionalisme",
+        "Feminisme",
+        "Liberalisme",
+        "Konservatisme"
+      ],
+      "correctIndex": 1,
+      "explanation": "Feminisme memperjuangkan kesetaraan gender dalam bidang sosial, politik, dan ekonomi.",
+      "category": "Isu Sosial"
+    },
+    {
+      "id": "q-sos-13",
+      "question": "Kerajaan maritim yang pernah menguasai jalur perdagangan Nusantara dan berpusat di Palembang adalah ...",
+      "options": [
+        "Majapahit",
+        "Sriwijaya",
+        "Mataram Kuno",
+        "Demak"
+      ],
+      "correctIndex": 1,
+      "explanation": "Kerajaan Sriwijaya menjadi pusat perdagangan dan penyebaran agama Buddha di Asia Tenggara sekitar abad ke-7–13.",
+      "category": "Sejarah Indonesia"
+    },
+    {
+      "id": "q-sos-14",
+      "question": "Organisasi kawasan yang beranggotakan negara-negara Asia Tenggara, termasuk Indonesia, disebut ...",
+      "options": [
+        "APEC",
+        "ASEAN",
+        "Uni Eropa",
+        "G20 Asia"
+      ],
+      "correctIndex": 1,
+      "explanation": "ASEAN (Association of Southeast Asian Nations) didirikan tahun 1967 untuk mempererat kerja sama kawasan.",
+      "category": "Organisasi Dunia"
+    },
+    {
+      "id": "q-sos-15",
+      "question": "Perbedaan status sosial berdasarkan kelahiran yang membagi masyarakat secara kaku, seperti pada sistem India kuno, disebut sistem ...",
+      "options": [
+        "Kasta",
+        "Feodal",
+        "Meritokrasi",
+        "Oligarki"
+      ],
+      "correctIndex": 0,
+      "explanation": "Sistem kasta membagi masyarakat berdasarkan keturunan dan sulit diubah sepanjang hidup seseorang.",
+      "category": "Struktur Sosial"
+    },
+    {
+      "id": "q-sos-16",
+      "question": "Perang Dunia II berakhir di kawasan Pasifik setelah Jepang menyerah pada tahun ...",
+      "options": [
+        "1943",
+        "1944",
+        "1945",
+        "1946"
+      ],
+      "correctIndex": 2,
+      "explanation": "Jepang menyerah tanpa syarat pada Agustus 1945 setelah pengeboman Hiroshima dan Nagasaki, mengakhiri Perang Dunia II.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-sos-17",
+      "question": "Proses perpindahan penduduk dari desa ke kota untuk mencari pekerjaan dan kehidupan lebih baik disebut ...",
+      "options": [
+        "Urbanisasi",
+        "Transmigrasi",
+        "Emigrasi",
+        "Repatriasi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Urbanisasi adalah perpindahan penduduk dari wilayah pedesaan menuju perkotaan.",
+      "category": "Isu Sosial"
+    },
+    {
+      "id": "q-sos-18",
+      "question": "Konsep gotong royong dalam masyarakat Indonesia mencerminkan nilai budaya yang menekankan ...",
+      "options": [
+        "Individualisme",
+        "Kerja sama dan kebersamaan",
+        "Persaingan bebas",
+        "Hierarki kaku"
+      ],
+      "correctIndex": 1,
+      "explanation": "Gotong royong adalah nilai luhur budaya Indonesia yang menekankan kerja sama demi kepentingan bersama.",
+      "category": "Budaya Sosial"
+    },
+    {
+      "id": "q-sos-19",
+      "question": "Tokoh yang dikenal sebagai pahlawan emansipasi wanita Indonesia lewat surat-suratnya adalah ...",
+      "options": [
+        "Cut Nyak Dhien",
+        "R.A. Kartini",
+        "Dewi Sartika",
+        "Rasuna Said"
+      ],
+      "correctIndex": 1,
+      "explanation": "R.A. Kartini memperjuangkan pendidikan dan kesetaraan perempuan lewat surat-suratnya yang kemudian dibukukan sebagai 'Habis Gelap Terbitlah Terang'.",
+      "category": "Sejarah Indonesia"
+    },
+    {
+      "id": "q-sos-20",
+      "question": "Sistem pemerintahan yang kekuasaannya diwariskan turun-temurun dalam satu keluarga kerajaan disebut ...",
+      "options": [
+        "Republik",
+        "Monarki",
+        "Federasi",
+        "Konfederasi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Monarki adalah bentuk pemerintahan yang dipimpin raja atau ratu, sering diwariskan secara turun-temurun.",
+      "category": "Ilmu Politik"
+    },
+    {
+      "id": "q-sos-21",
+      "question": "Perjanjian yang mengakhiri Perang Dunia I dan dianggap memberatkan Jerman disebut Perjanjian ...",
+      "options": [
+        "Versailles",
+        "Westphalia",
+        "Utrecht",
+        "Paris"
+      ],
+      "correctIndex": 0,
+      "explanation": "Perjanjian Versailles (1919) mengharuskan Jerman membayar reparasi besar dan kehilangan wilayah, memicu ketegangan yang berujung Perang Dunia II.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-sos-22",
+      "question": "Kesenjangan ekonomi antara kelompok kaya dan miskin dalam suatu masyarakat disebut ...",
+      "options": [
+        "Inflasi",
+        "Ketimpangan sosial",
+        "Deflasi",
+        "Stagflasi"
+      ],
+      "correctIndex": 1,
+      "explanation": "Ketimpangan sosial menggambarkan perbedaan akses terhadap sumber daya dan kesempatan antarkelompok masyarakat.",
+      "category": "Isu Sosial"
+    },
+    {
+      "id": "q-sos-23",
+      "question": "Konferensi Meja Bundar yang mengakhiri sengketa kedaulatan Indonesia-Belanda diselenggarakan di kota ...",
+      "options": [
+        "Den Haag",
+        "Linggarjati",
+        "Renville",
+        "Amsterdam"
+      ],
+      "correctIndex": 0,
+      "explanation": "Konferensi Meja Bundar berlangsung di Den Haag, Belanda, pada akhir 1949 dan menghasilkan pengakuan kedaulatan Indonesia.",
+      "category": "Sejarah Indonesia"
+    },
+    {
+      "id": "q-sos-24",
+      "question": "Istilah untuk generasi yang lahir setelah tahun 2010-an dan tumbuh sepenuhnya dengan teknologi digital disebut ...",
+      "options": [
+        "Generasi X",
+        "Generasi Baby Boomer",
+        "Generasi Alpha",
+        "Generasi Milenial"
+      ],
+      "correctIndex": 2,
+      "explanation": "Generasi Alpha adalah sebutan bagi anak-anak yang lahir setelah Generasi Z, sekitar tahun 2010 ke atas.",
+      "category": "Sosiologi"
+    },
+    {
+      "id": "q-sos-25",
+      "question": "Badan PBB yang berfokus pada pendidikan, ilmu pengetahuan, dan kebudayaan disebut ...",
+      "options": [
+        "UNICEF",
+        "UNESCO",
+        "WHO",
+        "UNHCR"
+      ],
+      "correctIndex": 1,
+      "explanation": "UNESCO (United Nations Educational, Scientific and Cultural Organization) berfokus pada kerja sama internasional di bidang pendidikan dan budaya.",
+      "category": "Organisasi Dunia"
+    },
+    {
+      "id": "q-sos-26",
+      "question": "Nilai-nilai dasar negara Indonesia yang termuat dalam pembukaan UUD 1945 disebut ...",
+      "options": [
+        "Trisakti",
+        "Pancasila",
+        "Bhinneka Tunggal Ika saja",
+        "Sapta Marga"
+      ],
+      "correctIndex": 1,
+      "explanation": "Pancasila adalah dasar negara dan pandangan hidup bangsa Indonesia yang terdiri dari lima sila.",
+      "category": "Sejarah Indonesia"
+    },
+    {
+      "id": "q-sos-27",
+      "question": "Proses pengelompokan masyarakat berdasarkan kelas sosial seperti pendidikan, pekerjaan, dan pendapatan disebut ...",
+      "options": [
+        "Stratifikasi sosial",
+        "Mobilitas sosial",
+        "Interaksi sosial",
+        "Sosialisasi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Stratifikasi sosial adalah pembagian masyarakat ke dalam lapisan-lapisan berdasarkan kriteria tertentu.",
+      "category": "Ilmu Sosial"
+    },
+    {
+      "id": "q-sos-28",
+      "question": "Peristiwa jatuhnya harga saham secara drastis di Amerika Serikat pada 1929 yang memicu krisis ekonomi dunia dikenal sebagai ...",
+      "options": [
+        "Resesi 2008",
+        "Depresi Besar (Great Depression)",
+        "Krisis Moneter Asia",
+        "Krisis Minyak 1973"
+      ],
+      "correctIndex": 1,
+      "explanation": "Depresi Besar dimulai dengan crash pasar saham Wall Street 1929 dan berdampak pada perekonomian dunia selama satu dekade.",
+      "category": "Sejarah Dunia"
+    },
+    {
+      "id": "q-sos-29",
+      "question": "Perpindahan status sosial seseorang, baik naik maupun turun, dalam struktur masyarakat disebut ...",
+      "options": [
+        "Mobilitas sosial",
+        "Disorganisasi sosial",
+        "Akulturasi",
+        "Asimilasi"
+      ],
+      "correctIndex": 0,
+      "explanation": "Mobilitas sosial menggambarkan perpindahan posisi seseorang dalam hierarki sosial, baik naik maupun turun.",
+      "category": "Ilmu Sosial"
+    },
+    {
+      "id": "q-sos-30",
+      "question": "Proklamator dan wakil presiden pertama Indonesia yang dijuluki 'Bapak Koperasi Indonesia' adalah ...",
+      "options": [
+        "Soekarno",
+        "Mohammad Hatta",
+        "Sutan Sjahrir",
+        "Sudirman"
+      ],
+      "correctIndex": 1,
+      "explanation": "Mohammad Hatta dijuluki Bapak Koperasi Indonesia karena kontribusinya mendorong ekonomi kerakyatan berbasis koperasi.",
+      "category": "Sejarah Indonesia"
+    }
+  ]
+}

@@ -1,0 +1,261 @@
+{
+  "id": "deck-builtin-alam",
+  "topicId": "alam-lingkungan",
+  "title": "Alam & Sains: Bumi, Cuaca & Makhluk Hidup",
+  "description": "Jelajahi fenomena alam, geologi, cuaca, hewan, tumbuhan, dan tata surya lewat 30 soal seru.",
+  "cardCount": 30,
+  "difficulty": "Sedang",
+  "isFree": false,
+  "price": 3000,
+  "badge": "Alam",
+  "questions": [
+    {
+      "id": "q-alm-01",
+      "question": "Gambar animasi ini memperlihatkan peta letusan-letusan gunung berapi Piton de la Fournaise. Gunung ini terletak di pulau ...",
+      "options": ["Sisilia", "Réunion", "Jawa", "Hawaii"],
+      "correctIndex": 1,
+      "explanation": "Piton de la Fournaise adalah gunung berapi perisai aktif di Pulau Réunion, wilayah Prancis di Samudra Hindia.",
+      "category": "Geologi",
+      "mediaType": "image",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Piton Fournaise eruptions animated-fr.gif",
+      "mediaCredit": "Piton Fournaise eruptions animated-fr.gif — Eric Gaba, Wikimedia Commons (CC BY-SA 3.0)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Piton_Fournaise_eruptions_animated-fr.gif"
+    },
+    {
+      "id": "q-alm-02",
+      "question": "Video satelit ini merekam letusan dahsyat sebuah gunung bawah laut pada Januari 2022 yang memicu tsunami. Letusan ini terjadi di negara ...",
+      "options": ["Fiji", "Tonga", "Filipina", "Papua Nugini"],
+      "correctIndex": 1,
+      "explanation": "Letusan Hunga Tonga–Hunga Haʻapai pada 15 Januari 2022 tercatat sebagai salah satu letusan terkuat dalam sejarah modern.",
+      "category": "Geologi",
+      "mediaType": "video",
+      "mediaUrl": "https://commons.wikimedia.org/wiki/Special:FilePath/Tonga Volcano Eruption 2022-01-15 0320Z to 0610Z Himawari-8 visible.webm",
+      "mediaCredit": "Himawari-8 satellite footage — Japan Meteorological Agency, Wikimedia Commons (Public Domain)",
+      "mediaSourceUrl": "https://commons.wikimedia.org/wiki/File:Tonga_Volcano_Eruption_2022-01-15_0320Z_to_0610Z_Himawari-8_visible.webm"
+    },
+    {
+      "id": "q-alm-03",
+      "question": "Lapisan atmosfer bumi tempat cuaca terjadi (hujan, angin, awan) disebut ...",
+      "options": ["Stratosfer", "Troposfer", "Termosfer", "Mesosfer"],
+      "correctIndex": 1,
+      "explanation": "Troposfer adalah lapisan terendah atmosfer, tempat hampir seluruh fenomena cuaca berlangsung.",
+      "category": "Ilmu Bumi"
+    },
+    {
+      "id": "q-alm-04",
+      "question": "Planet manakah yang dikenal sebagai 'Planet Merah'?",
+      "options": ["Venus", "Jupiter", "Mars", "Saturnus"],
+      "correctIndex": 2,
+      "explanation": "Mars tampak kemerahan karena permukaannya kaya oksida besi (karat).",
+      "category": "Astronomi"
+    },
+    {
+      "id": "q-alm-05",
+      "question": "Proses tumbuhan mengubah cahaya matahari, air, dan karbon dioksida menjadi makanan disebut ...",
+      "options": ["Respirasi", "Transpirasi", "Fotosintesis", "Fermentasi"],
+      "correctIndex": 2,
+      "explanation": "Fotosintesis menghasilkan glukosa dan oksigen dengan bantuan klorofil.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-06",
+      "question": "Hewan mamalia terbesar di dunia yang hidup di laut adalah ...",
+      "options": ["Hiu paus", "Paus biru", "Paus sperma", "Paus orca"],
+      "correctIndex": 1,
+      "explanation": "Paus biru (Balaenoptera musculus) adalah hewan terbesar yang pernah diketahui hidup di Bumi.",
+      "category": "Zoologi"
+    },
+    {
+      "id": "q-alm-07",
+      "question": "Gas yang paling banyak menyusun atmosfer bumi adalah ...",
+      "options": ["Oksigen", "Karbon dioksida", "Nitrogen", "Hidrogen"],
+      "correctIndex": 2,
+      "explanation": "Nitrogen menyusun sekitar 78% atmosfer bumi, sedangkan oksigen sekitar 21%.",
+      "category": "Ilmu Bumi"
+    },
+    {
+      "id": "q-alm-08",
+      "question": "Siklus air dimulai dari penguapan air laut, lalu naik menjadi awan melalui proses ...",
+      "options": ["Kondensasi", "Evaporasi", "Presipitasi", "Infiltrasi"],
+      "correctIndex": 1,
+      "explanation": "Evaporasi adalah penguapan air menjadi uap air karena panas matahari.",
+      "category": "Ilmu Bumi"
+    },
+    {
+      "id": "q-alm-09",
+      "question": "Hutan hujan tropis terbesar di dunia terletak di kawasan ...",
+      "options": ["Kongo", "Amazon", "Kalimantan", "Papua"],
+      "correctIndex": 1,
+      "explanation": "Hutan Amazon di Amerika Selatan adalah hutan hujan tropis terluas di dunia.",
+      "category": "Geografi"
+    },
+    {
+      "id": "q-alm-10",
+      "question": "Lempeng tektonik yang bergesekan dan menumpuk tekanan dapat menyebabkan bencana ...",
+      "options": ["Gempa bumi", "Kekeringan", "Kebakaran hutan", "Badai salju"],
+      "correctIndex": 0,
+      "explanation": "Pergerakan lempeng tektonik adalah penyebab utama gempa bumi.",
+      "category": "Geologi"
+    },
+    {
+      "id": "q-alm-11",
+      "question": "Hewan yang mengalami metamorfosis sempurna dari telur, larva, pupa, hingga dewasa adalah ...",
+      "options": ["Belalang", "Kupu-kupu", "Capung", "Jangkrik"],
+      "correctIndex": 1,
+      "explanation": "Kupu-kupu mengalami metamorfosis sempurna: telur → ulat (larva) → kepompong (pupa) → kupu-kupu dewasa.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-12",
+      "question": "Bagian bunga yang berfungsi sebagai alat kelamin jantan disebut ...",
+      "options": ["Putik", "Benang sari", "Mahkota", "Kelopak"],
+      "correctIndex": 1,
+      "explanation": "Benang sari (stamen) menghasilkan serbuk sari sebagai sel kelamin jantan tumbuhan.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-13",
+      "question": "Fenomena pelangi terbentuk akibat cahaya matahari yang mengalami ...",
+      "options": ["Pemantulan dan pembiasan pada tetes air", "Pembekuan uap air", "Pemuaian udara", "Penguapan awan"],
+      "correctIndex": 0,
+      "explanation": "Cahaya matahari dibiaskan, dipantulkan, dan diuraikan oleh tetes-tetes air hujan sehingga terlihat sebagai spektrum warna.",
+      "category": "Fisika Alam"
+    },
+    {
+      "id": "q-alm-14",
+      "question": "Gunung tertinggi di dunia yang diukur dari permukaan laut adalah ...",
+      "options": ["K2", "Kilimanjaro", "Everest", "Elbrus"],
+      "correctIndex": 2,
+      "explanation": "Gunung Everest di pegunungan Himalaya memiliki ketinggian sekitar 8.849 meter di atas permukaan laut.",
+      "category": "Geografi"
+    },
+    {
+      "id": "q-alm-15",
+      "question": "Batu yang terbentuk dari pembekuan magma disebut batuan ...",
+      "options": ["Sedimen", "Metamorf", "Beku", "Konglomerat"],
+      "correctIndex": 2,
+      "explanation": "Batuan beku (igneous) terbentuk dari pendinginan dan pembekuan magma atau lava.",
+      "category": "Geologi"
+    },
+    {
+      "id": "q-alm-16",
+      "question": "Hewan pemakan tumbuhan disebut ...",
+      "options": ["Karnivora", "Herbivora", "Omnivora", "Insektivora"],
+      "correctIndex": 1,
+      "explanation": "Herbivora adalah hewan yang sumber makanan utamanya berupa tumbuhan.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-17",
+      "question": "Terumbu karang yang paling besar di dunia, Great Barrier Reef, berada di negara ...",
+      "options": ["Indonesia", "Filipina", "Australia", "Meksiko"],
+      "correctIndex": 2,
+      "explanation": "Great Barrier Reef membentang di lepas pantai timur laut Australia.",
+      "category": "Ekologi"
+    },
+    {
+      "id": "q-alm-18",
+      "question": "Lapisan bumi paling luar tempat manusia tinggal disebut ...",
+      "options": ["Inti dalam", "Mantel", "Kerak bumi", "Inti luar"],
+      "correctIndex": 2,
+      "explanation": "Kerak bumi (crust) adalah lapisan terluar dan tertipis dari struktur bumi.",
+      "category": "Ilmu Bumi"
+    },
+    {
+      "id": "q-alm-19",
+      "question": "Musim yang dialami Indonesia akibat letaknya di garis khatulistiwa adalah ...",
+      "options": ["4 musim", "Kemarau dan hujan", "Hanya musim dingin", "Musim gugur sepanjang tahun"],
+      "correctIndex": 1,
+      "explanation": "Indonesia beriklim tropis dengan dua musim utama: kemarau dan hujan.",
+      "category": "Geografi"
+    },
+    {
+      "id": "q-alm-20",
+      "question": "Komodo, kadal raksasa yang menjadi hewan endemik Indonesia, banyak ditemukan di pulau ...",
+      "options": ["Bali", "Komodo dan Rinca", "Lombok", "Sumbawa"],
+      "correctIndex": 1,
+      "explanation": "Komodo adalah satwa endemik di Pulau Komodo dan Rinca, Nusa Tenggara Timur.",
+      "category": "Zoologi"
+    },
+    {
+      "id": "q-alm-21",
+      "question": "Proses hewan menyesuaikan diri dengan lingkungan agar bisa bertahan hidup disebut ...",
+      "options": ["Adaptasi", "Migrasi", "Regenerasi", "Reproduksi"],
+      "correctIndex": 0,
+      "explanation": "Adaptasi adalah kemampuan makhluk hidup menyesuaikan diri dengan lingkungannya.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-22",
+      "question": "Fenomena naik-turunnya permukaan air laut secara berkala disebut ...",
+      "options": ["Tsunami", "Pasang surut", "Arus laut", "Gelombang badai"],
+      "correctIndex": 1,
+      "explanation": "Pasang surut terjadi akibat gaya gravitasi bulan dan matahari terhadap bumi.",
+      "category": "Ilmu Bumi"
+    },
+    {
+      "id": "q-alm-23",
+      "question": "Bagian tumbuhan yang berfungsi menyerap air dan mineral dari tanah adalah ...",
+      "options": ["Batang", "Daun", "Akar", "Bunga"],
+      "correctIndex": 2,
+      "explanation": "Akar menyerap air dan mineral serta menopang tumbuhan agar berdiri kokoh.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-24",
+      "question": "Planet yang dikenal memiliki cincin paling menonjol di tata surya adalah ...",
+      "options": ["Neptunus", "Uranus", "Saturnus", "Jupiter"],
+      "correctIndex": 2,
+      "explanation": "Saturnus memiliki sistem cincin yang paling luas dan mudah dikenali, tersusun dari es dan batuan.",
+      "category": "Astronomi"
+    },
+    {
+      "id": "q-alm-25",
+      "question": "Hewan yang bisa hidup di dua alam, air dan darat, disebut ...",
+      "options": ["Reptil", "Amfibi", "Mamalia", "Aves"],
+      "correctIndex": 1,
+      "explanation": "Amfibi seperti katak menjalani sebagian hidupnya di air dan sebagian di darat.",
+      "category": "Zoologi"
+    },
+    {
+      "id": "q-alm-26",
+      "question": "Bencana alam berupa gelombang laut besar akibat gempa bawah laut disebut ...",
+      "options": ["Badai", "Tsunami", "Topan", "Banjir bandang"],
+      "correctIndex": 1,
+      "explanation": "Tsunami umumnya dipicu oleh gempa bumi bawah laut, letusan gunung berapi, atau longsor bawah laut.",
+      "category": "Geologi"
+    },
+    {
+      "id": "q-alm-27",
+      "question": "Zat hijau daun yang berperan penting dalam fotosintesis disebut ...",
+      "options": ["Klorofil", "Hemoglobin", "Melanin", "Karoten"],
+      "correctIndex": 0,
+      "explanation": "Klorofil menyerap cahaya matahari, terutama warna merah dan biru, untuk proses fotosintesis.",
+      "category": "Biologi"
+    },
+    {
+      "id": "q-alm-28",
+      "question": "Danau air tawar terdalam di dunia, Danau Baikal, terletak di negara ...",
+      "options": ["Kanada", "Rusia", "Amerika Serikat", "Tiongkok"],
+      "correctIndex": 1,
+      "explanation": "Danau Baikal di Siberia, Rusia, merupakan danau air tawar terdalam dan tertua di dunia.",
+      "category": "Geografi"
+    },
+    {
+      "id": "q-alm-29",
+      "question": "Rangkaian pegunungan berapi yang mengelilingi Samudra Pasifik dan rawan gempa disebut ...",
+      "options": ["Cincin Api Pasifik", "Sabuk Alpen", "Punggung Tengah Atlantik", "Sabuk Khatulistiwa"],
+      "correctIndex": 0,
+      "explanation": "Cincin Api Pasifik (Ring of Fire) adalah kawasan dengan aktivitas vulkanik dan seismik tertinggi di dunia, termasuk Indonesia.",
+      "category": "Geologi"
+    },
+    {
+      "id": "q-alm-30",
+      "question": "Hewan pengurai seperti cacing tanah berperan penting dalam ekosistem karena ...",
+      "options": ["Menguraikan sisa organisme menjadi zat hara", "Menghasilkan oksigen", "Menyerbuki bunga", "Memangsa hewan besar"],
+      "correctIndex": 0,
+      "explanation": "Organisme pengurai (dekomposer) mengubah bahan organik mati menjadi nutrisi yang menyuburkan tanah.",
+      "category": "Ekologi"
+    }
+  ]
+}
