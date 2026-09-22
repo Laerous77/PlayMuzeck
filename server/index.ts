@@ -1,4 +1,5 @@
 // server/index.ts
+import { uploadToSupabase } from './supabaseStorage';
 import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
@@ -183,20 +184,11 @@ if (fs.existsSync(serverUploads)) {
   app.use('/uploads', express.static(serverUploads));
 }
 
-// Konfigurasi Multer untuk validasi ekstensi audio & sheet music PDF
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadsDir),
-  filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, `${uniqueSuffix}${path.extname(file.originalname)}`);
-  },
-});
+const storage = multer.memoryStorage();
 
 const fileFilter = (_req: express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedExts = ['.mp3', '.wav', '.m4a', '.flac', '.pdf', '.jpg', '.jpeg', '.png', '.webp'];
   const ext = path.extname(file.originalname).toLowerCase();
-  // Ekstensi WAJIB ada di daftar putih. Sebelumnya cukup mimetype 'audio/*' (bisa dipalsukan)
-  // sehingga file .html/.js bisa terunggah lalu disajikan dari /uploads (stored XSS).
   if (allowedExts.includes(ext)) {
     cb(null, true);
   } else {
@@ -204,7 +196,7 @@ const fileFilter = (_req: express.Request, file: Express.Multer.File, cb: multer
   }
 };
 
-const upload = multer({ storage, fileFilter, limits: { fileSize: 150 * 1024 * 1024 } }); // Maksimal 150MB
+const upload = multer({ storage, fileFilter, limits: { fileSize: 150 * 1024 * 1024 } });
 
 // Middleware verifikasi Admin Token
 // BUG KRITIS SEBELUMNYA: header apa pun berbentuk "Bearer xxx" dianggap admin,
@@ -636,7 +628,6 @@ app.delete('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
   }
 });
 
-// Endpoint upload file fisik (Master, Loop, Stems, atau Sheet Music PDF)
 app.post('/api/admin/tracks/:id/audio', requireAdmin, upload.single('file'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -644,7 +635,7 @@ app.post('/api/admin/tracks/:id/audio', requireAdmin, upload.single('file'), asy
 
     if (!req.file) return res.status(400).json({ error: 'Tidak ada berkas yang diunggah.' });
 
-    const fileUrl = `/uploads/${req.file.filename}`;
+    const fileUrl = await uploadToSupabase(req.file.buffer, req.file.originalname, req.file.mimetype);
     const { rows } = await pool.query('SELECT * FROM audio_tracks WHERE id = $1', [id]);
     if (!rows.length) return res.status(404).json({ error: 'Track target tidak ditemukan.' });
 
