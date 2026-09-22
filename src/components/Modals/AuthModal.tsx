@@ -177,30 +177,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  const handleQuickDemo = async (demoEmail: string, demoName: string) => {
-    setErrorMsg('');
-    setIsSubmitting(true);
-    try {
-      const res = await fetch('/api/auth/demo-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: demoEmail }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data?.error || 'Gagal masuk dengan akun demo.');
-        return;
-      }
-      if (data.token) setUserToken(data.token);
-      onLogin(data.email || demoEmail, data.name || demoName);
-      onClose();
-    } catch (err) {
-      setErrorMsg('Gagal terhubung ke server untuk akun demo.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   return (
     <div
       id="auth-modal-overlay"
