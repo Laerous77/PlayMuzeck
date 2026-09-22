@@ -17,7 +17,7 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
-const PORT = 8787;
+const PORT = Number(process.env.PORT) || 8787;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PlayMuzeck-admin';
 if (!process.env.ADMIN_PASSWORD) {
   console.warn('[SECURITY] ADMIN_PASSWORD belum diset di .env — memakai sandi default yang mudah ditebak!');
@@ -2020,6 +2020,13 @@ app.post('/api/payment/notification', async (req, res) => {
   res.sendStatus(200);
 });
 
+const distDir = path.resolve(process.cwd(), 'dist');
+if (fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get(/^\/(?!api|uploads).*/, (_req, res) => {
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+}
 
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server aktif di http://localhost:${PORT} terhubung ke PostgreSQL.`);
