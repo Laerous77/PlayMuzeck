@@ -534,31 +534,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   )}
                 </button>
               </form>
-
-              {/* Quick 1-Click Demo Login Helper */}
-              <div className="pt-4 border-t border-white/[0.06] text-center space-y-2">
-                <span className="text-[11px] text-gray-400">Atau uji langsung dengan 1-klik akun demo:</span>
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleQuickDemo('soundcreator@PlayMuzeck.id', 'Aris Musik')}
-                    className="px-2.5 py-1.5 rounded-lg bg-black/50 hover:bg-[#FCA311]/20 text-[#FCA311] border border-[#FCA311]/30 text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 disabled:opacity-60"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Demo Produser</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSubmitting}
-                    onClick={() => handleQuickDemo('triviageek@PlayMuzeck.id', 'Nadia Trivia')}
-                    className="px-2.5 py-1.5 rounded-lg bg-black/50 hover:bg-[#FCA311]/20 text-[#FCA311] border border-[#FCA311]/30 text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1 disabled:opacity-60"
-                  >
-                    <Sparkles className="w-3 h-3" />
-                    <span>Demo Kuis Master</span>
-                  </button>
-                </div>
-              </div>
             </div>
           )}
         </div>
