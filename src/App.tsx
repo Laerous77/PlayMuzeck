@@ -896,28 +896,13 @@ function MainApp() {
 
           <div className="flex items-center gap-4 flex-wrap justify-center">
             <span className="flex items-center gap-1 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" /> Client-Side Offline First
+              <ShieldCheck className="w-3.5 h-3.5" /> Aman & Tepercaya
             </span>
             {isAdmin && (
               <a href="/admin" className="text-[#FCA311] font-bold hover:underline">
                 Developer Console ⚙️
               </a>
             )}
-            <button
-              type="button"
-              onClick={() => setCurrentMode('index')}
-              className="text-gray-400 hover:text-[#FCA311] transition-colors cursor-pointer"
-            >
-              Halaman Utama
-            </button>
-            <button
-              type="button"
-              onClick={handleResetDemo}
-              className="flex items-center gap-1 text-gray-400 hover:text-[#FCA311] transition-colors cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Reset Data Demo</span>
-            </button>
           </div>
         </div>
       </footer>
