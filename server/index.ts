@@ -9,7 +9,8 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { pool, initDatabase, SUPER_ADMIN_EMAIL } from './db';
-import { fileURLToPath } from 'url'; // <-- WAJIB ADA
+import { fileURLToPath } from 'url'; 
+import { attachMultiplayerSocket } from './multiplayerSocket';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -2019,7 +2020,7 @@ if (fs.existsSync(distDir)) {
   });
 }
 
-app.listen(PORT, '0.0.0.0', () => {
+const httpServer = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server aktif di http://localhost:${PORT} terhubung ke PostgreSQL.`);
   const ok = (v: unknown) => (v ? '✔' : '✘');
   console.log('--- KESIAPAN ---');
@@ -2037,3 +2038,4 @@ app.listen(PORT, '0.0.0.0', () => {
       : '✘ Pembayaran BELUM siap: isi MIDTRANS_SERVER_KEY & MIDTRANS_CLIENT_KEY di .env'
   );
 });
+attachMultiplayerSocket(httpServer);
