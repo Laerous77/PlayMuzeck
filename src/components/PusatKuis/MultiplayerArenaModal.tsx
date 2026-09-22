@@ -22,6 +22,9 @@ import {
   RotateCcw,
   Loader2,
   Lightbulb,
+  Globe,
+  Lock,
+  RefreshCw,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -57,10 +60,29 @@ interface RoomState {
   deckId: string;
   deckTitle: string;
   roundTimeSec: number;
-  status: 'lobby' | 'in-game' | 'podium';
+  /** Jeda (detik) antar soal, diatur host — supaya pemain tak perlu tunggu waktu jawab habis untuk lihat hasil. */
+  roundGapSec: number;
+  /** 'round-result' = jeda menampilkan jawaban benar & skor sebelum soal berikutnya. */
+  status: 'lobby' | 'in-game' | 'round-result' | 'podium';
   currentQIndex: number;
   roundEndsAt: number | null;
+  /** Terisi hanya saat status 'round-result'. */
+  roundResultEndsAt: number | null;
+  /** Poin penuh soal SAAT INI, diambil server dari Quiz Editor (bukan angka 100 tetap). */
+  currentQuestionBasePoints: number | null;
+  /** 'invite' = hanya lewat kode, tidak tampil di daftar publik. 'global' = tampil di "Room Global". */
+  visibility: 'invite' | 'global';
+  /** Room global dengan password wajib mengisi password saat join. Password asli tidak pernah dikirim ke client. */
+  hasPassword: boolean;
   players: RoomPlayer[];
+}
+
+/** Satu baris di daftar "Room Global" — data ringkas, tanpa password asli. */
+interface GlobalRoomListing {
+  code: string;
+  deckTitle: string;
+  playerCount: number;
+  hasPassword: boolean;
 }
 
 const SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : '';
@@ -120,12 +142,35 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [selectedDeckId, setSelectedDeckId] = useState<string>(playableDecks[0]?.id || 'deck-starter-1');
   const [roundTimeChoice, setRoundTimeChoice] = useState<number>(DEFAULT_QUESTION_TIME);
   // Skema poin dinamis, diatur host: persen waktu pertama yang masih dapat
-  // poin penuh, dan poin minimal saat mepet waktu habis (dipaksa minimal 2
-  // lewat validasi input di bawah, supaya tetap "terasa beda dari 0").
+  // poin penuh, dan poin minimal saat mepet waktu habis.
+  // PENTING: poin dasar/penuh tidak diatur di sini lagi — itu sudah jadi
+  // wewenang Quiz Editor (q.points, per soal). Di sini host hanya mengatur
+  // BERAPA PERSEN dari poin soal itu yang tetap didapat kalau jawab mepet
+  // waktu habis, supaya selalu masuk akal berapa pun besar poin soalnya
+  // (poin minimal = persen x poin soal, jadi otomatis selalu < poin penuh).
   const [fullPointPercent, setFullPointPercent] = useState<number>(40);
-  const [minPoints, setMinPoints] = useState<number>(10);
+  const [minPointsPercent, setMinPointsPercent] = useState<number>(10); // dalam %, 0-90
+  // Jeda (detik) menampilkan jawaban benar & skor sebelum lanjut ke soal
+  // berikutnya — supaya pemain tidak harus menunggu roundTimeSec penuh
+  // habis dulu baru bisa lihat hasil & pindah soal.
+  const [roundGapSec, setRoundGapSec] = useState<number>(5);
+  // Visibilitas ruangan yang mau dibuat: 'invite' (hanya lewat kode, bawaan)
+  // atau 'global' (tampil di daftar "Room Global", bisa digabung tanpa kode).
+  // Password HANYA relevan & dikirim ke server kalau visibility = 'global',
+  // dan itu pun opsional — boleh dikosongkan supaya room global bebas masuk.
+  const [roomVisibility, setRoomVisibility] = useState<'invite' | 'global'>('invite');
+  const [roomPassword, setRoomPassword] = useState<string>('');
   const [joinCodeInput, setJoinCodeInput] = useState<string>('');
   const [copied, setCopied] = useState(false);
+
+  // Sub-mode tab "Gabung": lewat kode ruangan (seperti sebelumnya), atau
+  // menelusuri daftar Room Global yang sedang terbuka.
+  const [joinMode, setJoinMode] = useState<'code' | 'global'>('code');
+  const [globalRooms, setGlobalRooms] = useState<GlobalRoomListing[]>([]);
+  const [isLoadingGlobalRooms, setIsLoadingGlobalRooms] = useState(false);
+  // Kode room global yang sedang diminta password-nya sebelum join.
+  const [pendingGlobalCode, setPendingGlobalCode] = useState<string | null>(null);
+  const [globalPasswordInput, setGlobalPasswordInput] = useState<string>('');
 
   const [room, setRoom] = useState<RoomState | null>(null);
   const [mySocketId, setMySocketId] = useState<string>('');
@@ -155,6 +200,12 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setFloatingReactions([]);
     answerLogRef.current = [];
     hasSavedResultRef.current = false;
+    setJoinMode('code');
+    setGlobalRooms([]);
+    setPendingGlobalCode(null);
+    setGlobalPasswordInput('');
+    setRoomVisibility('invite');
+    setRoomPassword('');
   }, [isOpen]);
 
   // ---- Koneksi socket: dibuat setiap modal dibuka ----
@@ -177,6 +228,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socket.on('room:joined', (state: RoomState) => setRoom(state));
     socket.on('room:update', (state: RoomState) => setRoom(state));
     socket.on('room:error', (msg: string) => setErrorMsg(msg));
+    socket.on('room:globalList', (list: GlobalRoomListing[]) => {
+      setGlobalRooms(list);
+      setIsLoadingGlobalRooms(false);
+    });
 
     socket.on('game:started', (payload: { questions: QuizQuestion[]; roundEndsAt: number; currentQIndex: number }) => {
       setQuestionsSnapshot(payload.questions);
@@ -190,6 +245,21 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socket.on('game:answerResult', (result: { isCorrect: boolean; pointsAwarded: number; correctIndex: number; explanation: string }) => {
       setAnswerResult(result);
     });
+
+    // Waktu jawab habis: server masuk status 'round-result' selama roundGapSec
+    // detik. `answerResult` dari jawaban sendiri tetap tampil kalau sudah
+    // menjawab; kalau belum menjawab sama sekali, tampilkan juga jawaban
+    // benarnya di sini supaya semua pemain lihat hasil, bukan cuma yang jawab.
+    socket.on(
+      'game:roundEnded',
+      (payload: { currentQIndex: number; correctIndex: number; explanation: string; roundResultEndsAt: number; isLastQuestion: boolean }) => {
+        setAnswerResult((prev) =>
+          prev
+            ? prev
+            : { isCorrect: false, pointsAwarded: 0, correctIndex: payload.correctIndex, explanation: payload.explanation }
+        );
+      }
+    );
 
     socket.on('game:nextRound', (_payload: { currentQIndex: number; roundEndsAt: number }) => {
       setUserSelectedOption(null);
@@ -210,6 +280,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isOnline]);
+
+  // ---- Muat daftar Room Global begitu tab "Room Global" dibuka ----
+  useEffect(() => {
+    if (!isOpen || room || activeTab !== 'join' || joinMode !== 'global') return;
+    if (connectionState !== 'connected') return;
+    setIsLoadingGlobalRooms(true);
+    socketRef.current?.emit('room:listGlobal');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, activeTab, joinMode, connectionState]);
 
   // ---- Timer tampilan (sumber kebenaran waktu tetap di server) ----
   useEffect(() => {
@@ -296,8 +375,11 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       deckId: activeDeck.id,
       deckTitle: activeDeck.title,
       roundTimeSec: getPlayTime(activeDeck, activeDeck.questions?.[0], roundTimeChoice),
+      roundGapSec,
       fullPointRatio: fullPointPercent / 100,
-      minPoints: Math.max(2, minPoints),
+      minPointsPercent: minPointsPercent / 100,
+      visibility: roomVisibility,
+      password: roomVisibility === 'global' ? roomPassword.trim() : undefined,
     });
   };
 
@@ -313,6 +395,40 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       name: userNickname || 'Pemain',
       avatarUrl: userAvatarUrl || '',
       frameId: userFrameId || 'none',
+    });
+  };
+
+  const handleRefreshGlobalRooms = () => {
+    setIsLoadingGlobalRooms(true);
+    socketRef.current?.emit('room:listGlobal');
+  };
+
+  /** Klik "Gabung" di daftar Room Global: langsung join kalau tanpa password, atau buka input password dulu. */
+  const handlePickGlobalRoom = (r: GlobalRoomListing) => {
+    setErrorMsg('');
+    if (r.hasPassword) {
+      setPendingGlobalCode(r.code);
+      setGlobalPasswordInput('');
+      return;
+    }
+    socketRef.current?.emit('room:join', {
+      code: r.code,
+      name: userNickname || 'Pemain',
+      avatarUrl: userAvatarUrl || '',
+      frameId: userFrameId || 'none',
+    });
+  };
+
+  /** Konfirmasi password untuk Room Global yang terkunci password. */
+  const handleConfirmGlobalPassword = () => {
+    if (!pendingGlobalCode) return;
+    setErrorMsg('');
+    socketRef.current?.emit('room:join', {
+      code: pendingGlobalCode,
+      name: userNickname || 'Pemain',
+      avatarUrl: userAvatarUrl || '',
+      frameId: userFrameId || 'none',
+      password: globalPasswordInput.trim(),
     });
   };
 
@@ -458,6 +574,67 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     </select>
                   </div>
 
+                  <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
+                    <span className="text-xs font-bold text-gray-300 block">Visibilitas Ruangan</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRoomVisibility('invite')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          roomVisibility === 'invite'
+                            ? 'bg-[#FC1212] border-[#FC1212] text-white'
+                            : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-xs">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Undangan</span>
+                        </div>
+                        <p className={`text-[10px] mt-0.5 ${roomVisibility === 'invite' ? 'text-red-100' : 'text-gray-500'}`}>
+                          Hanya bisa dimasuki lewat kode ruangan.
+                        </p>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRoomVisibility('global')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          roomVisibility === 'global'
+                            ? 'bg-[#FC1212] border-[#FC1212] text-white'
+                            : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-1.5 font-bold text-xs">
+                          <Globe className="w-3.5 h-3.5" />
+                          <span>Global</span>
+                        </div>
+                        <p className={`text-[10px] mt-0.5 ${roomVisibility === 'global' ? 'text-red-100' : 'text-gray-500'}`}>
+                          Muncul di daftar publik, bisa digabung tanpa kode.
+                        </p>
+                      </button>
+                    </div>
+
+                    {roomVisibility === 'global' && (
+                      <div className="space-y-1.5 pt-1">
+                        <label className="text-[11px] text-gray-400 flex items-center gap-1.5">
+                          <Lock className="w-3 h-3" />
+                          <span>Password Ruangan (opsional)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={roomPassword}
+                          onChange={(e) => setRoomPassword(e.target.value)}
+                          placeholder="Kosongkan agar bebas dimasuki siapa saja"
+                          maxLength={32}
+                          className="w-full p-2.5 rounded-lg bg-black/50 border border-white/[0.08] text-white text-xs focus:border-[#FC1212] focus:outline-none"
+                        />
+                        <p className="text-[10px] text-gray-500">
+                          Kalau diisi, pemain lain harus memasukkan password ini dulu sebelum bisa join dari daftar
+                          Room Global.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
                   <QuestionTimerSetting
                     value={roundTimeChoice}
                     onChange={setRoundTimeChoice}
@@ -468,10 +645,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
                   <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
                     <span className="text-xs font-bold text-gray-300 block">Skor Berbasis Kecepatan Jawab</span>
+                    <p className="text-[10px] text-gray-500 -mt-1">
+                      Poin penuh tiap soal mengikuti poin yang sudah diatur di Quiz Editor (skema "Poin Sama Rata" atau
+                      "Poin Berbeda"). Di sini host hanya mengatur seberapa cepat poin itu berkurang seiring waktu.
+                    </p>
 
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-[11px] text-gray-400">
-                        <span>Poin penuh (100) jika jawab dalam</span>
+                        <span>Poin penuh jika jawab dalam</span>
                         <span className="font-mono font-bold text-white">{fullPointPercent}% waktu pertama</span>
                       </div>
                       <input
@@ -488,24 +669,46 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-[11px] text-gray-400">
                         <span>Poin minimal saat mepet waktu habis</span>
-                        <input
-                          type="number"
-                          min={2}
-                          max={99}
-                          value={minPoints}
-                          onChange={(e) => setMinPoints(Math.max(2, Number(e.target.value) || 2))}
-                          className="w-16 px-2 py-1 rounded-lg bg-black/60 border border-white/10 text-white font-mono font-bold text-center outline-none focus:border-[#FC1212]"
-                        />
+                        <span className="font-mono font-bold text-white">{minPointsPercent}% dari poin soal</span>
                       </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={90}
+                        step={5}
+                        value={minPointsPercent}
+                        onChange={(e) => setMinPointsPercent(Number(e.target.value))}
+                        className="w-full accent-[#FC1212]"
+                      />
                       <p className="text-[10px] text-gray-500">
-                        Minimal 2 poin — supaya menjawab benar di detik-detik terakhir tetap terasa lebih baik daripada
-                        tidak menjawab sama sekali (0 poin).
+                        Dihitung sebagai persentase dari poin soal itu sendiri (bukan angka tetap), jadi otomatis selalu
+                        lebih kecil dari poin penuhnya — berapa pun besar poin soal itu (2, 10, atau 1000 sekalipun).
                       </p>
                     </div>
 
                     <p className="text-[10px] text-gray-500 pt-1 border-t border-white/[0.06]">
-                      Antara {fullPointPercent}% sampai 100% waktu, poin turun bertahap halus dari 100 menuju {minPoints}.
-                      Lewat waktu / tidak menjawab = 0 poin.
+                      Antara {fullPointPercent}% sampai 100% waktu, poin turun bertahap halus dari poin penuh soal
+                      menuju {minPointsPercent}% -nya. Lewat waktu / tidak menjawab = 0 poin.
+                    </p>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] text-gray-400">
+                      <span className="text-xs font-bold text-gray-300">Jeda Sebelum Soal Berikutnya</span>
+                      <span className="font-mono font-bold text-white">{roundGapSec}s</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={15}
+                      step={1}
+                      value={roundGapSec}
+                      onChange={(e) => setRoundGapSec(Number(e.target.value))}
+                      className="w-full accent-[#FC1212]"
+                    />
+                    <p className="text-[10px] text-gray-500">
+                      Setelah waktu jawab habis, semua pemain melihat jawaban benar & papan skor selama jeda ini
+                      sebelum otomatis lanjut ke soal berikutnya. Atur ke 0 detik untuk langsung lanjut tanpa jeda.
                     </p>
                   </div>
 
@@ -520,25 +723,121 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">Kode Ruangan (Room Code)</label>
-                    <input
-                      type="text"
-                      value={joinCodeInput}
-                      onChange={(e) => setJoinCodeInput(e.target.value)}
-                      placeholder="Misal: MZK-842"
-                      className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs font-mono uppercase tracking-widest focus:border-[#FC1212] focus:outline-none"
-                    />
+                  <div className="flex rounded-xl bg-black/30 p-1 border border-white/[0.06]">
+                    <button
+                      onClick={() => setJoinMode('code')}
+                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        joinMode === 'code' ? 'bg-white/15 text-white' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Lock className="w-3 h-3" />
+                      <span>Kode Ruangan</span>
+                    </button>
+                    <button
+                      onClick={() => setJoinMode('global')}
+                      className={`flex-1 py-1.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                        joinMode === 'global' ? 'bg-white/15 text-white' : 'text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Globe className="w-3 h-3" />
+                      <span>Room Global</span>
+                    </button>
                   </div>
 
-                  <button
-                    onClick={handleJoinRoom}
-                    disabled={!isOnline || connectionState !== 'connected'}
-                    className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
-                  >
-                    <Users className="w-4 h-4" />
-                    <span>Masuk ke Ruangan</span>
-                  </button>
+                  {joinMode === 'code' ? (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-300 mb-1">Kode Ruangan (Room Code)</label>
+                        <input
+                          type="text"
+                          value={joinCodeInput}
+                          onChange={(e) => setJoinCodeInput(e.target.value)}
+                          placeholder="Misal: MZK-842"
+                          className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs font-mono uppercase tracking-widest focus:border-[#FC1212] focus:outline-none"
+                        />
+                      </div>
+
+                      <button
+                        onClick={handleJoinRoom}
+                        disabled={!isOnline || connectionState !== 'connected'}
+                        className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                      >
+                        <Users className="w-4 h-4" />
+                        <span>Masuk ke Ruangan</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-gray-400">
+                          Ruangan publik yang bisa langsung digabung tanpa kode.
+                        </p>
+                        <button
+                          onClick={handleRefreshGlobalRooms}
+                          disabled={connectionState !== 'connected'}
+                          className="p-1.5 rounded-lg bg-black/40 border border-white/10 text-gray-300 hover:text-white transition-colors cursor-pointer disabled:opacity-40"
+                          title="Muat ulang daftar"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGlobalRooms ? 'animate-spin' : ''}`} />
+                        </button>
+                      </div>
+
+                      {isLoadingGlobalRooms ? (
+                        <div className="flex items-center justify-center gap-2 text-xs text-gray-400 py-6">
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          <span>Memuat daftar ruangan...</span>
+                        </div>
+                      ) : globalRooms.length === 0 ? (
+                        <div className="text-center text-xs text-gray-500 py-6 border border-dashed border-white/10 rounded-xl">
+                          Belum ada Room Global yang terbuka saat ini. Ajak temanmu membuat satu!
+                        </div>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                          {globalRooms.map((r) => (
+                            <div
+                              key={r.code}
+                              className="p-3 rounded-xl bg-black/40 border border-white/[0.08] flex items-center justify-between gap-3"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-mono font-black text-[#FC1212]">{r.code}</span>
+                                  {r.hasPassword && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
+                                </div>
+                                <p className="text-[11px] text-gray-300 truncate">{r.deckTitle}</p>
+                                <p className="text-[10px] text-gray-500">{r.playerCount} pemain di lobby</p>
+                              </div>
+
+                              {pendingGlobalCode === r.code ? (
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <input
+                                    type="text"
+                                    autoFocus
+                                    value={globalPasswordInput}
+                                    onChange={(e) => setGlobalPasswordInput(e.target.value)}
+                                    placeholder="Password"
+                                    className="w-24 p-1.5 rounded-lg bg-black/60 border border-white/10 text-white text-[11px] focus:border-[#FC1212] focus:outline-none"
+                                  />
+                                  <button
+                                    onClick={handleConfirmGlobalPassword}
+                                    className="px-2.5 py-1.5 rounded-lg bg-[#FC1212] hover:bg-[#e01010] text-white text-[11px] font-bold cursor-pointer"
+                                  >
+                                    OK
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => handlePickGlobalRoom(r)}
+                                  className="px-3 py-1.5 rounded-lg bg-[#FC1212] hover:bg-[#e01010] text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                                >
+                                  Gabung
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -546,14 +845,30 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
             <div className="space-y-6">
               <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Kode Ruangan Kuis</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Kode Ruangan Kuis</span>
+                    <span
+                      className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        room.visibility === 'global'
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-white/10 text-gray-300 border-white/15'
+                      }`}
+                    >
+                      {room.visibility === 'global' ? <Globe className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
+                      <span>{room.visibility === 'global' ? (room.hasPassword ? 'Global · Terkunci' : 'Global') : 'Undangan'}</span>
+                    </span>
+                  </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="text-xl font-mono font-black text-[#FC1212] tracking-wider">{room.code}</span>
                     <button onClick={handleCopyCode} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 text-xs transition-colors cursor-pointer">
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
-                  <p className="text-[11px] text-gray-400 mt-1">Bagikan kode ini ke teman untuk join ruangan.</p>
+                  <p className="text-[11px] text-gray-400 mt-1">
+                    {room.visibility === 'global'
+                      ? 'Ruangan ini juga muncul di daftar Room Global — siapapun bisa join langsung.'
+                      : 'Bagikan kode ini ke teman untuk join ruangan.'}
+                  </p>
                 </div>
                 {isHost ? (
                   <button
