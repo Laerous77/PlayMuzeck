@@ -1,5 +1,5 @@
 // src/components/PusatKuis/MultiplayerArenaModal.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   getPlayTime,
   isEditorDeck,
@@ -14,19 +14,15 @@ import {
   WifiOff,
   Copy,
   Check,
-  Play,
-  Crown,
   Sparkles,
-  Clock,
   Award,
-  CheckCircle2,
-  XCircle,
+  Crown,
   RotateCcw,
-  ShieldAlert,
-  ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
+import { io, Socket } from 'socket.io-client';
 
 interface MultiplayerArenaModalProps {
   isOpen: boolean;
@@ -42,11 +38,34 @@ interface RoomPlayer {
   name: string;
   isHost: boolean;
   isReady: boolean;
-  avatarBg: string;
   score: number;
   streak: number;
-  lastAnswerStatus?: 'correct' | 'wrong' | 'waiting';
+  lastAnswerStatus?: 'correct' | 'wrong';
 }
+
+interface RoomState {
+  code: string;
+  deckId: string;
+  deckTitle: string;
+  roundTimeSec: number;
+  status: 'lobby' | 'in-game' | 'podium';
+  currentQIndex: number;
+  roundEndsAt: number | null;
+  players: RoomPlayer[];
+}
+
+// Server socket.io menumpang di server Express yang sama (lihat server/multiplayerSocket.ts),
+// jadi cukup connect ke origin yang sama dengan web app — tidak perlu URL/port terpisah.
+const SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : '';
+
+const AVATAR_COLORS = [
+  'bg-[#FC1212]', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600', 'bg-purple-600', 'bg-sky-600',
+];
+const avatarColorFor = (id: string) => {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+};
 
 export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   isOpen,
@@ -56,230 +75,139 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   isOnline,
   userNickname,
 }) => {
-  const [screen, setScreen] = useState<'lobby-menu' | 'waiting-room' | 'in-game' | 'podium'>('lobby-menu');
+  const socketRef = useRef<Socket | null>(null);
+  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [errorMsg, setErrorMsg] = useState('');
+
   const [activeTab, setActiveTab] = useState<'create' | 'join'>('create');
-
-  const playableDecks = decks.filter((d) => d.isFree || unlockedDeckIds.includes(d.id));
+  const playableDecks = useMemo(
+    () => decks.filter((d) => d.isFree || unlockedDeckIds.includes(d.id)),
+    [decks, unlockedDeckIds]
+  );
   const [selectedDeckId, setSelectedDeckId] = useState<string>(playableDecks[0]?.id || 'deck-starter-1');
-  // Waktu per soal pilihan pembuat ruangan (hanya untuk kuis bawaan; kuis Editor dikunci)
   const [roundTimeChoice, setRoundTimeChoice] = useState<number>(DEFAULT_QUESTION_TIME);
-
-  const [roomCode, setRoomCode] = useState<string>('');
   const [joinCodeInput, setJoinCodeInput] = useState<string>('');
   const [copied, setCopied] = useState(false);
 
-  const [players, setPlayers] = useState<RoomPlayer[]>([]);
-  const [isUserReady, setIsUserReady] = useState(true);
+  const [room, setRoom] = useState<RoomState | null>(null);
+  const [mySocketId, setMySocketId] = useState<string>('');
+  const [userSelectedOption, setUserSelectedOption] = useState<number | null>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [questionsSnapshot, setQuestionsSnapshot] = useState<QuizQuestion[]>([]);
 
   const activeDeck = decks.find((d) => d.id === selectedDeckId) || decks[0];
-  const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(0);
-  const [userSelectedOption, setUserSelectedOption] = useState<number | null>(null);
-  const [isRoundFinished, setIsRoundFinished] = useState(false);
-  const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const currentQ: QuizQuestion | undefined = activeDeck?.questions[currentQIndex];
-  // Multiplayer selalu memakai timer: pilihan pembuat ruangan (kuis bawaan) atau waktu dari pembuat kuis (kuis Editor).
-  const roundTimerSec = getPlayTime(activeDeck, currentQ, roundTimeChoice);
+  // ---- Koneksi socket: dibuat sekali saat modal dibuka, ditutup saat modal ditutup ----
+  useEffect(() => {
+    if (!isOpen || !isOnline) return;
+
+    const socket = io(SOCKET_URL, { path: '/socket.io', transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setConnectionState('connected');
+      setMySocketId(socket.id || '');
+    });
+    socket.on('connect_error', () => {
+      setConnectionState('error');
+      setErrorMsg('Gagal terhubung ke server multiplayer. Coba lagi beberapa saat.');
+    });
+
+    socket.on('room:created', (state: RoomState) => setRoom(state));
+    socket.on('room:joined', (state: RoomState) => setRoom(state));
+    socket.on('room:update', (state: RoomState) => setRoom(state));
+    socket.on('room:error', (msg: string) => setErrorMsg(msg));
+
+    socket.on('game:started', (payload: { questions: QuizQuestion[]; roundEndsAt: number; currentQIndex: number }) => {
+      setQuestionsSnapshot(payload.questions);
+      setUserSelectedOption(null);
+      audioEngine.playClickSound();
+    });
+
+    socket.on('game:nextRound', (_payload: { currentQIndex: number; roundEndsAt: number }) => {
+      setUserSelectedOption(null);
+    });
+
+    socket.on('game:ended', (state: RoomState) => setRoom(state));
+
+    return () => {
+      socket.disconnect();
+      socketRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, isOnline]);
+
+  // ---- Timer lokal murni untuk tampilan (sumber kebenaran waktu tetap di server: roundEndsAt) ----
+  useEffect(() => {
+    if (!room || room.status !== 'in-game' || !room.roundEndsAt) return;
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((room.roundEndsAt! - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    };
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [room?.roundEndsAt, room?.status]);
+
+  if (!isOpen) return null;
+
+  const currentQ: QuizQuestion | undefined = questionsSnapshot[room?.currentQIndex ?? 0];
+  const me = room?.players.find((p) => p.id === mySocketId);
+  const isHost = Boolean(me?.isHost);
+  const isRoundFinished = Boolean(me && (userSelectedOption !== null || timeLeft <= 0));
+  const sortedPlayers = room ? [...room.players].sort((a, b) => b.score - a.score) : [];
 
   const handleCreateRoom = () => {
-    const generatedCode = 'MZK-' + Math.floor(100 + Math.random() * 900);
-    setRoomCode(generatedCode);
-
-    const initialPlayers: RoomPlayer[] = [
-      {
-        id: 'p-me',
-        name: userNickname || 'Kamu (Host)',
-        isHost: true,
-        isReady: true,
-        avatarBg: 'bg-[#FC1212]',
-        score: 0,
-        streak: 0,
-      },
-      {
-        id: 'p-bot-1',
-        name: 'Rian_Beat',
-        isHost: false,
-        isReady: true,
-        avatarBg: 'bg-blue-600',
-        score: 0,
-        streak: 0,
-      },
-      {
-        id: 'p-bot-2',
-        name: 'Maya_Harmoni',
-        isHost: false,
-        isReady: true,
-        avatarBg: 'bg-emerald-600',
-        score: 0,
-        streak: 0,
-      },
-    ];
-
-    setPlayers(initialPlayers);
-    setScreen('waiting-room');
+    if (!activeDeck) return;
+    audioEngine.playClickSound();
+    socketRef.current?.emit('room:create', {
+      name: userNickname || 'Host',
+      deckId: activeDeck.id,
+      deckTitle: activeDeck.title,
+      roundTimeSec: getPlayTime(activeDeck, activeDeck.questions?.[0], roundTimeChoice),
+    });
   };
 
   const handleJoinRoom = () => {
     const code = joinCodeInput.trim().toUpperCase();
     if (!code) {
-      alert('Masukkan kode ruangan terlebih dahulu.');
+      setErrorMsg('Masukkan kode ruangan terlebih dahulu.');
       return;
     }
-
-    setRoomCode(code);
-    const initialPlayers: RoomPlayer[] = [
-      {
-        id: 'p-host-room',
-        name: 'Kapten_Audio (Host)',
-        isHost: true,
-        isReady: true,
-        avatarBg: 'bg-amber-600',
-        score: 0,
-        streak: 0,
-      },
-      {
-        id: 'p-me',
-        name: userNickname || 'Kamu',
-        isHost: false,
-        isReady: true,
-        avatarBg: 'bg-[#FC1212]',
-        score: 0,
-        streak: 0,
-      },
-    ];
-
-    setPlayers(initialPlayers);
-    setScreen('waiting-room');
+    setErrorMsg('');
+    socketRef.current?.emit('room:join', { code, name: userNickname || 'Pemain' });
   };
 
   const handleCopyCode = () => {
-    navigator.clipboard?.writeText(roomCode);
+    if (!room) return;
+    navigator.clipboard?.writeText(room.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleToggleReady = () => {
-    setIsUserReady(!isUserReady);
-    setPlayers((prev) =>
-      prev.map((p) => (p.id === 'p-me' ? { ...p, isReady: !p.isReady } : p))
-    );
-  };
-
   const handleStartGame = () => {
+    if (!activeDeck || !isHost) return;
     audioEngine.playClickSound();
-    setCurrentQIndex(0);
-    setUserSelectedOption(null);
-    setIsRoundFinished(false);
-    setTimeLeft(roundTimerSec);
-    setPlayers((prev) => prev.map((p) => ({ ...p, score: 0, streak: 0, lastAnswerStatus: undefined })));
-    setScreen('in-game');
+    socketRef.current?.emit('room:start', { questions: activeDeck.questions });
   };
-
-  useEffect(() => {
-    if (screen !== 'in-game' || isRoundFinished) {
-      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-      return;
-    }
-
-    if (roundTimerSec <= 0) {
-      setTimeLeft(0);
-      return;
-    }
-    setTimeLeft(roundTimerSec);
-    gameTimerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-          setUserSelectedOption((sel) => {
-            if (sel === null) {
-              setPlayers((prevPlayers) =>
-                prevPlayers.map((p) =>
-                  p.id === 'p-me' ? { ...p, streak: 0, lastAnswerStatus: 'wrong' } : p
-                )
-              );
-            }
-            return sel;
-          });
-          setIsRoundFinished(true);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-    };
-  }, [screen, currentQIndex, isRoundFinished, roundTimerSec]);
-
-  // Simulasikan pemain lain (bot) ikut menjawab setiap ronde selesai, agar skor & podium hidup
-  useEffect(() => {
-    if (screen !== 'in-game' || !isRoundFinished || !currentQ) return;
-    setPlayers((prev) =>
-      prev.map((p) => {
-        if (p.id === 'p-me') return p;
-        const botCorrect = Math.random() < 0.65;
-        const botBonus = Math.round((0.15 + Math.random() * 0.7) * 150);
-        return botCorrect
-          ? {
-              ...p,
-              score: p.score + 100 + botBonus,
-              streak: p.streak + 1,
-              lastAnswerStatus: 'correct',
-            }
-          : { ...p, streak: 0, lastAnswerStatus: 'wrong' };
-      })
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRoundFinished, currentQIndex, screen]);
 
   const handleSelectOption = (idx: number) => {
     if (isRoundFinished || !currentQ) return;
-    if (gameTimerRef.current) clearInterval(gameTimerRef.current);
-
     setUserSelectedOption(idx);
-    setIsRoundFinished(true);
-
     const isCorrect = idx === currentQ.correctIndex;
-    if (isCorrect) {
-      audioEngine.playCorrectSound();
-    } else {
-      if (typeof (audioEngine as any).playIncorrectSound === 'function') {
-        (audioEngine as any).playIncorrectSound();
-      } else {
-        audioEngine.playClickSound();
-      }
-    }
-
-    setPlayers((prev) =>
-      prev.map((player) => {
-        if (player.id === 'p-me') {
-          return {
-            ...player,
-            score: player.score + (isCorrect ? 100 + (roundTimerSec > 0 ? Math.round((timeLeft / roundTimerSec) * 150) : 0) : 0),
-            lastAnswerStatus: isCorrect ? 'correct' : 'wrong',
-          };
-        }
-        return player;
-      })
-    );
+    if (isCorrect) audioEngine.playCorrectSound();
+    else if (typeof (audioEngine as any).playIncorrectSound === 'function') (audioEngine as any).playIncorrectSound();
+    else audioEngine.playClickSound();
+    socketRef.current?.emit('game:answer', { optionIndex: idx });
   };
 
-  const handleNextRound = () => {
-    if (currentQIndex + 1 < (activeDeck?.questions.length || 0)) {
-      setCurrentQIndex((prev) => prev + 1);
-      setUserSelectedOption(null);
-      setIsRoundFinished(false);
-      setTimeLeft(roundTimerSec);
-    } else {
-      setScreen('podium');
-    }
-  };
-
-  const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
-
-  if (!isOpen) return null;
+  const screen: 'lobby-menu' | 'waiting-room' | 'in-game' | 'podium' = !room
+    ? 'lobby-menu'
+    : room.status === 'lobby'
+    ? 'waiting-room'
+    : room.status === 'in-game'
+    ? 'in-game'
+    : 'podium';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">
@@ -296,15 +224,13 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-base sm:text-lg font-bold text-white">
-                  Multiplayer Arena
-                </h3>
+                <h3 className="text-base sm:text-lg font-bold text-white">Multiplayer Arena</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FC1212]/20 text-[#FC1212] border border-[#FC1212]/30">
                   Online Match
                 </span>
               </div>
               <p className="text-xs text-gray-400">
-                Tantang pemain lain dalam adu kecepatan dan ketepatan menjawab kuis interaktif.
+                Tantang pemain lain sungguhan secara real-time lewat kode ruangan.
               </p>
             </div>
           </div>
@@ -322,6 +248,23 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
             <WifiOff className="w-4 h-4 text-[#FC1212] flex-shrink-0" />
             <span>Mode Offline Terdeteksi. Fitur Multiplayer membutuhkan koneksi jaringan aktif.</span>
           </div>
+        )}
+
+        {isOnline && connectionState !== 'connected' && (
+          <div className="bg-black/40 border-b border-white/10 px-5 py-2.5 flex items-center gap-2.5 text-xs text-gray-300">
+            {connectionState === 'connecting' ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-[#FCA311]" />
+                <span>Menghubungkan ke server multiplayer...</span>
+              </>
+            ) : (
+              <span className="text-red-300">{errorMsg || 'Gagal terhubung ke server.'}</span>
+            )}
+          </div>
+        )}
+
+        {errorMsg && connectionState === 'connected' && (
+          <div className="bg-[#780000]/30 border-b border-red-500/20 px-5 py-2 text-xs text-red-200">{errorMsg}</div>
         )}
 
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
@@ -349,9 +292,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               {activeTab === 'create' ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">
-                      Pilih Deck Kuis Pertandingan
-                    </label>
+                    <label className="block text-xs font-bold text-gray-300 mb-1">Pilih Deck Kuis Pertandingan</label>
                     <select
                       value={selectedDeckId}
                       onChange={(e) => setSelectedDeckId(e.target.value)}
@@ -375,7 +316,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
                   <button
                     onClick={handleCreateRoom}
-                    disabled={!isOnline}
+                    disabled={!isOnline || connectionState !== 'connected'}
                     className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -385,9 +326,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               ) : (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">
-                      Kode Ruangan (Room Code)
-                    </label>
+                    <label className="block text-xs font-bold text-gray-300 mb-1">Kode Ruangan (Room Code)</label>
                     <input
                       type="text"
                       value={joinCodeInput}
@@ -399,7 +338,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
                   <button
                     onClick={handleJoinRoom}
-                    disabled={!isOnline}
+                    disabled={!isOnline || connectionState !== 'connected'}
                     className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
                   >
                     <Users className="w-4 h-4" />
@@ -408,15 +347,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 </div>
               )}
             </div>
-          ) : screen === 'waiting-room' ? (
+          ) : screen === 'waiting-room' && room ? (
             <div className="space-y-6">
-              <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] flex items-center justify-between">
+              <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] flex items-center justify-between flex-wrap gap-3">
                 <div>
                   <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
                     Kode Ruangan Kuis
                   </span>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xl font-mono font-black text-[#FC1212] tracking-wider">{roomCode}</span>
+                    <span className="text-xl font-mono font-black text-[#FC1212] tracking-wider">{room.code}</span>
                     <button
                       onClick={handleCopyCode}
                       className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 text-xs transition-colors cursor-pointer"
@@ -424,27 +363,55 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
                   </div>
+                  <p className="text-[11px] text-gray-400 mt-1">Bagikan kode ini ke teman untuk join ruangan.</p>
                 </div>
-                <button
-                  onClick={handleStartGame}
-                  className="px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all cursor-pointer"
-                >
-                  Mulai Kuis
-                </button>
+                {isHost ? (
+                  <button
+                    onClick={handleStartGame}
+                    disabled={room.players.length < 2}
+                    className="px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all cursor-pointer disabled:opacity-40"
+                  >
+                    {room.players.length < 2 ? 'Menunggu Pemain Lain...' : 'Mulai Kuis'}
+                  </button>
+                ) : (
+                  <span className="text-xs text-gray-400 flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Menunggu host memulai...
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
+                  Pemain di Ruangan ({room.players.length})
+                </span>
+                {room.players.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/[0.08]"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className={`w-6 h-6 rounded-full ${avatarColorFor(p.id)}`} />
+                      <span className="text-sm font-bold text-white">
+                        {p.name}
+                        {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
+                      </span>
+                      {p.isHost && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          ) : screen === 'in-game' && currentQ ? (
+          ) : screen === 'in-game' && currentQ && room ? (
             <div className="space-y-5">
               <div className="flex items-center justify-between text-xs">
                 <span className="px-3 py-1 rounded-full bg-black/40 text-gray-300 font-bold border border-white/[0.08]">
-                  Soal {currentQIndex + 1} / {activeDeck.questions.length}
+                  Soal {room.currentQIndex + 1} / {questionsSnapshot.length}
                 </span>
-                <span className="font-mono font-bold text-white">{roundTimerSec > 0 ? `${timeLeft}s` : 'Tanpa batas'}</span>
+                <span className="font-mono font-bold text-white">{timeLeft}s</span>
               </div>
 
-              <h4 className="text-base sm:text-lg font-bold text-white leading-relaxed">
-                {currentQ.question}
-              </h4>
+              <h4 className="text-base sm:text-lg font-bold text-white leading-relaxed">{currentQ.question}</h4>
 
               {(currentQ as any).mediaUrl && (currentQ as any).mediaType && (currentQ as any).mediaType !== 'none' && (
                 <div className="rounded-xl overflow-hidden border border-white/[0.08] bg-black/40 flex items-center justify-center">
@@ -488,17 +455,42 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               </div>
 
               {isRoundFinished && (
-                <div className="flex justify-end pt-2">
-                  <button
-                    onClick={handleNextRound}
-                    className="px-5 py-2 rounded-xl bg-[#FC1212] text-white font-extrabold text-xs shadow"
-                  >
-                    {currentQIndex + 1 < activeDeck.questions.length ? 'Ronde Berikutnya →' : 'Lihat Hasil Akhir'}
-                  </button>
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-[11px] text-gray-400">
+                    Menunggu pemain lain menjawab / waktu ronde habis...
+                  </span>
+                  <div className="flex -space-x-2">
+                    {room.players.map((p) => (
+                      <span
+                        key={p.id}
+                        title={p.name}
+                        className={`w-6 h-6 rounded-full ${avatarColorFor(p.id)} border-2 ${
+                          p.lastAnswerStatus === 'correct'
+                            ? 'border-emerald-400'
+                            : p.lastAnswerStatus === 'wrong'
+                            ? 'border-red-500'
+                            : 'border-white/20'
+                        }`}
+                      />
+                    ))}
+                  </div>
                 </div>
               )}
+
+              <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+                {sortedPlayers.map((p, rank) => (
+                  <div key={p.id} className="flex items-center justify-between text-xs">
+                    <span className="flex items-center gap-1.5 text-gray-300">
+                      <span className="text-gray-500 font-mono w-3">{rank + 1}</span>
+                      {p.name}
+                      {p.id === mySocketId && <span className="text-[10px] text-gray-500">(Kamu)</span>}
+                    </span>
+                    <span className="font-mono font-bold text-[#FC1212]">{p.score}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ) : (
+          ) : screen === 'podium' && room ? (
             <div className="text-center space-y-5 py-2">
               <div className="w-14 h-14 rounded-full bg-[#FC1212]/20 border border-[#FC1212] text-[#FC1212] mx-auto flex items-center justify-center">
                 <Award className="w-7 h-7" />
@@ -512,7 +504,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     className={`flex items-center justify-between p-3 rounded-xl border ${
                       rank === 0
                         ? 'bg-amber-950/30 border-amber-500/40'
-                        : p.id === 'p-me'
+                        : p.id === mySocketId
                         ? 'bg-[#FC1212]/10 border-[#FC1212]/30'
                         : 'bg-black/40 border-white/[0.08]'
                     }`}
@@ -525,10 +517,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                           {rank + 1}
                         </span>
                       )}
-                      <span className={`w-6 h-6 rounded-full ${p.avatarBg} shrink-0`} />
+                      <span className={`w-6 h-6 rounded-full ${avatarColorFor(p.id)} shrink-0`} />
                       <span className="text-sm font-bold text-white truncate">
                         {p.name}
-                        {p.id === 'p-me' && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
+                        {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
                       </span>
                     </div>
                     <span className="text-sm font-mono font-black text-[#FC1212] shrink-0">{p.score} Poin</span>
@@ -537,13 +529,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               </div>
 
               <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  onClick={handleStartGame}
-                  className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Main Lagi</span>
-                </button>
+                {isHost && (
+                  <button
+                    onClick={handleStartGame}
+                    className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Main Lagi</span>
+                  </button>
+                )}
                 <button
                   onClick={onClose}
                   className="px-5 py-2.5 rounded-xl bg-black/60 hover:bg-black/90 text-gray-300 text-xs font-bold cursor-pointer border border-white/[0.08]"
@@ -552,7 +546,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 </button>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </motion.div>
     </div>
