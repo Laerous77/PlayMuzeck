@@ -78,8 +78,6 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [isRoundFinished, setIsRoundFinished] = useState(false);
   const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  if (!isOpen) return null;
-
   const currentQ: QuizQuestion | undefined = activeDeck?.questions[currentQIndex];
   // Multiplayer selalu memakai timer: pilihan pembuat ruangan (kuis bawaan) atau waktu dari pembuat kuis (kuis Editor).
   const roundTimerSec = getPlayTime(activeDeck, currentQ, roundTimeChoice);
@@ -280,6 +278,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   };
 
   const sortedPlayers = [...players].sort((a, b) => b.score - a.score);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto">

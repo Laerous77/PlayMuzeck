@@ -26,8 +26,8 @@ export function generateStandaloneQuizHtml(
   decks: Deck[],
   userNickname: string,
   hasQuizEditor: boolean = false,
-  apiBaseUrl: string = 'http://localhost:8787',
-  webAppUrl: string = 'http://localhost:3000',
+  apiBaseUrl: string = 'https://playmuzeck.my.id',
+  webAppUrl: string = 'https://playmuzeck.my.id',
   logoDataUri: string = ''
 ): string {
   const safeNickname = (userNickname || 'Pemain').replace(/</g, '&lt;');
