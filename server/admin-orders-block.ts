@@ -74,7 +74,7 @@ async function grantOrderAccess(client: any, order: any) {
   // Cerminkan ke tabel `orders` supaya Pendapatan di Dashboard ikut terhitung.
   await client.query(
     `INSERT INTO orders (id, customer_email, customer_name, items, total, status)
-     VALUES ($1, $2, (SELECT name FROM users WHERE email = $2), $3, $4, 'completed')
+     VALUES ($1, $2::varchar, (SELECT name FROM users WHERE email = $2::varchar), $3::jsonb, $4::int, 'completed')
      ON CONFLICT (id) DO UPDATE SET items = EXCLUDED.items, total = EXCLUDED.total, status = 'completed'`,
     [`pay_${order.order_id}`, email, JSON.stringify(items), Number(order.gross_amount) || 0]
   );
@@ -202,7 +202,7 @@ app.post('/api/admin/payment-orders', requireAdmin, async (req, res) => {
     await client.query('COMMIT');
     res.status(201).json({ success: true, order_id: orderId });
   } catch (err: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[admin] create payment-order:', err);
     res.status(400).json({ error: err?.message || 'Gagal membuat pesanan.' });
   } finally {
@@ -219,7 +219,7 @@ app.patch('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
     await client.query('BEGIN');
     const found = await client.query('SELECT * FROM payment_orders WHERE order_id = $1 FOR UPDATE', [req.params.id]);
     const order = found.rows[0];
-    if (!order) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pesanan tidak ditemukan.' }); }
+    if (!order) { await client.query('ROLLBACK').catch(() => {}); return res.status(404).json({ error: 'Pesanan tidak ditemukan.' }); }
 
     const newAmount = gross_amount !== undefined ? Math.max(0, Math.round(Number(gross_amount) || 0)) : Number(order.gross_amount);
     const newStatus = status ?? order.status;
@@ -238,7 +238,7 @@ app.patch('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[admin] patch payment-order:', err);
     res.status(500).json({ error: err?.message || 'Gagal memperbarui pesanan.' });
   } finally {
@@ -253,14 +253,14 @@ app.delete('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
     await client.query('BEGIN');
     const found = await client.query('SELECT * FROM payment_orders WHERE order_id = $1 FOR UPDATE', [req.params.id]);
     const order = found.rows[0];
-    if (!order) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pesanan tidak ditemukan.' }); }
+    if (!order) { await client.query('ROLLBACK').catch(() => {}); return res.status(404).json({ error: 'Pesanan tidak ditemukan.' }); }
     if (order.fulfilled && order.status === 'paid' && String(req.query.revoke) === '1') await revokeOrderAccess(client, order);
     else await client.query('DELETE FROM orders WHERE id = $1', [`pay_${order.order_id}`]);
     await client.query('DELETE FROM payment_orders WHERE order_id = $1', [order.order_id]);
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('[admin] delete payment-order:', err);
     res.status(500).json({ error: err?.message || 'Gagal menghapus pesanan.' });
   } finally {
