@@ -634,8 +634,25 @@ function MainApp() {
     } catch {}
   };
 
-  const handleLogin = (email: string, name: string) => {
-    const adminStatus = isUserAdmin(email);
+  // Login sekarang sesi cookie dari server; data akun resminya = respons { user: {...} } dari /api/auth/*.
+  // Kalau AuthModal masih mengirim email/nama kosong (format respons lama), ambil langsung dari
+  // server lewat /api/auth/me supaya sesi tidak terisi `undefined` (tampil sebagai "Mode Tamu").
+  const handleLogin = async (emailArg?: string, nameArg?: string) => {
+    let email = String(emailArg || '').trim();
+    let name = String(nameArg || '').trim();
+    let serverAdmin: boolean | undefined;
+    if (!email) {
+      const r = await authApi.me();
+      if (!r.ok || !r.data?.user?.email) {
+        showToast('Login berhasil, tetapi data akun gagal dimuat. Muat ulang halaman lalu coba lagi.');
+        return;
+      }
+      email = r.data.user.email;
+      name = r.data.user.name || '';
+      serverAdmin = r.data.user.isAdmin;
+    }
+    if (!name) name = email.split('@')[0];
+    const adminStatus = serverAdmin ?? isUserAdmin(email);
     const session: UserSession = {
       isLoggedIn: true,
       email,
