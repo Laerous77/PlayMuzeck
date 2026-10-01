@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { X, User, Lock, Mail, LogOut, CheckCircle2, Sparkles, ArrowRight, Loader2, KeyRound, ShieldCheck } from 'lucide-react';
 import { UserSession } from '../../types';
-import { setUserToken } from '../../services/authToken';
+import { authApi } from '../../services/authToken';
 import { GoogleSignInButton } from '../GoogleSignInButton';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
@@ -33,6 +33,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [needsVerify, setNeedsVerify] = useState(false); // login ditolak karena email belum diverifikasi
+  const [signupDone, setSignupDone] = useState(false);   // daftar sukses -> tampilkan panel "cek email"
 
   // Kalau App.tsx mendeteksi ?resetToken=... di URL setelah modal sudah pernah
   // dibuat, pastikan kita tetap pindah ke mode reset begitu propnya berubah.
@@ -46,27 +48,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   if (!isOpen) return null;
 
+  const MIN_PASSWORD = 10; // harus sama dengan passwordSchema di server (authRoutes.ts)
+
+  const switchMode = (mode: AuthMode) => {
+    setAuthMode(mode);
+    setErrorMsg('');
+    setInfoMsg('');
+    setNeedsVerify(false);
+    setSignupDone(false);
+  };
+
+  // Login Google: TIDAK perlu verifikasi email (Google sudah memverifikasi emailnya,
+  // dan server mengecek ulang `email_verified` dari ID token).
   const handleGoogleCredential = async (credential: string) => {
     setErrorMsg('');
+    setInfoMsg('');
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/google', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data?.error || 'Login dengan Google gagal.');
+      const r = await authApi.google(credential);
+      if (!r.ok || !r.data?.user?.email) {
+        setErrorMsg(r.data?.message || 'Login dengan Google gagal. Coba lagi.');
         return;
       }
-      if (data.token) setUserToken(data.token);
-      onLogin(data.email, data.name);
+      onLogin(r.data.user.email, r.data.user.name || r.data.user.email.split('@')[0]);
       onClose();
-    } catch {
-      setErrorMsg('Gagal terhubung ke server untuk login Google.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!email.includes('@')) {
+      setErrorMsg('Isi alamat email dulu.');
+      return;
+    }
+    setIsSubmitting(true);
+    const r = await authApi.resendVerification(email.trim());
+    setIsSubmitting(false);
+    if (r.ok) {
+      setErrorMsg('');
+      setInfoMsg(r.data?.message || 'Link verifikasi baru sudah dikirim. Cek inbox/spam.');
+    } else {
+      setErrorMsg(r.data?.message || 'Gagal mengirim ulang. Coba lagi beberapa saat lagi.');
     }
   };
 
@@ -80,30 +103,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data?.error || 'Gagal memproses permintaan reset kata sandi.');
+      const r = await authApi.forgotPassword(email.trim());
+      if (!r.ok) {
+        setErrorMsg(r.data?.message || 'Gagal memproses permintaan reset kata sandi.');
         return;
       }
-      setInfoMsg('Jika email tersebut terdaftar, tautan reset kata sandi sudah dikirim. Periksa kotak masuk (dan folder spam) Anda.');
-    } catch {
-      setErrorMsg('Gagal terhubung ke server. Periksa koneksi Anda dan coba lagi.');
+      setInfoMsg(r.data?.message || 'Jika email tersebut terdaftar, tautan reset kata sandi sudah dikirim. Periksa inbox dan folder spam.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Server TIDAK lagi auto-login setelah reset (semua sesi lama dihapus), jadi setelah
+  // berhasil kita arahkan pengguna ke form Masuk.
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setInfoMsg('');
-    if (password.length < 4) {
-      setErrorMsg('Kata sandi minimal 4 karakter.');
+    if (!initialResetToken) {
+      setErrorMsg('Tautan reset tidak valid. Minta tautan baru lewat "Lupa kata sandi".');
+      return;
+    }
+    if (password.length < MIN_PASSWORD) {
+      setErrorMsg(`Kata sandi minimal ${MIN_PASSWORD} karakter.`);
       return;
     }
     if (password !== confirmPassword) {
@@ -112,66 +134,70 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/auth/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token: initialResetToken, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setErrorMsg(data?.error || 'Gagal mengatur ulang kata sandi.');
+      const r = await authApi.resetPassword(initialResetToken, password);
+      if (!r.ok) {
+        setErrorMsg(r.data?.message || 'Gagal mengatur ulang kata sandi.');
         return;
       }
-      if (data.token) setUserToken(data.token);
-      onLogin(data.email, data.email.split('@')[0]);
-      setInfoMsg('Kata sandi berhasil diperbarui. Anda sudah masuk.');
-      setTimeout(() => onClose(), 1200);
-    } catch {
-      setErrorMsg('Gagal terhubung ke server. Periksa koneksi Anda dan coba lagi.');
+      setPassword('');
+      setConfirmPassword('');
+      setAuthMode('signin');
+      setInfoMsg('Kata sandi berhasil diganti. Silakan masuk dengan kata sandi baru.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // PERBAIKAN: sebelumnya login "simulasi" ini hanya mengecek format email &
-  // panjang kata sandi di sisi klien lalu langsung meloloskan SIAPAPUN tanpa
-  // pernah dicek ke database — akibatnya kata sandi apapun dianggap benar
-  // untuk email manapun. Sekarang kita benar-benar memanggil endpoint
-  // /api/auth/login (mode Masuk) atau /api/auth/register (mode Daftar), yang
-  // memverifikasi/menyimpan kata sandi ter-hash (bcrypt) di PostgreSQL.
+  // Masuk / Daftar dengan email + kata sandi.
+  // - Daftar  -> server kirim link verifikasi ke email. JANGAN login dulu.
+  // - Masuk   -> hanya berhasil kalau email sudah diverifikasi (server balas 403 kalau belum).
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
+    setInfoMsg('');
+    setNeedsVerify(false);
 
     if (!email || !email.includes('@')) {
       setErrorMsg('Masukkan alamat surel (email) yang valid.');
       return;
     }
-    if (password.length < 4) {
-      setErrorMsg('Kata sandi minimal 4 karakter.');
+    if (password.length < MIN_PASSWORD) {
+      setErrorMsg(`Kata sandi minimal ${MIN_PASSWORD} karakter.`);
+      return;
+    }
+    if (authMode === 'signup' && name.trim().length < 2) {
+      setErrorMsg('Isi nama panggilan (minimal 2 karakter).');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      const endpoint = authMode === 'signin' ? '/api/auth/login' : '/api/auth/register';
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name: name.trim() || undefined }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrorMsg(data?.error || 'Terjadi kesalahan saat memproses akun Anda.');
+      if (authMode === 'signup') {
+        const r = await authApi.signup(name.trim(), email.trim(), password);
+        if (!r.ok) {
+          if (r.data?.error === 'EMAIL_NOT_VERIFIED') setNeedsVerify(true);
+          setErrorMsg(r.data?.message || 'Gagal mendaftar. Coba lagi.');
+          return;
+        }
+        setPassword('');
+        setSignupDone(true);
+        setInfoMsg(r.data?.message || 'Kami sudah mengirim link verifikasi ke email kamu. Cek inbox/spam.');
         return;
       }
 
-      if (data.token) setUserToken(data.token); // token sesi dari server, dipakai semua request /api/user/*
-      onLogin(data.email || email, data.name || name.trim() || email.split('@')[0]);
+      const r = await authApi.login(email.trim(), password);
+      if (!r.ok) {
+        if (r.status === 403 && r.data?.error === 'EMAIL_NOT_VERIFIED') setNeedsVerify(true);
+        setErrorMsg(r.data?.message || 'Email atau password salah.');
+        return;
+      }
+      if (!r.data?.user?.email) {
+        setErrorMsg('Login berhasil, tetapi data akun tidak diterima. Muat ulang halaman lalu coba lagi.');
+        return;
+      }
+      onLogin(r.data.user.email, r.data.user.name || r.data.user.email.split('@')[0]);
+      setPassword('');
       onClose();
-    } catch (err) {
-      setErrorMsg('Gagal terhubung ke server. Periksa koneksi Anda dan coba lagi.');
     } finally {
       setIsSubmitting(false);
     }
@@ -220,14 +246,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             /* Logged In State */
             <div className="space-y-6 text-center">
               <div className="w-16 h-16 rounded-full bg-[#FCA311] text-black text-2xl font-black mx-auto flex items-center justify-center shadow-lg">
-                {userSession.name.charAt(0).toUpperCase()}
+                {(userSession.name || userSession.email || 'M').charAt(0).toUpperCase()}
               </div>
 
               <div className="space-y-1">
                 <div className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20">
                   <CheckCircle2 className="w-3 h-3" /> Akun Terhubung
                 </div>
-                <h4 className="text-lg font-bold text-white">{userSession.name}</h4>
+                <h4 className="text-lg font-bold text-white">{userSession.name || userSession.email}</h4>
                 <p className="text-xs text-gray-400 font-mono">{userSession.email}</p>
               </div>
 
@@ -238,7 +264,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Penyimpanan Sesi:</span>
-                  <span className="text-white font-mono">Lokal Peramban</span>
+                  <span className="text-white font-mono">Cookie Aman (Server)</span>
                 </div>
               </div>
 
@@ -308,11 +334,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <button
                 type="button"
-                onClick={() => {
-                  setAuthMode('signin');
-                  setErrorMsg('');
-                  setInfoMsg('');
-                }}
+                onClick={() => switchMode('signin')}
                 className="w-full text-center text-[11px] text-gray-400 hover:text-white transition-colors"
               >
                 ← Kembali ke halaman masuk
@@ -344,7 +366,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <input
                       type="password"
                       required
-                      placeholder="••••••••"
+                      minLength={10}
+                      autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
+                      placeholder="Minimal 10 karakter"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
@@ -388,10 +412,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="grid grid-cols-2 p-1 bg-black/60 rounded-xl border border-white/[0.08]">
                 <button
                   type="button"
-                  onClick={() => {
-                    setAuthMode('signin');
-                    setErrorMsg('');
-                  }}
+                  onClick={() => switchMode('signin')}
                   className={`py-2 text-xs font-bold rounded-lg transition-all ${
                     authMode === 'signin'
                       ? 'bg-[#FCA311] text-black shadow-sm'
@@ -402,10 +423,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setAuthMode('signup');
-                    setErrorMsg('');
-                  }}
+                  onClick={() => switchMode('signup')}
                   className={`py-2 text-xs font-bold rounded-lg transition-all ${
                     authMode === 'signup'
                       ? 'bg-[#FCA311] text-black shadow-sm'
@@ -417,16 +435,63 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {errorMsg && (
-                <div className="p-3 rounded-lg bg-[#780000]/20 border border-[#780000] text-red-200 text-xs">
-                  {errorMsg}
+                <div className="p-3 rounded-lg bg-[#780000]/20 border border-[#780000] text-red-200 text-xs space-y-2">
+                  <p>{errorMsg}</p>
+                  {needsVerify && (
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={isSubmitting}
+                      className="font-bold text-[#FCA311] hover:underline disabled:opacity-60"
+                    >
+                      Kirim ulang link verifikasi
+                    </button>
+                  )}
+                </div>
+              )}
+              {infoMsg && !signupDone && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs flex gap-2">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{infoMsg}</span>
                 </div>
               )}
 
+              {signupDone ? (
+                <div className="space-y-4 text-center py-2">
+                  <div className="w-14 h-14 rounded-full bg-[#FCA311]/15 border border-[#FCA311]/30 text-[#FCA311] mx-auto flex items-center justify-center">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <h4 className="text-base font-bold text-white">Cek email kamu</h4>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    {infoMsg || 'Kami sudah mengirim link verifikasi.'}
+                    <br />
+                    Akun baru aktif setelah link di email diklik. Link berlaku 24 jam.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={isSubmitting}
+                      className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all disabled:opacity-60"
+                    >
+                      {isSubmitting ? 'Mengirim...' : 'Kirim ulang link verifikasi'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchMode('signin')}
+                      className="text-[11px] text-gray-400 hover:text-white transition-colors"
+                    >
+                      Sudah verifikasi? Masuk di sini
+                    </button>
+                  </div>
+                </div>
+              ) : (
+              <>
               <GoogleSignInButton onCredential={handleGoogleCredential} onError={setErrorMsg} text="continue_with" />
 
               <div className="relative flex items-center justify-center">
                 <div className="border-t border-white/10 w-full" />
-                <span className="bg-[#14213D] px-3 text-[11px] text-gray-500 uppercase font-mono">atau pakai email</span>
+                <span className="bg-[#14213D] px-3 text-[11px] text-gray-500 uppercase font-mono">atau pakai email (perlu verifikasi)</span>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-3.5">
@@ -467,11 +532,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     {authMode === 'signin' && (
                       <button
                         type="button"
-                        onClick={() => {
-                          setAuthMode('forgot');
-                          setErrorMsg('');
-                          setInfoMsg('');
-                        }}
+                        onClick={() => switchMode('forgot')}
                         className="text-[11px] text-[#FCA311] hover:underline"
                       >
                         Lupa kata sandi?
@@ -483,7 +544,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     <input
                       type="password"
                       required
-                      placeholder="••••••••"
+                      minLength={10}
+                      autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
+                      placeholder="Minimal 10 karakter"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
@@ -510,6 +573,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   )}
                 </button>
               </form>
+              </>
+              )}
             </div>
           )}
         </div>

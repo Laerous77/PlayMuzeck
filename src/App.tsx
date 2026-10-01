@@ -90,7 +90,9 @@ function MainApp() {
   const [userSession, setUserSession] = useState<UserSession>(() => {
     try {
       const s = storage.getUserSession();
-      if (s && typeof s === 'object' && typeof s.isLoggedIn !== 'undefined') {
+      // Sesi hanya dipercaya kalau punya email. Sesi "hantu" (isLoggedIn true tapi email kosong)
+      // dibuang; sesi asli akan dipulihkan dari server lewat /api/auth/me (cookie httpOnly).
+      if (s && typeof s === 'object' && s.isLoggedIn && String(s.email || '').trim()) {
         return s;
       }
     } catch {}
@@ -100,7 +102,7 @@ function MainApp() {
   const [currentMode, setCurrentMode] = useState<AppMode | 'index'>(() => {
     try {
       const s = storage.getUserSession();
-      return s?.isLoggedIn ? 'audio' : 'index';
+      return s?.isLoggedIn && String(s.email || '').trim() ? 'audio' : 'index';
     } catch {
       return 'index';
     }
@@ -228,7 +230,9 @@ function MainApp() {
   // browser / bisa dipakai ulang tanpa sengaja (mis. tombol back, share link).
   const [resetToken, setResetToken] = useState<string | null>(() => {
     try {
-      return new URLSearchParams(window.location.search).get('resetToken');
+      const q = new URLSearchParams(window.location.search);
+      if (window.location.pathname === '/reset-password') return q.get('token');
+      return q.get('resetToken');
     } catch {
       return null;
     }
@@ -237,9 +241,8 @@ function MainApp() {
   useEffect(() => {
     if (resetToken) {
       setIsAuthOpen(true);
-      const url = new URL(window.location.href);
-      url.searchParams.delete('resetToken');
-      window.history.replaceState({}, '', url.toString());
+      // Bersihkan token dari URL (riwayat browser) dan kembalikan ke halaman utama.
+      window.history.replaceState({}, '', '/');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -715,23 +718,60 @@ function MainApp() {
     showToast('Anda telah keluar dari akun.');
   };
 
-  // Sesi kedaluwarsa / cookie hilang (mis. sesi lama sebelum sistem cookie ada) -> paksa login ulang.
+  // Sesi kedaluwarsa / cookie hilang -> paksa login ulang.
   const logoutRef = useRef<() => void>(() => {});
   logoutRef.current = handleLogout;
+  const handleLoginRef = useRef(handleLogin);
+  handleLoginRef.current = handleLogin;
+
   useEffect(() => {
     const expire = () => {
       if (!emailRef.current) return;
       logoutRef.current();
       showToast('Sesi login berakhir. Silakan masuk kembali.');
     };
-    // Sesi = cookie httpOnly, tidak bisa dibaca JS -> tanya server. Hanya 401 yang dianggap
-    // sesi habis; status 0 (server mati/offline) jangan memaksa logout.
-    if (userSession?.isLoggedIn) {
+    window.addEventListener(AUTH_EXPIRED_EVENT, expire);
+
+    // 1) Link verifikasi dari email: /verify-email?token=...  (server langsung membuat sesi cookie)
+    const isVerifyPage = window.location.pathname === '/verify-email';
+    const verifyToken = isVerifyPage ? new URLSearchParams(window.location.search).get('token') : null;
+    if (isVerifyPage) window.history.replaceState({}, '', '/'); // token jangan tertinggal di URL
+
+    if (verifyToken) {
+      authApi.verifyEmail(verifyToken).then((r) => {
+        if (r.ok && r.data?.user?.email) {
+          showToast('Email terverifikasi!');
+          void handleLoginRef.current(r.data.user.email, r.data.user.name);
+        } else {
+          showToast(r.data?.message || 'Link verifikasi tidak valid atau sudah kedaluwarsa.');
+          setIsAuthOpen(true);
+        }
+      });
+    } else {
+      // 2) SERVER = sumber kebenaran. Cookie httpOnly tidak bisa dibaca JS, jadi tanya /api/auth/me.
+      //    - 200 -> pulihkan sesi dari data server (nama/email/isAdmin pasti benar)
+      //    - 401 -> jadi tamu (termasuk membuang sesi hantu dari localStorage)
+      //    - status 0 (server mati/offline) -> jangan ubah apa pun
       authApi.me().then((r) => {
-        if (r.status === 401) expire();
+        if (r.ok && r.data?.user?.email) {
+          const u = r.data.user;
+          const session: UserSession = {
+            isLoggedIn: true,
+            email: u.email,
+            name: u.name || u.email.split('@')[0],
+          };
+          (session as any).isAdmin = u.isAdmin;
+          setUserSession((prev) => ({ ...prev, ...session }));
+          try { storage.setUserSession(session); } catch {}
+        } else if (r.status === 401) {
+          const guest: UserSession = { isLoggedIn: false, name: 'Tamu PlayMuzeck', email: '' };
+          setUserSession(guest);
+          try { storage.setUserSession(guest); } catch {}
+          setCurrentMode('index');
+        }
       });
     }
-    window.addEventListener(AUTH_EXPIRED_EVENT, expire);
+
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expire);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -789,7 +829,9 @@ function MainApp() {
     (d) => d.isFree || (unlockedDeckIds || []).includes(d.id)
   );
 
-  const isAdmin = Boolean(userSession?.email && isUserAdmin(userSession.email));
+  const isAdmin = Boolean(
+    userSession?.email && ((userSession as any).isAdmin === true || isUserAdmin(userSession.email))
+  );
 
   return (
     <div className="min-h-screen bg-[#000000] text-[#E5E5E5] flex flex-col selection:bg-[#FCA311] selection:text-black">
