@@ -227,6 +227,41 @@ export async function initDatabase() {
       );
     `);
 
+    // 12. Sistem login baru (sesi cookie httpOnly + verifikasi email).
+    // Kolom lama (password_hash bcrypt) tetap dipertahankan: authRoutes.ts masih bisa
+    // memverifikasi hash bcrypt lama dan otomatis menggantinya ke argon2 saat login berhasil.
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS failed_logins INT NOT NULL DEFAULT 0;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(100);
+      CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_uniq ON users (google_sub) WHERE google_sub IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS users_email_lower_idx ON users (lower(email));
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id_hash CHAR(64) PRIMARY KEY,
+        user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMPTZ NOT NULL,
+        user_agent VARCHAR(200),
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id);
+
+      CREATE TABLE IF NOT EXISTS auth_tokens (
+        id SERIAL PRIMARY KEY,
+        user_id VARCHAR(100) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        purpose VARCHAR(30) NOT NULL,
+        token_hash CHAR(64) NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        used_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS auth_tokens_hash_idx ON auth_tokens (token_hash);
+      CREATE INDEX IF NOT EXISTS auth_tokens_user_idx ON auth_tokens (user_id, purpose, created_at);
+    `);
+    // Bersihkan sesi & token kedaluwarsa setiap kali server start.
+    await client.query(`DELETE FROM sessions WHERE expires_at < now(); DELETE FROM auth_tokens WHERE expires_at < now() - interval '7 days';`);
+
     console.log('PostgreSQL PlayMuzeck siap & seluruh skema tabel tervalidasi.');
   } catch (error) {
     console.error('Inisialisasi tabel PostgreSQL gagal:', error);

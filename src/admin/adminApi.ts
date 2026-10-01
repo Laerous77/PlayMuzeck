@@ -40,15 +40,17 @@ export async function loginAdminWithGoogle(credential: string): Promise<string> 
 }
 
 /**
- * Menaikkan sesi login SITUS UTAMA (token dari services/authToken, hasil
- * login email/password, Google, atau demo) menjadi sesi admin, tanpa perlu
- * login Google kedua kalinya. Server memverifikasi tanda tangan token sesi
- * itu sendiri sebelum mengecek daftar admin, jadi email tidak bisa dipalsukan.
+ * Menaikkan sesi login SITUS UTAMA menjadi sesi admin, tanpa perlu login
+ * Google kedua kalinya. Sesi situs utama sekarang berupa cookie httpOnly
+ * (muzeck_sid) yang diatur server, jadi TIDAK ada token yang dikirim dari
+ * JavaScript: browser otomatis membawa cookie-nya (credentials: 'include'),
+ * lalu server memverifikasi sesi itu dan mengecek daftar admin.
  */
-export async function elevateToAdminViaSession(userSessionToken: string): Promise<string> {
+export async function elevateToAdminViaSession(): Promise<string> {
   const res = await fetch('/api/admin/session-login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${userSessionToken}` },
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

@@ -24,10 +24,10 @@ import { cartKeyOf, findCartConflict } from './services/cartRules';
 import { removeDeckFromJsonStore } from './services/quizJsonStore';
 import { notifyUserScopeChanged } from './services/userScope';
 import { isBuiltinDeckId } from './data/quiz';
-import { installAuthFetch, clearUserToken, getUserToken, AUTH_EXPIRED_EVENT } from './services/authToken';
+import { installAuthFetch, clearUserToken, authApi, AUTH_EXPIRED_EVENT } from './services/authToken';
 import { RotateCcw, ShieldCheck, AlertTriangle } from 'lucide-react';
 
-installAuthFetch(); // semua request /api/user/* otomatis membawa token sesi
+installAuthFetch(); // semua request /api/* otomatis membawa cookie sesi httpOnly
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -678,6 +678,7 @@ function MainApp() {
       clearAdminToken();
       clearUserToken();
     } catch {}
+    void authApi.logout(); // hapus sesi di server + cookie httpOnly (JS tidak bisa menghapusnya sendiri)
 
     // WAJIB: reset semua state turunan localStorage global, supaya akun
     // berikutnya yang login di browser ini TIDAK mewarisi data akun sebelumnya.
@@ -697,7 +698,7 @@ function MainApp() {
     showToast('Anda telah keluar dari akun.');
   };
 
-  // Sesi kedaluwarsa / token hilang (mis. sesi lama sebelum sistem token ada) -> paksa login ulang.
+  // Sesi kedaluwarsa / cookie hilang (mis. sesi lama sebelum sistem cookie ada) -> paksa login ulang.
   const logoutRef = useRef<() => void>(() => {});
   logoutRef.current = handleLogout;
   useEffect(() => {
@@ -706,7 +707,13 @@ function MainApp() {
       logoutRef.current();
       showToast('Sesi login berakhir. Silakan masuk kembali.');
     };
-    if (userSession?.isLoggedIn && !getUserToken()) expire();
+    // Sesi = cookie httpOnly, tidak bisa dibaca JS -> tanya server. Hanya 401 yang dianggap
+    // sesi habis; status 0 (server mati/offline) jangan memaksa logout.
+    if (userSession?.isLoggedIn) {
+      authApi.me().then((r) => {
+        if (r.status === 401) expire();
+      });
+    }
     window.addEventListener(AUTH_EXPIRED_EVENT, expire);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expire);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -916,20 +923,9 @@ function MainApp() {
         onSelectDestination={(dest) => {
           setIsDestinationModalOpen(false);
           if (dest === 'admin') {
-            // PERBAIKAN KRITIS: sebelumnya kode ini membuat token admin palsu
-            // (`admin-google-<email>`) langsung di browser lalu redirect ke
-            // /admin — server tidak pernah memverifikasi apa pun, jadi token
-            // itu selalu ditolak (401) dan halaman admin gagal memuat data.
-            // Sekarang kita memakai token sesi ASLI yang sudah ditandatangani
-            // server (dari login/daftar/Google/demo) untuk membuktikan email
-            // ini betul-betul sedang login, lalu server yang mengecek daftar
-            // admin & menerbitkan token admin sungguhan sebelum redirect.
-            const userToken = getUserToken();
-            if (!userToken) {
-              showToast('Sesi login tidak ditemukan. Silakan masuk ulang.');
-              return;
-            }
-            elevateToAdminViaSession(userToken)
+            // Server memverifikasi cookie sesi httpOnly yang asli (tabel `sessions`),
+            // mengecek daftar admin, lalu menerbitkan token admin sebelum redirect.
+            elevateToAdminViaSession()
               .then(() => {
                 window.location.href = '/admin';
               })

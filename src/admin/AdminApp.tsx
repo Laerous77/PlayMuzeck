@@ -22,7 +22,7 @@ import {
   setAdminToken,
   AdminMe,
 } from './adminApi';
-import { getUserToken } from '../services/authToken';
+import { authApi } from '../services/authToken';
 import { storage } from '../services/storage';
 import { GoogleSignInButton } from '../components/GoogleSignInButton';
 import { DashboardPage } from './pages/DashboardPage';
@@ -53,8 +53,22 @@ export default function AdminApp() {
     return NAV.some((item) => item.id === hash) ? hash : 'dashboard';
   });
 
+  // Sesi situs utama = cookie httpOnly, tidak bisa dibaca JavaScript. Satu-satunya
+  // cara tahu apakah masih berlaku adalah bertanya ke server (/api/auth/me).
   const clientSession = storage.getUserSession();
-  const mainSiteToken = getUserToken();
+  const [mainSiteEmail, setMainSiteEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!clientSession?.isLoggedIn) return;
+    let cancelled = false;
+    authApi.me().then((r) => {
+      if (!cancelled && r.ok && r.data?.user?.email) setMainSiteEmail(r.data.user.email);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const onHash = () => {
@@ -78,15 +92,13 @@ export default function AdminApp() {
       .catch(() => setMe(null));
   }, [token]);
 
-  // "Masuk pakai sesi situs utama": memakai token sesi ASLI (tertanda tangan
-  // server) dari akun yang sedang login di halaman klien — tidak perlu login
-  // Google kedua kalinya. Server yang memverifikasi token & mengecek daftar
-  // admin, jadi tidak ada email yang bisa dipalsukan dari browser.
+  // "Masuk pakai sesi situs utama": server memverifikasi cookie sesi asli dan
+  // mengecek daftar admin, jadi tidak ada email yang bisa dipalsukan dari browser.
   const handleSessionLogin = async () => {
-    if (!mainSiteToken) return;
+    if (!mainSiteEmail) return;
     setError('');
     try {
-      const adminToken = await elevateToAdminViaSession(mainSiteToken);
+      const adminToken = await elevateToAdminViaSession();
       setToken(adminToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Akun ini bukan Administrator terdaftar.');
@@ -162,13 +174,13 @@ export default function AdminApp() {
           {/* Opsi 1: Sudah login di situs utama -> naikkan sesi itu jadi admin,
               tanpa perlu login Google kedua kalinya. Server yang memverifikasi
               token sesi & mengecek daftar admin. */}
-          {clientSession?.isLoggedIn && mainSiteToken && (
+          {mainSiteEmail && (
             <div className="p-4 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 space-y-2.5">
               <div className="flex items-center gap-2 text-xs font-bold text-[#FCA311]">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Sesi situs utama terdeteksi</span>
               </div>
-              <p className="text-xs text-white font-mono">{clientSession.email}</p>
+              <p className="text-xs text-white font-mono">{mainSiteEmail}</p>
               <button
                 type="button"
                 onClick={handleSessionLogin}

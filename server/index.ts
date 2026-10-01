@@ -11,6 +11,9 @@ import bcrypt from 'bcryptjs';
 import { pool, initDatabase, SUPER_ADMIN_EMAIL } from './db';
 import { fileURLToPath } from 'url'; 
 import { attachMultiplayerSocket } from './multiplayerSocket';
+import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { authRouter, requireAuth, originGuard, isAllowedOrigin } from './auth/authRoutes';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -74,92 +77,47 @@ async function verifyGoogleIdToken(credential: string): Promise<{ email: string;
   }
 }
 
-/**
- * Kirim email lewat SMTP (nodemailer) jika sudah dikonfigurasi di .env
- * (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS). Kalau belum, tautan/kode
- * hanya dicetak ke console server supaya alur reset password tetap bisa
- * diuji saat development tanpa perlu SMTP asli.
- */
-async function sendEmail(to: string, subject: string, html: string) {
-  if (process.env.SMTP_HOST) {
-    try {
-      const nodemailer: any = await import('nodemailer');
-      const transporter = nodemailer.default.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT) || 587,
-        secure: process.env.SMTP_SECURE === 'true',
-        auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
-      });
-      await transporter.sendMail({ from: process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, html });
-      return;
-    } catch (err) {
-      console.error('[email] Gagal mengirim lewat SMTP, fallback ke console:', err);
-    }
-  }
-  console.log(`\n[EMAIL:DEV MODE — SMTP belum dikonfigurasi]\nKe      : ${to}\nSubjek  : ${subject}\nIsi     :\n${html}\n`);
-}
-
-app.use(cors());
+// ==========================================
+// MIDDLEWARE GLOBAL (urutan PENTING: harus sebelum semua route)
+// ==========================================
+// Di belakang Nginx/Cloudflare/Railway isi TRUST_PROXY=1. Di lokal biarkan 0.
+app.set('trust proxy', Number(process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? 1 : 0)));
+app.use(helmet({
+  // CSP bawaan helmet akan memblokir script Google Sign-In, Midtrans Snap, dan audio dari Supabase.
+  // Nyalakan lagi nanti setelah daftar domainnya disusun.
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  // Wajib 'same-origin-allow-popups' supaya popup Google Sign-In bisa kirim hasilnya balik.
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+}));
+// credentials:true wajib karena sesi sekarang berupa cookie; origin '*' tidak boleh dipakai bersama credentials.
+app.use(cors({ origin: (origin, cb) => cb(null, isAllowedOrigin(origin)), credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: '10mb' })); // kuis dengan media base64 bisa > 100kb (default)
+app.use(originGuard);
+app.use('/api/auth', authRouter); // login/daftar/verifikasi/reset/google/me/logout (sesi cookie httpOnly)
 
 // ==========================================
-// AUTENTIKASI SESI PENGGUNA (token HMAC stateless)
+// AUTENTIKASI SESI PENGGUNA (cookie httpOnly + tabel `sessions`)
 // ==========================================
-// Sebelumnya semua /api/user/* mempercayai `email` dari body/query tanpa bukti apa pun,
-// sehingga siapa saja bisa membaca/mengubah koleksi akun lain.
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
-if (!process.env.SESSION_SECRET) {
-  console.warn('[SECURITY] SESSION_SECRET belum diset di .env — semua sesi login akan hangus setiap server restart.');
-}
-const USER_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-function signUserToken(email: string): string {
-  const payload = Buffer.from(JSON.stringify({ e: email, exp: Date.now() + USER_TOKEN_TTL_MS })).toString('base64url');
-  const sig = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
-  return `${payload}.${sig}`;
-}
-
-function verifyUserToken(token: string): string | null {
-  const [payload, sig] = String(token || '').split('.');
-  if (!payload || !sig) return null;
-  const expected = crypto.createHmac('sha256', SESSION_SECRET).update(payload).digest('base64url');
-  const a = Buffer.from(sig);
-  const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
-  try {
-    const { e, exp } = JSON.parse(Buffer.from(payload, 'base64url').toString());
-    return typeof e === 'string' && exp > Date.now() ? e : null;
-  } catch {
-    return null;
-  }
-}
-
-const requireUser = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const auth = req.headers.authorization;
-  const tokenEmail = auth?.startsWith('Bearer ') ? verifyUserToken(auth.slice(7).trim()) : null;
-  if (!tokenEmail) {
-    return res.status(401).json({ error: 'Sesi login tidak valid atau sudah berakhir. Silakan masuk kembali.' });
-  }
-  const claimed = String((req.body && req.body.email) ?? req.query?.email ?? '').trim();
-  if (claimed && claimed.toLowerCase() !== tokenEmail.toLowerCase()) {
-    return res.status(403).json({ error: 'Email pada permintaan tidak sesuai dengan akun yang sedang login.' });
-  }
-  if (req.body && typeof req.body === 'object') req.body.email = tokenEmail;
-  (req as any).userEmail = tokenEmail;
-  next();
+// Sesi dicek lewat requireAuth (server/auth/authRoutes.ts). Middleware ini membungkusnya supaya
+// handler lama yang membaca (req as any).userEmail / req.body.email tetap jalan tanpa diubah:
+// email SELALU diambil dari sesi, bukan dari kiriman klien.
+const requireUser: express.RequestHandler = (req, res, next) => {
+  requireAuth(req, res, (err?: unknown) => {
+    if (err) return next(err);
+    if (!req.user) return; // requireAuth sudah membalas 401
+    const email = req.user.email;
+    const claimed = String((req.body && req.body.email) ?? req.query?.email ?? '').trim();
+    if (claimed && claimed.toLowerCase() !== email.toLowerCase()) {
+      return res.status(403).json({ error: 'Email pada permintaan tidak sesuai dengan akun yang sedang login.' });
+    }
+    if (req.body && typeof req.body === 'object') req.body.email = email;
+    (req as any).userEmail = email;
+    next();
+  });
 };
 app.use('/api/user', requireUser);
-
-// Pembatas percobaan login (anti brute-force), per IP + email.
-const loginAttempts = new Map<string, number[]>();
-const LOGIN_WINDOW_MS = 15 * 60 * 1000;
-const LOGIN_MAX_ATTEMPTS = 10;
-const loginKey = (req: express.Request, email: string) => `${req.ip}|${String(email).toLowerCase()}`;
-const isLoginLimited = (key: string) => {
-  const recent = (loginAttempts.get(key) || []).filter((t) => t > Date.now() - LOGIN_WINDOW_MS);
-  loginAttempts.set(key, recent);
-  return recent.length >= LOGIN_MAX_ATTEMPTS;
-};
 
 Promise.resolve(initDatabase())
   .then(() => ensurePaymentTables())
@@ -313,15 +271,10 @@ app.post('/api/admin/google-login', async (req, res) => {
 // Login admin memakai sesi login SITUS UTAMA yang sedang aktif (dipakai saat
 // pengguna sudah login di halaman klien lalu memilih "Masuk sebagai Admin").
 // Alih-alih mempercayai email yang dikirim klien, endpoint ini memverifikasi
-// TOKEN SESI asli (HMAC bertanda tangan server, dari /api/auth/login,
-// /api/auth/register, /api/auth/google, atau /api/auth/demo-login) sehingga
-// emailnya dijamin benar-benar milik sesi yang sedang login.
-app.post('/api/admin/session-login', async (req, res) => {
-  const auth = req.headers.authorization;
-  const email = auth?.startsWith('Bearer ') ? verifyUserToken(auth.slice(7).trim()) : null;
-  if (!email) {
-    return res.status(401).json({ error: 'Sesi login situs utama tidak valid atau sudah berakhir.' });
-  }
+// SESI cookie asli (tabel `sessions`, diterbitkan /api/auth/login atau /api/auth/google)
+// sehingga emailnya dijamin benar-benar milik sesi yang sedang login.
+app.post('/api/admin/session-login', requireAuth, async (req, res) => {
+  const email = String(req.user!.email).toLowerCase();
   if (!(await isServerAdminEmail(email))) {
     return res.status(403).json({ error: `Akses ditolak: email "${email}" bukan Administrator terdaftar.` });
   }
@@ -352,203 +305,10 @@ app.get('/api/admin/me', requireAdmin, (req, res) => {
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ''));
 
-app.post('/api/auth/register', async (req, res) => {
-  try {
-    const { email, name, password } = req.body || {};
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ error: 'Alamat surel (email) tidak valid.' });
-    }
-    if (!password || String(password).length < 4) {
-      return res.status(400).json({ error: 'Kata sandi minimal 4 karakter.' });
-    }
-
-    const existing = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existing.rows.length) {
-      return res.status(409).json({ error: 'Email ini sudah terdaftar. Silakan masuk (login).' });
-    }
-
-    const passwordHash = await bcrypt.hash(String(password), 10);
-    const displayName = (name && String(name).trim()) || email.split('@')[0];
-    const userId = `usr_${Date.now()}`;
-
-    await pool.query(
-      `INSERT INTO users (id, email, name, password_hash, last_seen) VALUES ($1, $2, $3, $4, NOW())`,
-      [userId, email, displayName, passwordHash]
-    );
-
-    return res.status(201).json({ success: true, email, name: displayName, token: signUserToken(email) });
-  } catch (err) {
-    console.error('Register error:', err);
-    return res.status(500).json({ error: 'Gagal membuat akun baru.' });
-  }
-});
-
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!isValidEmail(email) || !password) {
-      return res.status(400).json({ error: 'Email dan kata sandi wajib diisi.' });
-    }
-    const attemptKey = loginKey(req, email);
-    if (isLoginLimited(attemptKey)) {
-      return res.status(429).json({ error: 'Terlalu banyak percobaan login. Coba lagi dalam 15 menit.' });
-    }
-    loginAttempts.set(attemptKey, [...(loginAttempts.get(attemptKey) || []), Date.now()]);
-
-    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
-    const user = rows[0];
-
-    // Pesan generik disengaja (tidak membedakan "email tidak ada" vs "kata
-    // sandi salah") supaya tidak membocorkan email mana yang terdaftar.
-    if (!user || !user.password_hash) {
-      return res.status(401).json({ error: 'Email atau kata sandi salah.' });
-    }
-
-    const match = await bcrypt.compare(String(password), user.password_hash);
-    if (!match) {
-      return res.status(401).json({ error: 'Email atau kata sandi salah.' });
-    }
-
-    loginAttempts.delete(attemptKey);
-    await pool.query('UPDATE users SET last_seen = NOW() WHERE email = $1', [email]);
-    return res.json({ success: true, email: user.email, name: user.name, token: signUserToken(user.email) });
-  } catch (err) {
-    console.error('Login error:', err);
-    return res.status(500).json({ error: 'Gagal memproses login.' });
-  }
-});
-
-// PERBAIKAN: sebelumnya tidak ada jalur "lupa kata sandi" sama sekali — kalau
-// pengguna lupa, akunnya buntu selamanya. Sekarang tautan reset dikirim ke
-// email terdaftar (token acak, hash-nya disimpan di DB, kedaluwarsa 30 menit,
-// sekali pakai). Balasan selalu generik ("jika email terdaftar...") supaya
-// endpoint ini tidak bisa dipakai untuk menebak email mana yang punya akun.
-app.post('/api/auth/forgot-password', async (req, res) => {
-  try {
-    const email = String(req.body?.email || '').trim().toLowerCase();
-    if (!isValidEmail(email)) {
-      return res.status(400).json({ error: 'Alamat email tidak valid.' });
-    }
-
-    const { rows } = await pool.query('SELECT email FROM users WHERE email = $1', [email]);
-    if (rows.length) {
-      const rawToken = crypto.randomBytes(32).toString('hex');
-      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-      const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
-      await pool.query(
-        'INSERT INTO password_resets (token_hash, user_email, expires_at) VALUES ($1, $2, $3)',
-        [tokenHash, email, expiresAt]
-      );
-      const resetLink = `${process.env.APP_URL || 'http://localhost:3000'}/?resetToken=${rawToken}`;
-      await sendEmail(
-        email,
-        'Reset Kata Sandi PlayMuzeck',
-        `<p>Kami menerima permintaan reset kata sandi untuk akun ini.</p>
-         <p>Klik tautan berikut untuk mengatur kata sandi baru (berlaku 30 menit):</p>
-         <p><a href="${resetLink}">${resetLink}</a></p>
-         <p>Jika Anda tidak meminta ini, abaikan saja email ini.</p>`
-      );
-    }
-
-    // Balasan selalu sukses & generik, terlepas email terdaftar atau tidak.
-    res.json({ success: true, message: 'Jika email terdaftar, tautan reset kata sandi sudah dikirim.' });
-  } catch (err) {
-    console.error('forgot-password error:', err);
-    res.status(500).json({ error: 'Gagal memproses permintaan reset kata sandi.' });
-  }
-});
-
-app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { token, password } = req.body || {};
-    if (!token || typeof token !== 'string') {
-      return res.status(400).json({ error: 'Token reset tidak ditemukan atau tidak valid.' });
-    }
-    if (!password || String(password).length < 4) {
-      return res.status(400).json({ error: 'Kata sandi minimal 4 karakter.' });
-    }
-
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-    const { rows } = await pool.query(
-      'SELECT * FROM password_resets WHERE token_hash = $1 AND used = FALSE AND expires_at > NOW()',
-      [tokenHash]
-    );
-    const record = rows[0];
-    if (!record) {
-      return res.status(400).json({ error: 'Tautan reset tidak valid atau sudah kedaluwarsa. Minta tautan baru.' });
-    }
-
-    const passwordHash = await bcrypt.hash(String(password), 10);
-    await pool.query('UPDATE users SET password_hash = $1 WHERE email = $2', [passwordHash, record.user_email]);
-    await pool.query('UPDATE password_resets SET used = TRUE WHERE token_hash = $1', [tokenHash]);
-    // Token lain yang belum dipakai untuk email ini ikut dianggap basi.
-    await pool.query('UPDATE password_resets SET used = TRUE WHERE user_email = $1 AND used = FALSE', [record.user_email]);
-
-    res.json({ success: true, email: record.user_email, token: signUserToken(record.user_email) });
-  } catch (err) {
-    console.error('reset-password error:', err);
-    res.status(500).json({ error: 'Gagal mengatur ulang kata sandi.' });
-  }
-});
-
-// Login/daftar akun otomatis lewat Google Sign-In (Google Identity Services
-// di klien mengirim `credential` berupa ID token JWT). Server memverifikasi
-// token itu langsung ke Google (tokeninfo) sebelum membuat/mengenali akun,
-// jadi tidak ada email yang bisa dipalsukan dari sisi klien.
-app.post('/api/auth/google', async (req, res) => {
-  try {
-    const verified = await verifyGoogleIdToken(String(req.body?.credential || ''));
-    if (!verified) {
-      return res.status(401).json({ error: 'Token Google tidak valid atau tidak bisa diverifikasi.' });
-    }
-    const { email, name } = verified;
-    // Akun Google tidak pakai kata sandi manual; simpan hash acak sebagai
-    // placeholder supaya kolom password_hash tetap terisi (bukan login palsu:
-    // tidak ada cara login pakai "kata sandi" untuk akun ini selain Google).
-    const placeholderHash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
-    const userId = `usr_${Date.now()}`;
-
-    const existing = await pool.query('SELECT name FROM users WHERE email = $1', [email]);
-    await pool.query(
-      `INSERT INTO users (id, email, name, password_hash, last_seen) VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT (email) DO UPDATE SET last_seen = NOW()`,
-      [userId, email, existing.rows[0]?.name || name, placeholderHash]
-    );
-
-    res.json({ success: true, email, name: existing.rows[0]?.name || name, token: signUserToken(email) });
-  } catch (err) {
-    console.error('Google login error:', err);
-    res.status(500).json({ error: 'Gagal memproses login Google.' });
-  }
-});
-
-// Login cepat 1-klik untuk akun demo bawaan (tidak butuh kata sandi manual),
-// tapi tetap membuat/menggunakan baris `users` yang sesungguhnya di database
-// sehingga datanya tetap konsisten & terisolasi per-akun seperti user biasa.
-const DEMO_ACCOUNTS: Record<string, string> = {
-  'soundcreator@PlayMuzeck.id': 'Aris Musik',
-  'triviageek@PlayMuzeck.id': 'Nadia Trivia',
-};
-
-app.post('/api/auth/demo-login', async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    const demoName = DEMO_ACCOUNTS[email];
-    if (!demoName) {
-      return res.status(400).json({ error: 'Akun demo tidak dikenali.' });
-    }
-    const passwordHash = await bcrypt.hash('demo-password', 10);
-    await pool.query(
-      `INSERT INTO users (id, email, name, password_hash, last_seen) VALUES ($1, $2, $3, $4, NOW())
-       ON CONFLICT (email) DO UPDATE SET last_seen = NOW()`,
-      [`usr_${Date.now()}`, email, demoName, passwordHash]
-    );
-    return res.json({ success: true, email, name: demoName, token: signUserToken(email) });
-  } catch (err) {
-    console.error('Demo login error:', err);
-    return res.status(500).json({ error: 'Gagal masuk dengan akun demo.' });
-  }
-});
+// Route /api/auth/* (signup, verify-email, login, forgot/reset-password, google, me, logout)
+// sekarang ada di server/auth/authRoutes.ts. Route lama (register, login, forgot-password,
+// reset-password, google) DIHAPUS, termasuk /api/auth/demo-login yang bisa masuk ke akun
+// tanpa kata sandi.
 
 // ==========================================
 // B. ADMIN TRACKS & AUDIO UPLOADS (AudioPage)
@@ -1491,13 +1251,13 @@ app.post('/api/public/analytics', async (req, res) => {
   res.json({ success: true });
 });
 
+// Akun dibuat lewat /api/auth/signup atau /api/auth/google, jadi di sini hanya memperbarui akun yang sedang login.
 app.post('/api/users', requireUser, async (req, res) => {
-  const { email, name } = req.body;
-  if (!email) return res.status(400).json({ error: 'Email wajib diisi' });
-  await pool.query(`
-    INSERT INTO users (id, email, name, last_seen) VALUES ($1, $2, $3, NOW())
-    ON CONFLICT(email) DO UPDATE SET name = EXCLUDED.name, last_seen = NOW();
-  `, [`usr_${Date.now()}`, email, name || 'Pengguna']);
+  const name = String(req.body?.name || '').replace(/[<>]/g, '').trim().slice(0, 60);
+  await pool.query(
+    `UPDATE users SET name = COALESCE(NULLIF($2, ''), name), last_seen = NOW() WHERE id = $1`,
+    [req.user!.id, name]
+  );
   res.json({ success: true });
 });
 
@@ -2459,7 +2219,7 @@ const httpServer = app.listen(PORT, '0.0.0.0', () => {
   console.log('--- KESIAPAN ---');
   console.log(`${ok(process.env.MIDTRANS_SERVER_KEY)} MIDTRANS_SERVER_KEY`);
   console.log(`${ok(process.env.MIDTRANS_CLIENT_KEY)} MIDTRANS_CLIENT_KEY`);
-  console.log(`${ok(process.env.SESSION_SECRET)} SESSION_SECRET`);
+  console.log(`${ok(process.env.APP_URL)} APP_URL (dipakai untuk link email & cek origin)`);
   console.log(`${ok(process.env.ADMIN_PASSWORD)} ADMIN_PASSWORD`);
   console.log(`${ok(process.env.GOOGLE_CLIENT_ID)} GOOGLE_CLIENT_ID (tombol "Masuk dengan Google")`);
   console.log(`${ok(process.env.SMTP_HOST)} SMTP_HOST (email reset kata sandi asli; tanpa ini, tautan reset dicetak ke console)`);
