@@ -1188,20 +1188,183 @@ app.delete('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// ==========================================
+// CUSTOM AUDIO / PESAN MASUK (tabel inquiries) — CRUD penuh.
+// Nilai status di DB: 'baru' (Menunggu), 'proses' (Diproses), 'selesai' (Selesai).
+// ==========================================
+const INQUIRY_STATUSES = ['baru', 'proses', 'selesai'];
+
 app.get('/api/admin/inquiries', requireAdmin, async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM inquiries ORDER BY created_at DESC');
-  res.json(rows);
+  try {
+    const { rows } = await pool.query('SELECT * FROM inquiries ORDER BY created_at DESC');
+    res.json(rows);
+  } catch (err) {
+    console.error('[admin] inquiries:', err);
+    res.status(500).json({ error: 'Gagal memuat permintaan.' });
+  }
+});
+
+app.post('/api/admin/inquiries', requireAdmin, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const status = INQUIRY_STATUSES.includes(b.status) ? b.status : 'baru';
+    const title = String(b.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'Judul wajib diisi.' });
+    const id = `inq_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`;
+    await pool.query(
+      `INSERT INTO inquiries (id, title, email, genre, mood, status, notes) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, title.slice(0, 255), String(b.email || '').trim().slice(0, 255), String(b.genre || '').slice(0, 100), String(b.mood || '').slice(0, 100), status, String(b.notes || '')]
+    );
+    res.status(201).json({ success: true, id });
+  } catch (err: any) {
+    console.error('[admin] create inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Gagal membuat permintaan.' });
+  }
 });
 
 app.patch('/api/admin/inquiries/:id', requireAdmin, async (req, res) => {
-  await pool.query('UPDATE inquiries SET status = $1 WHERE id = $2', [req.body.status, req.params.id]);
-  res.json({ success: true });
+  try {
+    const b = req.body || {};
+    if (b.status !== undefined && !INQUIRY_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Status tidak valid.' });
+    const cols: Array<[string, string, number]> = [
+      ['status', 'status', 50], ['title', 'title', 255], ['email', 'email', 255],
+      ['genre', 'genre', 100], ['mood', 'mood', 100], ['notes', 'notes', 20000],
+    ];
+    const sets: string[] = [];
+    const vals: any[] = [];
+    for (const [key, col, max] of cols) {
+      if (b[key] !== undefined) { vals.push(String(b[key]).slice(0, max)); sets.push(`${col} = $${vals.length}`); }
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Tidak ada perubahan.' });
+    vals.push(req.params.id);
+    const r = await pool.query(`UPDATE inquiries SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Permintaan tidak ditemukan.' });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[admin] patch inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Gagal memperbarui permintaan.' });
+  }
 });
 
-app.get('/api/admin/users', requireAdmin, async (_req, res) => {
-  const { rows } = await pool.query('SELECT * FROM users ORDER BY created_at DESC');
-  res.json(rows.map(u => ({ ...u, last_seen: u.last_seen || u.created_at })));
+app.delete('/api/admin/inquiries/:id', requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query('DELETE FROM inquiries WHERE id = $1', [req.params.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Permintaan tidak ditemukan.' });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[admin] delete inquiry:', err);
+    res.status(500).json({ error: err?.message || 'Gagal menghapus permintaan.' });
+  }
 });
+
+// ==========================================
+// PENGGUNA (tabel users) — CRUD murni dari database. password_hash TIDAK PERNAH dikirim ke browser.
+// Email tidak bisa diubah: tabel lain (koleksi, donasi, pesanan) merujuk ke email.
+// ==========================================
+const USER_ROLES = ['user', 'admin'];
+
+app.get('/api/admin/users', requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, email, name, role, active_frame_id, created_at, last_seen,
+              (password_hash IS NOT NULL) AS has_password
+       FROM users ORDER BY created_at DESC`
+    );
+    res.json(rows.map((u) => ({ ...u, last_seen: u.last_seen || u.created_at, is_super_admin: u.email === SUPER_ADMIN_EMAIL })));
+  } catch (err) {
+    console.error('[admin] users:', err);
+    res.status(500).json({ error: 'Gagal memuat pengguna.' });
+  }
+});
+
+app.post('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const { email, name, role, password } = req.body || {};
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: 'Alamat email tidak valid.' });
+    if (password && String(password).length < 4) return res.status(400).json({ error: 'Kata sandi minimal 4 karakter.' });
+    const exists = await pool.query('SELECT 1 FROM users WHERE LOWER(email) = $1', [cleanEmail]);
+    if (exists.rows.length) return res.status(409).json({ error: 'Email ini sudah terdaftar.' });
+    const hash = password ? await bcrypt.hash(String(password), 10) : null;
+    const id = `usr_${Date.now()}`;
+    await pool.query(
+      `INSERT INTO users (id, email, name, role, password_hash, last_seen) VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [id, cleanEmail, String(name || '').trim().slice(0, 255) || cleanEmail.split('@')[0], USER_ROLES.includes(role) ? role : 'user', hash]
+    );
+    res.status(201).json({ success: true, id });
+  } catch (err: any) {
+    console.error('[admin] create user:', err);
+    res.status(500).json({ error: err?.message || 'Gagal membuat pengguna.' });
+  }
+});
+
+app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const { name, role, password } = req.body || {};
+    if (role !== undefined && !USER_ROLES.includes(role)) return res.status(400).json({ error: 'Role tidak valid.' });
+    if (password && String(password).length < 4) return res.status(400).json({ error: 'Kata sandi minimal 4 karakter.' });
+    const sets: string[] = [];
+    const vals: any[] = [];
+    if (name !== undefined) { vals.push(String(name).trim().slice(0, 255)); sets.push(`name = $${vals.length}`); }
+    if (role !== undefined) { vals.push(role); sets.push(`role = $${vals.length}`); }
+    if (password) { vals.push(await bcrypt.hash(String(password), 10)); sets.push(`password_hash = $${vals.length}`); }
+    if (!sets.length) return res.status(400).json({ error: 'Tidak ada perubahan.' });
+    vals.push(req.params.id);
+    const r = await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[admin] patch user:', err);
+    res.status(500).json({ error: err?.message || 'Gagal memperbarui pengguna.' });
+  }
+});
+
+// Menghapus pengguna ikut menghapus koleksi, donasi, dan token reset miliknya (ON DELETE CASCADE).
+// Riwayat pesanan (payment_orders / orders) tetap ada.
+app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const found = await pool.query('SELECT email FROM users WHERE id = $1', [req.params.id]);
+    if (!found.rows[0]) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+    if (found.rows[0].email === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Akun Super Admin tidak bisa dihapus.' });
+    await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[admin] delete user:', err);
+    res.status(500).json({ error: err?.message || 'Gagal menghapus pengguna.' });
+  }
+});
+
+// Detail satu pembeli: semua pesanan (id, status, tanggal, isi) + produk yang saat ini dimiliki.
+app.get('/api/admin/buyers/:email', requireAdmin, async (req, res) => {
+  try {
+    const email = String(req.params.email || '');
+    const [orders, owned] = await Promise.all([
+      pool.query('SELECT * FROM payment_orders WHERE user_email = $1 ORDER BY created_at DESC', [email]),
+      pool.query(
+        `SELECT c.item_category, c.item_id, c.item_type_key, c.purchased_at,
+                COALESCE(t.title, d.title, tp.title) AS title
+         FROM public.user_collections c
+         LEFT JOIN audio_tracks t ON c.item_category = 'audio' AND t.id = c.item_id
+         LEFT JOIN decks d        ON c.item_category = 'quiz'  AND d.id = c.item_id
+         LEFT JOIN topics tp      ON c.item_category = 'topic' AND tp.id = c.item_id
+         WHERE c.user_email = $1 AND c.item_category <> 'frame'
+         ORDER BY c.purchased_at DESC`,
+        [email]
+      ),
+    ]);
+    res.json({
+      orders: orders.rows.map(mapPaymentOrder),
+      owned: owned.rows.map((r) => ({
+        category: r.item_category, id: r.item_id, type_key: r.item_type_key,
+        title: r.title || r.item_id, purchased_at: r.purchased_at,
+      })),
+    });
+  } catch (err) {
+    console.error('[admin] buyer detail:', err);
+    res.status(500).json({ error: 'Gagal memuat detail pembeli.' });
+  }
+});
+
 
 // ==========================================
 // KELOLA DAFTAR ADMIN (hanya Super Admin: frfrareu@gmail.com, atau login
