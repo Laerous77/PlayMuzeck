@@ -35,11 +35,29 @@ export async function getPaymentStatus(): Promise<PaymentStatus> {
   }
 }
 
-/** Memuat skrip Midtrans Snap otomatis memakai client key dari server (tak perlu edit index.html). */
+/**
+ * Memuat skrip Midtrans Snap memakai snapUrl & client key dari server (tak perlu edit index.html).
+ * Kalau sudah ada snap.js dari lingkungan LAIN (mis. sandbox sisa cache/PWA) dibuang dan dimuat ulang,
+ * karena token production tidak dikenali oleh snap.js sandbox ("Transaksi tidak ditemukan").
+ */
+const SNAP_SELECTOR = 'script[src*="midtrans.com/snap/snap.js"]';
+
 async function ensureSnap(): Promise<boolean> {
-  if (typeof (window as any).snap !== 'undefined') return true;
   const st = await getPaymentStatus();
-  if (!st.clientKey || !st.snapUrl) return false;
+  if (!st.clientKey || !st.snapUrl) return typeof (window as any).snap !== 'undefined';
+
+  const existing = Array.from(document.querySelectorAll<HTMLScriptElement>(SNAP_SELECTOR));
+  if (typeof (window as any).snap !== 'undefined' && existing.length > 0 && existing.every((s) => s.src === st.snapUrl)) {
+    return true;
+  }
+
+  existing.forEach((s) => s.remove());
+  try {
+    delete (window as any).snap;
+  } catch {
+    (window as any).snap = undefined;
+  }
+
   return new Promise((resolve) => {
     const s = document.createElement('script');
     s.src = st.snapUrl!;
