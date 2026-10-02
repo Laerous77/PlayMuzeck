@@ -15,6 +15,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
 import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
+import { createThemeBulkRoutes } from './themeBulkRoutes';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -207,6 +208,11 @@ const requireSuperAdmin = (req: express.Request, res: express.Response, next: ex
 // ---- Tema: /api/me/theme*, /api/admin/themes*, /api/admin/users/:email/theme ----
 // Sebelumnya router ini TIDAK PERNAH dipasang, jadi semua endpoint tema membalas 404.
 app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
+
+// ---- Tema massal: /api/admin/theme-bulk/* (daftar pengguna, terapkan, reset) + /api/me/notifications* ----
+// PERBAIKAN: router ini sebelumnya TIDAK PERNAH dipasang, jadi GET /api/admin/theme-bulk/users membalas 404
+// dan daftar pengguna di panel admin selalu kosong ("Belum ada pengguna").
+app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));
 
 // ---- Kepemilikan: admin biasa hanya boleh mengubah audio/kuis BUATANNYA SENDIRI ----
 // Super Admin boleh semuanya. Baris lama tanpa owner_email, deck bawaan, dan deck buatan

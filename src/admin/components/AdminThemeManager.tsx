@@ -23,7 +23,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const explain = (e: unknown, fallback: string) => {
   const m = e instanceof Error ? e.message : fallback;
   return m.includes('(404)')
-    ? 'Endpoint tema belum ada di server (404). Pasang themeRoutes / themeBulkRoutes di server/index.ts lalu restart server.'
+    ? 'Endpoint tema belum ada di server (404). Pastikan themeRoutes & themeBulkRoutes terpasang di server/index.ts, lalu restart server.'
     : m;
 };
 
@@ -118,6 +118,7 @@ export const AdminThemeManager: React.FC = () => {
   // ── Terapkan ke pengguna ───────────────────────────────────────────────
   const [users, setUsers] = useState<string[]>([]);
   const [usersLoaded, setUsersLoaded] = useState(false);
+  const [usersFailed, setUsersFailed] = useState(false);
   const [targetMode, setTargetMode] = useState<TargetMode>('selected');
   const [chosen, setChosen] = useState<string[]>([]);
   const [q, setQ] = useState('');
@@ -141,11 +142,25 @@ export const AdminThemeManager: React.FC = () => {
     load().catch((e) => setErr(explain(e, 'Gagal memuat tema.')));
   }, []);
 
-  useEffect(() => {
+  const loadUsers = () => {
+    setUsersFailed(false);
     adminFetch<{ users: Array<{ email: string }> }>('/api/admin/theme-bulk/users')
-      .then((r) => { setUsers(r.users.map((u) => u.email.toLowerCase())); setUsersLoaded(true); })
-      .catch((e) => setUErr(explain(e, 'Gagal memuat daftar pengguna.')));
-  }, []);
+      .then((r) => {
+        setUsers(r.users.map((u) => u.email.toLowerCase()));
+        setUsersLoaded(true);
+        setUErr('');
+      })
+      .catch((e) => {
+        setUsersFailed(true);
+        setUErr(explain(e, 'Gagal memuat daftar pengguna.'));
+      });
+  };
+
+  // Endpoint ini khusus Super Admin; useAdminRole memuat perannya secara asinkron,
+  // jadi baru dipanggil setelah peran diketahui.
+  useEffect(() => {
+    if (isSuperAdmin) loadUsers();
+  }, [isSuperAdmin]);
 
   // Pilih tema pertama otomatis agar tombol Terapkan langsung siap.
   useEffect(() => {
@@ -248,7 +263,8 @@ export const AdminThemeManager: React.FC = () => {
   const runBulk = async (action: 'apply' | 'reset-previous' | 'reset-builtin') => {
     setUErr(''); setUMsg('');
     if (!isSuperAdmin) { setUErr(READONLY_MSG); return; }
-    if (targetCount === 0) { setUErr(targetMode === 'all' ? 'Belum ada pengguna.' : 'Pilih minimal satu pengguna.'); return; }
+    if (targetMode === 'all' && !usersLoaded) { setUErr('Daftar pengguna belum berhasil dimuat. Klik "Coba lagi" atau cek koneksi/server.'); return; }
+    if (targetCount === 0) { setUErr(targetMode === 'all' ? 'Belum ada pengguna terdaftar di database.' : 'Pilih minimal satu pengguna.'); return; }
     if (action === 'apply' && !pick) { setUErr('Pilih tema admin dulu.'); return; }
 
     const verb =
@@ -443,9 +459,16 @@ export const AdminThemeManager: React.FC = () => {
             </div>
 
             {targetMode === 'all' ? (
-              <p className="text-xs text-amber-200 rounded-xl bg-amber-500/10 border border-amber-400/30 px-3 py-2">
-                Perubahan berlaku ke {usersLoaded ? users.length : '…'} pengguna terdaftar.
-              </p>
+              usersFailed ? (
+                <p className="text-xs text-red-300 rounded-xl bg-red-500/10 border border-red-400/30 px-3 py-2 flex items-center gap-2">
+                  <span>Daftar pengguna gagal dimuat dari server.</span>
+                  <button type="button" onClick={loadUsers} className="underline font-bold cursor-pointer">Coba lagi</button>
+                </p>
+              ) : (
+                <p className="text-xs text-amber-200 rounded-xl bg-amber-500/10 border border-amber-400/30 px-3 py-2">
+                  Perubahan berlaku ke {usersLoaded ? users.length : '…'} pengguna terdaftar.
+                </p>
+              )
             ) : (
               <div className="space-y-2 rounded-xl border border-white/10 p-3">
                 <div className="flex gap-2">

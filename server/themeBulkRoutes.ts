@@ -1,18 +1,14 @@
 // server/themeBulkRoutes.ts
 // Terapkan / reset tema ke banyak pengguna + notifikasi untuk pengguna.
 //
-// Pasang di server/index.ts (SEBELUM atau sesudah themeRoutes, tidak bentrok):
+// Dipasang di server/index.ts (SESUDAH createThemeRouter):
 //   import { createThemeBulkRoutes } from './themeBulkRoutes';
-//   app.use(createThemeBulkRoutes({
-//     pool,                         // pg Pool yang sama dengan route lain
-//     requireSuperAdmin,            // middleware yang sudah ada
-//     getUserEmail: (req) => ...,   // email pengguna dari sesi cookie muzeck_sid (null kalau belum login)
-//   }));
+//   app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));
 //
-// ASUMSI NAMA TABEL/KOLOM (saya tidak melihat server lo — sesuaikan bila beda, semuanya ada di SQL di bawah):
-//   users(email)                                  → daftar pengguna terdaftar
-//   themes(id, scope)                             → tema; scope = 'admin' | 'user'
-//   user_themes(user_email UNIQUE, active_theme_id, locked)  → tema aktif + status kunci per pengguna
+// Memakai tabel yang SAMA dengan themeRoutes.ts:
+//   themes(id, scope, ...)                                   -> tema
+//   user_theme_prefs(email PK, active_theme_id, locked)      -> tema aktif + kunci per pengguna
+//   users(email)                                             -> daftar pengguna terdaftar
 // Tabel baru yang dibuat otomatis: theme_prev (riwayat tema sebelumnya) dan user_notifications.
 import { Router } from 'express';
 import type { Request, RequestHandler, Response } from 'express';
@@ -20,8 +16,9 @@ import type { Pool } from 'pg';
 
 interface Deps {
   pool: Pool;
+  requireAdmin: RequestHandler;      // wajib dijalankan lebih dulu: dialah yang mengisi req.isSuperAdmin
   requireSuperAdmin: RequestHandler;
-  getUserEmail: (req: Request) => string | null | undefined | Promise<string | null | undefined>;
+  requireUser: RequestHandler;       // sesi cookie pengguna; mengisi req.userEmail
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -47,7 +44,7 @@ const parseNotify = (n: any): { title: string; message: string } | null => {
   return title && message ? { title, message } : null;
 };
 
-export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }: Deps): Router {
+export function createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }: Deps): Router {
   const router = Router();
 
   const ready = pool
@@ -100,20 +97,20 @@ export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }:
     if (!n || emails.length === 0) return 0;
     const r = await client.query(
       `INSERT INTO user_notifications (user_email, kind, title, message)
-       SELECT e, 'theme', $2, $3 FROM unnest($1::text[]) AS e`,
+       SELECT e, 'theme', $2::text, $3::text FROM unnest($1::text[]) AS e`,
       [emails, n.title, n.message],
     );
     return r.rowCount ?? 0;
   }
 
   // ── Admin: daftar pengguna untuk pemilih ───────────────────────────────
-  router.get('/api/admin/theme-bulk/users', requireSuperAdmin, wrap(async (_req, res) => {
+  router.get('/api/admin/theme-bulk/users', requireAdmin, requireSuperAdmin, wrap(async (_req, res) => {
     const r = await pool.query(`SELECT lower(email) AS email FROM users WHERE email IS NOT NULL ORDER BY 1 LIMIT 5000`);
     res.json({ users: r.rows });
   }));
 
   // ── Admin: terapkan tema ───────────────────────────────────────────────
-  router.post('/api/admin/theme-bulk/apply', requireSuperAdmin, wrap(async (req, res) => {
+  router.post('/api/admin/theme-bulk/apply', requireAdmin, requireSuperAdmin, wrap(async (req, res) => {
     const { scope, emails, themeId, locked, notify: notifyIn } = req.body || {};
     if (scope !== 'all' && scope !== 'selected') { res.status(400).json({ error: 'scope harus "all" atau "selected".' }); return; }
     if (!Number.isInteger(themeId)) { res.status(400).json({ error: 'themeId tidak valid.' }); return; }
@@ -134,15 +131,15 @@ export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }:
         `INSERT INTO theme_prev (user_email, prev_theme_id, prev_locked)
          SELECT e, ut.active_theme_id, COALESCE(ut.locked, FALSE)
          FROM unnest($1::text[]) AS e
-         LEFT JOIN user_themes ut ON lower(ut.user_email) = e
+         LEFT JOIN user_theme_prefs ut ON lower(ut.email) = e
          ON CONFLICT (user_email) DO NOTHING`,
         [targets],
       );
 
       await client.query(
-        `INSERT INTO user_themes (user_email, active_theme_id, locked)
-         SELECT e, $2, $3 FROM unnest($1::text[]) AS e
-         ON CONFLICT (user_email) DO UPDATE SET active_theme_id = EXCLUDED.active_theme_id, locked = EXCLUDED.locked`,
+        `INSERT INTO user_theme_prefs (email, active_theme_id, locked)
+         SELECT e, $2::int, $3::boolean FROM unnest($1::text[]) AS e
+         ON CONFLICT (email) DO UPDATE SET active_theme_id = EXCLUDED.active_theme_id, locked = EXCLUDED.locked`,
         [targets, themeId, Boolean(locked)],
       );
 
@@ -160,7 +157,7 @@ export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }:
   // ── Admin: reset tema ──────────────────────────────────────────────────
   // mode 'previous' = kembalikan ke tema + status kunci sebelum admin menerapkan
   // mode 'builtin'  = kembali ke tema bawaan & buka kunci
-  router.post('/api/admin/theme-bulk/reset', requireSuperAdmin, wrap(async (req, res) => {
+  router.post('/api/admin/theme-bulk/reset', requireAdmin, requireSuperAdmin, wrap(async (req, res) => {
     const { scope, emails, mode, notify: notifyIn } = req.body || {};
     if (scope !== 'all' && scope !== 'selected') { res.status(400).json({ error: 'scope harus "all" atau "selected".' }); return; }
     if (mode !== 'previous' && mode !== 'builtin') { res.status(400).json({ error: 'mode harus "previous" atau "builtin".' }); return; }
@@ -181,21 +178,21 @@ export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }:
              DELETE FROM theme_prev WHERE user_email = ANY($1::text[])
              RETURNING user_email, prev_theme_id, prev_locked
            )
-           INSERT INTO user_themes (user_email, active_theme_id, locked)
+           INSERT INTO user_theme_prefs (email, active_theme_id, locked)
            SELECT s.user_email,
                   CASE WHEN EXISTS (SELECT 1 FROM themes t WHERE t.id = s.prev_theme_id) THEN s.prev_theme_id END,
                   s.prev_locked
            FROM snap s
-           ON CONFLICT (user_email) DO UPDATE SET active_theme_id = EXCLUDED.active_theme_id, locked = EXCLUDED.locked
-           RETURNING user_email`,
+           ON CONFLICT (email) DO UPDATE SET active_theme_id = EXCLUDED.active_theme_id, locked = EXCLUDED.locked
+           RETURNING email AS user_email`,
           [targets],
         );
         restored = r.rows.map((x: any) => x.user_email as string);
       } else {
         await client.query(
-          `INSERT INTO user_themes (user_email, active_theme_id, locked)
+          `INSERT INTO user_theme_prefs (email, active_theme_id, locked)
            SELECT e, NULL, FALSE FROM unnest($1::text[]) AS e
-           ON CONFLICT (user_email) DO UPDATE SET active_theme_id = NULL, locked = FALSE`,
+           ON CONFLICT (email) DO UPDATE SET active_theme_id = NULL, locked = FALSE`,
           [targets],
         );
         await client.query(`DELETE FROM theme_prev WHERE user_email = ANY($1::text[])`, [targets]);
@@ -217,8 +214,8 @@ export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }:
   }));
 
   // ── Pengguna: baca & tandai notifikasi ─────────────────────────────────
-  router.get('/api/me/notifications', wrap(async (req, res) => {
-    const email = (await getUserEmail(req))?.toLowerCase();
+  router.get('/api/me/notifications', requireUser, wrap(async (req, res) => {
+    const email = String((req as any).userEmail || '').toLowerCase();
     if (!email) { res.status(401).json({ error: 'Belum login.' }); return; }
     const r = await pool.query(
       `SELECT id, title, message, created_at FROM user_notifications
@@ -230,8 +227,8 @@ export function createThemeBulkRoutes({ pool, requireSuperAdmin, getUserEmail }:
     });
   }));
 
-  router.post('/api/me/notifications/read', wrap(async (req, res) => {
-    const email = (await getUserEmail(req))?.toLowerCase();
+  router.post('/api/me/notifications/read', requireUser, wrap(async (req, res) => {
+    const email = String((req as any).userEmail || '').toLowerCase();
     if (!email) { res.status(401).json({ error: 'Belum login.' }); return; }
     const ids: number[] = Array.isArray(req.body?.ids) ? req.body.ids.filter((n: unknown) => Number.isInteger(n)) : [];
     if (ids.length) {
