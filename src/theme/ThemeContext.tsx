@@ -60,6 +60,7 @@ export const ThemeProvider: React.FC<Props> = ({ isLoggedIn, userKey, getToken, 
     wasLoggedIn.current = true;
     setData(EMPTY);
     setLoaded(false);
+    api.setThemeUserKey(userKey);
     if (getToken) api.setThemeTokenGetter(getToken);
     let cancelled = false;
     api.fetchMyTheme()

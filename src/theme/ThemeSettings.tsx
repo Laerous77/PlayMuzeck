@@ -6,6 +6,7 @@ import { Lock, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { PalettePicker } from './PalettePicker';
 import { useTheme } from './ThemeContext';
 import { BUILTIN_THEME, NAME_MAX, Palette } from './theme';
+import { isLocalMode } from './themeApi';
 
 type Sel = 'builtin' | 'assigned' | 'new' | number;
 
@@ -98,7 +99,7 @@ export const ThemeSettings: React.FC<{ embedded?: boolean }> = ({ embedded = fal
       const id = typeof sel === 'number' ? sel : undefined;
       const newActive = await save({ id, name: name.trim(), palette: draft });
       if (newActive != null) setSel(newActive);
-    }, 'Tema disimpan dan dipakai. Akan tetap sama setiap kamu login.');
+    }, isLocalMode() ? 'Tema disimpan dan dipakai di browser ini.' : 'Tema disimpan dan dipakai. Akan tetap sama setiap kamu login.');
 
   const onDelete = () => {
     if (typeof sel !== 'number') return;
@@ -227,6 +228,9 @@ export const ThemeSettings: React.FC<{ embedded?: boolean }> = ({ embedded = fal
         )}
       </div>
 
+      {isLocalMode() && (
+        <p className="text-[11px] text-gray-500">Tema disimpan di browser ini (server tema belum tersedia).</p>
+      )}
       {err && <p className="text-xs text-red-400 font-medium">{err}</p>}
       {msg && <p className="text-xs text-emerald-400 font-medium">{msg}</p>}
     </section>

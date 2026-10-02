@@ -27,19 +27,27 @@ export const BUILTIN_THEME = {
   palette: { surface: '#14213D', accent: '#FCA311', accent2: '#FC1212' } as Palette,
 };
 
-/** Palette siap pakai sebagai titik awal. Tidak dihitung ke batas slot. */
-export const PRESETS: Array<{ id: string; label: string; palette: Palette }> = [
+/** Palette siap pakai: 6 gelap + 6 terang. Daftar yang tampil mengikuti mode. Tidak dihitung ke batas slot. */
+export const DARK_PRESETS: Array<{ id: string; label: string; palette: Palette }> = [
   { id: 'oxford-amber', label: 'Oxford Amber', palette: { surface: '#14213D', accent: '#FCA311', accent2: '#FC1212' } },
   { id: 'crimson-night', label: 'Crimson Night', palette: { surface: '#2A0F1A', accent: '#E11D48', accent2: '#FB7185' } },
   { id: 'emerald-studio', label: 'Emerald Studio', palette: { surface: '#0F2A24', accent: '#34D399', accent2: '#22D3EE' } },
   { id: 'violet-arena', label: 'Violet Arena', palette: { surface: '#1E1B3A', accent: '#A78BFA', accent2: '#F472B6' } },
   { id: 'ocean-sunset', label: 'Ocean Sunset', palette: { surface: '#0B2545', accent: '#38BDF8', accent2: '#FB923C' } },
   { id: 'forest-gold', label: 'Forest Gold', palette: { surface: '#142A1C', accent: '#EAB308', accent2: '#F97316' } },
-  // Mode terang
-  { id: 'daylight-sky', label: 'Daylight Sky (terang)', palette: { surface: '#FFFFFF', accent: '#0284C7', accent2: '#E11D48' } },
-  { id: 'paper-amber', label: 'Paper Amber (terang)', palette: { surface: '#FFF8EB', accent: '#C2410C', accent2: '#7C3AED' } },
-  { id: 'mint-light', label: 'Mint Light (terang)', palette: { surface: '#F0FDF4', accent: '#15803D', accent2: '#0E7490' } },
 ];
+
+export const LIGHT_PRESETS: Array<{ id: string; label: string; palette: Palette }> = [
+  { id: 'daylight-sky', label: 'Daylight Sky', palette: { surface: '#FFFFFF', accent: '#0284C7', accent2: '#E11D48' } },
+  { id: 'paper-amber', label: 'Paper Amber', palette: { surface: '#FFF8EB', accent: '#C2410C', accent2: '#7C3AED' } },
+  { id: 'mint-light', label: 'Mint Light', palette: { surface: '#F0FDF4', accent: '#15803D', accent2: '#0E7490' } },
+  { id: 'lavender-light', label: 'Lavender Light', palette: { surface: '#F5F3FF', accent: '#6D28D9', accent2: '#BE185D' } },
+  { id: 'rose-light', label: 'Rose Light', palette: { surface: '#FFF1F2', accent: '#BE123C', accent2: '#0369A1' } },
+  { id: 'ocean-light', label: 'Ocean Light', palette: { surface: '#F0F9FF', accent: '#0369A1', accent2: '#C2410C' } },
+];
+
+export const PRESETS = [...DARK_PRESETS, ...LIGHT_PRESETS];
+export const presetsFor = (mode: Mode) => (mode === 'light' ? LIGHT_PRESETS : DARK_PRESETS);
 
 export const isHex = (s: unknown): s is string => typeof s === 'string' && /^#[0-9a-fA-F]{6}$/.test(s);
 
@@ -56,6 +64,19 @@ const toRgb = (hex: string): [number, number, number] => {
   const n = parseInt(hex.slice(1), 16);
   return [n >> 16, (n >> 8) & 255, n & 255];
 };
+
+export const hexToRgb = (hex: string): [number, number, number] => toRgb(hex);
+
+export const rgbToHex = (r: number, g: number, b: number) =>
+  '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+
+/** Terima "#abc", "abc", "#AABBCC", "aabbcc" → "#aabbcc"; selain itu null. */
+export function parseHex(input: string): string | null {
+  const t = input.trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{3}$/.test(t)) return ('#' + t.split('').map((c) => c + c).join('')).toLowerCase();
+  if (/^[0-9a-fA-F]{6}$/.test(t)) return ('#' + t).toLowerCase();
+  return null;
+}
 
 /** Kecerahan 0–255 (rumus luma). */
 export function luminance(hex: string): number {
@@ -94,13 +115,19 @@ export const readableOn = (hex: string) => (luminance(hex) > 150 ? '#000000' : '
 export const LIGHT_THRESHOLD = 140;
 export const modeOf = (surface: string): Mode => (luminance(surface) > LIGHT_THRESHOLD ? 'light' : 'dark');
 
-/** Ubah palette ke mode lain dengan mempertahankan rona warna panel. */
+/** Geser warna aksen sampai cukup kontras dengan panel (min rasio WCAG 3). */
+function ensureContrast(hex: string, surface: string, min = 3): string {
+  const target = modeOf(surface) === 'dark' ? '#ffffff' : '#000000';
+  let c = hex;
+  for (let i = 0; i < 12 && contrastRatio(c, surface) < min; i++) c = mixHex(c, target, 0.12);
+  return c;
+}
+
+/** Ubah palette ke mode lain: rona panel dipertahankan, aksen disesuaikan agar tetap terbaca. */
 export function withMode(p: Palette, mode: Mode): Palette {
   if (modeOf(p.surface) === mode) return p;
-  return {
-    ...p,
-    surface: mode === 'light' ? mixHex(p.surface, '#ffffff', 0.92) : mixHex(p.surface, '#000000', 0.85),
-  };
+  const surface = mode === 'light' ? mixHex(p.surface, '#ffffff', 0.92) : mixHex(p.surface, '#000000', 0.85);
+  return { surface, accent: ensureContrast(p.accent, surface), accent2: ensureContrast(p.accent2, surface) };
 }
 
 export function applyPalette(p: Palette) {
