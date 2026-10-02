@@ -516,11 +516,11 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         transition={{ duration: 0.2 }}
-        className="w-full max-w-2xl rounded-2xl bg-[#14213D] border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto"
+        className="w-full max-w-2xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto"
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-black/50">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-xs font-bold text-[#FC1212] uppercase tracking-wider shrink-0">
+            <span className="text-xs font-bold text-accent2 uppercase tracking-wider shrink-0">
               {modeLabel}
             </span>
             <span className="text-gray-500 shrink-0">•</span>
@@ -547,7 +547,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
             </button>
 
             {phase === 'quiz' && !isFinished && (
-              <span className="text-xs font-mono text-[#FC1212] bg-[#FC1212]/15 px-2.5 py-1 rounded-full border border-[#FC1212]/30 font-bold">
+              <span className="text-xs font-mono text-accent2 bg-accent2/15 px-2.5 py-1 rounded-full border border-accent2/30 font-bold">
                 {currentIndex + 1} / {questions.length}
               </span>
             )}
@@ -565,7 +565,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
         {phase === 'quiz' && !isFinished && questions.length > 0 && (
           <div className="w-full h-1.5 bg-black/80">
             <div
-              className="h-full bg-[#FC1212] transition-all duration-300 shadow-[0_0_8px_#FC1212]"
+              className="h-full bg-accent2 transition-all duration-300 shadow-[0_0_8px_var(--t-accent2)]"
               style={{ width: `${((currentIndex + 1) / questions.length) * 100}%` }}
             />
           </div>
@@ -584,7 +584,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                   key={i}
                   className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border ${
                     i === activePlayerIndex
-                      ? 'bg-[#FC1212]/20 text-[#FC1212] border-[#FC1212]/40'
+                      ? 'bg-accent2/20 text-accent2 border-accent2/40'
                       : 'bg-black/40 text-gray-400 border-white/10'
                   }`}
                 >
@@ -614,7 +614,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
               {isSoloMode && (
                 <div className="space-y-5">
                   <div className="text-center space-y-1">
-                    <div className="w-14 h-14 rounded-2xl bg-[#FC1212]/15 border border-[#FC1212]/40 text-[#FC1212] mx-auto flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-2xl bg-accent2/15 border border-accent2/40 text-accent2 mx-auto flex items-center justify-center">
                       <Swords className="w-7 h-7" />
                     </div>
                     <h3 className="text-lg font-black text-white">Atur Sesi Solo</h3>
@@ -627,7 +627,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       onClick={() => setVsBotEnabled(false)}
                       className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                         !vsBotEnabled
-                          ? 'bg-[#FC1212]/15 border-[#FC1212] text-white'
+                          ? 'bg-accent2/15 border-accent2 text-white'
                           : 'bg-black/40 border-white/10 text-gray-400 hover:border-white/30'
                       }`}
                     >
@@ -686,7 +686,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     type="button"
                     onClick={handleStartFromSetup}
                     disabled={questions.length === 0}
-                    className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] disabled:opacity-40 text-white font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-red-600/25"
+                    className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 disabled:opacity-40 text-on-accent2 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent2/25"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>Mulai Kuis</span>
@@ -697,7 +697,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
               {isPassPlayMode && (
                 <div className="space-y-5">
                   <div className="text-center space-y-1">
-                    <div className="w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/40 text-amber-400 mx-auto flex items-center justify-center">
+                    <div className="w-14 h-14 rounded-2xl bg-accent/15 border border-accent/40 text-accent mx-auto flex items-center justify-center">
                       <Users className="w-7 h-7" />
                     </div>
                     <h3 className="text-lg font-black text-white">Atur Nama Pemain</h3>
@@ -723,7 +723,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                               setPlayerNamesState((prev) => prev.map((n, idx) => (idx === i ? val : n)));
                             }}
                             placeholder={`Pemain ${i + 1}`}
-                            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-bold focus:border-amber-400 outline-none"
+                            className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-black/50 border border-white/10 text-white text-xs font-bold focus:border-accent outline-none"
                           />
                         </div>
                       </div>
@@ -742,7 +742,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     type="button"
                     onClick={handleStartFromSetup}
                     disabled={questions.length === 0}
-                    className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20"
+                    className="w-full py-3 rounded-xl bg-accent hover:bg-accent/80 disabled:opacity-40 text-on-accent font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/20"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>Mulai Sesi Pass &amp; Play</span>
@@ -890,7 +890,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       <span
                         className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-mono font-bold border ${
                           !isAnswerRevealed && timeLeft <= 5
-                            ? 'bg-[#780000]/30 text-[#FC1212] border-[#FC1212] animate-pulse'
+                            ? 'bg-accent2/30 text-accent2 border-accent2 animate-pulse'
                             : 'bg-black/40 text-gray-300 border-white/[0.08]'
                         }`}
                       >
@@ -926,7 +926,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                             className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs shrink-0 ${
                               isAnswerRevealed && isCorrectOption
                                 ? 'bg-emerald-500 text-black font-bold'
-                                : 'bg-[#14213D] text-gray-300'
+                                : 'bg-surface text-gray-300'
                             }`}
                           >
                             {letters[idx] || idx + 1}
@@ -954,7 +954,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       {currentQ.explanation && (
                         <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] space-y-2">
                           <div className="flex items-center gap-2">
-                            <HelpCircle className="w-4 h-4 text-[#FC1212]" />
+                            <HelpCircle className="w-4 h-4 text-accent2" />
                             <span className="text-xs font-bold text-white uppercase tracking-wider">Penjelasan Konsep</span>
                           </div>
                           <p className="text-xs sm:text-sm text-gray-300 leading-relaxed">{currentQ.explanation}</p>
@@ -1005,7 +1005,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                                 <button
                                   onClick={() => handleAwardTeamPoint(i, 1)}
                                   title={`Tambah ${pointStep} poin`}
-                                  className="w-7 h-7 rounded-lg bg-[#FC1212] hover:bg-[#e01010] text-white flex items-center justify-center cursor-pointer"
+                                  className="w-7 h-7 rounded-lg bg-accent2 hover:bg-accent2/80 text-on-accent2 flex items-center justify-center cursor-pointer"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                 </button>
@@ -1019,7 +1019,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                         <button
                           id="btn-host-next-question"
                           onClick={handleHostNextQuestion}
-                          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-sm shadow-lg shadow-red-600/25 transition-all cursor-pointer active:scale-95"
+                          className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-sm shadow-lg shadow-accent2/25 transition-all cursor-pointer active:scale-95"
                         >
                           <span>{currentIndex + 1 < questions.length ? 'Soal Berikutnya' : 'Selesaikan Sesi'}</span>
                           <ArrowRight className="w-4 h-4" />
@@ -1034,7 +1034,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                   animate={{ opacity: 1, scale: 1 }}
                   className="text-center space-y-6 py-4"
                 >
-                  <div className="w-16 h-16 rounded-full bg-[#14213D] border-2 border-purple-500 text-purple-400 mx-auto flex items-center justify-center shadow-lg shadow-purple-600/20">
+                  <div className="w-16 h-16 rounded-full bg-surface border-2 border-purple-500 text-purple-400 mx-auto flex items-center justify-center shadow-lg shadow-purple-600/20">
                     <Crown className="w-8 h-8" />
                   </div>
                   <div>
@@ -1052,15 +1052,15 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                           key={t.name}
                           className={`flex items-center justify-between p-3 rounded-xl border ${
                             rank === 0
-                              ? 'bg-amber-950/30 border-amber-500/40'
+                              ? 'bg-accent/10 border-accent/40'
                               : 'bg-black/40 border-white/[0.08]'
                           }`}
                         >
                           <div className="flex items-center gap-2">
-                            {rank === 0 && <Crown className="w-4 h-4 text-amber-400" />}
+                            {rank === 0 && <Crown className="w-4 h-4 text-accent" />}
                             <span className="text-sm font-bold text-white">{t.name}</span>
                           </div>
-                          <span className="text-sm font-mono font-black text-[#FC1212]">{t.score} Poin</span>
+                          <span className="text-sm font-mono font-black text-accent2">{t.score} Poin</span>
                         </div>
                       ))}
                   </div>
@@ -1083,7 +1083,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     </button>
                     <button
                       onClick={handleRestartQuiz}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-sm shadow-lg shadow-red-600/25 transition-all cursor-pointer active:scale-95"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-sm shadow-lg shadow-accent2/25 transition-all cursor-pointer active:scale-95"
                     >
                       <RotateCcw className="w-4 h-4" />
                       <span>Mulai Sesi Baru</span>
@@ -1118,7 +1118,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     <div
                       className={`flex items-center gap-1.5 px-3 py-1 rounded-full font-mono font-bold border transition-colors ${
                         currentTimeLimit > 0 && timeLeft <= 5
-                          ? 'bg-[#780000]/30 text-[#FC1212] border-[#FC1212] animate-pulse'
+                          ? 'bg-accent2/30 text-accent2 border-accent2 animate-pulse'
                           : 'bg-black/40 text-gray-300 border-white/[0.08]'
                       }`}
                     >
@@ -1143,15 +1143,15 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       const isCorrectOption = idx === currentQ.correctIndex;
 
                       let btnStyle = 'bg-black/40 border-white/[0.08] hover:border-white/30 text-gray-200';
-                      let badgeLetterStyle = 'bg-[#14213D] text-gray-300';
+                      let badgeLetterStyle = 'bg-surface text-gray-300';
 
                       if (isAnswerSubmitted) {
                         if (isCorrectOption) {
                           btnStyle = 'bg-emerald-950/40 border-emerald-500 text-emerald-100 font-semibold shadow-md shadow-emerald-500/10';
                           badgeLetterStyle = 'bg-emerald-500 text-black font-bold';
                         } else if (isSelected && !isCorrectOption) {
-                          btnStyle = 'bg-[#780000]/40 border-[#FC1212] text-red-100 font-semibold shadow-md shadow-red-900/20';
-                          badgeLetterStyle = 'bg-[#780000] text-white font-bold';
+                          btnStyle = 'bg-accent2/40 border-accent2 text-red-100 font-semibold shadow-md shadow-accent2/20';
+                          badgeLetterStyle = 'bg-accent2 text-on-accent2 font-bold';
                         } else {
                           btnStyle = 'bg-black/20 border-white/[0.04] opacity-40 text-gray-400';
                         }
@@ -1181,7 +1181,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                               {isCorrectOption ? (
                                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                               ) : isSelected ? (
-                                <XCircle className="w-5 h-5 text-[#FC1212]" />
+                                <XCircle className="w-5 h-5 text-accent2" />
                               ) : null}
                             </div>
                           )}
@@ -1191,8 +1191,8 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                   </div>
 
                   {isAnswerSubmitted && selectedOptionIndex === -1 && (
-                    <div className="p-3 rounded-xl bg-[#780000]/30 border border-[#FC1212]/50 text-xs text-red-200 flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-[#FC1212] flex-shrink-0" />
+                    <div className="p-3 rounded-xl bg-red-900/30 border border-accent2/50 text-xs text-red-200 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-accent2 flex-shrink-0" />
                       <span>Waktu habis! Kunci jawaban yang benar ditandai dengan warna hijau.</span>
                     </div>
                   )}
@@ -1204,7 +1204,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       className="p-4 rounded-xl bg-black/60 border border-white/[0.08] space-y-2"
                     >
                       <div className="flex items-center gap-2">
-                        <HelpCircle className="w-4 h-4 text-[#FC1212]" />
+                        <HelpCircle className="w-4 h-4 text-accent2" />
                         <span className="text-xs font-bold text-white uppercase tracking-wider">
                           Penjelasan Konsep
                         </span>
@@ -1220,7 +1220,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       <button
                         id="btn-next-question"
                         onClick={handleNextQuestion}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-sm shadow-lg shadow-red-600/25 transition-all cursor-pointer active:scale-95"
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-sm shadow-lg shadow-accent2/25 transition-all cursor-pointer active:scale-95"
                       >
                         <span>{getNextTurnLabel()}</span>
                         <ArrowRight className="w-4 h-4" />
@@ -1234,12 +1234,12 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                   animate={{ opacity: 1, scale: 1 }}
                   className="text-center space-y-6 py-4"
                 >
-                  <div className="w-16 h-16 rounded-full bg-[#14213D] border-2 border-[#FC1212] text-[#FC1212] mx-auto flex items-center justify-center shadow-lg shadow-red-600/20">
+                  <div className="w-16 h-16 rounded-full bg-surface border-2 border-accent2 text-accent2 mx-auto flex items-center justify-center shadow-lg shadow-accent2/20">
                     <Award className="w-8 h-8" />
                   </div>
 
                   <div>
-                    <span className="text-xs uppercase tracking-widest text-[#FC1212] font-bold">
+                    <span className="text-xs uppercase tracking-widest text-accent2 font-bold">
                       Kuis Selesai
                     </span>
                     <h3 className="text-2xl sm:text-3xl font-black text-white mt-1">
@@ -1271,14 +1271,14 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                           <div
                             key={p.name}
                             className={`flex items-center justify-between p-3 rounded-xl border ${
-                              rank === 0 ? 'bg-amber-950/30 border-amber-500/40' : 'bg-black/40 border-white/[0.08]'
+                              rank === 0 ? 'bg-accent/10 border-accent/40' : 'bg-black/40 border-white/[0.08]'
                             }`}
                           >
                             <div className="flex items-center gap-2">
-                              {rank === 0 && <Crown className="w-4 h-4 text-amber-400" />}
+                              {rank === 0 && <Crown className="w-4 h-4 text-accent" />}
                               <span className="text-sm font-bold text-white">{p.name}</span>
                             </div>
-                            <span className="text-sm font-mono font-black text-[#FC1212]">{p.score} Poin</span>
+                            <span className="text-sm font-mono font-black text-accent2">{p.score} Poin</span>
                           </div>
                         ))}
                     </div>
@@ -1301,7 +1301,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                   ) : (
                     <div className="p-6 rounded-2xl bg-black/50 border border-white/[0.08] max-w-sm mx-auto flex items-center justify-around">
                       <div>
-                        <span className="text-3xl sm:text-4xl font-black text-[#FC1212] font-mono">
+                        <span className="text-3xl sm:text-4xl font-black text-accent2 font-mono">
                           {scorePercentage}%
                         </span>
                         <span className="text-[11px] text-gray-400 block mt-0.5">Akurasi Jawaban</span>
@@ -1337,7 +1337,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     <button
                       id="btn-play-again"
                       onClick={handleRestartQuiz}
-                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-sm shadow-lg shadow-red-600/25 transition-all cursor-pointer active:scale-95"
+                      className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-sm shadow-lg shadow-accent2/25 transition-all cursor-pointer active:scale-95"
                     >
                       <RotateCcw className="w-4 h-4" />
                       <span>Main Lagi</span>

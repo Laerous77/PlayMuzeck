@@ -224,11 +224,11 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
   const isBundleHighlighted = highlightKey === 'bundle';
 
   return (
-    <div className="rounded-3xl bg-[#14213D]/40 border border-white/10 p-6 sm:p-8 space-y-6">
+    <div className="rounded-3xl bg-surface/40 border border-white/10 p-6 sm:p-8 space-y-6">
       <div>
         <h2 className="text-xl font-black text-white">Modular Audio License & Stems Box</h2>
         <p className="text-xs text-gray-400 mt-1">
-          Pilih item individual sesuai kebutuhan untuk lagu <span className="text-[#FCA311] font-semibold">{activeTrack?.title}</span>, atau beli paket komplit untuk hemat maksimal.
+          Pilih item individual sesuai kebutuhan untuk lagu <span className="text-accent font-semibold">{activeTrack?.title}</span>, atau beli paket komplit untuk hemat maksimal.
         </p>
       </div>
 
@@ -247,9 +247,9 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                 p.isOwned
                   ? 'bg-black/30 border-white/5 opacity-60 cursor-not-allowed'
                   : isHighlighted
-                  ? 'bg-[#14213D] border-[#FCA311] ring-2 ring-[#FCA311] shadow-xl shadow-amber-500/20'
+                  ? 'bg-surface border-accent ring-2 ring-accent shadow-xl shadow-accent/20'
                   : isSelected
-                  ? 'bg-[#14213D] border-[#FCA311] shadow-lg shadow-amber-500/10'
+                  ? 'bg-surface border-accent shadow-lg shadow-accent/10'
                   : 'bg-black/40 border-white/5 hover:border-white/20'
               }`}
             >
@@ -259,7 +259,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                     p.isOwned
                       ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
                       : isSelected || isHighlighted
-                      ? 'bg-[#FCA311] border-[#FCA311] text-black'
+                      ? 'bg-accent border-accent text-on-accent'
                       : 'border-white/20 bg-black/40'
                   }`}
                 >
@@ -292,7 +292,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                     className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 ${
                       inCart
                         ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-not-allowed'
-                        : 'bg-white/10 hover:bg-[#FCA311] hover:text-black text-gray-200 cursor-pointer'
+                        : 'bg-white/10 hover:bg-accent hover:text-on-accent text-gray-200 cursor-pointer'
                     }`}
                   >
                     {inCart ? <Check className="w-3.5 h-3.5" /> : <ShoppingCart className="w-3.5 h-3.5" />}
@@ -326,15 +326,15 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
         id="bundle-card-section"
         className={`p-6 rounded-3xl transition-all duration-500 relative overflow-hidden flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5 ${
           isBundleHighlighted
-            ? 'bg-gradient-to-r from-amber-500/25 via-[#1a2d54] to-amber-500/20 border-2 border-[#FCA311] ring-4 ring-[#FCA311]/50 shadow-[0_0_40px_rgba(252,163,17,0.45)] scale-[1.01]'
-            : 'bg-gradient-to-r from-amber-500/10 via-[#14213D] to-black border-2 border-[#FCA311]/40 shadow-xl'
+            ? 'bg-gradient-to-r from-accent/25 via-surface to-accent/20 border-2 border-accent ring-4 ring-accent/50 shadow-[0_0_40px_color-mix(in_srgb,var(--t-accent)_45%,transparent)] scale-[1.01]'
+            : 'bg-gradient-to-r from-accent/10 via-surface to-black border-2 border-accent/40 shadow-xl'
         }`}
       >
-        <div className="absolute -top-12 -left-12 w-36 h-36 bg-[#FCA311]/20 rounded-full blur-2xl pointer-events-none animate-pulse" />
+        <div className="absolute -top-12 -left-12 w-36 h-36 bg-accent/20 rounded-full blur-2xl pointer-events-none animate-pulse" />
 
         <div className="z-10">
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full bg-gradient-to-r from-[#FCA311] to-amber-300 text-black text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md animate-bounce">
+            <span className="px-3 py-1 rounded-full bg-gradient-to-r from-accent to-accent/70 text-black text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md animate-bounce">
               <Sparkles className="w-3 h-3 fill-black" />
               <span>Best Value Bundle</span>
             </span>
@@ -369,7 +369,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                     Rp {pricing.totalUnownedPrice.toLocaleString('id-ID')}
                   </span>
                 )}
-                <span className="text-2xl font-black text-[#FCA311] font-mono drop-shadow">
+                <span className="text-2xl font-black text-accent font-mono drop-shadow">
                   Rp {pricing.bundleUserPrice.toLocaleString('id-ID')}
                 </span>
               </div>
@@ -381,7 +381,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                 className={`px-6 py-3.5 rounded-2xl font-black text-xs whitespace-nowrap transition-all flex items-center gap-1.5 ${
                   bundleConflict
                     ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-not-allowed'
-                    : 'bg-gradient-to-r from-[#FCA311] to-amber-400 text-black hover:brightness-110 shadow-xl shadow-amber-500/30 cursor-pointer active:scale-95'
+                    : 'bg-gradient-to-r from-accent to-accent/70 text-black hover:brightness-110 shadow-xl shadow-accent/30 cursor-pointer active:scale-95'
                 }`}
               >
                 {bundleConflict ? <Check className="w-4 h-4" /> : <ShoppingCart className="w-4 h-4" />}

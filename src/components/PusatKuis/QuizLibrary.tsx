@@ -297,7 +297,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
       <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 p-4 sm:p-5 rounded-3xl bg-black/40 border border-white/10">
         <div className="space-y-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#FC1212] text-white">
+            <span className="text-[11px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-accent2 text-on-accent2">
               Pusat Kuis
             </span>
             {isOnline ? (
@@ -305,7 +305,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                 <Wifi className="w-3 h-3" /> Online Mode Aktif
               </span>
             ) : (
-              <span className="text-[11px] font-medium text-[#FC1212] bg-[#780000]/30 px-2.5 py-0.5 rounded-full border border-[#FC1212]/40 flex items-center gap-1">
+              <span className="text-[11px] font-medium text-accent2 bg-accent2/30 px-2.5 py-0.5 rounded-full border border-accent2/40 flex items-center gap-1">
                 <WifiOff className="w-3 h-3" /> Offline Mode
               </span>
             )}
@@ -324,14 +324,14 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             onClick={handleOpenCreator}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
               isCreatorUnlocked
-                ? 'bg-[#FC1212] hover:bg-[#e01010] text-white'
-                : 'bg-black/60 hover:bg-black/90 text-gray-300 border border-[#FC1212]/40'
+                ? 'bg-accent2 hover:bg-accent2/80 text-on-accent2'
+                : 'bg-black/60 hover:bg-black/90 text-gray-300 border border-accent2/40'
             }`}
           >
-            {isCreatorUnlocked ? <Edit3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-[#FCA311]" />}
+            {isCreatorUnlocked ? <Edit3 className="w-4 h-4" /> : <Lock className="w-4 h-4 text-accent" />}
             <span>Kreator Deck &amp; Topik</span>
             {!isCreatorUnlocked && (
-              <span className="text-[9px] px-1.5 py-0.2 rounded bg-amber-500/20 text-[#FCA311] font-mono">
+              <span className="text-[9px] px-1.5 py-0.2 rounded bg-accent/20 text-accent font-mono">
                 Rp25rb
               </span>
             )}
@@ -341,7 +341,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
       </div>
 
       {/* Bilah Pencarian Cerdas (Judul, Topik, atau Tema) */}
-      <div className="p-4 rounded-2xl bg-[#14213D] border border-white/10 space-y-3 shadow-lg">
+      <div className="p-4 rounded-2xl bg-surface border border-white/10 space-y-3 shadow-lg">
         <div className="relative">
           <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
@@ -349,7 +349,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Cari kuis berdasarkan Judul, Topik, atau Tema (mis. Sains, Alam, Sejarah)..."
-            className="w-full bg-black/60 border border-white/10 focus:border-[#FC1212] rounded-xl pl-9 pr-8 py-2.5 text-xs text-white placeholder:text-gray-500 outline-none transition-colors"
+            className="w-full bg-black/60 border border-white/10 focus:border-accent2 rounded-xl pl-9 pr-8 py-2.5 text-xs text-white placeholder:text-gray-500 outline-none transition-colors"
           />
           {searchQuery && (
             <button
@@ -373,7 +373,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             }}
             className={`px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer whitespace-nowrap ${
               selectedTheme === 'all'
-                ? 'bg-[#FC1212] text-white'
+                ? 'bg-accent2 text-on-accent2'
                 : 'bg-black/50 text-gray-400 hover:text-white'
             }`}
           >
@@ -388,7 +388,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
               }}
               className={`px-3 py-1.5 rounded-xl font-bold transition-colors cursor-pointer whitespace-nowrap ${
                 selectedTheme.toLowerCase() === th.toLowerCase()
-                  ? 'bg-[#FC1212] text-white'
+                  ? 'bg-accent2 text-on-accent2'
                   : 'bg-black/50 text-gray-400 hover:text-white'
               }`}
             >
@@ -444,7 +444,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
               setSelectedTheme('all');
               setSelectedTopicId('all');
             }}
-            className="px-4 py-2 rounded-xl bg-[#FC1212] text-white font-bold text-xs cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-accent2 text-on-accent2 font-bold text-xs cursor-pointer"
           >
             Reset Semua Filter
           </button>
@@ -472,12 +472,12 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   key={deck.id}
-                  className="rounded-3xl bg-[#14213D] border border-white/10 p-5 flex flex-col justify-between shadow-xl"
+                  className="rounded-3xl bg-surface border border-white/10 p-5 flex flex-col justify-between shadow-xl"
                 >
                   <div className="space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-[#FC1212]/20 text-[#FC1212] border border-[#FC1212]/30">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-accent2/20 text-accent2 border border-accent2/30">
                           {themeName}
                         </span>
                         <span className="text-[11px] font-medium text-gray-400 truncate max-w-[90px] sm:max-w-[140px]">
@@ -485,7 +485,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                         </span>
                       </div>
                       {locked ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-[#FCA311] border border-amber-500/30 flex items-center gap-1">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-accent/20 text-accent border border-accent/30 flex items-center gap-1">
                           <Lock className="w-2.5 h-2.5" /> Rp{(deck.price || 3000).toLocaleString('id-ID')}
                         </span>
                       ) : (
@@ -539,7 +539,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                           <button
                             type="button"
                             onClick={(e) => handleEditDeck(deck, e)}
-                            className="p-2 rounded-xl bg-white/10 hover:bg-amber-500/20 text-amber-300 transition-colors cursor-pointer"
+                            className="p-2 rounded-xl bg-white/10 hover:bg-accent/20 text-accent transition-colors cursor-pointer"
                             title="Edit Kuis Ini"
                           >
                             <Edit3 className="w-3.5 h-3.5" />
@@ -561,7 +561,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                       <button
                         type="button"
                         onClick={() => handleBuyDeck(deck)}
-                        className="px-4 py-2 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/25 cursor-pointer active:scale-95 transition-all"
+                        className="px-4 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 shadow-md shadow-accent/25 cursor-pointer active:scale-95 transition-all"
                         title="Tambahkan deck ini ke keranjang"
                       >
                         <Lock className="w-3.5 h-3.5" />
@@ -571,7 +571,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                       <button
                         type="button"
                         onClick={() => onPlayDeck(deck)}
-                        className="px-4 py-2 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 shadow-md shadow-red-600/25 cursor-pointer active:scale-95 transition-all"
+                        className="px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 shadow-md shadow-accent2/25 cursor-pointer active:scale-95 transition-all"
                         title="Muat kuis ini ke sesi Mainkan Kuis"
                       >
                         <ArrowRight className="w-3.5 h-3.5" />
@@ -589,7 +589,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
       {/* Jendela Pratinjau Bersih: Tanpa Bocoran Kunci Jawaban & Penjelasan */}
       {deckToView && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-2xl max-h-[85vh] bg-[#14213D] border border-white/15 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
+          <div className="w-full max-w-2xl max-h-[85vh] bg-surface border border-white/15 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div>
                 <h3 className="text-lg font-black text-white">{deckToView.title}</h3>
@@ -604,7 +604,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
               {(deckToView.questions || []).slice(0, canAccess(deckToView) ? undefined : 3).map((q, qIdx) => (
                 <div key={q.id || qIdx} className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="font-bold text-[#FC1212]">Soal #{qIdx + 1}</span>
+                    <span className="font-bold text-accent2">Soal #{qIdx + 1}</span>
                     {q.category && <span className="text-[10px] text-gray-400 font-mono">{q.category}</span>}
                   </div>
                   <p className="text-white font-medium text-sm leading-relaxed">{q.question}</p>
@@ -628,7 +628,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             </div>
 
             {!canAccess(deckToView) && (
-              <p className="text-[11px] text-amber-300 text-center">
+              <p className="text-[11px] text-accent text-center">
                 Menampilkan 3 dari {deckToView.cardCount} soal. Beli deck ini untuk memainkan semuanya.
               </p>
             )}
@@ -648,7 +648,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                     setDeckToView(null);
                     onPlayDeck(target);
                   }}
-                  className="px-5 py-2 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs cursor-pointer flex items-center gap-1.5 shadow"
+                  className="px-5 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs cursor-pointer flex items-center gap-1.5 shadow"
                 >
                   <ArrowRight className="w-3.5 h-3.5" />
                   <span>Muat Kuis</span>
@@ -661,7 +661,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                     setDeckToView(null);
                     handleBuyDeck(target);
                   }}
-                  className="px-5 py-2 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs cursor-pointer flex items-center gap-1.5 shadow"
+                  className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs cursor-pointer flex items-center gap-1.5 shadow"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Beli Rp{(deckToView.price || 3000).toLocaleString('id-ID')}</span>
@@ -689,8 +689,8 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
       {/* Dialog Kunci Pembelian */}
       {isLockedPromptOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#14213D] border border-[#FC1212]/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="w-14 h-14 rounded-2xl bg-[#FC1212]/20 border border-[#FC1212]/40 text-[#FC1212] mx-auto flex items-center justify-center">
+          <div className="w-full max-w-md bg-surface border border-accent2/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-14 h-14 rounded-2xl bg-accent2/20 border border-accent2/40 text-accent2 mx-auto flex items-center justify-center">
               <Lock className="w-7 h-7" />
             </div>
             <div>
@@ -701,7 +701,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             </div>
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 flex justify-between items-center text-xs">
               <span className="text-gray-400">Lisensi Pembuat Kuis Mandiri:</span>
-              <span className="text-sm font-black text-[#FC1212] font-mono">Rp 25.000</span>
+              <span className="text-sm font-black text-accent2 font-mono">Rp 25.000</span>
             </div>
             <div className="flex gap-2">
               <button
@@ -714,7 +714,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
               <button
                 type="button"
                 onClick={handleBuyCreator}
-                className="flex-1 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white text-xs font-black shadow-lg shadow-red-600/20 cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-black shadow-lg shadow-accent2/20 cursor-pointer"
               >
                 Beli Lisensi Sekarang
               </button>

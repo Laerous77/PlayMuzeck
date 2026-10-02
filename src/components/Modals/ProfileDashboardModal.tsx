@@ -794,7 +794,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="w-full max-w-2xl max-h-[92vh] rounded-3xl bg-[#14213D] border border-white/[0.12] shadow-2xl relative flex flex-col overflow-hidden">
+      <div className="w-full max-w-2xl max-h-[92vh] rounded-3xl bg-surface border border-white/[0.12] shadow-2xl relative flex flex-col overflow-hidden">
         <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-xl bg-black/40 text-gray-400 hover:text-white hover:bg-black/70 transition-colors z-20 cursor-pointer">
           <X className="w-4 h-4" />
         </button>
@@ -808,7 +808,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
               {editAvatar ? (
                 <img src={editAvatar} alt="Foto Profil" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-gradient-to-tr from-[#FCA311] via-amber-300 to-amber-500 flex items-center justify-center text-black font-black text-3xl">
+                <div className="w-full h-full bg-gradient-to-tr from-accent via-accent/70 to-accent/70 flex items-center justify-center text-black font-black text-3xl">
                   {userInitial}
                 </div>
               )}
@@ -816,7 +816,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
             {isEditingProfile && (
               <div className="absolute inset-0 bg-black/70 rounded-2xl flex items-center justify-center gap-2 z-20">
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 rounded-lg bg-[#FCA311] text-black hover:bg-amber-400 transition-colors cursor-pointer" title="Ganti Foto Profil">
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 rounded-lg bg-accent text-on-accent hover:bg-accent/80 transition-colors cursor-pointer" title="Ganti Foto Profil">
                   <Camera className="w-4 h-4" />
                 </button>
               </div>
@@ -826,7 +826,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
           </div>
 
           <div className="space-y-1.5 flex-1 min-w-0">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FCA311]/15 text-[#FCA311] text-xs font-black tracking-wide border border-[#FCA311]/30 animate-pulse">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 text-accent text-xs font-black tracking-wide border border-accent/30 animate-pulse">
               <Sparkles className="w-3.5 h-3.5" />
               <span>{randomGreeting}</span>
             </div>
@@ -839,7 +839,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                 {userSession.isLoggedIn ? 'Terverifikasi' : 'Tamu'}
               </span>
 
-              <button type="button" onClick={() => setIsEditingProfile(!isEditingProfile)} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isEditingProfile ? 'bg-[#FCA311] text-black' : 'bg-white/10 hover:bg-[#FCA311] hover:text-black text-gray-300'}`} title="Ubah Foto, Username, dan Email">
+              <button type="button" onClick={() => setIsEditingProfile(!isEditingProfile)} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isEditingProfile ? 'bg-accent text-on-accent' : 'bg-white/10 hover:bg-accent hover:text-on-accent text-gray-300'}`} title="Ubah Foto, Username, dan Email">
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -847,7 +847,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
             <div className="flex items-center justify-center sm:justify-start gap-2 text-xs text-gray-400">
               <span className="truncate">{editEmail || userSession.email || 'Mode Tamu Offline-First'}</span>
               <span className="text-gray-600">•</span>
-              <span className="text-[#FCA311] font-mono font-bold text-[11px] truncate">
+              <span className="text-accent font-mono font-bold text-[11px] truncate">
                 Bingkai: {currentFrameObj.name}
               </span>
             </div>
@@ -858,23 +858,23 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         {isEditingProfile && (
           <form onSubmit={handleSaveProfile} className="shrink-0 p-4 bg-black/60 border-b border-white/[0.08] space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-white/10 text-xs">
-              <span className="font-bold text-[#FCA311]">Edit Informasi Akun & Foto Profil</span>
+              <span className="font-bold text-accent">Edit Informasi Akun & Foto Profil</span>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
               <div className="space-y-1">
                 <label className="text-gray-300 font-bold">Nama / Username:</label>
-                <input type="text" required value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-black/50 border border-white/15 focus:border-[#FCA311] rounded-lg px-3 py-1.5 text-white outline-none" />
+                <input type="text" required value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full bg-black/50 border border-white/15 focus:border-accent rounded-lg px-3 py-1.5 text-white outline-none" />
               </div>
               <div className="space-y-1">
                 <label className="text-gray-300 font-bold">Email Pengguna:</label>
-                <input type="email" value={editEmail} readOnly title="Email akun tidak dapat diubah" placeholder="email@domain.com" className="w-full bg-black/50 border border-white/15 focus:border-[#FCA311] rounded-lg px-3 py-1.5 text-white outline-none" />
+                <input type="email" value={editEmail} readOnly title="Email akun tidak dapat diubah" placeholder="email@domain.com" className="w-full bg-black/50 border border-white/15 focus:border-accent rounded-lg px-3 py-1.5 text-white outline-none" />
               </div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-1">
               <button type="button" onClick={() => setIsEditingProfile(false)} className="px-3 py-1 rounded-lg bg-white/10 text-gray-300 hover:text-white text-xs font-bold cursor-pointer">Batal</button>
-              <button type="submit" className="px-4 py-1 rounded-lg bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs flex items-center gap-1.5 cursor-pointer">
+              <button type="submit" className="px-4 py-1 rounded-lg bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer">
                 <Check className="w-3.5 h-3.5" /> Simpan Perubahan
               </button>
             </div>
@@ -883,19 +883,19 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
         {/* 3. TAB NAVIGASI */}
         <div className="shrink-0 flex items-center border-b border-white/[0.08] bg-black/40 px-6 overflow-x-auto no-scrollbar">
-          <button type="button" onClick={() => setActiveTab('collection')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'collection' ? 'border-[#FCA311] text-[#FCA311]' : 'border-transparent text-gray-400 hover:text-white'}`}>
+          <button type="button" onClick={() => setActiveTab('collection')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'collection' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
             <Library className="w-4 h-4" /> Koleksi Saya
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 text-white font-mono">{totalCollectionCount}</span>
           </button>
-          <button type="button" onClick={() => setActiveTab('frames')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'frames' ? 'border-[#FCA311] text-[#FCA311]' : 'border-transparent text-gray-400 hover:text-white'}`}>
-            <Award className="w-4 h-4 text-amber-400" /> Album Bingkai
-            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-300 font-mono">{totalUnlockedFrames}/{PROFILE_FRAMES.length}</span>
+          <button type="button" onClick={() => setActiveTab('frames')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'frames' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            <Award className="w-4 h-4 text-accent" /> Album Bingkai
+            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-accent/20 text-accent font-mono">{totalUnlockedFrames}/{PROFILE_FRAMES.length}</span>
           </button>
-          <button type="button" onClick={() => setActiveTab('donate')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'donate' ? 'border-[#FCA311] text-[#FCA311]' : 'border-transparent text-gray-400 hover:text-white'}`}>
-            <Heart className="w-4 h-4 text-rose-400" /> Donasi & Dukungan
+          <button type="button" onClick={() => setActiveTab('donate')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'donate' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            <Heart className="w-4 h-4 text-accent2" /> Donasi & Dukungan
           </button>
-          <button type="button" onClick={() => setActiveTab('contact')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'contact' ? 'border-[#FCA311] text-[#FCA311]' : 'border-transparent text-gray-400 hover:text-white'}`}>
-            <MessageSquare className="w-4 h-4 text-sky-400" /> Hubungi Kami
+          <button type="button" onClick={() => setActiveTab('contact')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'contact' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            <MessageSquare className="w-4 h-4 text-accent" /> Hubungi Kami
           </button>
         </div>
 
@@ -903,7 +903,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
           {isDbLoading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
-              <Loader2 className="w-10 h-10 text-[#FCA311] animate-spin" />
+              <Loader2 className="w-10 h-10 text-accent animate-spin" />
               <p className="text-sm font-bold text-gray-400 animate-pulse">Menyinkronkan data dari PostgreSQL...</p>
             </div>
           ) : activeTab === 'collection' ? (
@@ -911,7 +911,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-[#FCA311] flex items-center justify-center"><Sliders className="w-4 h-4" /></div>
+                    <div className="w-9 h-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Sliders className="w-4 h-4" /></div>
                     <div>
                       <h4 className="text-xs font-bold text-white leading-tight">Full 16-Bar Editor</h4>
                       <p className="text-[10px] text-gray-400">Status: {dbData.features.full16BarEditor ? 'Aktif' : 'Belum Aktif'}</p>
@@ -922,7 +922,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
                 <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center"><Wrench className="w-4 h-4" /></div>
+                    <div className="w-9 h-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Wrench className="w-4 h-4" /></div>
                     <div>
                       <h4 className="text-xs font-bold text-white leading-tight">Audio Tools Suite</h4>
                       <p className="text-[10px] text-gray-400">Status: {dbData.features.audioToolsSuite ? 'Aktif' : 'Belum Aktif'}</p>
@@ -933,7 +933,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
                 <div className="p-3.5 rounded-2xl bg-black/40 border border-white/10 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-[#FC1212]/15 text-[#FC1212] flex items-center justify-center"><Edit3 className="w-4 h-4" /></div>
+                    <div className="w-9 h-9 rounded-xl bg-accent2/15 text-accent2 flex items-center justify-center"><Edit3 className="w-4 h-4" /></div>
                     <div>
                       <h4 className="text-xs font-bold text-white leading-tight">Quiz Editor</h4>
                       <p className="text-[10px] text-gray-400">Status: {dbData.features.quizEditor ? 'Aktif' : 'Belum Aktif'}</p>
@@ -949,7 +949,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   <div className="p-4 rounded-xl bg-black/30 border border-dashed border-white/10 text-center space-y-2">
                     <p className="text-xs text-gray-400">{userSession.isLoggedIn ? 'Belum ada audio yang dibeli dari Database.' : 'Belum ada audio yang dibeli. Masuk ke akun Anda.'}</p>
                     {userSession.isLoggedIn && (
-                      <button onClick={() => { onClose(); onNavigateAudio(); }} className="px-3 py-1.5 rounded-lg bg-[#FCA311]/20 hover:bg-[#FCA311] text-[#FCA311] hover:text-black text-xs font-bold transition-colors cursor-pointer">Buka Katalog Audio Studio →</button>
+                      <button onClick={() => { onClose(); onNavigateAudio(); }} className="px-3 py-1.5 rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-on-accent text-xs font-bold transition-colors cursor-pointer">Buka Katalog Audio Studio →</button>
                     )}
                   </div>
                 ) : (
@@ -957,7 +957,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                     {dbData.audio.items.map(({ track, ownership }) => (
                       <div key={track.id} className="p-3 rounded-xl bg-black/40 border border-white/[0.06] flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <Music className="w-4 h-4 text-[#FCA311] shrink-0" />
+                          <Music className="w-4 h-4 text-accent shrink-0" />
                           <div className="truncate">
                             <h5 className="text-xs font-bold text-white truncate">{track.title}</h5>
                             <p className="text-[10px] text-gray-400 truncate font-mono">
@@ -965,7 +965,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                             </p>
                           </div>
                         </div>
-                        <button onClick={() => { onClose(); onNavigateAudio(); }} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-[#FCA311] text-white hover:text-black text-xs font-bold transition-colors cursor-pointer shrink-0">Buka</button>
+                        <button onClick={() => { onClose(); onNavigateAudio(); }} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-accent text-white hover:text-on-accent text-xs font-bold transition-colors cursor-pointer shrink-0">Buka</button>
                       </div>
                     ))}
                   </div>
@@ -986,7 +986,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                           <h5 className="text-xs font-bold text-white truncate">{deck.title}</h5>
                           <span className="text-[10px] text-gray-400">Deck Kuis Siap Dimainkan</span>
                         </div>
-                        <button type="button" onClick={() => handleLoadDeckToPlaySegment(deck)} className="px-3 py-1.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-md shadow-red-600/20 active:scale-95">
+                        <button type="button" onClick={() => handleLoadDeckToPlaySegment(deck)} className="px-3 py-1.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 shadow-md shadow-red-600/20 active:scale-95">
                           <ArrowRight className="w-3.5 h-3.5" /> Muat
                         </button>
                       </div>
@@ -997,8 +997,8 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
             </div>
           ) : activeTab === 'frames' ? (
             <div className="space-y-4 animate-in fade-in duration-300">
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-purple-500/10 to-transparent border border-amber-500/30 space-y-1">
-                <h4 className="text-sm font-black text-white flex items-center gap-2"><Award className="w-4 h-4 text-amber-400" /> Album Bingkai Kehormatan</h4>
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-accent/15 via-accent2/10 to-transparent border border-accent/30 space-y-1">
+                <h4 className="text-sm font-black text-white flex items-center gap-2"><Award className="w-4 h-4 text-accent" /> Album Bingkai Kehormatan</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">{userSession.isLoggedIn ? 'Setiap bingkai dilengkapi lencana tematik unik yang tersimpan di Database.' : 'Masuk ke akun Anda untuk mulai mengoleksi bingkai kehormatan melalui donasi atau pembelian kuis.'}</p>
               </div>
 
@@ -1007,12 +1007,12 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   const isUnlocked = !userSession.isLoggedIn ? frame.id === 'none' : typeof frame.checkUnlocked === 'function' ? frame.checkUnlocked(dbData) : dbData.frames.unlockedIds.includes(frame.id);
                   const isEquipped = currentActiveFrameId === frame.id;
                   return (
-                    <div key={frame.id} className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 relative ${isEquipped ? 'bg-amber-500/10 border-[#FCA311]' : isUnlocked ? 'bg-black/50 border-white/10 hover:border-white/25' : 'bg-black/30 border-white/[0.04] opacity-75'}`}>
+                    <div key={frame.id} className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 relative ${isEquipped ? 'bg-accent/10 border-accent' : isUnlocked ? 'bg-black/50 border-white/10 hover:border-white/25' : 'bg-black/30 border-white/[0.04] opacity-75'}`}>
                       <div className="flex items-start gap-3.5">
                         <div className="relative shrink-0 pt-1">
                           <FrameOrnament frame={frame} size="sm" />
                           <div className={`w-13 h-13 rounded-xl flex items-center justify-center text-black font-black text-sm overflow-hidden bg-[#0a1120] ${frame.borderClass}`}>
-                            {editAvatar ? <img src={editAvatar} alt="Pratinjau" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-tr from-[#FCA311] via-amber-300 to-amber-500 flex items-center justify-center text-black font-black text-base">{userInitial}</div>}
+                            {editAvatar ? <img src={editAvatar} alt="Pratinjau" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-tr from-accent via-accent/70 to-accent/70 flex items-center justify-center text-black font-black text-base">{userInitial}</div>}
                           </div>
                         </div>
                         <div className="space-y-0.5 min-w-0 flex-1">
@@ -1021,15 +1021,15 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-gray-300 shrink-0">{frame.badge}</span>
                           </div>
                           <p className="text-[11px] text-gray-400 leading-tight">{frame.description}</p>
-                          <p className="text-[10px] text-amber-300 font-medium pt-0.5">{frame.requirement}</p>
+                          <p className="text-[10px] text-accent font-medium pt-0.5">{frame.requirement}</p>
                         </div>
                       </div>
                       <div className="flex items-center justify-between pt-1 border-t border-white/5">
                         <div className="flex items-center gap-1 text-[10px] font-bold">
-                          {isEquipped ? <span className="text-emerald-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Dipakai</span> : isUnlocked ? <span className="text-[#FCA311]">Terbuka</span> : <span className="text-gray-500 flex items-center gap-1"><Lock className="w-3 h-3" /> Terkunci</span>}
+                          {isEquipped ? <span className="text-emerald-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Dipakai</span> : isUnlocked ? <span className="text-accent">Terbuka</span> : <span className="text-gray-500 flex items-center gap-1"><Lock className="w-3 h-3" /> Terkunci</span>}
                         </div>
                         {isUnlocked ? (
-                          <button type="button" disabled={isEquipped} onClick={() => handleEquipFrame(frame)} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${isEquipped ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-[#FCA311] hover:bg-[#e58e00] text-black font-black'}`}>{isEquipped ? 'Aktif' : 'Pakai Bingkai'}</button>
+                          <button type="button" disabled={isEquipped} onClick={() => handleEquipFrame(frame)} className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${isEquipped ? 'bg-white/5 text-gray-500 cursor-not-allowed' : 'bg-accent hover:bg-accent/80 text-on-accent font-black'}`}>{isEquipped ? 'Aktif' : 'Pakai Bingkai'}</button>
                         ) : <span className="text-[10px] text-gray-500 italic">Selesaikan Misi</span>}
                       </div>
                     </div>
@@ -1039,21 +1039,21 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
             </div>
           ) : activeTab === 'donate' ? (
             <div className="space-y-5 animate-in fade-in duration-300">
-               <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-rose-500/10 to-transparent border border-[#FCA311]/30 space-y-1.5">
-                <h4 className="text-sm font-black text-white flex items-center gap-2"><Heart className="w-4 h-4 text-rose-400 fill-current" /> Dukung Kelangsungan Server PlayMuzeck</h4>
+               <div className="p-4 rounded-2xl bg-gradient-to-r from-accent/15 via-accent2/10 to-transparent border border-accent/30 space-y-1.5">
+                <h4 className="text-sm font-black text-white flex items-center gap-2"><Heart className="w-4 h-4 text-accent2 fill-current" /> Dukung Kelangsungan Server PlayMuzeck</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">Donasi sukarela Anda langsung dialokasikan untuk pemeliharaan database PostgreSQL, bank instrumen, dan pengembangan fitur baru. Setiap tingkatan nominal membuka bingkai profil eksklusif di Album Bingkai.</p>
               </div>
 
               {!userSession.isLoggedIn ? (
                 <div className="p-5 rounded-2xl bg-black/30 border border-dashed border-white/10 text-center space-y-2">
                   <p className="text-xs text-gray-400">Masuk ke akun Anda terlebih dahulu untuk berdonasi dan membuka bingkai eksklusif.</p>
-                  <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="px-4 py-2 rounded-xl bg-[#FCA311] text-black font-bold text-xs cursor-pointer">Masuk Akun</button>
+                  <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="px-4 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs cursor-pointer">Masuk Akun</button>
                 </div>
               ) : (
                 pendingDonation ? (
                   <div className="space-y-4">
-                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 space-y-2">
-                      <div className="flex items-center gap-2 text-[#FCA311] font-black text-sm">
+                    <div className="p-4 rounded-2xl bg-accent/10 border border-accent/40 space-y-2">
+                      <div className="flex items-center gap-2 text-accent font-black text-sm">
                         <ClockIcon className="w-4 h-4" />
                         <span>Donasi Menunggu Pembayaran</span>
                       </div>
@@ -1064,7 +1064,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                       {pendingDonation.expiresAt && (
                         <div className="text-xs text-gray-200">
                           Bayar sebelum <span className="font-bold text-white">{formatDeadline(pendingDonation.expiresAt)}</span>
-                          <span className="text-[#FCA311] font-bold"> • sisa {timeLeftLabel(pendingDonation.expiresAt)}</span>
+                          <span className="text-accent font-bold"> • sisa {timeLeftLabel(pendingDonation.expiresAt)}</span>
                         </div>
                       )}
                     </div>
@@ -1076,12 +1076,12 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                       </div>
                       <div className="pt-2 border-t border-white/[0.08] flex justify-between font-bold text-white">
                         <span>Nominal Donasi:</span>
-                        <span className="text-base text-[#FCA311] font-mono">{formatIDR(pendingDonation.amount)}</span>
+                        <span className="text-base text-accent font-mono">{formatIDR(pendingDonation.amount)}</span>
                       </div>
                     </div>
 
                     {donationError && (
-                      <div className="p-3 rounded-xl bg-[#780000]/25 border border-[#780000] text-red-200 text-xs">{donationError}</div>
+                      <div className="p-3 rounded-xl bg-red-900/25 border border-red-900 text-red-200 text-xs">{donationError}</div>
                     )}
 
                     <div className="space-y-2">
@@ -1089,7 +1089,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                         type="button"
                         disabled={isSendingDonation || isCancellingDonation}
                         onClick={handleResumeDonation}
-                        className="w-full py-3 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                        className="w-full py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                       >
                         {isSendingDonation ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> <span>Memproses...</span></>
@@ -1103,7 +1103,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                         onClick={() => recordDonation(pendingDonation.orderId, pendingDonation.amount)}
                         className="w-full py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                       >
-                        <RefreshIcon className="w-4 h-4 text-[#FCA311]" />
+                        <RefreshIcon className="w-4 h-4 text-accent" />
                         <span>Saya sudah bayar — cek status</span>
                       </button>
                       <button
@@ -1149,7 +1149,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                         key={opt.amount}
                         type="button"
                         onClick={() => { setSelectedAmount(opt.amount); setCustomAmount(''); }}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${selectedAmount === opt.amount && !customAmount ? 'bg-[#FCA311]/15 border-[#FCA311]' : 'bg-black/40 border-white/10 hover:border-white/25'}`}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${selectedAmount === opt.amount && !customAmount ? 'bg-accent/15 border-accent' : 'bg-black/40 border-white/10 hover:border-white/25'}`}
                       >
                         <span className="block text-sm font-black text-white">Rp{opt.amount.toLocaleString('id-ID')}</span>
                         <span className="block text-[10px] text-gray-400 mt-0.5">{opt.label}</span>
@@ -1168,7 +1168,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                         placeholder="Contoh: 15000"
                         value={customAmount}
                         onChange={(e) => setCustomAmount(e.target.value)}
-                        className="w-full bg-black/60 border border-white/[0.1] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none"
+                        className="w-full bg-black/60 border border-white/[0.1] focus:border-accent rounded-xl pl-9 pr-3 py-2.5 text-sm text-white outline-none"
                       />
                     </div>
                   </div>
@@ -1177,7 +1177,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                     type="button"
                     disabled={isSendingDonation}
                     onClick={handleStartDonation}
-                    className="w-full py-3 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
+                    className="w-full py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"
                   >
                     {isSendingDonation ? (
                       <><Loader2 className="w-4 h-4 animate-spin" /> <span>Membuka QRIS...</span></>
@@ -1191,15 +1191,15 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
             </div>
           ) : (
             <form onSubmit={handleSendContact} className="space-y-4 animate-in fade-in duration-300">
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-sky-500/15 via-transparent to-transparent border border-sky-500/30 space-y-1">
-                <h4 className="text-sm font-black text-white flex items-center gap-2"><MessageSquare className="w-4 h-4 text-sky-400" /> Hubungi Tim PlayMuzeck</h4>
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-accent/15 via-transparent to-transparent border border-accent/30 space-y-1">
+                <h4 className="text-sm font-black text-white flex items-center gap-2"><MessageSquare className="w-4 h-4 text-accent" /> Hubungi Tim PlayMuzeck</h4>
                 <p className="text-xs text-gray-300 leading-relaxed">Sampaikan masukan, ide kustom, atau aduan. Setiap pesan yang dikirim membuka bingkai "Sinyal Resonansi Pengembang" di Album Bingkai.</p>
               </div>
 
               {!userSession.isLoggedIn ? (
                 <div className="p-5 rounded-2xl bg-black/30 border border-dashed border-white/10 text-center space-y-2">
                   <p className="text-xs text-gray-400">Masuk ke akun Anda terlebih dahulu untuk mengirim masukan.</p>
-                  <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="px-4 py-2 rounded-xl bg-[#FCA311] text-black font-bold text-xs cursor-pointer">Masuk Akun</button>
+                  <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="px-4 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs cursor-pointer">Masuk Akun</button>
                 </div>
               ) : (
                 <>
@@ -1214,7 +1214,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                         key={c.key}
                         type="button"
                         onClick={() => setFeedbackCategory(c.key as any)}
-                        className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${feedbackCategory === c.key ? 'bg-[#FCA311]/15 border-[#FCA311] text-[#FCA311]' : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/25'}`}
+                        className={`p-2.5 rounded-xl border text-xs font-bold flex flex-col items-center gap-1 transition-all cursor-pointer ${feedbackCategory === c.key ? 'bg-accent/15 border-accent text-accent' : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/25'}`}
                       >
                         <c.icon className="w-3.5 h-3.5" />
                         <span>{c.label}</span>
@@ -1229,7 +1229,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                       placeholder="Ringkasan singkat pesan Anda"
                       value={contactSubject}
                       onChange={(e) => setContactSubject(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-gray-500 outline-none"
                     />
                   </div>
 
@@ -1241,13 +1241,13 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                       placeholder="Tuliskan masukan, ide, atau aduan Anda secara detail..."
                       value={contactMessage}
                       onChange={(e) => setContactMessage(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl p-3.5 text-sm text-white placeholder-gray-500 outline-none resize-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl p-3.5 text-sm text-white placeholder-gray-500 outline-none resize-none"
                     />
                   </div>
                 </>
               )}
 
-               <button type="submit" disabled={isSendingContact || !userSession.isLoggedIn} className="w-full py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"><Send className="w-3.5 h-3.5" /> <span>{isSendingContact ? 'Mengirim pesan...' : 'Kirim Masukan & Aduan'}</span></button>
+               <button type="submit" disabled={isSendingContact || !userSession.isLoggedIn} className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 disabled:opacity-50"><Send className="w-3.5 h-3.5" /> <span>{isSendingContact ? 'Mengirim pesan...' : 'Kirim Masukan & Aduan'}</span></button>
             </form>
           )}
         </div>
@@ -1259,7 +1259,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
               <button type="button" onClick={() => { onLogout(); onClose(); setTimeout(() => window.location.reload(), 300); }} className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 font-bold transition-colors cursor-pointer"><LogOut className="w-3.5 h-3.5" /> <span>Keluar & Hapus Sesi Klien</span></button>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="flex items-center gap-1.5 text-[#FCA311] hover:underline font-bold cursor-pointer"><LogIn className="w-3.5 h-3.5" /> <span>Masuk Akun</span></button>
+                <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="flex items-center gap-1.5 text-accent hover:underline font-bold cursor-pointer"><LogIn className="w-3.5 h-3.5" /> <span>Masuk Akun</span></button>
               </div>
             )}
           </div>

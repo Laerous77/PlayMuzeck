@@ -35,10 +35,10 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
     <section className="space-y-6 animate-in fade-in duration-200">
       
       {/* BANNER INSTALASI LENGKAP DENGAN AKSES UNDUH NYATA */}
-      <div className="rounded-3xl bg-gradient-to-r from-[#20080b] via-[#14213D] to-[#101b33] border-2 border-[#FC1212]/40 p-6 sm:p-8 shadow-2xl space-y-6">
+      <div className="rounded-3xl bg-gradient-to-r from-accent2/15 via-surface to-surface/80 border-2 border-accent2/40 p-6 sm:p-8 shadow-2xl space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FC1212]/20 text-[#FC1212] border border-[#FC1212]/30 text-xs font-bold">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent2/20 text-accent2 border border-accent2/30 text-xs font-bold">
               <Cpu className="w-3.5 h-3.5" />
               <span>Teknologi Progressive Web App (PWA) Standalone</span>
             </div>
@@ -62,7 +62,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
                   alert('Gunakan menu browser Anda (titik tiga atau tombol bagikan) lalu pilih "Tambahkan ke Layar Utama / Install App".');
                 }
               }}
-              className="px-6 py-3.5 rounded-2xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-red-600/30 cursor-pointer active:scale-95 transition-all"
+              className="px-6 py-3.5 rounded-2xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-accent2/30 cursor-pointer active:scale-95 transition-all"
             >
               <Download className="w-4 h-4" />
               <span>Instal Web App (PWA)</span>
@@ -73,7 +73,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
               onClick={onDownloadStandalone}
               className="px-6 py-3.5 rounded-2xl bg-white/10 hover:bg-white/20 border border-white/15 text-white font-black text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all shadow-md"
             >
-              <FileCode2 className="w-4 h-4 text-[#FCA311]" />
+              <FileCode2 className="w-4 h-4 text-accent" />
               <span>Unduh Berkas Standalone (.html)</span>
             </button>
           </div>
@@ -89,7 +89,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
             </div>
           </div>
           <div className="p-3.5 rounded-xl bg-black/40 border border-white/5 flex items-center gap-3">
-            <HardDrive className="w-4 h-4 text-[#FCA311] shrink-0" />
+            <HardDrive className="w-4 h-4 text-accent shrink-0" />
             <div>
               <span className="font-bold text-white block">Penyimpanan Luring Penuh</span>
               <span className="text-[11px] text-gray-400">Skor dan bank soal tersimpan lokal</span>
@@ -110,7 +110,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-black text-white flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#FC1212]" />
+              <Sparkles className="w-4 h-4 text-accent2" />
               <span>3 Paket Kuis Bawaan (Starter Decks)</span>
             </h3>
             <p className="text-xs text-gray-400">
@@ -121,7 +121,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
           <button
             type="button"
             onClick={onNavigateLibrary}
-            className="px-4 py-2 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-red-600/20 active:scale-95 transition-all"
+            className="px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-accent2/20 active:scale-95 transition-all"
           >
             <span>Buka Perpustakaan</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -132,11 +132,11 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
           {starterDecks.slice(0, 3).map((deck, idx) => (
             <div
               key={deck.id || idx}
-              className="rounded-3xl bg-[#14213D] border border-white/10 p-5 flex flex-col justify-between shadow-xl space-y-3"
+              className="rounded-3xl bg-surface border border-white/10 p-5 flex flex-col justify-between shadow-xl space-y-3"
             >
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-red-500/20 text-[#FC1212] border border-red-500/30">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-accent2/20 text-accent2 border border-accent2/30">
                     PAKET #{idx + 1}
                   </span>
                   <span className="text-[11px] font-mono text-gray-400">

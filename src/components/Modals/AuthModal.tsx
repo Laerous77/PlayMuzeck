@@ -212,12 +212,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-md rounded-2xl bg-[#14213D] border border-white/[0.1] shadow-2xl overflow-hidden my-auto"
+        className="w-full max-w-md rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden my-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/[0.08] bg-black/40">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-[#FCA311] text-black flex items-center justify-center font-bold text-sm">
+            <div className="w-8 h-8 rounded-lg bg-accent text-on-accent flex items-center justify-center font-bold text-sm">
               M
             </div>
             <h3 className="text-base font-bold text-white">
@@ -245,7 +245,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {userSession.isLoggedIn ? (
             /* Logged In State */
             <div className="space-y-6 text-center">
-              <div className="w-16 h-16 rounded-full bg-[#FCA311] text-black text-2xl font-black mx-auto flex items-center justify-center shadow-lg">
+              <div className="w-16 h-16 rounded-full bg-accent text-on-accent text-2xl font-black mx-auto flex items-center justify-center shadow-lg">
                 {(userSession.name || userSession.email || 'M').charAt(0).toUpperCase()}
               </div>
 
@@ -260,7 +260,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06] text-left text-xs text-gray-300 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Status Keanggotaan:</span>
-                  <span className="text-[#FCA311] font-bold">PlayMuzeck Explorer</span>
+                  <span className="text-accent font-bold">PlayMuzeck Explorer</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Penyimpanan Sesi:</span>
@@ -274,7 +274,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onLogout();
                   onClose();
                 }}
-                className="w-full py-2.5 rounded-xl bg-[#780000]/30 hover:bg-[#780000]/50 text-red-200 border border-[#780000] text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-red-900/30 hover:bg-red-900/50 text-red-200 border border-red-900 text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
                 <span>Keluar dari Akun</span>
@@ -284,7 +284,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             /* Lupa Kata Sandi */
             <div className="space-y-5">
               <div className="flex items-center gap-2 text-white">
-                <KeyRound className="w-4 h-4 text-[#FCA311]" />
+                <KeyRound className="w-4 h-4 text-accent" />
                 <h4 className="text-sm font-bold">Lupa kata sandi?</h4>
               </div>
               <p className="text-xs text-gray-400">
@@ -292,7 +292,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </p>
 
               {errorMsg && (
-                <div className="p-3 rounded-lg bg-[#780000]/20 border border-[#780000] text-red-200 text-xs">{errorMsg}</div>
+                <div className="p-3 rounded-lg bg-red-900/20 border border-red-900 text-red-200 text-xs">{errorMsg}</div>
               )}
               {infoMsg && (
                 <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs flex gap-2">
@@ -312,14 +312,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="nama@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
                   </div>
                 </div>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#FCA311]/90 text-black font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {isSubmitting ? (
                     <>
@@ -344,12 +344,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             /* Atur Ulang Kata Sandi (dibuka dari tautan di email) */
             <div className="space-y-5">
               <div className="flex items-center gap-2 text-white">
-                <ShieldCheck className="w-4 h-4 text-[#FCA311]" />
+                <ShieldCheck className="w-4 h-4 text-accent" />
                 <h4 className="text-sm font-bold">Atur ulang kata sandi</h4>
               </div>
 
               {errorMsg && (
-                <div className="p-3 rounded-lg bg-[#780000]/20 border border-[#780000] text-red-200 text-xs">{errorMsg}</div>
+                <div className="p-3 rounded-lg bg-red-900/20 border border-red-900 text-red-200 text-xs">{errorMsg}</div>
               )}
               {infoMsg && (
                 <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-200 text-xs flex gap-2">
@@ -371,7 +371,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="Minimal 10 karakter"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
                   </div>
                 </div>
@@ -385,14 +385,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
                   </div>
                 </div>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#FCA311]/90 text-black font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
                 >
                   {isSubmitting ? (
                     <>
@@ -415,7 +415,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onClick={() => switchMode('signin')}
                   className={`py-2 text-xs font-bold rounded-lg transition-all ${
                     authMode === 'signin'
-                      ? 'bg-[#FCA311] text-black shadow-sm'
+                      ? 'bg-accent text-on-accent shadow-sm'
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
@@ -426,7 +426,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   onClick={() => switchMode('signup')}
                   className={`py-2 text-xs font-bold rounded-lg transition-all ${
                     authMode === 'signup'
-                      ? 'bg-[#FCA311] text-black shadow-sm'
+                      ? 'bg-accent text-on-accent shadow-sm'
                       : 'text-gray-400 hover:text-white'
                   }`}
                 >
@@ -435,14 +435,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               </div>
 
               {errorMsg && (
-                <div className="p-3 rounded-lg bg-[#780000]/20 border border-[#780000] text-red-200 text-xs space-y-2">
+                <div className="p-3 rounded-lg bg-red-900/20 border border-red-900 text-red-200 text-xs space-y-2">
                   <p>{errorMsg}</p>
                   {needsVerify && (
                     <button
                       type="button"
                       onClick={handleResendVerification}
                       disabled={isSubmitting}
-                      className="font-bold text-[#FCA311] hover:underline disabled:opacity-60"
+                      className="font-bold text-accent hover:underline disabled:opacity-60"
                     >
                       Kirim ulang link verifikasi
                     </button>
@@ -458,7 +458,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               {signupDone ? (
                 <div className="space-y-4 text-center py-2">
-                  <div className="w-14 h-14 rounded-full bg-[#FCA311]/15 border border-[#FCA311]/30 text-[#FCA311] mx-auto flex items-center justify-center">
+                  <div className="w-14 h-14 rounded-full bg-accent/15 border border-accent/30 text-accent mx-auto flex items-center justify-center">
                     <Mail className="w-6 h-6" />
                   </div>
                   <h4 className="text-base font-bold text-white">Cek email kamu</h4>
@@ -491,7 +491,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
               <div className="relative flex items-center justify-center">
                 <div className="border-t border-white/10 w-full" />
-                <span className="bg-[#14213D] px-3 text-[11px] text-gray-500 uppercase font-mono">atau pakai email (perlu verifikasi)</span>
+                <span className="bg-surface px-3 text-[11px] text-gray-500 uppercase font-mono">atau pakai email (perlu verifikasi)</span>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-3.5">
@@ -505,7 +505,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         placeholder="Contoh: Budi Musisi"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                        className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                       />
                     </div>
                   </div>
@@ -521,7 +521,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="nama@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
                   </div>
                 </div>
@@ -533,7 +533,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       <button
                         type="button"
                         onClick={() => switchMode('forgot')}
-                        className="text-[11px] text-[#FCA311] hover:underline"
+                        className="text-[11px] text-accent hover:underline"
                       >
                         Lupa kata sandi?
                       </button>
@@ -549,7 +549,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       placeholder="Minimal 10 karakter"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
                   </div>
                 </div>
@@ -558,7 +558,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   type="submit"
                   id="btn-submit-auth"
                   disabled={isSubmitting}
-                  className="w-full py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#FCA311]/90 text-black font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-60"
+                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-60"
                 >
                   {isSubmitting ? (
                     <>

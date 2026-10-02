@@ -178,8 +178,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
     const bannerBtn = document.getElementById('btn-buy-stems-banner');
     if (bannerBtn) {
       bannerBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      bannerBtn.classList.add('ring-4', 'ring-[#FCA311]', 'scale-105');
-      setTimeout(() => bannerBtn.classList.remove('ring-4', 'ring-[#FCA311]', 'scale-105'), 1500);
+      bannerBtn.classList.add('ring-4', 'ring-accent', 'scale-105');
+      setTimeout(() => bannerBtn.classList.remove('ring-4', 'ring-accent', 'scale-105'), 1500);
     }
   };
 
@@ -910,7 +910,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
   const isAnySoloActive = Object.values(channelStates).some((s) => s.isSolo);
 
   return (
-    <div className="rounded-3xl bg-[#090D16] border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl">
+    <div className="rounded-3xl bg-surface border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl">
       {stems.map((stem) => (
         <audio
           key={stem.id}
@@ -936,7 +936,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 <CheckCircle2 className="w-3 h-3" /> Full Multi-Track Aktif
               </span>
             ) : (
-              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+              <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30 flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Mode Preview 7 Detik
               </span>
             )}
@@ -958,15 +958,15 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             }}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
               !isStemsUnlocked
-                ? 'bg-white/5 border-white/10 text-gray-400 hover:border-[#FCA311]/40 hover:text-amber-300'
+                ? 'bg-white/5 border-white/10 text-gray-400 hover:border-accent/40 hover:text-accent'
                 : showMasterFxRack
-                ? 'bg-[#FCA311] text-black border-[#FCA311] shadow-md shadow-amber-500/20'
+                ? 'bg-accent text-on-accent border-accent shadow-md shadow-accent/20'
                 : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
             }`}
           >
             {!isStemsUnlocked ? (
               <>
-                <Lock className="w-3.5 h-3.5 text-[#FCA311]" />
+                <Lock className="w-3.5 h-3.5 text-accent" />
                 <span>Master FX Rack</span>
               </>
             ) : (
@@ -984,10 +984,10 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             className={`px-4 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-all cursor-pointer ${
               isStemsUnlocked
                 ? 'bg-emerald-500 text-black hover:brightness-110 shadow-lg shadow-emerald-500/20'
-                : 'bg-white/5 text-gray-400 border border-white/10 hover:border-[#FCA311]/40 hover:text-amber-300'
+                : 'bg-white/5 text-gray-400 border border-white/10 hover:border-accent/40 hover:text-accent'
             }`}
           >
-            {isStemsUnlocked ? <Download className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-[#FCA311]" />}
+            {isStemsUnlocked ? <Download className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
             <span>Ekspor Mix</span>
           </button>
         </div>
@@ -1004,7 +1004,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             step={0.1}
             value={currentTime}
             onChange={handleSeek}
-            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
           />
           <span className="text-xs font-mono text-gray-400 w-10">{formatTime(effectiveMaxDuration)}</span>
         </div>
@@ -1013,7 +1013,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={togglePlayAll}
-              className="w-12 h-12 rounded-2xl bg-[#FCA311] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+              className="w-12 h-12 rounded-2xl bg-accent text-on-accent flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-accent/20 cursor-pointer"
             >
               {isPlaying ? <Pause className="w-6 h-6 fill-black" /> : <Play className="w-6 h-6 fill-black ml-0.5" />}
             </button>
@@ -1035,7 +1035,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
               title={isLooping ? 'Matikan Loop' : 'Ulangi Audio (Loop)'}
               className={`p-2.5 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold ${
                 isLooping
-                  ? 'bg-[#FCA311] text-black shadow-md shadow-amber-500/20'
+                  ? 'bg-accent text-on-accent shadow-md shadow-accent/20'
                   : 'bg-white/5 text-gray-400 hover:text-white hover:bg-white/10'
               }`}
             >
@@ -1052,7 +1052,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 step={0.01}
                 value={masterVolume}
                 onChange={(e) => setMasterVolume(Number(e.target.value))}
-                className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
               />
               <span className="text-xs font-mono text-gray-300 font-semibold">{Math.round(masterVolume * 100)}%</span>
             </div>
@@ -1067,7 +1067,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 max={240}
                 value={targetBpm}
                 onChange={(e) => setTargetBpm(Math.max(40, Math.min(240, Number(e.target.value) || baseBpm)))}
-                className="w-14 bg-black/60 border border-white/15 rounded px-1.5 py-0.5 text-xs text-white font-mono text-center outline-none focus:border-[#FCA311]"
+                className="w-14 bg-black/60 border border-white/15 rounded px-1.5 py-0.5 text-xs text-white font-mono text-center outline-none focus:border-accent"
               />
               <span className="text-xs text-gray-400 font-mono">BPM ({playbackSpeed.toFixed(2)}x)</span>
             </div>
@@ -1077,7 +1077,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 type="checkbox"
                 checked={keepPitch}
                 onChange={(e) => setKeepPitch(e.target.checked)}
-                className="accent-[#FCA311] rounded cursor-pointer"
+                className="accent-accent rounded cursor-pointer"
               />
               <span>Kunci Nada (Keep Pitch)</span>
             </label>
@@ -1090,8 +1090,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
         <div className="p-5 rounded-2xl bg-black/50 border border-white/10 space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#FCA311]" />
-              <span className="text-xs font-bold text-[#FCA311] uppercase tracking-wider">
+              <Sparkles className="w-4 h-4 text-accent" />
+              <span className="text-xs font-bold text-accent uppercase tracking-wider">
                 Stem Studio Master FX Rack
               </span>
               <span className="text-[10px] text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/10">
@@ -1114,7 +1114,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 step={1}
                 value={masterBassGain}
                 onChange={(e) => setMasterBassGain(Number(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded accent-[#FCA311] cursor-pointer"
+                className="w-full h-1 bg-zinc-800 rounded accent-accent cursor-pointer"
               />
             </div>
 
@@ -1130,7 +1130,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 step={1}
                 value={masterTrebleGain}
                 onChange={(e) => setMasterTrebleGain(Number(e.target.value))}
-                className="w-full h-1 bg-zinc-800 rounded accent-[#FCA311] cursor-pointer"
+                className="w-full h-1 bg-zinc-800 rounded accent-accent cursor-pointer"
               />
             </div>
 
@@ -1139,7 +1139,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 type="button"
                 onClick={() => setIsMasterReverb(!isMasterReverb)}
                 className={`w-full py-2.5 rounded-xl font-bold border transition-colors cursor-pointer text-center ${
-                  isMasterReverb ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  isMasterReverb ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isMasterReverb ? '✓ Reverb On' : 'Reverb'}
@@ -1151,7 +1151,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 type="button"
                 onClick={() => setIsMasterDelay(!isMasterDelay)}
                 className={`w-full py-2.5 rounded-xl font-bold border transition-colors cursor-pointer text-center ${
-                  isMasterDelay ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  isMasterDelay ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isMasterDelay ? '✓ Delay On' : 'Delay'}
@@ -1163,7 +1163,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 type="button"
                 onClick={() => setIsMasterChorus(!isMasterChorus)}
                 className={`w-full py-2.5 rounded-xl font-bold border transition-colors cursor-pointer text-center ${
-                  isMasterChorus ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  isMasterChorus ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isMasterChorus ? '✓ Chorus On' : 'Chorus FX'}
@@ -1175,7 +1175,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 type="button"
                 onClick={() => setIsMasterFlanger(!isMasterFlanger)}
                 className={`w-full py-2.5 rounded-xl font-bold border transition-colors cursor-pointer text-center ${
-                  isMasterFlanger ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  isMasterFlanger ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isMasterFlanger ? '✓ Flanger On' : 'Flanger'}
@@ -1187,7 +1187,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 type="button"
                 onClick={() => setIsMasterPhaser(!isMasterPhaser)}
                 className={`w-full py-2.5 rounded-xl font-bold border transition-colors cursor-pointer text-center ${
-                  isMasterPhaser ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                  isMasterPhaser ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isMasterPhaser ? '✓ Phaser On' : 'Phaser'}
@@ -1199,8 +1199,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
       {/* Banner Preview jika Belum Beli */}
       {!isStemsUnlocked && (
-        <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-xs text-amber-300">
+        <div className="p-3.5 rounded-2xl bg-accent/10 border border-accent/30 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-xs text-accent">
             <Lock className="w-4 h-4 shrink-0" />
             <span>
               Mode Preview 7 Detik aktif. Buka paket <strong>Separated Stems</strong> untuk mixing durasi penuh, akses rak efek, dan ekspor multi-track.
@@ -1209,7 +1209,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
           <button
             id="btn-buy-stems-banner"
             onClick={onOpenBundlePurchase}
-            className="px-4 py-1.5 rounded-xl bg-[#FCA311] text-black font-extrabold text-xs hover:brightness-110 cursor-pointer whitespace-nowrap transition-all duration-300"
+            className="px-4 py-1.5 rounded-xl bg-accent text-on-accent font-extrabold text-xs hover:brightness-110 cursor-pointer whitespace-nowrap transition-all duration-300"
           >
             Beli Lisensi Stems
           </button>
@@ -1237,7 +1237,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 isDimmed ? 'opacity-40' : 'opacity-100'
               } ${
                 isFxOpen
-                  ? 'border-[#FCA311] ring-1 ring-[#FCA311]/40 shadow-xl shadow-amber-500/10'
+                  ? 'border-accent ring-1 ring-accent/40 shadow-xl shadow-accent/10'
                   : 'border-white/5 hover:border-white/20'
               }`}
             >
@@ -1245,7 +1245,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 <span className="text-xs font-bold text-white truncate max-w-[120px]">{stem.name}</span>
                 <div className="flex items-center gap-1.5">
                   {fxActive && (
-                    <span className="w-2 h-2 rounded-full bg-[#FCA311] animate-pulse" title="Efek instrumen aktif" />
+                    <span className="w-2 h-2 rounded-full bg-accent animate-pulse" title="Efek instrumen aktif" />
                   )}
                   <span className="text-[10px] text-gray-400 uppercase font-mono">{stem.type || 'SYNTH'}</span>
                 </div>
@@ -1263,7 +1263,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   step={0.01}
                   value={state.volume}
                   onChange={(e) => updateChannel(stem.id, { volume: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-zinc-800 rounded accent-[#FCA311] cursor-pointer"
+                  className="w-full h-1.5 bg-zinc-800 rounded accent-accent cursor-pointer"
                 />
               </div>
 
@@ -1278,7 +1278,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   max={100}
                   value={state.pan}
                   onChange={(e) => updateChannel(stem.id, { pan: Number(e.target.value) })}
-                  className="w-full h-1.5 bg-zinc-800 rounded accent-[#FCA311] cursor-pointer"
+                  className="w-full h-1.5 bg-zinc-800 rounded accent-accent cursor-pointer"
                 />
               </div>
 
@@ -1298,7 +1298,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   type="button"
                   onClick={() => updateChannel(stem.id, { isSolo: !state.isSolo })}
                   className={`w-9 py-1 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                    state.isSolo ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                    state.isSolo ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                   }`}
                   title="Solo Channel"
                 >
@@ -1316,17 +1316,17 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   }}
                   className={`flex-1 py-1 rounded-lg text-xs font-bold border transition-all flex items-center justify-center gap-1 cursor-pointer ${
                     !isStemsUnlocked
-                      ? 'bg-black/30 border-white/5 text-gray-400 hover:text-[#FCA311] hover:border-[#FCA311]/30'
+                      ? 'bg-black/30 border-white/5 text-gray-400 hover:text-accent hover:border-accent/30'
                       : isFxOpen
-                      ? 'bg-[#FCA311] text-black border-[#FCA311]'
+                      ? 'bg-accent text-on-accent border-accent'
                       : fxActive
-                      ? 'bg-amber-500/20 text-[#FCA311] border-[#FCA311]/40'
+                      ? 'bg-accent/20 text-accent border-accent/40'
                       : 'bg-white/5 border-white/10 text-gray-300 hover:text-white'
                   }`}
                 >
                   {!isStemsUnlocked ? (
                     <>
-                      <Lock className="w-3 h-3 text-[#FCA311]" />
+                      <Lock className="w-3 h-3 text-accent" />
                       <span>FX Rack</span>
                     </>
                   ) : (
@@ -1342,7 +1342,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
               {isStemsUnlocked && isFxOpen && (
                 <div className="pt-3 border-t border-white/10 space-y-3 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-[#FCA311] flex items-center gap-1">
+                    <span className="text-[11px] font-bold text-accent flex items-center gap-1">
                       <Layers className="w-3 h-3" /> Efek {stem.name}
                     </span>
                     {fxActive && (
@@ -1369,7 +1369,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                         step={1}
                         value={state.fx.bassGain}
                         onChange={(e) => updateChannelFx(stem.id, { bassGain: Number(e.target.value) })}
-                        className="w-full h-1 bg-zinc-800 rounded accent-[#FCA311] cursor-pointer"
+                        className="w-full h-1 bg-zinc-800 rounded accent-accent cursor-pointer"
                       />
                     </div>
 
@@ -1385,7 +1385,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                         step={1}
                         value={state.fx.trebleGain}
                         onChange={(e) => updateChannelFx(stem.id, { trebleGain: Number(e.target.value) })}
-                        className="w-full h-1 bg-zinc-800 rounded accent-[#FCA311] cursor-pointer"
+                        className="w-full h-1 bg-zinc-800 rounded accent-accent cursor-pointer"
                       />
                     </div>
                   </div>
@@ -1395,7 +1395,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                       type="button"
                       onClick={() => updateChannelFx(stem.id, { isReverb: !state.fx.isReverb })}
                       className={`py-1.5 rounded-lg font-bold border transition-colors cursor-pointer text-center ${
-                        state.fx.isReverb ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        state.fx.isReverb ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                       }`}
                     >
                       {state.fx.isReverb ? '✓ Reverb' : 'Reverb'}
@@ -1405,7 +1405,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                       type="button"
                       onClick={() => updateChannelFx(stem.id, { isDelay: !state.fx.isDelay })}
                       className={`py-1.5 rounded-lg font-bold border transition-colors cursor-pointer text-center ${
-                        state.fx.isDelay ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        state.fx.isDelay ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                       }`}
                     >
                       {state.fx.isDelay ? '✓ Delay' : 'Delay'}
@@ -1415,7 +1415,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                       type="button"
                       onClick={() => updateChannelFx(stem.id, { isChorus: !state.fx.isChorus })}
                       className={`py-1.5 rounded-lg font-bold border transition-colors cursor-pointer text-center ${
-                        state.fx.isChorus ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        state.fx.isChorus ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                       }`}
                     >
                       {state.fx.isChorus ? '✓ Chorus' : 'Chorus'}
@@ -1425,7 +1425,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                       type="button"
                       onClick={() => updateChannelFx(stem.id, { isFlanger: !state.fx.isFlanger })}
                       className={`py-1.5 rounded-lg font-bold border transition-colors cursor-pointer text-center ${
-                        state.fx.isFlanger ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        state.fx.isFlanger ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                       }`}
                     >
                       {state.fx.isFlanger ? '✓ Flanger' : 'Flanger'}
@@ -1435,7 +1435,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                       type="button"
                       onClick={() => updateChannelFx(stem.id, { isPhaser: !state.fx.isPhaser })}
                       className={`py-1.5 rounded-lg font-bold border transition-colors cursor-pointer text-center col-span-2 ${
-                        state.fx.isPhaser ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                        state.fx.isPhaser ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                       }`}
                     >
                       {state.fx.isPhaser ? '✓ Phaser' : 'Phaser'}
@@ -1450,7 +1450,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
       {isExportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto my-auto rounded-2xl bg-[#14213D] border border-white/[0.12] p-6 shadow-2xl relative space-y-4">
+          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto my-auto rounded-2xl bg-surface border border-white/[0.12] p-6 shadow-2xl relative space-y-4">
             <button
               onClick={() => !isRendering && setIsExportModalOpen(false)}
               disabled={isRendering}
@@ -1460,7 +1460,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             </button>
 
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-[#FCA311]/20 text-[#FCA311] flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-accent/20 text-accent flex items-center justify-center">
                 <FileAudio className="w-5 h-5" />
               </div>
               <div>
@@ -1471,7 +1471,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-gray-300">Nama Berkas</label>
-              <div className="flex items-center bg-black/50 rounded-xl border border-white/[0.1] px-3 py-2 text-sm text-white focus-within:border-[#FCA311]">
+              <div className="flex items-center bg-black/50 rounded-xl border border-white/[0.1] px-3 py-2 text-sm text-white focus-within:border-accent">
                 <input
                   type="text"
                   value={exportFileName}
@@ -1495,7 +1495,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                     disabled={isRendering}
                     className={`py-2 px-1 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
                       selectedFormat === fmt
-                        ? 'bg-[#FCA311] text-black border-[#FCA311] shadow-md'
+                        ? 'bg-accent text-on-accent border-accent shadow-md'
                         : 'bg-black/40 text-gray-300 border-white/[0.08] hover:border-white/20'
                     }`}
                   >
@@ -1511,7 +1511,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             <div className="bg-black/40 p-3 rounded-xl border border-white/[0.06] text-[11px] text-gray-400 space-y-1">
               <div className="flex items-center justify-between text-white font-semibold">
                 <span>Konfigurasi Render Studio:</span>
-                <span className="text-[#FCA311] font-mono">{playbackSpeed.toFixed(2)}x Speed</span>
+                <span className="text-accent font-mono">{playbackSpeed.toFixed(2)}x Speed</span>
               </div>
               <p>✓ Seluruh EQ & efek DSP Master maupun per-stem otomatis terbawa.</p>
               <p>✓ Mode <strong>Single-pass</strong> aktif (audio diekspor 1 putaran penuh tanpa pengulangan loop).</p>
@@ -1521,14 +1521,14 @@ export const StemMixer: React.FC<StemMixerProps> = ({
               <div className="space-y-1.5 pt-1">
                 <div className="flex justify-between text-xs text-gray-300">
                   <span className="flex items-center gap-1.5">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#FCA311]" />
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
                     Merender buffer multi-track offline...
                   </span>
-                  <span className="font-mono text-[#FCA311]">{renderProgress}%</span>
+                  <span className="font-mono text-accent">{renderProgress}%</span>
                 </div>
                 <div className="w-full h-2 rounded-full bg-black/60 overflow-hidden border border-white/[0.08]">
                   <div
-                    className="h-full bg-gradient-to-r from-[#FCA311] to-amber-300 transition-all duration-300"
+                    className="h-full bg-gradient-to-r from-accent to-accent/70 transition-all duration-300"
                     style={{ width: `${renderProgress}%` }}
                   />
                 </div>
@@ -1538,7 +1538,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             <button
               onClick={handleExecuteExport}
               disabled={isRendering}
-              className="w-full py-3 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-sm shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              className="w-full py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-extrabold text-sm shadow-lg shadow-accent/20 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
             >
               {isRendering ? (
                 <>

@@ -66,7 +66,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   if (!activeTrack) {
     return (
       <div className="w-full max-w-7xl mx-auto px-4 py-20 text-center text-gray-400">
-        <Music className="w-10 h-10 mx-auto mb-3 text-[#FCA311]" />
+        <Music className="w-10 h-10 mx-auto mb-3 text-accent" />
         <p className="font-bold text-white">Katalog audio belum tersedia</p>
         <p className="text-xs mt-1">Sedang memuat, atau belum ada lagu yang dipublikasikan di database.</p>
       </div>
@@ -151,15 +151,15 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-7 pb-20">
       
       {/* BANNER JUDUL SEGMEN DENGAN WIDGET STATUS KANAN */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#172547] via-[#101b33] to-[#1c2c52] border-2 border-[#FCA311]/40 p-5 sm:p-6 shadow-[0_10px_35px_rgba(252,163,17,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-surface via-surface/80 to-surface border-2 border-accent/40 p-5 sm:p-6 shadow-[0_10px_35px_color-mix(in_srgb,var(--t-accent)_15%,transparent)] flex flex-col md:flex-row md:items-center justify-between gap-5">
         
         {/* Sisi Kiri: Judul Segmen Dinamis */}
         <div className="flex items-center gap-3.5 z-10">
-          <div className="w-13 h-13 rounded-2xl bg-[#FCA311]/15 border border-[#FCA311]/40 flex items-center justify-center text-[#FCA311] shadow-lg shadow-amber-500/20 shrink-0">
-            {activeSection === 'assets' && <Music className="w-6 h-6 text-[#FCA311]" />}
-            {activeSection === 'pad' && <Sliders className="w-6 h-6 text-[#FCA311]" />}
-            {activeSection === 'tools' && <Wrench className="w-6 h-6 text-[#FCA311]" />}
-            {activeSection === 'pricing' && <CreditCard className="w-6 h-6 text-[#FCA311]" />}
+          <div className="w-13 h-13 rounded-2xl bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shadow-lg shadow-accent/20 shrink-0">
+            {activeSection === 'assets' && <Music className="w-6 h-6 text-accent" />}
+            {activeSection === 'pad' && <Sliders className="w-6 h-6 text-accent" />}
+            {activeSection === 'tools' && <Wrench className="w-6 h-6 text-accent" />}
+            {activeSection === 'pricing' && <CreditCard className="w-6 h-6 text-accent" />}
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
@@ -180,50 +180,50 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
         {/* Sisi Kanan: Status Widget Sesuai Segmen Aktif */}
         <div className="z-10 self-start md:self-auto">
           {activeSection === 'assets' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-amber-500/25 shadow-inner">
+            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-accent/25 shadow-inner">
               <div className="flex items-end gap-1 h-6">
-                <span className="w-1 bg-[#FCA311] rounded-full animate-pulse h-5" style={{ animationDuration: '0.6s' }} />
-                <span className="w-1 bg-amber-400 rounded-full animate-pulse h-3" style={{ animationDuration: '0.4s' }} />
+                <span className="w-1 bg-accent rounded-full animate-pulse h-5" style={{ animationDuration: '0.6s' }} />
+                <span className="w-1 bg-accent rounded-full animate-pulse h-3" style={{ animationDuration: '0.4s' }} />
                 <span className="w-1 bg-yellow-300 rounded-full animate-pulse h-6" style={{ animationDuration: '0.8s' }} />
-                <span className="w-1 bg-[#FCA311] rounded-full animate-pulse h-4" style={{ animationDuration: '0.5s' }} />
-                <span className="w-1 bg-amber-500 rounded-full animate-pulse h-5" style={{ animationDuration: '0.7s' }} />
+                <span className="w-1 bg-accent rounded-full animate-pulse h-4" style={{ animationDuration: '0.5s' }} />
+                <span className="w-1 bg-accent rounded-full animate-pulse h-5" style={{ animationDuration: '0.7s' }} />
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
                   <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
                   <span>Hi-Res Stream</span>
                 </span>
-                <span className="text-xs font-black text-[#FCA311]">Audio, Loop, dan Stem Master</span>
+                <span className="text-xs font-black text-accent">Audio, Loop, dan Stem Master</span>
               </div>
             </div>
           )}
 
           {activeSection === 'pad' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-amber-500/25 shadow-inner">
+            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-accent/25 shadow-inner">
               <div className="flex items-center gap-1.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FCA311] animate-ping" style={{ animationDuration: '0.8s' }} />
-                <span className="w-2 h-2 rounded-full bg-amber-400 opacity-70" />
-                <span className="w-2 h-2 rounded-full bg-amber-500 opacity-50" />
+                <span className="w-2.5 h-2.5 rounded-full bg-accent animate-ping" style={{ animationDuration: '0.8s' }} />
+                <span className="w-2 h-2 rounded-full bg-accent opacity-70" />
+                <span className="w-2 h-2 rounded-full bg-accent opacity-50" />
                 <span className="w-2 h-2 rounded-full bg-yellow-400 opacity-30" />
               </div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Activity className="w-3 h-3 text-[#FCA311]" />
+                  <Activity className="w-3 h-3 text-accent" />
                   <span>Sequencer Clock Sync</span>
                 </span>
-                <span className="text-xs font-black text-amber-300">16-Bar Grid & Real-time ADSR</span>
+                <span className="text-xs font-black text-accent">16-Bar Grid & Real-time ADSR</span>
               </div>
             </div>
           )}
 
           {activeSection === 'tools' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-cyan-500/30 shadow-inner">
-              <div className="w-7 h-7 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-accent/30 shadow-inner">
+              <div className="w-7 h-7 rounded-xl bg-accent/20 border border-accent/40 flex items-center justify-center text-accent">
                 <Cpu className="w-4 h-4 animate-spin" style={{ animationDuration: '8s' }} />
               </div>
               <div className="flex flex-col">
-                <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
+                <span className="text-[10px] font-mono font-bold text-accent uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent animate-ping" />
                   <span>Client-Side Processing</span>
                 </span>
                 <span className="text-xs font-black text-white">Pemisah Vokal, Pitch & 9 Utilitas Studio</span>
@@ -258,10 +258,10 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
           />
 
           {!isTrackFullyOwned && (
-            <div className="p-5 rounded-2xl bg-gradient-to-r from-[#14213D] via-black to-[#14213D] border border-[#FCA311]/40 shadow-xl">
+            <div className="p-5 rounded-2xl bg-gradient-to-r from-surface via-black to-surface border border-accent/40 shadow-xl">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                  <span className="text-xs font-bold text-[#FCA311] uppercase tracking-wider">
+                  <span className="text-xs font-bold text-accent uppercase tracking-wider">
                     Paket Lengkap Studio Bundle
                   </span>
                   <h3 className="text-lg font-extrabold text-white mt-0.5">
@@ -275,7 +275,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
                       Rp {pricing.baseBundlePrice.toLocaleString('id-ID')}
                     </span>
                   </div>
-                  <p className="text-xs text-amber-300 font-medium mt-1">
+                  <p className="text-xs text-accent font-medium mt-1">
                     Hemat Rp {(pricing.baseBundlePrice - pricing.bundleUserPrice).toLocaleString('id-ID')} dibanding membeli modul secara terpisah.
                   </p>
                 </div>
@@ -283,7 +283,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
                 <button
                   type="button"
                   onClick={handleGoToBundlePricing}
-                  className="px-6 py-3 rounded-xl font-extrabold text-sm transition-all whitespace-nowrap bg-[#FCA311] text-black hover:bg-[#e58e00] cursor-pointer shadow-lg shadow-amber-500/20 flex items-center gap-2 active:scale-95"
+                  className="px-6 py-3 rounded-xl font-extrabold text-sm transition-all whitespace-nowrap bg-accent text-on-accent hover:bg-accent/80 cursor-pointer shadow-lg shadow-accent/20 flex items-center gap-2 active:scale-95"
                 >
                   <span>Beli Bundle Sekarang</span>
                   <ArrowRight className="w-4 h-4" />

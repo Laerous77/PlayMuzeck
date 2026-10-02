@@ -224,9 +224,9 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-7 pb-20">
       {/* BANNER SEGMEN KUIS DINAMIS */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#2a0c10] via-[#14213D] to-[#1e0a0d] border-2 border-[#FC1212]/40 p-5 sm:p-6 shadow-[0_10px_35px_rgba(252,18,18,0.15)] flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-accent2/15 via-surface to-accent2/10 border-2 border-accent2/40 p-5 sm:p-6 shadow-[0_10px_35px_color-mix(in_srgb,var(--t-accent2)_15%,transparent)] flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-center gap-3.5 z-10">
-          <div className="w-13 h-13 rounded-2xl bg-[#FC1212]/15 border border-[#FC1212]/40 flex items-center justify-center text-[#FC1212] shadow-lg shadow-red-600/20 shrink-0">
+          <div className="w-13 h-13 rounded-2xl bg-accent2/15 border border-accent2/40 flex items-center justify-center text-accent2 shadow-lg shadow-accent2/20 shrink-0">
             {activeSection === 'pwa' && <Download className="w-6 h-6 stroke-[2.5]" />}
             {activeSection === 'play' && <Play className="w-6 h-6 stroke-[2.5] fill-current" />}
             {activeSection === 'all' && <Layers className="w-6 h-6 stroke-[2.5]" />}
@@ -247,8 +247,8 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
 
         <div className="z-10 self-start md:self-auto">
           {activeSection === 'pwa' && (
-            <div className="flex items-center gap-3 bg-black/55 px-4 py-2 rounded-2xl border border-red-500/30 shadow-inner">
-              <div className="w-2.5 h-2.5 rounded-full bg-[#FC1212] animate-ping" />
+            <div className="flex items-center gap-3 bg-black/55 px-4 py-2 rounded-2xl border border-accent2/30 shadow-inner">
+              <div className="w-2.5 h-2.5 rounded-full bg-accent2 animate-ping" />
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Target Standalone PWA</span>
                 <span className="text-xs font-black text-white">Khusus Modul Kuis Luring</span>
@@ -267,11 +267,11 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
           )}
 
           {activeSection === 'all' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2 rounded-2xl border border-amber-500/30 shadow-inner">
-              <Layers className="w-4 h-4 text-amber-400" />
+            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2 rounded-2xl border border-accent/30 shadow-inner">
+              <Layers className="w-4 h-4 text-accent" />
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Database Vault</span>
-                <span className="text-xs font-black text-amber-300">{decksForDisplay.length} Deck • {new Set([...BUILTIN_TOPICS.map((t) => t.id), ...topics.map((t) => t.id)]).size} Kategori</span>
+                <span className="text-xs font-black text-accent">{decksForDisplay.length} Deck • {new Set([...BUILTIN_TOPICS.map((t) => t.id), ...topics.map((t) => t.id)]).size} Kategori</span>
               </div>
             </div>
           )}
@@ -294,7 +294,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
       {/* SEGMEN 2: MAINKAN KUIS */}
       {activeSection === 'play' && (
         <section className="space-y-6 animate-in fade-in duration-200">
-          <div className="rounded-3xl bg-[#14213D] border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="rounded-3xl bg-surface border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
               <div>
                 <h2 className="text-xl sm:text-2xl font-black text-white">Konfigurasi Sesi Mainkan Kuis</h2>
@@ -329,12 +329,12 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               <select
                 value={selectedDeckToLoad}
                 onChange={(e) => setSelectedDeckToLoad(e.target.value)}
-                className="w-full bg-black/80 border border-white/15 focus:border-[#FC1212] rounded-xl px-3.5 py-3 text-xs text-white outline-none font-bold cursor-pointer"
+                className="w-full bg-black/80 border border-white/15 focus:border-accent2 rounded-xl px-3.5 py-3 text-xs text-white outline-none font-bold cursor-pointer"
               >
                 {decksForDisplay.map((d) => {
                   const ok = canAccess(d);
                   return (
-                    <option key={d.id} value={d.id} disabled={!ok} className="bg-[#14213D] text-white">
+                    <option key={d.id} value={d.id} disabled={!ok} className="bg-surface text-white">
                       {ok ? '' : '🔒 '}
                       {d.title} ({(d.questions || []).length} Butir Soal • {d.difficulty})
                       {ok ? '' : ` — beli di Perpustakaan (Rp${(d.price || 3000).toLocaleString('id-ID')})`}
@@ -348,7 +348,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               <div className="space-y-2 bg-black/50 p-4 rounded-2xl border border-white/10">
                 <label className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-                  <ListOrdered className="w-3.5 h-3.5 text-[#FC1212]" />
+                  <ListOrdered className="w-3.5 h-3.5 text-accent2" />
                   <span>Jumlah Soal Dimainkan:</span>
                 </label>
                 <div className="flex items-center gap-2.5">
@@ -387,16 +387,16 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                 type="button"
                 onClick={() => setShuffleOn((prev) => !prev)}
                 className={`space-y-2 p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
-                  shuffleOn ? 'bg-[#FC1212]/15 border-[#FC1212]/50' : 'bg-black/50 border-white/10 hover:border-white/20'
+                  shuffleOn ? 'bg-accent2/15 border-accent2/50' : 'bg-black/50 border-white/10 hover:border-white/20'
                 }`}
               >
                 <label className="text-xs font-bold text-gray-300 flex items-center gap-1.5 cursor-pointer">
-                  <Shuffle className={`w-3.5 h-3.5 ${shuffleOn ? 'text-[#FC1212]' : 'text-gray-400'}`} />
+                  <Shuffle className={`w-3.5 h-3.5 ${shuffleOn ? 'text-accent2' : 'text-gray-400'}`} />
                   <span>Acak Urutan Soal</span>
                 </label>
                 <div className="flex items-center gap-2">
                   <div
-                    className={`w-9 h-5 rounded-full relative transition-colors ${shuffleOn ? 'bg-[#FC1212]' : 'bg-white/15'}`}
+                    className={`w-9 h-5 rounded-full relative transition-colors ${shuffleOn ? 'bg-accent2' : 'bg-white/15'}`}
                   >
                     <div
                       className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
@@ -418,9 +418,9 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div
                   onClick={() => launchSession('solo')}
-                  className="p-5 rounded-2xl bg-black/40 hover:bg-[#FC1212] border border-white/10 hover:border-[#FC1212] transition-all cursor-pointer group flex flex-col justify-between"
+                  className="p-5 rounded-2xl bg-black/40 hover:bg-accent2 border border-white/10 hover:border-accent2 transition-all cursor-pointer group flex flex-col justify-between"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-[#FC1212]/20 group-hover:bg-black text-[#FC1212] group-hover:text-white flex items-center justify-center mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent2/20 group-hover:bg-black text-accent2 group-hover:text-white flex items-center justify-center mb-3">
                     <Zap className="w-5 h-5" />
                   </div>
                   <div>
@@ -431,9 +431,9 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                   </div>
                 </div>
 
-                <div className="p-5 rounded-2xl bg-black/40 border border-white/10 hover:border-amber-400/60 transition-all group flex flex-col justify-between gap-3">
+                <div className="p-5 rounded-2xl bg-black/40 border border-white/10 hover:border-accent/60 transition-all group flex flex-col justify-between gap-3">
                   <div>
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-accent/20 text-accent flex items-center justify-center mb-3">
                       <Smartphone className="w-5 h-5" />
                     </div>
                     <h4 className="text-sm font-black text-white">2. Pass &amp; Play</h4>
@@ -469,7 +469,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                     <button
                       type="button"
                       onClick={() => launchSession('pass_play')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-[11px] font-black cursor-pointer active:scale-95 transition-all"
+                      className="px-3 py-1.5 rounded-lg bg-accent hover:bg-accent/80 text-on-accent text-[11px] font-black cursor-pointer active:scale-95 transition-all"
                     >
                       Mulai
                     </button>
@@ -478,7 +478,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
 
                 <div
                   onClick={() => setIsMultiplayerOpen(true)}
-                  className="p-5 rounded-2xl bg-black/40 hover:bg-[#FC1212] border border-white/10 hover:border-[#FC1212] transition-all cursor-pointer group flex flex-col justify-between"
+                  className="p-5 rounded-2xl bg-black/40 hover:bg-accent2 border border-white/10 hover:border-accent2 transition-all cursor-pointer group flex flex-col justify-between"
                 >
                   <div className="w-10 h-10 rounded-xl bg-blue-500/20 group-hover:bg-black text-blue-400 group-hover:text-white flex items-center justify-center mb-3">
                     <Users className="w-5 h-5" />

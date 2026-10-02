@@ -458,7 +458,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
         animate={{ x: 0 }}
         exit={{ x: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 350 }}
-        className="relative z-10 w-full max-w-lg bg-[#14213D] border-l border-white/[0.08] shadow-2xl flex flex-col h-full overflow-hidden"
+        className="relative z-10 w-full max-w-lg bg-surface border-l border-white/[0.08] shadow-2xl flex flex-col h-full overflow-hidden"
       >
         <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/40 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -473,7 +473,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                 <ChevronLeft className="w-5 h-5" />
               </button>
             )}
-            <div className="p-2 rounded-xl bg-[#FCA311] text-black">
+            <div className="p-2 rounded-xl bg-accent text-on-accent">
               <ShoppingBag className="w-4 h-4" />
             </div>
             <div>
@@ -527,7 +527,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                         <div className="space-y-1">
                           <span className="text-xs font-bold text-white leading-snug">{item.title}</span>
                           <p className="text-[11px] text-gray-400 line-clamp-2">{item.description}</p>
-                          <div className="text-xs font-bold text-[#FCA311] font-mono pt-1">
+                          <div className="text-xs font-bold text-accent font-mono pt-1">
                             {formatIDR(item.price)}
                           </div>
                         </div>
@@ -547,8 +547,8 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
 
             {currentStep === 'buyer_data' && (
               <motion.div key="buyer_data" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
-                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#FCA311] text-black flex items-center justify-center shrink-0">
+                <div className="p-3.5 rounded-2xl bg-accent/10 border border-accent/40 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-accent text-on-accent flex items-center justify-center shrink-0">
                     <QrCode className="w-5 h-5" />
                   </div>
                   <div>
@@ -593,8 +593,8 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
 
             {currentStep === 'payment_process' && pendingOrder && !demoFlow && (
               <motion.div key="pending_payment" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
-                <div className="p-4 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 space-y-2">
-                  <div className="flex items-center gap-2 text-[#FCA311] font-black text-sm">
+                <div className="p-4 rounded-2xl bg-accent/10 border border-accent/40 space-y-2">
+                  <div className="flex items-center gap-2 text-accent font-black text-sm">
                     <ClockIcon className="w-4 h-4" />
                     <span>Menunggu Pembayaran</span>
                   </div>
@@ -605,7 +605,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                   {pendingOrder.expiresAt && (
                     <div className="text-xs text-gray-200">
                       Bayar sebelum <span className="font-bold text-white">{formatDeadline(pendingOrder.expiresAt)}</span>
-                      <span className="text-[#FCA311] font-bold"> • sisa {timeLeftLabel(pendingOrder.expiresAt)}</span>
+                      <span className="text-accent font-bold"> • sisa {timeLeftLabel(pendingOrder.expiresAt)}</span>
                     </div>
                   )}
                 </div>
@@ -627,12 +627,12 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                   )}
                   <div className="pt-2 border-t border-white/[0.08] flex justify-between font-bold text-white">
                     <span>Total (termasuk PPN):</span>
-                    <span className="text-base text-[#FCA311] font-mono">{formatIDR(pendingOrder.amount)}</span>
+                    <span className="text-base text-accent font-mono">{formatIDR(pendingOrder.amount)}</span>
                   </div>
                 </div>
 
                 {syncError && (
-                  <div className="p-3 rounded-xl bg-[#780000]/25 border border-[#780000] text-red-200 text-xs">{syncError}</div>
+                  <div className="p-3 rounded-xl bg-red-900/25 border border-red-900 text-red-200 text-xs">{syncError}</div>
                 )}
 
                 <div className="space-y-2">
@@ -640,7 +640,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                     type="button"
                     disabled={isProcessingCheckout || isSyncingWithDB || isCancelling}
                     onClick={handleResumePayment}
-                    className="w-full py-3.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-sm shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                    className="w-full py-3.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-extrabold text-sm shadow-lg shadow-accent/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
                   >
                     {isProcessingCheckout ? (
                       <>
@@ -661,7 +661,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                     onClick={() => handleFinishTransaction(pendingOrder.orderId, { items: pendingOrder.items, total: pendingOrder.amount })}
                     className="w-full py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                   >
-                    {isSyncingWithDB ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshIcon className="w-4 h-4 text-[#FCA311]" />}
+                    {isSyncingWithDB ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshIcon className="w-4 h-4 text-accent" />}
                     <span>Saya sudah bayar — cek status</span>
                   </button>
 
@@ -712,7 +712,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                   </div>
                   <div className="pt-2 border-t border-white/[0.08] flex justify-between font-bold text-white">
                     <span>Total Lunas:</span>
-                    <span className="text-base text-[#FCA311] font-mono">{formatIDR(completedOrder.total)}</span>
+                    <span className="text-base text-accent font-mono">{formatIDR(completedOrder.total)}</span>
                   </div>
                 </div>
 
@@ -721,13 +721,13 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                     onClick={handleDownloadInvoice}
                     className="w-full py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <FileText className="w-4 h-4 text-[#FCA311]" />
+                    <FileText className="w-4 h-4 text-accent" />
                     <span>Unduh Bukti Transaksi (Invoice Resmi)</span>
                   </button>
 
                   <button
                     onClick={handleFinishAndGoLibrary}
-                    className="w-full py-3 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-sm shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 mt-2"
+                    className="w-full py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-extrabold text-sm shadow-lg shadow-accent/20 flex items-center justify-center gap-2 cursor-pointer active:scale-95 mt-2"
                   >
                     <span>Sinkronkan ke Koleksi Saya</span>
                     <ArrowRight className="w-4 h-4" />
@@ -751,14 +751,14 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
               </div>
               <div className="flex justify-between text-base font-extrabold text-white pt-1.5 border-t border-white/[0.08]">
                 <span>Total Tagihan:</span>
-                <span className="text-lg text-[#FCA311] font-mono">{formatIDR(grandTotal)}</span>
+                <span className="text-lg text-accent font-mono">{formatIDR(grandTotal)}</span>
               </div>
             </div>
 
             {currentStep === 'cart' && (
               <button
                 onClick={handleProceedToBuyerData}
-                className="w-full py-3.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-sm shadow-lg shadow-amber-500/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
+                className="w-full py-3.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-extrabold text-sm shadow-lg shadow-accent/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95"
               >
                 <span>Lanjut ke Data Pemesan</span>
                 <ArrowRight className="w-4 h-4" />
@@ -770,7 +770,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                 type="submit"
                 form="buyer-info-form"
                 disabled={isProcessingCheckout}
-                className="w-full py-3.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-sm shadow-lg shadow-amber-500/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
+                className="w-full py-3.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-extrabold text-sm shadow-lg shadow-accent/25 transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-50"
               >
                 {isProcessingCheckout ? (
                   <>

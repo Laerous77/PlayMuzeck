@@ -570,11 +570,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   return (
     <section id="pad-studio-section" className="w-full">
-      <div className="rounded-2xl bg-[#14213D] border border-white/[0.08] p-5 sm:p-7 shadow-xl relative overflow-hidden space-y-6">
+      <div className="rounded-2xl bg-surface border border-white/[0.08] p-5 sm:p-7 shadow-xl relative overflow-hidden space-y-6">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-white/[0.08]">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#FCA311]" />
+              <Sparkles className="w-5 h-5 text-accent" />
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                 Drum Pad & Chord Pad Studio
               </h3>
@@ -590,7 +590,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <button
                 type="button"
                 onClick={() => setBpm((p) => Math.max(60, p - 1))}
-                className="p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-[#FCA311] active:text-black text-gray-300"
+                className="p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -600,13 +600,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 max="200"
                 value={bpm}
                 onChange={(e) => setBpm(Math.max(60, Math.min(200, Number(e.target.value))))}
-                className="w-11 bg-transparent text-center font-mono font-black text-sm text-[#FCA311] focus:outline-none"
+                className="w-11 bg-transparent text-center font-mono font-black text-sm text-accent focus:outline-none"
               />
               <span className="text-[10px] text-gray-400 mr-0.5">BPM</span>
               <button
                 type="button"
                 onClick={() => setBpm((p) => Math.min(200, p + 1))}
-                className="p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-[#FCA311] active:text-black text-gray-300"
+                className="p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -625,7 +625,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <button
                 onClick={() => setActiveTab('drum')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                  activeTab === 'drum' ? 'bg-[#FCA311] text-black shadow-sm' : 'text-gray-300 hover:text-white'
+                  activeTab === 'drum' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
                 Drum Pad
@@ -639,10 +639,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   setActiveTab('chord');
                 }}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
-                  activeTab === 'chord' ? 'bg-[#FCA311] text-black shadow-sm' : 'text-gray-300 hover:text-white'
+                  activeTab === 'chord' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
-                {!isUnlocked8Bar && <Lock className="w-3 h-3 text-amber-400" />}
+                {!isUnlocked8Bar && <Lock className="w-3 h-3 text-accent" />}
                 <span>Chord Pad</span>
               </button>
             </div>
@@ -656,9 +656,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }
                 setIsExportMenuOpen(true);
               }}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-[#FCA311] shadow cursor-pointer shrink-0"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-accent shadow cursor-pointer shrink-0"
             >
-              <Download className="w-3.5 h-3.5 text-[#FCA311]" />
+              <Download className="w-3.5 h-3.5 text-accent" />
               <span>Ekspor Pola</span>
             </button>
           </div>
@@ -672,7 +672,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   type="button"
                   onClick={toggleDrumLoop}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isDrumLoopActive ? 'bg-[#FCA311] text-black shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                    isDrumLoopActive ? 'bg-accent text-on-accent shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
                   }`}
                 >
                   <Disc className="w-3.5 h-3.5" />
@@ -686,7 +686,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     max="100"
                     value={drumVolume}
                     onChange={(e) => setDrumVolume(Number(e.target.value))}
-                    className="w-16 sm:w-20 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                    className="w-16 sm:w-20 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                   />
                   <span className="text-[10px] font-mono text-gray-300 w-7 text-right">{drumVolume}%</span>
                 </div>
@@ -697,7 +697,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   type="button"
                   onClick={toggleChordLoop}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isChordLoopActive ? 'bg-amber-400 text-black shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
+                    isChordLoopActive ? 'bg-accent text-on-accent shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
                   }`}
                 >
                   <Music className="w-3.5 h-3.5" />
@@ -711,7 +711,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     max="100"
                     value={chordMasterVolume}
                     onChange={(e) => setChordMasterVolume(Number(e.target.value))}
-                    className="w-16 sm:w-20 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-amber-400"
+                    className="w-16 sm:w-20 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                   />
                   <span className="text-[10px] font-mono text-gray-300 w-7 text-right">{chordMasterVolume}%</span>
                 </div>
@@ -722,7 +722,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 onClick={() => setShowEnvelopePanel(!showEnvelopePanel)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                   showEnvelopePanel
-                    ? 'bg-[#FCA311] text-black border-[#FCA311]'
+                    ? 'bg-accent text-on-accent border-accent'
                     : 'bg-black/40 text-gray-300 border-white/[0.08] hover:border-white/20'
                 }`}
               >
@@ -737,7 +737,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   Full 16-Bar Editor Aktif
                 </span>
               ) : (
-                <button onClick={onUnlockEditor} className="text-[#FCA311] hover:underline font-semibold cursor-pointer">
+                <button onClick={onUnlockEditor} className="text-accent hover:underline font-semibold cursor-pointer">
                   Buka 16-Bar →
                 </button>
               )}
@@ -749,7 +749,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               {activeTab === 'drum' ? (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                    <Activity className="w-3 h-3 text-[#FCA311]" />
+                    <Activity className="w-3 h-3 text-accent" />
                     <span>Envelope DRUM KIT ({selectedDrumKit}) — Karakter perkusif</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -762,9 +762,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         step="0.001"
                         value={drumAttackVal}
                         onChange={(e) => setDrumAttackVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                       />
-                      <span className="font-mono text-[#FCA311] w-12 text-right">{(drumAttackVal * 1000).toFixed(0)}ms</span>
+                      <span className="font-mono text-accent w-12 text-right">{(drumAttackVal * 1000).toFixed(0)}ms</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
                       <span className="text-gray-400 font-bold">D (Decay):</span>
@@ -775,9 +775,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         step="0.01"
                         value={drumDecayVal}
                         onChange={(e) => setDrumDecayVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                       />
-                      <span className="font-mono text-[#FCA311] w-12 text-right">{(drumDecayVal * 1000).toFixed(0)}ms</span>
+                      <span className="font-mono text-accent w-12 text-right">{(drumDecayVal * 1000).toFixed(0)}ms</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
                       <span className="text-gray-400 font-bold">S (Sustain):</span>
@@ -788,9 +788,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         step="0.05"
                         value={drumSustainVal}
                         onChange={(e) => setDrumSustainVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                       />
-                      <span className="font-mono text-[#FCA311] w-10 text-right">{(drumSustainVal * 100).toFixed(0)}%</span>
+                      <span className="font-mono text-accent w-10 text-right">{(drumSustainVal * 100).toFixed(0)}%</span>
                     </div>
                     <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
                       <span className="text-gray-400 font-bold">R (Release):</span>
@@ -801,9 +801,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         step="0.02"
                         value={drumReleaseVal}
                         onChange={(e) => setDrumReleaseVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                       />
-                      <span className="font-mono text-[#FCA311] w-12 text-right">{(drumReleaseVal * 1000).toFixed(0)}ms</span>
+                      <span className="font-mono text-accent w-12 text-right">{(drumReleaseVal * 1000).toFixed(0)}ms</span>
                     </div>
                   </div>
                 </div>
@@ -814,7 +814,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     const instName = INSTRUMENTS_128.find((i) => i.id === track.program)?.name || `Instrumen ${track.id}`;
                     return (
                       <div key={track.id} className="space-y-2">
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-[#FCA311]">
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-accent">
                           <span>Envelope {track.label}: {instName}</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -827,9 +827,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                               step="0.01"
                               value={track.adsr.attack}
                               onChange={(e) => updateTrackAdsr(tIdx, { attack: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                             />
-                            <span className="font-mono text-[#FCA311] w-12 text-right">{(track.adsr.attack * 1000).toFixed(0)}ms</span>
+                            <span className="font-mono text-accent w-12 text-right">{(track.adsr.attack * 1000).toFixed(0)}ms</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
                             <span className="text-gray-400 font-bold">D (Decay):</span>
@@ -840,9 +840,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                               step="0.01"
                               value={track.adsr.decay}
                               onChange={(e) => updateTrackAdsr(tIdx, { decay: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                             />
-                            <span className="font-mono text-[#FCA311] w-12 text-right">{(track.adsr.decay * 1000).toFixed(0)}ms</span>
+                            <span className="font-mono text-accent w-12 text-right">{(track.adsr.decay * 1000).toFixed(0)}ms</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
                             <span className="text-gray-400 font-bold">S (Sustain):</span>
@@ -853,9 +853,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                               step="0.05"
                               value={track.adsr.sustain}
                               onChange={(e) => updateTrackAdsr(tIdx, { sustain: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                             />
-                            <span className="font-mono text-[#FCA311] w-10 text-right">{(track.adsr.sustain * 100).toFixed(0)}%</span>
+                            <span className="font-mono text-accent w-10 text-right">{(track.adsr.sustain * 100).toFixed(0)}%</span>
                           </div>
                           <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
                             <span className="text-gray-400 font-bold">R (Release):</span>
@@ -866,9 +866,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                               step="0.05"
                               value={track.adsr.release}
                               onChange={(e) => updateTrackAdsr(tIdx, { release: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                             />
-                            <span className="font-mono text-[#FCA311] w-12 text-right">{(track.adsr.release * 1000).toFixed(0)}ms</span>
+                            <span className="font-mono text-accent w-12 text-right">{(track.adsr.release * 1000).toFixed(0)}ms</span>
                           </div>
                         </div>
                       </div>
@@ -880,7 +880,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs">
-            <div className="flex items-center gap-2 text-[#FCA311] font-bold">
+            <div className="flex items-center gap-2 text-accent font-bold">
               <Repeat className="w-4 h-4" />
               <span>Wilayah Looping (Bar & Beat):</span>
             </div>
@@ -893,7 +893,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   max={TOTAL_BARS}
                   value={loopStartBar}
                   onChange={(e) => setLoopStartBar(Math.max(1, Math.min(TOTAL_BARS, Number(e.target.value) || 1)))}
-                  className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-[#FCA311]"
+                  className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
                 <span className="text-gray-400">Beat</span>
                 <input
@@ -902,7 +902,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   max={STEPS_PER_BAR}
                   value={loopStartBeat}
                   onChange={(e) => setLoopStartBeat(Math.max(1, Math.min(STEPS_PER_BAR, Number(e.target.value) || 1)))}
-                  className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-[#FCA311]"
+                  className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
               </div>
               <span className="text-gray-500">—</span>
@@ -914,7 +914,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   max={TOTAL_BARS}
                   value={loopEndBar}
                   onChange={(e) => setLoopEndBar(Math.max(1, Math.min(TOTAL_BARS, Number(e.target.value) || 1)))}
-                  className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-[#FCA311]"
+                  className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
                 <span className="text-gray-400">Beat</span>
                 <input
@@ -923,7 +923,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   max={STEPS_PER_BAR}
                   value={loopEndBeat}
                   onChange={(e) => setLoopEndBeat(Math.max(1, Math.min(STEPS_PER_BAR, Number(e.target.value) || 1)))}
-                  className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-[#FCA311]"
+                  className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
               </div>
             </div>
@@ -940,7 +940,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onClick={() => setSelectedDrumKit(kit)}
                   className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                     selectedDrumKit === kit
-                      ? 'bg-[#FCA311] text-black border-[#FCA311] font-bold shadow'
+                      ? 'bg-accent text-on-accent border-accent font-bold shadow'
                       : 'bg-black/50 text-gray-300 border-white/[0.08] hover:border-white/20'
                   }`}
                 >
@@ -955,7 +955,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   Preset Instrumen & Mixer Saluran (4 Progresi Akor)
                 </span>
                 {engineStatus && (
-                  <span className="text-[10px] text-[#FCA311] font-mono bg-amber-500/10 px-2 py-0.5 rounded border border-[#FCA311]/20">
+                  <span className="text-[10px] text-accent font-mono bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
                     {engineStatus}
                   </span>
                 )}
@@ -984,7 +984,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                             }
                             updateTrack(tIdx, { program: prg });
                           }}
-                          className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded-lg border border-white/[0.15] focus:border-[#FCA311] outline-none min-w-0 flex-1 truncate cursor-pointer"
+                          className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded-lg border border-white/[0.15] focus:border-accent outline-none min-w-0 flex-1 truncate cursor-pointer"
                         >
                           {INSTRUMENT_CATEGORIES.map((cat) => {
                             const isCatLocked = !isUnlocked8Bar && cat !== 'Piano';
@@ -992,7 +992,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                               <optgroup
                                 key={cat}
                                 label={`${isCatLocked ? '🔒 ' : ''}── ${cat} ──`}
-                                className="bg-[#14213D] text-gray-300 font-bold"
+                                className="bg-surface text-gray-300 font-bold"
                               >
                                 {INSTRUMENTS_128.filter((i) => i.category === cat).map((inst) => (
                                   <option
@@ -1019,7 +1019,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                             max="100"
                             value={track.volume}
                             onChange={(e) => updateTrack(tIdx, { volume: Number(e.target.value) })}
-                            className="w-14 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                            className="w-14 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                             title={`Volume ${track.label}: ${track.volume}%`}
                           />
                           <span className="text-[10px] font-mono text-gray-300 w-6 text-right">
@@ -1045,7 +1045,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                           onClick={() => toggleSolo(tIdx)}
                           className={`w-6 h-6 rounded text-[10px] font-black transition-colors cursor-pointer flex items-center justify-center ${
                             track.solo
-                              ? 'bg-[#FCA311] text-black font-extrabold'
+                              ? 'bg-accent text-on-accent font-extrabold'
                               : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
                           }`}
                           title={track.solo ? 'Buka Isolate' : 'Isolate (Solo) Instrumen'}
@@ -1086,7 +1086,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         updateTrack(firstDisabledIdx, { enabled: true });
                       }
                     }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed border-[#FCA311]/50 text-[#FCA311] hover:bg-[#FCA311]/10 cursor-pointer transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed border-accent/50 text-accent hover:bg-accent/10 cursor-pointer transition-colors"
                   >
                     <Plus className="w-3.5 h-3.5" />
                     <span>Tambah Progresi Instrumen ({chordTracks.filter((t) => t.enabled).length + 1}/4)</span>
@@ -1114,12 +1114,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onClick={() => triggerDrum(inst.id)}
                   className={`h-20 rounded-xl border flex flex-col items-center justify-between p-2 transition-all cursor-pointer ${
                     activePadAnim === inst.id
-                      ? 'bg-[#FCA311] text-black border-[#FCA311] scale-105 shadow-lg'
-                      : 'bg-[#14213D] text-white border-white/[0.08] hover:border-[#FCA311]/60'
+                      ? 'bg-accent text-on-accent border-accent scale-105 shadow-lg'
+                      : 'bg-surface text-white border-white/[0.08] hover:border-accent/60'
                   }`}
                 >
                   <span className="text-xs font-black tracking-tight text-center leading-tight">{inst.label}</span>
-                  <div className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
+                  <div className="w-1.5 h-1.5 rounded-full bg-accent/80" />
                 </button>
               ))}
             </div>
@@ -1134,14 +1134,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     onClick={() => triggerChordByIndex(idx)}
                     className={`h-22 rounded-xl border flex flex-col items-center justify-between p-2 transition-all relative group cursor-pointer ${
                       isActive
-                        ? 'bg-[#FCA311] text-black border-[#FCA311] scale-105 shadow-lg'
-                        : 'bg-[#14213D] text-white border-white/[0.08] hover:border-[#FCA311]/60'
+                        ? 'bg-accent text-on-accent border-accent scale-105 shadow-lg'
+                        : 'bg-surface text-white border-white/[0.08] hover:border-accent/60'
                     }`}
                   >
                     <button
                       type="button"
                       onClick={(e) => openHarmonicEditor(idx, e)}
-                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 hover:bg-[#FCA311] text-gray-300 hover:text-black transition-colors"
+                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 hover:bg-accent text-gray-300 hover:text-on-accent transition-colors"
                     >
                       <Sliders className="w-3 h-3" />
                     </button>
@@ -1166,14 +1166,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <button
                 type="button"
                 onClick={() => scrollByBar(-1)}
-                className="p-1.5 rounded-md bg-white/5 hover:bg-[#FCA311] hover:text-black text-gray-300 transition-colors"
+                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => scrollByBar(1)}
-                className="p-1.5 rounded-md bg-white/5 hover:bg-[#FCA311] hover:text-black text-gray-300 transition-colors"
+                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors"
               >
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
@@ -1190,7 +1190,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   {Array.from({ length: TOTAL_BARS }).map((_, barIdx) => (
                     <div
                       key={barIdx}
-                      className="col-span-4 py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-[#14213D] text-[#FCA311] border-[#FCA311]/30"
+                      className="col-span-4 py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-surface text-accent border-accent/30"
                     >
                       BAR {barIdx + 1}
                     </div>
@@ -1200,7 +1200,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
               <div className="flex items-center gap-2">
                 <div className="w-36 shrink-0 flex items-center justify-between bg-black/60 border border-white/10 rounded-xl px-2.5 py-1">
-                  <span className="text-[11px] font-bold text-[#FCA311] tracking-tight">Titik Putar</span>
+                  <span className="text-[11px] font-bold text-accent tracking-tight">Titik Putar</span>
                   <div className="flex items-center gap-1">
                     <button
                       type="button"
@@ -1213,7 +1213,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       type="button"
                       onClick={() => setIsSeqLooping(!isSeqLooping)}
                       className={`p-1 rounded-md transition-all ${
-                        isSeqLooping ? 'bg-amber-500/20 text-[#FCA311] border border-[#FCA311]/40' : 'bg-white/5 text-gray-500'
+                        isSeqLooping ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-white/5 text-gray-500'
                       }`}
                     >
                       <Repeat className="w-3 h-3" />
@@ -1229,7 +1229,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       onClick={() => handleSeekStep(idx)}
                       className={`h-8 rounded-xs text-xs font-mono font-bold transition-all flex items-center justify-center ${
                         currentStep === idx
-                          ? 'bg-[#FCA311] text-black ring-2 ring-white ring-inset z-10 font-black'
+                          ? 'bg-accent text-on-accent ring-2 ring-white ring-inset z-10 font-black'
                           : idx % 4 === 0
                           ? 'bg-white/15 text-white hover:bg-white/30'
                           : 'bg-black/50 text-gray-400 hover:bg-white/10'
@@ -1257,7 +1257,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                               onClick={() => toggleDrumStep(inst.id, stepIdx)}
                               className={`h-7 rounded-xs transition-all relative flex items-center justify-center cursor-pointer ${
                                 isStepActive
-                                  ? 'bg-[#FCA311] text-black font-bold shadow-xs'
+                                  ? 'bg-accent text-on-accent font-bold shadow-xs'
                                   : 'bg-black/60 hover:bg-black/90 border border-white/[0.05]'
                               } ${currentStep === stepIdx ? 'ring-2 ring-white ring-inset z-10' : ''}`}
                             />
@@ -1277,7 +1277,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                           <span className="text-xs font-semibold text-gray-200 truncate">
                             {track.label}
                           </span>
-                          <span className="text-[10px] text-[#FCA311] truncate font-mono">
+                          <span className="text-[10px] text-accent truncate font-mono">
                             {INSTRUMENTS_128.find((i) => i.id === track.program)?.name || 'Piano'}
                           </span>
                         </div>
@@ -1294,7 +1294,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                                 key={stepIdx}
                                 className={`h-20 rounded-lg p-1 flex flex-col justify-between items-center transition-all relative ${
                                   isAssigned
-                                    ? 'bg-[#FCA311]/20 border border-[#FCA311] text-white shadow-xs'
+                                    ? 'bg-accent/20 border border-accent text-white shadow-xs'
                                     : 'bg-black/60 border border-white/[0.05] hover:border-white/20'
                                 } ${currentStep === stepIdx ? 'ring-2 ring-white ring-inset z-10' : ''}`}
                               >
@@ -1302,7 +1302,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                                 <div className="w-full flex-1 flex flex-col items-center justify-center relative">
                                   <span
                                     className={`text-[11px] font-black tracking-tight leading-none text-center px-0.5 w-full overflow-hidden ${
-                                      isAssigned ? 'text-[#FCA311]' : 'text-gray-500'
+                                      isAssigned ? 'text-accent' : 'text-gray-500'
                                     }`}
                                     title={fullChordName}
                                   >
@@ -1315,13 +1315,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                                   >
                                     <option value={-1} className="bg-black text-gray-400">- Kosongkan -</option>
                                     {padChords.map((ch, pIdx) => (
-                                      <option key={pIdx} value={pIdx} className="bg-[#14213D] text-white font-bold">
+                                      <option key={pIdx} value={pIdx} className="bg-surface text-white font-bold">
                                         Pad #{pIdx + 1}: {buildHarmonicChord(ch).displayName}
                                       </option>
                                     ))}
                                   </select>
                                 </div>
-                                <div className={`w-1.5 h-1.5 rounded-full mb-0.5 ${isAssigned ? 'bg-[#FCA311]' : 'bg-transparent'}`} />
+                                <div className={`w-1.5 h-1.5 rounded-full mb-0.5 ${isAssigned ? 'bg-accent' : 'bg-transparent'}`} />
                               </div>
                             );
                           })}
@@ -1338,10 +1338,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
       {editingPadIndex !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#14213D] border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto my-auto shadow-2xl p-6 space-y-5">
+          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto my-auto shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
-                <Sliders className="w-5 h-5 text-[#FCA311]" />
+                <Sliders className="w-5 h-5 text-accent" />
                 <h3 className="font-bold text-white text-base sm:text-lg">
                   Harmonic Chord Editor — Mengedit Pad #{editingPadIndex + 1}
                 </h3>
@@ -1358,7 +1358,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <div className="flex items-center justify-between bg-black/60 p-3.5 rounded-xl border border-white/10">
               <div>
                 <span className="text-xs text-gray-400 font-mono">Hasil Formula Akor:</span>
-                <div className="text-2xl font-black text-[#FCA311]">
+                <div className="text-2xl font-black text-accent">
                   {buildHarmonicChord(draftChord).displayName}
                 </div>
               </div>
@@ -1383,7 +1383,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       onClick={() => previewDraftChord({ ...draftChord, inversion: inv.id })}
                       className={`py-1.5 rounded-lg font-bold text-[10px] cursor-pointer ${
                         (draftChord.inversion || 0) === inv.id
-                          ? 'bg-[#FCA311] text-black shadow'
+                          ? 'bg-accent text-on-accent shadow'
                           : 'bg-black/60 text-gray-300 hover:bg-white/10'
                       }`}
                     >
@@ -1403,7 +1403,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       onClick={() => previewDraftChord({ ...draftChord, octaveOffset: oct })}
                       className={`py-1.5 rounded-lg font-bold text-[10px] cursor-pointer ${
                         (draftChord.octaveOffset || 0) === oct
-                          ? 'bg-[#FCA311] text-black shadow'
+                          ? 'bg-accent text-on-accent shadow'
                           : 'bg-black/60 text-gray-300 hover:bg-white/10'
                       }`}
                     >
@@ -1424,7 +1424,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       type="button"
                       onClick={() => previewDraftChord({ ...draftChord, root })}
                       className={`px-3 py-1.5 rounded-lg font-bold text-left transition-colors cursor-pointer ${
-                        draftChord.root === root ? 'bg-[#FCA311] text-black' : 'bg-black/50 text-gray-300 hover:bg-white/10'
+                        draftChord.root === root ? 'bg-accent text-on-accent' : 'bg-black/50 text-gray-300 hover:bg-white/10'
                       }`}
                     >
                       {root}
@@ -1442,7 +1442,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       type="button"
                       onClick={() => previewDraftChord({ ...draftChord, type })}
                       className={`px-3 py-1.5 rounded-lg font-bold text-left transition-colors cursor-pointer ${
-                        draftChord.type === type ? 'bg-[#FCA311] text-black' : 'bg-black/50 text-gray-300 hover:bg-white/10'
+                        draftChord.type === type ? 'bg-accent text-on-accent' : 'bg-black/50 text-gray-300 hover:bg-white/10'
                       }`}
                     >
                       {type}
@@ -1460,7 +1460,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       type="button"
                       onClick={() => previewDraftChord({ ...draftChord, tension })}
                       className={`px-3 py-1.5 rounded-lg font-bold text-left transition-colors cursor-pointer ${
-                        (draftChord.tension || 'none') === tension ? 'bg-[#FCA311] text-black' : 'bg-black/50 text-gray-300 hover:bg-white/10'
+                        (draftChord.tension || 'none') === tension ? 'bg-accent text-on-accent' : 'bg-black/50 text-gray-300 hover:bg-white/10'
                       }`}
                     >
                       {tension === 'none' ? 'None' : tension}
@@ -1476,7 +1476,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     type="button"
                     onClick={() => previewDraftChord({ ...draftChord, bass: 'none' })}
                     className={`px-3 py-1.5 rounded-lg font-bold text-left transition-colors cursor-pointer ${
-                      !draftChord.bass || draftChord.bass === 'none' ? 'bg-[#FCA311] text-black' : 'bg-black/50 text-gray-300 hover:bg-white/10'
+                      !draftChord.bass || draftChord.bass === 'none' ? 'bg-accent text-on-accent' : 'bg-black/50 text-gray-300 hover:bg-white/10'
                     }`}
                   >
                     Root
@@ -1487,7 +1487,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       type="button"
                       onClick={() => previewDraftChord({ ...draftChord, bass })}
                       className={`px-3 py-1.5 rounded-lg font-bold text-left transition-colors cursor-pointer ${
-                        draftChord.bass === bass ? 'bg-[#FCA311] text-black' : 'bg-black/50 text-gray-300 hover:bg-white/10'
+                        draftChord.bass === bass ? 'bg-accent text-on-accent' : 'bg-black/50 text-gray-300 hover:bg-white/10'
                       }`}
                     >
                       /{bass}
@@ -1508,7 +1508,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <button
                 type="button"
                 onClick={applyHarmonicChord}
-                className="px-5 py-2 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/20"
+                className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg shadow-accent/20"
               >
                 <Check className="w-4 h-4" />
                 <span>Simpan ke Pad #{editingPadIndex + 1}</span>
@@ -1521,7 +1521,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       {isExportMenuOpen && isUnlocked8Bar && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
           <div className="fixed inset-0" onClick={() => setIsExportMenuOpen(false)} />
-          <div className="relative w-full max-w-xs rounded-2xl bg-[#14213D] border border-white/[0.12] p-5 shadow-2xl">
+          <div className="relative w-full max-w-xs rounded-2xl bg-surface border border-white/[0.12] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-white">Pilih Cakupan Ekspor</h3>
               <button
@@ -1542,7 +1542,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
-                <Disc className="w-4 h-4 text-[#FCA311]" />
+                <Disc className="w-4 h-4 text-accent" />
                 <span>Hanya Pola Drum</span>
               </button>
               <button
@@ -1554,7 +1554,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
-                <Music className="w-4 h-4 text-[#FCA311]" />
+                <Music className="w-4 h-4 text-accent" />
                 <span>4 Instrumen Akor</span>
               </button>
               <button
@@ -1566,7 +1566,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
-                <Sparkles className="w-4 h-4 text-[#FCA311]" />
+                <Sparkles className="w-4 h-4 text-accent" />
                 <span>Drum + Semua Instrumen Akor</span>
               </button>
             </div>

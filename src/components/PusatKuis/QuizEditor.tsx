@@ -557,7 +557,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="w-full max-w-4xl rounded-3xl bg-[#14213D] border border-white/[0.12] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94vh]"
+        className="w-full max-w-4xl rounded-3xl bg-surface border border-white/[0.12] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94vh]"
       >
         <input
           ref={fileInputRef}
@@ -570,7 +570,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
         {/* Header Atas */}
         <div className="p-4 sm:p-5 border-b border-white/10 bg-black/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#FC1212] text-white flex items-center justify-center shadow-lg shadow-red-600/20 font-black">
+            <div className="w-10 h-10 rounded-xl bg-accent2 text-on-accent2 flex items-center justify-center shadow-lg shadow-accent2/20 font-black">
               <Sliders className="w-5 h-5" />
             </div>
             <div>
@@ -601,7 +601,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
               onClick={() => handleStepClick(st.id as EditorStep)}
               className={`shrink-0 min-w-max px-4 py-2 rounded-full font-bold text-xs inline-flex items-center justify-center transition-all cursor-pointer ${
                 currentStep === st.id
-                  ? 'bg-[#FC1212] text-white shadow-lg shadow-red-600/30 font-black'
+                  ? 'bg-accent2 text-on-accent2 shadow-lg shadow-accent2/30 font-black'
                   : 'text-gray-400 bg-white/[0.04] hover:text-white hover:bg-white/10'
               }`}
             >
@@ -612,7 +612,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
 
         {errorMsg && (
           <div className="p-3 bg-red-950/60 border-b border-red-500/40 px-6 text-xs text-red-200 flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-[#FC1212] shrink-0" />
+            <AlertCircle className="w-4 h-4 text-accent2 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
@@ -622,7 +622,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
           {currentStep === 'theme' && (
             <div className="space-y-4">
               <div>
-                <span className="text-xs font-mono font-bold text-[#FC1212] uppercase tracking-wider block mb-1">Langkah 1 dari 6</span>
+                <span className="text-xs font-mono font-bold text-accent2 uppercase tracking-wider block mb-1">Langkah 1 dari 6</span>
                 <h4 className="text-xl font-black text-white">Tentukan Tema Kuis</h4>
                 <p className="text-xs text-gray-400 mt-1">Pilih kategori induk yang telah ditentukan oleh admin:</p>
               </div>
@@ -634,7 +634,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                     onClick={() => setSelectedThemeId(theme.id)}
                     className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
                       selectedThemeId === theme.id
-                        ? 'bg-[#FC1212]/15 border-[#FC1212] ring-2 ring-[#FC1212]/40 shadow-lg'
+                        ? 'bg-accent2/15 border-accent2 ring-2 ring-accent2/40 shadow-lg'
                         : 'bg-black/40 border-white/10 hover:border-white/20'
                     }`}
                   >
@@ -653,21 +653,21 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
           {currentStep === 'topic' && (
             <div className="space-y-5 max-w-2xl">
               <div>
-                <span className="text-xs font-mono font-bold text-[#FC1212] uppercase tracking-wider block mb-1">Langkah 2 dari 6</span>
+                <span className="text-xs font-mono font-bold text-accent2 uppercase tracking-wider block mb-1">Langkah 2 dari 6</span>
                 <h4 className="text-xl font-black text-white">Tentukan Topik Kuis</h4>
                 <p className="text-xs text-gray-400 mt-1">Topik adalah turunan bebas di bawah Tema <strong>{selectedThemeObj.name}</strong>:</p>
               </div>
 
               <div className="space-y-4 bg-black/40 p-5 rounded-2xl border border-white/10">
                 <div>
-                  <label className="text-xs font-bold text-gray-300 block mb-1">Nama Topik <span className="text-[#FC1212]">*</span></label>
+                  <label className="text-xs font-bold text-gray-300 block mb-1">Nama Topik <span className="text-accent2">*</span></label>
                   <input
                     type="text"
                     required
                     value={topicName}
                     onChange={(e) => setTopicName(e.target.value)}
                     placeholder="Contoh: Pemrograman React & Arsitektur Cloud"
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
                   />
                 </div>
                 <div>
@@ -677,7 +677,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                     value={topicDesc}
                     onChange={(e) => setTopicDesc(e.target.value)}
                     placeholder="Jelaskan cakupan materi topik ini..."
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl p-3 text-xs text-white outline-none resize-none"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl p-3 text-xs text-white outline-none resize-none"
                   />
                 </div>
               </div>
@@ -688,21 +688,21 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
           {currentStep === 'info' && (
             <div className="space-y-5 max-w-2xl">
               <div>
-                <span className="text-xs font-mono font-bold text-[#FC1212] uppercase tracking-wider block mb-1">Langkah 3 dari 6</span>
+                <span className="text-xs font-mono font-bold text-accent2 uppercase tracking-wider block mb-1">Langkah 3 dari 6</span>
                 <h4 className="text-xl font-black text-white">Informasi Spesifik Kuis</h4>
                 <p className="text-xs text-gray-400 mt-1">Judul kuis berada di bawah Topik <strong>{topicName || 'Topik Anda'}</strong>:</p>
               </div>
 
               <div className="space-y-4 bg-black/40 p-5 rounded-2xl border border-white/10">
                 <div>
-                  <label className="text-xs font-bold text-gray-300 block mb-1">Judul Kuis <span className="text-[#FC1212]">*</span></label>
+                  <label className="text-xs font-bold text-gray-300 block mb-1">Judul Kuis <span className="text-accent2">*</span></label>
                   <input
                     type="text"
                     required
                     value={quizTitle}
                     onChange={(e) => setQuizTitle(e.target.value)}
                     placeholder="Contoh: Evaluasi Sintaksis Hooks & State Management"
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl px-3.5 py-2.5 text-xs text-white outline-none"
                   />
                 </div>
                 <div>
@@ -712,7 +712,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                     value={quizDesc}
                     onChange={(e) => setQuizDesc(e.target.value)}
                     placeholder="Ringkasan atau instruksi pengerjaan kuis..."
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl p-3 text-xs text-white outline-none resize-none"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl p-3 text-xs text-white outline-none resize-none"
                   />
                 </div>
                 <div className="relative">
@@ -721,7 +721,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowDifficultyHelp((v) => !v)}
-                      className="text-gray-400 hover:text-[#FCA311] cursor-pointer"
+                      className="text-gray-400 hover:text-accent cursor-pointer"
                       title="Perbedaan tiap tingkat kesulitan"
                     >
                       <HelpCircle className="w-3.5 h-3.5" />
@@ -729,7 +729,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                   </div>
 
                   {showDifficultyHelp && (
-                    <div className="mb-3 p-3.5 rounded-2xl bg-black/70 border border-[#FCA311]/40 text-[11px] text-gray-300 space-y-1.5 leading-relaxed">
+                    <div className="mb-3 p-3.5 rounded-2xl bg-black/70 border border-accent/40 text-[11px] text-gray-300 space-y-1.5 leading-relaxed">
                       <p><strong className="text-white">Mudah:</strong> Maks 25 soal, maks 5 opsi, poin wajib sama rata, tanpa nilai minus.</p>
                       <p><strong className="text-white">Biasa:</strong> Maks 50 soal, maks 10 opsi, poin berbeda boleh, nilai minus 0–50%.</p>
                       <p><strong className="text-white">Sulit:</strong> Maks 100 soal, nilai minus 0–100%, acak opsi dapat diaktifkan.</p>
@@ -745,7 +745,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                         type="button"
                         onClick={() => setDifficulty(diff)}
                         className={`py-2 px-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
-                          difficulty === diff ? 'bg-[#FC1212] text-white border-[#FC1212] shadow' : 'bg-black/50 text-gray-400 border-white/10 hover:text-white'
+                          difficulty === diff ? 'bg-accent2 text-on-accent2 border-accent2 shadow' : 'bg-black/50 text-gray-400 border-white/10 hover:text-white'
                         }`}
                       >
                         {diff}
@@ -761,7 +761,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
           {currentStep === 'settings' && (
             <div className="space-y-5 max-w-3xl">
               <div>
-                <span className="text-xs font-mono font-bold text-[#FC1212] uppercase tracking-wider block mb-1">Langkah 4 dari 6</span>
+                <span className="text-xs font-mono font-bold text-accent2 uppercase tracking-wider block mb-1">Langkah 4 dari 6</span>
                 <h4 className="text-xl font-black text-white">Pengaturan &amp; Aturan Penilaian</h4>
               </div>
 
@@ -770,7 +770,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                 <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-2">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-gray-300">Jumlah Butir Soal:</label>
-                    <span className="text-[10px] font-mono text-[#FCA311]">
+                    <span className="text-[10px] font-mono text-accent">
                       Maks {difficulty === 'Mudah' ? 25 : difficulty === 'Biasa' ? 50 : 100} Soal
                     </span>
                   </div>
@@ -780,7 +780,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                     max={difficulty === 'Mudah' ? 25 : difficulty === 'Biasa' ? 50 : 100}
                     value={totalQuestions}
                     onChange={(e) => setTotalQuestions(Number(e.target.value) || 1)}
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white outline-none"
                   />
                 </div>
 
@@ -788,19 +788,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                 <div className="p-4 rounded-2xl bg-black/40 border border-white/10 space-y-2">
                   <div className="flex justify-between items-center">
                     <label className="text-xs font-bold text-gray-300">Jumlah Pilihan Jawaban:</label>
-                    <span className="text-[10px] font-mono text-[#FCA311]">
+                    <span className="text-[10px] font-mono text-accent">
                       {difficulty === 'Mudah' ? 'Maks 5 Opsi' : '2 s/d 10 Opsi'}
                     </span>
                   </div>
                   <select
                     value={choicesPerQuestion}
                     onChange={(e) => setChoicesPerQuestion(Number(e.target.value))}
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl px-3 py-2 text-xs font-bold text-white outline-none cursor-pointer"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl px-3 py-2 text-xs font-bold text-white outline-none cursor-pointer"
                   >
                     {[2, 3, 4, 5, 6, 7, 8, 9, 10]
                       .filter((n) => (difficulty === 'Mudah' ? n <= 5 : true))
                       .map((num) => (
-                        <option key={num} value={num} className="bg-[#14213D] text-white">
+                        <option key={num} value={num} className="bg-surface text-white">
                           {num} Pilihan ({String.fromCharCode(65)} s/d {String.fromCharCode(65 + num - 1)})
                         </option>
                       ))}
@@ -814,14 +814,14 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => setScoreUnit('point')}
-                      className={`p-2 rounded-xl border text-xs font-bold cursor-pointer ${scoreUnit === 'point' ? 'bg-[#FC1212] text-white border-[#FC1212]' : 'bg-black/50 text-gray-400 border-white/10'}`}
+                      className={`p-2 rounded-xl border text-xs font-bold cursor-pointer ${scoreUnit === 'point' ? 'bg-accent2 text-on-accent2 border-accent2' : 'bg-black/50 text-gray-400 border-white/10'}`}
                     >
                       Poin (1 s/d 1000)
                     </button>
                     <button
                       type="button"
                       onClick={() => setScoreUnit('percent')}
-                      className={`p-2 rounded-xl border text-xs font-bold cursor-pointer ${scoreUnit === 'percent' ? 'bg-[#FC1212] text-white border-[#FC1212]' : 'bg-black/50 text-gray-400 border-white/10'}`}
+                      className={`p-2 rounded-xl border text-xs font-bold cursor-pointer ${scoreUnit === 'percent' ? 'bg-accent2 text-on-accent2 border-accent2' : 'bg-black/50 text-gray-400 border-white/10'}`}
                     >
                       Persentase (0% - 100%)
                     </button>
@@ -837,7 +837,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                           max={scoreUnit === 'percent' ? 100 : 1000}
                           value={equalScorePerQuestion}
                           onChange={(e) => setEqualScorePerQuestion(Number(e.target.value) || 0)}
-                          className="w-20 bg-black/80 border border-white/20 rounded-lg px-2 py-1 text-center text-xs font-mono font-bold text-white outline-none focus:border-[#FC1212]"
+                          className="w-20 bg-black/80 border border-white/20 rounded-lg px-2 py-1 text-center text-xs font-mono font-bold text-white outline-none focus:border-accent2"
                         />
                         <span className="text-[11px] text-gray-400 font-mono">{scoreUnit === 'percent' ? '%' : 'pt'}</span>
                       </div>
@@ -850,7 +850,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                         type="checkbox"
                         checked={roundScores}
                         onChange={(e) => setRoundScores(e.target.checked)}
-                        className="accent-[#FC1212]"
+                        className="accent-accent2"
                       />
                       <span>Bulatkan Nilai</span>
                     </label>
@@ -859,7 +859,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       type="button"
                       disabled={difficulty === 'Mudah'}
                       onClick={() => setPointSystem(pointSystem === 'equal' ? 'variable' : 'equal')}
-                      className="text-[11px] font-bold text-[#FCA311] underline disabled:opacity-30 cursor-pointer"
+                      className="text-[11px] font-bold text-accent underline disabled:opacity-30 cursor-pointer"
                     >
                       {pointSystem === 'equal' ? 'Ganti ke Poin Berbeda' : 'Ganti ke Poin Sama Rata'}
                     </button>
@@ -877,7 +877,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                         disabled={difficulty === 'Mudah' || difficulty === 'Ekstrem'}
                         checked={enablePenaltyMinus}
                         onChange={(e) => setEnablePenaltyMinus(e.target.checked)}
-                        className="accent-[#FC1212] w-4 h-4 cursor-pointer"
+                        className="accent-accent2 w-4 h-4 cursor-pointer"
                       />
                     </label>
 
@@ -895,7 +895,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                           max={maxAllowedPenalty}
                           value={penaltyPercentage}
                           onChange={(e) => setPenaltyPercentage(Number(e.target.value))}
-                          className="w-full h-1.5 bg-zinc-800 rounded appearance-none accent-[#FC1212] cursor-pointer"
+                          className="w-full h-1.5 bg-zinc-800 rounded appearance-none accent-accent2 cursor-pointer"
                         />
                       </div>
                     )}
@@ -907,7 +907,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                         disabled={difficulty === 'Mudah' || difficulty === 'Biasa' || difficulty === 'Ekstrem'}
                         checked={shuffleChoices}
                         onChange={(e) => setShuffleChoices(e.target.checked)}
-                        className="accent-[#FC1212] w-4 h-4 cursor-pointer"
+                        className="accent-accent2 w-4 h-4 cursor-pointer"
                       />
                     </label>
                   </div>
@@ -930,7 +930,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       onClick={() => setCorrectAnswerMode('single')}
                       className={`p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all ${
                         correctAnswerMode === 'single'
-                          ? 'bg-[#FC1212] text-white border-[#FC1212] shadow-md'
+                          ? 'bg-accent2 text-on-accent2 border-accent2 shadow-md'
                           : 'bg-black/50 text-gray-400 border-white/10 hover:text-white'
                       }`}
                     >
@@ -942,7 +942,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       onClick={() => setCorrectAnswerMode('multiple')}
                       className={`p-2.5 rounded-xl border text-xs font-bold cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed ${
                         correctAnswerMode === 'multiple'
-                          ? 'bg-[#FC1212] text-white border-[#FC1212] shadow-md'
+                          ? 'bg-accent2 text-on-accent2 border-accent2 shadow-md'
                           : 'bg-black/50 text-gray-400 border-white/10 hover:text-white'
                       }`}
                     >
@@ -956,15 +956,15 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       <div className="flex justify-between items-center">
                         <span className="text-xs font-bold text-white flex items-center gap-1.5">
                           <span>Aturan Penilaian Jawaban Ganda:</span>
-                          <span className="text-[10px] font-mono text-[#FCA311]">
+                          <span className="text-[10px] font-mono text-accent">
                             ({multiEvaluationMode === 'all_or_nothing' ? 'Harus Benar Semua' : 'Atur Poin Sendiri'})
                           </span>
                         </span>
                         {difficulty === 'Mudah' && (
-                          <span className="text-[10px] text-amber-300 font-mono">*Tingkat Mudah: wajib atur poin per opsi</span>
+                          <span className="text-[10px] text-accent font-mono">*Tingkat Mudah: wajib atur poin per opsi</span>
                         )}
                         {difficulty === 'Ekstrem' && (
-                          <span className="text-[10px] text-amber-300 font-mono">*Tingkat Ekstrem: wajib benar semua</span>
+                          <span className="text-[10px] text-accent font-mono">*Tingkat Ekstrem: wajib benar semua</span>
                         )}
                       </div>
 
@@ -975,7 +975,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                           onClick={() => setMultiEvaluationMode('all_or_nothing')}
                           className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
                             multiEvaluationMode === 'all_or_nothing'
-                              ? 'bg-[#FC1212] text-white border-[#FC1212] font-black shadow-lg shadow-red-600/20'
+                              ? 'bg-accent2 text-on-accent2 border-accent2 font-black shadow-lg shadow-accent2/20'
                               : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
                           }`}
                         >
@@ -991,7 +991,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                           onClick={() => setMultiEvaluationMode('partial')}
                           className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
                             multiEvaluationMode === 'partial'
-                              ? 'bg-[#FC1212] text-white border-[#FC1212] font-black shadow-lg shadow-red-600/20'
+                              ? 'bg-accent2 text-on-accent2 border-accent2 font-black shadow-lg shadow-accent2/20'
                               : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
                           }`}
                         >
@@ -1011,7 +1011,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                         type="checkbox"
                         checked={hasGlobalTimer}
                         onChange={(e) => setHasGlobalTimer(e.target.checked)}
-                        className="accent-[#FC1212] w-4 h-4"
+                        className="accent-accent2 w-4 h-4"
                       />
                       <span>Batasi Waktu Pengerjaan Soal (Maksimal 3 Menit / 180s)</span>
                     </label>
@@ -1024,7 +1024,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                           max={180}
                           value={globalTimeLimitSec}
                           onChange={(e) => setGlobalTimeLimitSec(Math.min(180, Math.max(1, Number(e.target.value) || 1)))}
-                          className="w-16 bg-black/80 border border-white/20 rounded px-2 py-1 text-center text-[#FC1212] font-bold"
+                          className="w-16 bg-black/80 border border-white/20 rounded px-2 py-1 text-center text-accent2 font-bold"
                         />
                         <span>Detik</span>
                       </div>
@@ -1049,7 +1049,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       type="button"
                       onClick={() => setActiveQuestionIndex(idx)}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
-                        isCur ? 'bg-[#FC1212] text-white shadow' : isReady ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-black/50 text-gray-400 border border-white/10'
+                        isCur ? 'bg-accent2 text-on-accent2 shadow' : isReady ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-black/50 text-gray-400 border border-white/10'
                       }`}
                     >
                       Soal {idx + 1} {isReady ? '✓' : '•'}
@@ -1061,7 +1061,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
               {/* Kontainer Soal Aktif */}
               <div className="p-5 rounded-3xl bg-black/40 border border-white/10 space-y-5">
                 <div className="flex items-center justify-between">
-                  <span className="px-3 py-1 rounded-full bg-[#FC1212] text-white text-xs font-black">
+                  <span className="px-3 py-1 rounded-full bg-accent2 text-on-accent2 text-xs font-black">
                     Soal #{activeQuestionIndex + 1} dari {totalQuestions}
                   </span>
 
@@ -1077,7 +1077,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                             prev.map((q, qi) => (qi === activeQuestionIndex ? { ...q, points: val } : q))
                           );
                         }}
-                        className="w-16 bg-black/80 border border-white/20 rounded-lg px-2 py-1 text-center font-mono font-bold text-[#FC1212]"
+                        className="w-16 bg-black/80 border border-white/20 rounded-lg px-2 py-1 text-center font-mono font-bold text-accent2"
                       />
                       <span className="font-mono">{scoreUnit === 'percent' ? '%' : 'Poin'}</span>
                     </div>
@@ -1097,7 +1097,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       );
                     }}
                     placeholder="Tuliskan pertanyaan di sini..."
-                    className="w-full bg-black/60 border border-white/15 focus:border-[#FC1212] rounded-xl p-3 text-xs text-white outline-none resize-none"
+                    className="w-full bg-black/60 border border-white/15 focus:border-accent2 rounded-xl p-3 text-xs text-white outline-none resize-none"
                   />
                 </div>
 
@@ -1128,7 +1128,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                         }}
                         className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1 cursor-pointer"
                       >
-                        <Upload className="w-3 h-3 text-[#FC1212]" />
+                        <Upload className="w-3 h-3 text-accent2" />
                         <span>Unggah Lokal (Gambar &le;2MB, Audio &le;5MB, Video &le;10MB)</span>
                       </button>
                     </div>
@@ -1154,7 +1154,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                       );
                     }}
                     placeholder="Atau tautkan URL media online (https://...)"
-                    className="w-full bg-black/80 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white outline-none focus:border-[#FC1212]"
+                    className="w-full bg-black/80 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white outline-none focus:border-accent2"
                   />
                   {curQ.mediaUrl && curQ.mediaType && curQ.mediaType !== 'none' && (
                     <div className="pt-1">
@@ -1183,7 +1183,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                           )
                         );
                       }}
-                      className="text-xs font-bold text-amber-300 flex items-center gap-1.5 cursor-pointer w-full text-left"
+                      className="text-xs font-bold text-accent flex items-center gap-1.5 cursor-pointer w-full text-left"
                     >
                       {curQ.showGeneralExplanation ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                       <span>Penjelasan Umum Jika Seluruh Jawaban Benar Terpilih (Opsional)</span>
@@ -1268,7 +1268,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                             );
                           }}
                           placeholder={`Pilihan ${String.fromCharCode(65 + cIdx)}...`}
-                          className="flex-1 bg-black/80 border border-white/15 focus:border-[#FC1212] rounded-xl px-3 py-2 text-xs text-white outline-none"
+                          className="flex-1 bg-black/80 border border-white/15 focus:border-accent2 rounded-xl px-3 py-2 text-xs text-white outline-none"
                         />
 
                         {correctAnswerMode === 'multiple' && ch.isCorrect && multiEvaluationMode === 'partial' && (
@@ -1302,7 +1302,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                             );
                           }}
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            ch.showExplanation ? 'bg-[#FC1212] text-white border-[#FC1212]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
+                            ch.showExplanation ? 'bg-accent2 text-on-accent2 border-accent2' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'
                           }`}
                           title="Tampilkan / Sembunyikan Penjelasan Opsi"
                         >
@@ -1370,7 +1370,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
               <div className="p-5 rounded-2xl bg-black/40 border border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                 <div>
                   <span className="text-gray-400 block font-mono text-[10px]">TEMA:</span>
-                  <span className="font-black text-[#FC1212] text-sm">{selectedThemeObj.name}</span>
+                  <span className="font-black text-accent2 text-sm">{selectedThemeObj.name}</span>
                 </div>
                 <div>
                   <span className="text-gray-400 block font-mono text-[10px]">TOPIK:</span>
@@ -1432,7 +1432,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
               <button
                 type="button"
                 onClick={() => setCurrentStep('topic')}
-                className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Lanjut ke Topik</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1450,7 +1450,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                   setErrorMsg(null);
                   setCurrentStep('info');
                 }}
-                className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Lanjut ke Info Kuis</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1468,7 +1468,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
                   setErrorMsg(null);
                   setCurrentStep('settings');
                 }}
-                className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Lanjut ke Pengaturan Kuis</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1479,7 +1479,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
               <button
                 type="button"
                 onClick={handleApplySettingsAndProceed}
-                className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <span>Terapkan &amp; Mulai Buat Soal</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -1490,7 +1490,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
               <button
                 type="button"
                 onClick={handleProceedQuestionStep}
-                className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg shadow-red-600/30"
+                className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-lg shadow-accent2/30"
               >
                 <span>{activeQuestionIndex < totalQuestions - 1 ? 'Soal Selanjutnya' : 'Lanjut ke Review & Simpan'}</span>
                 <ArrowRight className="w-3.5 h-3.5" />
