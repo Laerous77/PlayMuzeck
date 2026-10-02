@@ -94,9 +94,9 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
     const unlockBtn = document.getElementById('btn-unlock-loop-header');
     if (unlockBtn) {
       unlockBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      unlockBtn.classList.add('ring-4', 'ring-[#FCA311]', 'scale-105');
+      unlockBtn.classList.add('ring-4', 'ring-accent', 'scale-105');
       setTimeout(() => {
-        unlockBtn.classList.remove('ring-4', 'ring-[#FCA311]', 'scale-105');
+        unlockBtn.classList.remove('ring-4', 'ring-accent', 'scale-105');
       }, 1500);
     }
   };
@@ -406,7 +406,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
   };
 
   return (
-    <div className="rounded-3xl bg-gradient-to-b from-[#14213D]/80 via-black to-[#090D16] border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6">
+    <div className="rounded-3xl bg-gradient-to-b from-surface/80 via-black to-deep border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6">
       <audio
         ref={audioRef}
         src={loopAudioUrl}
@@ -419,7 +419,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-[#FCA311]/15 border border-[#FCA311]/30 flex items-center justify-center text-[#FCA311] shadow-inner">
+          <div className="w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent shadow-inner">
             <Radio className="w-6 h-6 animate-pulse" />
           </div>
           <div>
@@ -432,7 +432,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                   <CheckCircle2 className="w-3 h-3" /> Full Loop Aktif
                 </span>
               ) : (
-                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30 flex items-center gap-1">
                   <Lock className="w-3 h-3" /> Preview 7 Detik
                 </span>
               )}
@@ -450,22 +450,22 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 <button
                   disabled={isExporting}
                   onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 text-black font-extrabold text-xs hover:bg-emerald-400 cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500 text-neutral-950 font-extrabold text-xs hover:bg-emerald-400 cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                 >
                   {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   <span>Unduh Loop</span>
                   <ChevronDown className="w-3 h-3" />
                 </button>
                 {showDownloadMenu && !isExporting && (
-                  <div className="absolute right-0 mt-2 w-48 rounded-xl bg-[#14213D] border border-white/15 p-1.5 shadow-2xl z-30 text-xs">
-                    <p className="text-[10px] uppercase font-bold text-[#FCA311] px-2.5 py-1">
+                  <div className="absolute right-0 mt-2 w-48 rounded-xl bg-surface border border-white/15 p-1.5 shadow-2xl z-30 text-xs">
+                    <p className="text-[10px] uppercase font-bold text-accent px-2.5 py-1">
                       Render Loop ({maxLoopCount}x):
                     </p>
                     {['WAV', 'MP3', 'FLAC', 'M4A'].map((fmt) => (
                       <button
                         key={fmt}
                         onClick={() => handleDownloadProcessedLoop(fmt)}
-                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-white hover:bg-[#FCA311] hover:text-black font-semibold flex justify-between cursor-pointer"
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-white hover:bg-accent hover:text-on-accent font-semibold flex justify-between cursor-pointer"
                       >
                         <span>Loop .{fmt}</span>
                         <span className="text-[10px] opacity-70">{maxLoopCount}x Loop</span>
@@ -479,7 +479,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 type="button"
                 onClick={() => setShowDspPanel(!showDspPanel)}
                 className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                  showDspPanel ? 'bg-[#FCA311] text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                  showDspPanel ? 'bg-accent text-on-accent' : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
                 <Sliders className="w-3.5 h-3.5" />
@@ -491,7 +491,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
               id="btn-unlock-loop-header"
               type="button"
               onClick={() => onNavigateToPricing('loopVersion')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#FCA311] text-black font-extrabold text-xs hover:brightness-110 shadow-lg shadow-amber-500/20 cursor-pointer transition-all duration-300"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-on-accent font-extrabold text-xs hover:brightness-110 shadow-lg shadow-accent/20 cursor-pointer transition-all duration-300"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Buka Seamless Loop</span>
@@ -510,7 +510,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
             step={0.1}
             value={currentTime}
             onChange={handleSeek}
-            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
           />
           <span className="text-xs font-mono text-gray-400 w-10">{formatTime(effectiveMaxDuration)}</span>
         </div>
@@ -519,9 +519,9 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={togglePlay}
-              className="w-12 h-12 rounded-2xl bg-[#FCA311] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+              className="w-12 h-12 rounded-2xl bg-accent text-on-accent flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-accent/20 cursor-pointer"
             >
-              {isPlaying ? <Pause className="w-6 h-6 fill-black" /> : <Play className="w-6 h-6 fill-black ml-0.5" />}
+              {isPlaying ? <Pause className="w-6 h-6 fill-on-accent" /> : <Play className="w-6 h-6 fill-on-accent ml-0.5" />}
             </button>
 
             <button
@@ -540,7 +540,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
 
             {/* Selector Ulangi Loop (1x Gratis, 2x & 3x Mengarahkan ke Buka Seamless Loop) */}
             <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/5">
-              <Repeat className="w-3.5 h-3.5 text-[#FCA311]" />
+              <Repeat className="w-3.5 h-3.5 text-accent" />
               <span className="text-xs text-gray-300 font-bold mr-1">Ulangi:</span>
               {([1, 2, 3] as const).map((count) => {
                 const isLockedCount = !isLoopUnlocked && count > 1;
@@ -560,19 +560,19 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                     title={isLockedCount ? `Buka lisensi loop untuk pengulangan ${count}x` : `Ulangi ${count} kali`}
                     className={`px-2 py-1 rounded-lg text-xs font-mono font-black transition-all cursor-pointer flex items-center gap-1 ${
                       maxLoopCount === count
-                        ? 'bg-[#FCA311] text-black shadow'
+                        ? 'bg-accent text-on-accent shadow'
                         : isLockedCount
-                        ? 'bg-black/30 text-gray-500 hover:text-amber-300'
+                        ? 'bg-black/30 text-gray-500 hover:text-accent'
                         : 'bg-black/50 text-gray-400 hover:text-white'
                     }`}
                   >
-                    {isLockedCount && <Lock className="w-2.5 h-2.5 text-[#FCA311]" />}
+                    {isLockedCount && <Lock className="w-2.5 h-2.5 text-accent" />}
                     <span>{count}x</span>
                   </button>
                 );
               })}
               {isPlaying && isLoopUnlocked && (
-                <span className="text-[10px] font-mono text-[#FCA311] bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 ml-1">
+                <span className="text-[10px] font-mono text-accent bg-accent/10 px-2 py-0.5 rounded border border-accent/20 ml-1">
                   Putaran {currentLoopIteration}/{maxLoopCount}
                 </span>
               )}
@@ -592,7 +592,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 setVolume(v);
                 if (audioRef.current) audioRef.current.volume = v;
               }}
-              className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+              className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
             />
             <span className="text-xs font-mono text-gray-300 w-9 text-right font-semibold">
               {Math.round(volume * 100)}%
@@ -605,7 +605,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
         <div className="mt-6 pt-6 border-t border-white/10 animate-in fade-in duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-[#FCA311]" /> Rak Efek Audio & Equalizer (Loop Studio)
+              <Sliders className="w-4 h-4 text-accent" /> Rak Efek Audio & Equalizer (Loop Studio)
             </h3>
           </div>
 
@@ -618,7 +618,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
               <select
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
-                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#FCA311]"
+                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-accent"
               >
                 <option value={0.5}>0.5x (Slow Motion)</option>
                 <option value={0.75}>0.75x</option>
@@ -632,7 +632,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                   type="checkbox"
                   checked={keepPitch}
                   onChange={(e) => setKeepPitch(e.target.checked)}
-                  className="accent-[#FCA311] rounded cursor-pointer"
+                  className="accent-accent rounded cursor-pointer"
                 />
                 <span>Kunci Nada (Keep Pitch)</span>
               </label>
@@ -650,7 +650,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 step={1}
                 value={bassGain}
                 onChange={(e) => setBassGain(Number(e.target.value))}
-                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
               />
             </div>
 
@@ -666,7 +666,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 step={1}
                 value={trebleGain}
                 onChange={(e) => setTrebleGain(Number(e.target.value))}
-                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
               />
             </div>
 
@@ -675,7 +675,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsDelay(!isDelay)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isDelay ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isDelay ? 'bg-accent text-on-accent border-accent' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isDelay ? '✓ Delay On' : 'Delay'}
@@ -684,7 +684,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsReverb(!isReverb)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isReverb ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isReverb ? 'bg-accent text-on-accent border-accent' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isReverb ? '✓ Reverb On' : 'Reverb'}
@@ -696,7 +696,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsChorus(!isChorus)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isChorus ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isChorus ? 'bg-accent text-on-accent border-accent' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isChorus ? '✓ Chorus' : 'Chorus'}
@@ -705,7 +705,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsCompressor(!isCompressor)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isCompressor ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isCompressor ? 'bg-accent text-on-accent border-accent' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isCompressor ? '✓ Comp' : 'Compressor'}

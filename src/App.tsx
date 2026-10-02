@@ -847,7 +847,7 @@ function MainApp() {
 
   return (
     <ThemeProvider isLoggedIn={Boolean(userSession?.isLoggedIn)} userKey={userSession?.email || ''}>
-    <div className="min-h-screen bg-[#000000] text-[#E5E5E5] flex flex-col selection:bg-accent selection:text-on-accent">
+    <div className="min-h-screen bg-page text-fg flex flex-col selection:bg-accent selection:text-on-accent">
       <Header
         currentMode={currentMode}
         onModeChange={(mode) => {

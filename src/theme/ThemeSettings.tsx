@@ -42,7 +42,7 @@ const Card: React.FC<CardProps> = ({ title, sub, palette, selected, inUse, onCli
   </button>
 );
 
-export const ThemeSettings: React.FC = () => {
+export const ThemeSettings: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { palette, loaded, activeId, mine, assigned, locked, maxMine, activate, save, remove, reset, preview } = useTheme();
 
   const [sel, setSel] = useState<Sel>('builtin');
@@ -115,7 +115,7 @@ export const ThemeSettings: React.FC = () => {
   const isFull = mine.length >= maxMine;
 
   return (
-    <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-4 max-w-2xl">
+    <section className={`space-y-4 ${embedded ? '' : 'rounded-2xl bg-surface border border-white/10 p-5 max-w-2xl'}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="font-bold text-white">Tema saya</h3>

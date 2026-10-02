@@ -866,7 +866,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   return (
     <section id="audio-tools-section" className="w-full">
-      <div className="rounded-2xl bg-[#14213D] border border-white/[0.08] p-5 sm:p-7 shadow-xl space-y-6">
+      <div className="rounded-2xl bg-surface border border-white/[0.08] p-5 sm:p-7 shadow-xl space-y-6">
         
         {audioUrl && (
           <audio
@@ -882,7 +882,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-[#FCA311]" />
+              <Sparkles className="w-5 h-5 text-accent" />
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                 Audio Processing & AI Tools Suite
               </h3>
@@ -899,15 +899,15 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                 <CheckCircle className="w-3.5 h-3.5" /> Sudah Dimiliki
               </span>
             ) : currentToolQuota > 0 ? (
-              <span className="text-amber-300 bg-amber-500/10 px-3 py-1.5 rounded-xl border border-amber-500/20 text-xs font-bold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-[#FCA311]" />
+              <span className="text-accent bg-accent/10 px-3 py-1.5 rounded-xl border border-accent/20 text-xs font-bold flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-accent" />
                 {currentToolQuota === 2 ? '2 penggunaan gratis hari ini' : '1 penggunaan gratis tersisa'}
               </span>
             ) : (
               <button
                 type="button"
                 onClick={onUnlockEditor}
-                className="px-3.5 py-1.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                className="px-3.5 py-1.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
               >
                 <Lock className="w-3.5 h-3.5" /> Beli Audio Tools — Rp20.000
               </button>
@@ -917,7 +917,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               onClick={() => fileInputRef.current?.click()}
               className="px-3.5 py-2 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer"
             >
-              <Upload className="w-3.5 h-3.5 text-[#FCA311]" />
+              <Upload className="w-3.5 h-3.5 text-accent" />
               <span>{audioFile ? 'Ganti Berkas' : 'Unggah Berkas'}</span>
             </button>
             <input
@@ -950,14 +950,14 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                 }}
                 className={`p-2.5 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer relative ${
                   isSelected
-                    ? 'bg-[#FCA311] text-black border-[#FCA311] shadow-md font-black'
+                    ? 'bg-accent text-on-accent border-accent shadow-md font-black'
                     : 'bg-black/40 text-gray-300 border-white/[0.06] hover:border-white/20'
                 }`}
               >
                 {tool.isAi && (
                   <span
                     className={`absolute -top-1.5 -right-1 text-[9px] font-black px-1.5 py-0.2 rounded-full border shadow-xs ${
-                      isSelected ? 'bg-black text-[#FCA311] border-black' : 'bg-[#FCA311] text-black border-[#FCA311]'
+                      isSelected ? 'bg-black text-accent border-black' : 'bg-accent text-on-accent border-accent'
                     }`}
                   >
                     AI
@@ -989,7 +989,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             </div>
 
             {audioFile && (
-              <span className="text-[11px] font-mono text-[#FCA311] bg-black/60 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
+              <span className="text-[11px] font-mono text-accent bg-black/60 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
                 <FileAudio className="w-3.5 h-3.5" />
                 <span className="truncate max-w-[150px] sm:max-w-xs">{audioFile.name}</span>
                 <span className="text-gray-400">({decodedBuffer?.duration.toFixed(1)}s)</span>
@@ -1006,13 +1006,13 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   className="relative w-full h-16 bg-black/60 rounded-xl border border-white/10 overflow-hidden select-none p-1 touch-none"
                 >
                   <div
-                    className="absolute top-0 bottom-0 bg-[#FCA311]/25 border-x-2 border-[#FCA311] transition-none flex items-center justify-center pointer-events-none"
+                    className="absolute top-0 bottom-0 bg-accent/25 border-x-2 border-accent transition-none flex items-center justify-center pointer-events-none"
                     style={{
                       left: `${startPercent}%`,
                       width: `${Math.max(0, endPercent - startPercent)}%`,
                     }}
                   >
-                    <span className="text-[10px] font-mono font-bold text-[#FCA311] bg-black/80 px-2 py-0.5 rounded shadow">
+                    <span className="text-[10px] font-mono font-bold text-accent bg-black/80 px-2 py-0.5 rounded shadow">
                       Area Simpan: {(trimEnd - trimStart).toFixed(1)}s
                     </span>
                   </div>
@@ -1022,8 +1022,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     className="absolute top-0 bottom-0 w-4 -ml-2 z-10 flex items-center justify-center cursor-ew-resize group"
                     style={{ left: `${startPercent}%` }}
                   >
-                    <div className="w-1 h-full bg-amber-300 group-hover:bg-amber-200 group-active:bg-white transition-colors" />
-                    <div className="absolute w-3 h-6 bg-amber-300 group-hover:bg-amber-200 group-active:bg-white rounded-sm shadow" />
+                    <div className="w-1 h-full bg-accent group-hover:bg-accent/70 group-active:bg-white transition-colors" />
+                    <div className="absolute w-3 h-6 bg-accent group-hover:bg-accent/70 group-active:bg-white rounded-sm shadow" />
                   </div>
 
                   <div
@@ -1031,8 +1031,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     className="absolute top-0 bottom-0 w-4 -ml-2 z-10 flex items-center justify-center cursor-ew-resize group"
                     style={{ left: `${endPercent}%` }}
                   >
-                    <div className="w-1 h-full bg-amber-300 group-hover:bg-amber-200 group-active:bg-white transition-colors" />
-                    <div className="absolute w-3 h-6 bg-amber-300 group-hover:bg-amber-200 group-active:bg-white rounded-sm shadow" />
+                    <div className="w-1 h-full bg-accent group-hover:bg-accent/70 group-active:bg-white transition-colors" />
+                    <div className="absolute w-3 h-6 bg-accent group-hover:bg-accent/70 group-active:bg-white rounded-sm shadow" />
                   </div>
                 </div>
 
@@ -1053,7 +1053,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                             setTrimStart(clamped);
                             if (audioElementRef.current) audioElementRef.current.currentTime = clamped;
                           }}
-                          className="w-20 bg-black/80 border border-white/15 rounded px-2 py-1 text-xs font-mono font-bold text-[#FCA311] text-right focus:outline-none focus:border-[#FCA311]"
+                          className="w-20 bg-black/80 border border-white/15 rounded px-2 py-1 text-xs font-mono font-bold text-accent text-right focus:outline-none focus:border-accent"
                         />
                         <span className="text-gray-400 font-mono">detik</span>
                       </div>
@@ -1069,7 +1069,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                         setTrimStart(val);
                         if (audioElementRef.current) audioElementRef.current.currentTime = val;
                       }}
-                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                     />
                   </div>
 
@@ -1088,7 +1088,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                             const clamped = Math.max(trimStart + 0.1, Math.min(val, totalDuration));
                             setTrimEnd(clamped);
                           }}
-                          className="w-20 bg-black/80 border border-white/15 rounded px-2 py-1 text-xs font-mono font-bold text-[#FCA311] text-right focus:outline-none focus:border-[#FCA311]"
+                          className="w-20 bg-black/80 border border-white/15 rounded px-2 py-1 text-xs font-mono font-bold text-accent text-right focus:outline-none focus:border-accent"
                         />
                         <span className="text-gray-400 font-mono">detik</span>
                       </div>
@@ -1103,7 +1103,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                         const val = Math.max(trimStart + 0.1, Number(e.target.value));
                         setTrimEnd(val);
                       }}
-                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                     />
                   </div>
                 </div>
@@ -1115,7 +1115,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <div className="space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <label className="text-gray-300 font-bold block">Penyesuaian Gain Dinamis (Real-time):</label>
-                  <span className="text-sm font-mono font-bold text-[#FCA311]">
+                  <span className="text-sm font-mono font-bold text-accent">
                     {dynamicGainDb > 0 ? `+${dynamicGainDb}` : dynamicGainDb} dB
                   </span>
                 </div>
@@ -1126,7 +1126,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   step="1"
                   value={dynamicGainDb}
                   onChange={(e) => setDynamicGainDb(Number(e.target.value))}
-                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
               </div>
             )}
@@ -1136,7 +1136,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <div className="space-y-3 text-xs">
                 <div className="flex items-center justify-between">
                   <label className="text-gray-300 font-bold block">Pergeseran Nada Dinamis:</label>
-                  <span className="text-sm font-mono font-bold text-[#FCA311]">
+                  <span className="text-sm font-mono font-bold text-accent">
                     {dynamicPitchSemitones > 0 ? `+${dynamicPitchSemitones}` : dynamicPitchSemitones} Semitone
                   </span>
                 </div>
@@ -1147,7 +1147,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   step="1"
                   value={dynamicPitchSemitones}
                   onChange={(e) => setDynamicPitchSemitones(Number(e.target.value))}
-                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
                 <div className="flex items-center gap-2 pt-1 bg-black/40 p-2.5 rounded-lg border border-white/5">
                   <input
@@ -1155,7 +1155,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     id="chk-keep-tempo"
                     checked={keepTempoOnPitch}
                     onChange={(e) => setKeepTempoOnPitch(e.target.checked)}
-                    className="accent-[#FCA311] w-4 h-4 cursor-pointer"
+                    className="accent-accent w-4 h-4 cursor-pointer"
                   />
                   <label htmlFor="chk-keep-tempo" className="text-gray-300 font-bold cursor-pointer select-none">
                     Kunci Tempo (Keep Tempo) — Kecepatan tempo tetap stabil saat nada dinaik-turunkan
@@ -1169,7 +1169,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <div className="space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <label className="text-gray-300 font-bold block">Kecepatan Putar Dinamis (Nada Terkunci Normal):</label>
-                  <span className="text-sm font-mono font-bold text-[#FCA311]">{dynamicTempoSpeed}x</span>
+                  <span className="text-sm font-mono font-bold text-accent">{dynamicTempoSpeed}x</span>
                 </div>
                 <input
                   type="range"
@@ -1178,7 +1178,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   step="0.05"
                   value={dynamicTempoSpeed}
                   onChange={(e) => setDynamicTempoSpeed(Number(e.target.value))}
-                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
               </div>
             )}
@@ -1198,7 +1198,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     type="button"
                     onClick={() => setConvertSourceMode('audio')}
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold cursor-pointer ${
-                      convertSourceMode === 'audio' ? 'bg-[#FCA311] text-black shadow' : 'bg-black/50 text-gray-400 hover:text-white'
+                      convertSourceMode === 'audio' ? 'bg-accent text-on-accent shadow' : 'bg-black/50 text-gray-400 hover:text-white'
                     }`}
                   >
                     <Music className="w-3.5 h-3.5" />
@@ -1211,7 +1211,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       fileInputRef.current?.click();
                     }}
                     className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold cursor-pointer ${
-                      convertSourceMode === 'video' ? 'bg-[#FCA311] text-black shadow' : 'bg-black/50 text-gray-400 hover:text-white'
+                      convertSourceMode === 'video' ? 'bg-accent text-on-accent shadow' : 'bg-black/50 text-gray-400 hover:text-white'
                     }`}
                   >
                     <Film className="w-3.5 h-3.5" />
@@ -1220,7 +1220,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                 </div>
 
                 {convertSourceMode === 'video' && (
-                  <p className="text-[11px] text-amber-300 bg-amber-500/10 p-3 rounded-xl border border-amber-500/20 leading-relaxed">
+                  <p className="text-[11px] text-accent bg-accent/10 p-3 rounded-xl border border-accent/20 leading-relaxed">
                     Mendukung ekstraksi audio universal dari semua ekstensi video (<strong>.mp4, .mkv, .webm, .mov, .avi, .flv, .wmv, .m4v, .3gp</strong>). Mesin browser mendaur ulang track suara video langsung ke format MP3/WAV/FLAC/M4A pilihan Anda.
                   </p>
                 )}
@@ -1241,7 +1241,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                         onClick={() => handleCompressTierChange(tier.id)}
                         className={`p-3 rounded-xl border flex flex-col justify-between text-left transition-all cursor-pointer ${
                           isSelected
-                            ? 'bg-[#FCA311] text-black border-[#FCA311] font-bold shadow-md'
+                            ? 'bg-accent text-on-accent border-accent font-bold shadow-md'
                             : 'bg-black/50 text-gray-300 border-white/[0.08] hover:border-white/20'
                         }`}
                       >
@@ -1260,7 +1260,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {/* 8. AI NOISE REDUCTION */}
             {selectedTool === 'noise_reduction' && (
               <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-[#FCA311] font-bold">
+                <div className="flex items-center gap-2 text-accent font-bold">
                   <Sparkles className="w-4 h-4" />
                   <span>AI Spectral Noise Gate</span>
                 </div>
@@ -1272,7 +1272,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     max="100"
                     value={aiNoiseAggression}
                     onChange={(e) => setAiNoiseAggression(Number(e.target.value))}
-                    className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-[#FCA311]"
+                    className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                   />
                 </div>
               </div>
@@ -1281,7 +1281,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {/* 9. AI VOCAL SEPARATOR */}
             {selectedTool === 'vocal_separator' && (
               <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-[#FCA311] font-bold">
+                <div className="flex items-center gap-2 text-accent font-bold">
                   <Mic2 className="w-4 h-4" />
                   <span>AI Center-Phase Isolation</span>
                 </div>
@@ -1292,7 +1292,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       type="button"
                       onClick={() => setVocalExtractTarget(mode)}
                       className={`px-3 py-1.5 rounded-lg font-bold capitalize cursor-pointer ${
-                        vocalExtractTarget === mode ? 'bg-[#FCA311] text-black' : 'bg-black/60 text-gray-400 hover:text-white'
+                        vocalExtractTarget === mode ? 'bg-accent text-on-accent' : 'bg-black/60 text-gray-400 hover:text-white'
                       }`}
                     >
                       {mode === 'vocal' ? 'Vokal Saja' : mode === 'instrumental' ? 'Musik Saja' : 'Keduanya (2 File)'}
@@ -1315,7 +1315,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     onClick={() => setSelectedExportFormat(fmt)}
                     className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
                       selectedExportFormat === fmt
-                        ? 'bg-[#FCA311] text-black shadow'
+                        ? 'bg-accent text-on-accent shadow'
                         : 'bg-black/60 text-gray-400 hover:text-white'
                     }`}
                   >
@@ -1332,7 +1332,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   <button
                     type="button"
                     onClick={onUnlockEditor}
-                    className="px-5 py-2 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
+                    className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
                   >
                     <Lock className="w-3.5 h-3.5" />
                     <span>Beli Audio Tools — Rp20.000</span>
@@ -1343,7 +1343,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       type="button"
                       onClick={() => executeProcessForTool(selectedTool)}
                       disabled={currentToolState.isProcessing}
-                      className="px-5 py-2 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                      className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
                     >
                       {currentToolState.isProcessing ? (
                         <>
@@ -1352,7 +1352,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                         </>
                       ) : (
                         <>
-                          <Play className="w-3.5 h-3.5 fill-black" />
+                          <Play className="w-3.5 h-3.5 fill-on-accent" />
                           <span>Jalankan {TOOLS.find((t) => t.id === selectedTool)?.name}</span>
                         </>
                       )}
@@ -1397,14 +1397,14 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   <button
                     type="button"
                     onClick={() => handleDownloadFile(currentToolState.vocalBuffers!.vocal!, 'Vocal_Only')}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black flex items-center gap-1 cursor-pointer shadow"
+                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 text-xs font-black flex items-center gap-1 cursor-pointer shadow"
                   >
                     <Download className="w-3 h-3" /> Unduh Vokal ({selectedExportFormat})
                   </button>
                   <button
                     type="button"
                     onClick={() => handleDownloadFile(currentToolState.vocalBuffers!.instrumental!, 'Music_Only')}
-                    className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black text-xs font-black flex items-center gap-1 cursor-pointer shadow"
+                    className="px-3 py-1.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1 cursor-pointer shadow"
                   >
                     <Download className="w-3 h-3" /> Unduh Musik ({selectedExportFormat})
                   </button>
@@ -1421,7 +1421,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       type="button"
                       onClick={() => handleDownloadFile()}
                       disabled={isEncodingCompressed || (!isToolsOwned && currentToolQuota <= 0)}
-                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                      className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50"
                     >
                       {isEncodingCompressed ? (
                         <>

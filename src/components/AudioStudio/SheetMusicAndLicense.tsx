@@ -154,10 +154,10 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
   return (
     <div className="space-y-6">
       {/* 1. LEMBAR PARTITUR PDF ASLI */}
-      <div className="rounded-3xl bg-[#0d1527] border border-white/10 p-6 sm:p-7 shadow-2xl space-y-5">
+      <div className="rounded-3xl bg-deep border border-white/10 p-6 sm:p-7 shadow-2xl space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/15 border border-[#FCA311]/40 flex items-center justify-center text-[#FCA311] shadow-lg shadow-amber-500/20 shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-accent/15 border border-accent/40 flex items-center justify-center text-accent shadow-lg shadow-accent/20 shrink-0">
               <FileText className="w-5 h-5" />
             </div>
             <div>
@@ -168,7 +168,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
                     DIMILIKI
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-[#FCA311] border border-amber-500/30 flex items-center gap-1">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/20 text-accent border border-accent/30 flex items-center gap-1">
                     <Lock className="w-2.5 h-2.5" /> Berbayar
                   </span>
                 )}
@@ -185,7 +185,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
                 <button
                   type="button"
                   onClick={handleDownloadSheetPdf}
-                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-extrabold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Unduh Partitur PDF</span>
@@ -206,7 +206,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
               <button
                 type="button"
                 onClick={handleBuySheetMusic}
-                className="px-5 py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs flex items-center gap-1.5 shadow-md shadow-amber-500/25 cursor-pointer active:scale-95 transition-all"
+                className="px-5 py-2.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 shadow-md shadow-accent/25 cursor-pointer active:scale-95 transition-all"
               >
                 <Lock className="w-3.5 h-3.5" />
                 <span>Beli Partitur (Rp {sheetMusicPrice.toLocaleString('id-ID')})</span>
@@ -228,7 +228,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
               </div>
             ) : (
               <div className="p-12 text-center space-y-3">
-                <FileText className="w-10 h-10 text-[#FCA311] mx-auto opacity-80" />
+                <FileText className="w-10 h-10 text-accent mx-auto opacity-80" />
                 <h4 className="text-sm font-bold text-white">Partitur Sudah Dimiliki</h4>
                 <p className="text-xs text-gray-400 max-w-md mx-auto leading-relaxed">
                   Berkas partitur PDF untuk lagu ini sedang diproses atau dapat diunduh langsung menggunakan tombol unduh di atas.
@@ -245,7 +245,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
             )
           ) : (
             <div className="p-12 text-center space-y-3.5 bg-gradient-to-b from-black/40 to-black/80">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-[#FCA311] mx-auto flex items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 text-accent mx-auto flex items-center justify-center">
                 <Lock className="w-6 h-6" />
               </div>
               <div className="max-w-md mx-auto space-y-1">
@@ -257,7 +257,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
               <button
                 type="button"
                 onClick={handleBuySheetMusic}
-                className="px-6 py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-xs cursor-pointer shadow-lg shadow-amber-500/25 active:scale-95 transition-all"
+                className="px-6 py-2.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-extrabold text-xs cursor-pointer shadow-lg shadow-accent/25 active:scale-95 transition-all"
               >
                 Beli Lisensi Partitur Rp {sheetMusicPrice.toLocaleString('id-ID')}
               </button>
@@ -267,7 +267,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
       </div>
 
       {/* 2. SERTIFIKAT & BERKAS LISENSI RESMI (.TXT) */}
-      <div className="rounded-3xl bg-[#0d1527] border border-white/10 p-6 sm:p-7 shadow-2xl space-y-4">
+      <div className="rounded-3xl bg-deep border border-white/10 p-6 sm:p-7 shadow-2xl space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 flex items-center justify-center">
@@ -316,7 +316,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-1">
               <div className="space-y-0.5">
                 <span className="text-gray-400 text-[10px] uppercase font-mono">Kode Sertifikasi:</span>
-                <p className="text-[#FCA311] font-mono font-bold text-xs select-all">{licenseKey}</p>
+                <p className="text-accent font-mono font-bold text-xs select-all">{licenseKey}</p>
               </div>
 
               <div className="flex items-center gap-2">
@@ -332,7 +332,7 @@ PLAYMUZECK AUDIO WORKSTATION • DIGITAL ASSET MANAGEMENT • DRM-FREE PASS
                 <button
                   type="button"
                   onClick={handleDownloadLicenseTxt}
-                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
+                  className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer active:scale-95 transition-all"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>Unduh Readme_License.txt</span>
