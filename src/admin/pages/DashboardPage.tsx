@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, Brain, Heart, Music, ShoppingBag, UserCheck, Users, Wallet, Clock, MessageSquare } from 'lucide-react';
 import { adminFetch } from '../adminApi';
+import { BUILTIN_DECKS } from '../../data/quiz';
 
 interface DayRow {
   date: string;
@@ -16,6 +17,7 @@ interface AnalyticsPayload {
     topics: number;
     decks: number;
     customDecks: number;
+    deckIds?: string[];
     users: number;
     newUsers7d: number;
     suspendedUsers: number;
@@ -92,6 +94,9 @@ export const DashboardPage: React.FC = () => {
   if (!data) return <p className={error ? 'text-red-400' : 'text-gray-400'}>{error || 'Memuat analitik...'}</p>;
 
   const t = data.totals;
+  // Deck bawaan hanya ada di kode frontend, bukan di tabel decks — hitung terpisah (hindari dobel bila id-nya juga ada di DB).
+  const dbIds = new Set(t.deckIds || []);
+  const builtinCount = BUILTIN_DECKS.filter((b) => !dbIds.has(b.id)).length;
   const values = data.days.map((d) => d[metric]);
   const maxVal = Math.max(1, ...values);
   const total = values.reduce((a, b) => a + b, 0);
@@ -104,7 +109,7 @@ export const DashboardPage: React.FC = () => {
     { label: 'Pengguna', value: t.users, sub: `+${t.newUsers7d} 7 hari${t.suspendedUsers ? ` · ${t.suspendedUsers} ditangguhkan` : ''}`, icon: Users },
     { label: 'Event', value: t.events, sub: 'total tercatat', icon: Activity },
     { label: 'Track audio', value: t.tracks, sub: 'di katalog', icon: Music },
-    { label: 'Kuis', value: t.decks + (t.customDecks || 0), sub: `${t.decks} admin · ${t.customDecks || 0} pengguna`, icon: Brain },
+    { label: 'Kuis', value: builtinCount + t.decks + (t.customDecks || 0), sub: `${builtinCount} bawaan · ${t.decks} admin · ${t.customDecks || 0} pengguna`, icon: Brain },
     { label: 'Pesan masuk', value: t.openInquiries, sub: `${t.inquiries} total`, icon: MessageSquare },
   ];
 

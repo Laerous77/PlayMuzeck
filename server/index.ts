@@ -628,7 +628,8 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
           (SELECT COUNT(*) FROM audio_tracks)::int AS tracks,
           (SELECT COUNT(*) FROM topics)::int AS topics,
           (SELECT COUNT(*) FROM decks WHERE COALESCE(is_custom, FALSE) = FALSE)::int AS decks,
-          (SELECT COUNT(*) FROM decks WHERE is_custom IS TRUE)::int AS custom_decks`),
+          (SELECT COUNT(*) FROM decks WHERE is_custom IS TRUE)::int AS custom_decks,
+          (SELECT COALESCE(array_agg(id), '{}') FROM decks) AS deck_ids`),
       pool.query(`SELECT COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE suspended_at IS NOT NULL)::int AS suspended,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int AS new7d
@@ -680,6 +681,7 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
         topics: cat.rows[0].topics,
         decks: cat.rows[0].decks,
         customDecks: cat.rows[0].custom_decks,
+        deckIds: cat.rows[0].deck_ids || [],
         users: usr.rows[0].total,
         newUsers7d: usr.rows[0].new7d,
         suspendedUsers: usr.rows[0].suspended,
