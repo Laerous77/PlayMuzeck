@@ -2349,6 +2349,40 @@ app.get('/api/payment/status', (_req, res) => {
   });
 });
 
+// Produk di sini sistemnya BELI SEKALI = AKSES LANGSUNG TERBUKA. Jadi item yang sudah dimiliki
+// (atau muncul dobel di keranjang yang sama) ditolak di server sebelum pembayaran dibuat.
+async function assertNotOwned(email: string, items: any[]): Promise<void> {
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (!item || item.category === 'donation') continue;
+    const label = String(item.title || item.name || item.id || 'Produk');
+    const refs = await collectionRefsForItems(pool, [item]);
+    if (!refs.length) continue;
+
+    const key = refs.map((r) => `${r.category}:${r.id}:${r.typeKey}`).sort().join('|');
+    if (seen.has(key)) throw new CheckoutError(`"${label}" ada lebih dari satu di keranjang. Hapus yang dobel.`);
+    seen.add(key);
+
+    const { rows } = await pool.query(
+      `SELECT item_category, item_id, item_type_key FROM public.user_collections
+        WHERE lower(user_email) = lower($1) AND item_id = ANY($2::text[])`,
+      [email, refs.map((r) => r.id)]
+    );
+    // Deck/topik/fitur: cukup cocok (kategori + id). Audio: kategori + id + jenis produk harus sama.
+    const looseCats = new Set(['quiz', 'topic', 'feature']);
+    const owns = (r: { category: string; id: string; typeKey: string }) =>
+      rows.some(
+        (o: any) =>
+          o.item_category === r.category &&
+          o.item_id === r.id &&
+          (looseCats.has(r.category) || String(o.item_type_key || '') === r.typeKey)
+      );
+    if (refs.every(owns)) {
+      throw new CheckoutError(`Kamu sudah memiliki "${label}". Akses produk ini sudah terbuka, jadi tidak perlu dibeli lagi.`);
+    }
+  }
+}
+
 app.post('/api/payment/charge', requireUser, async (req, res) => {
   const email = String((req as any).userEmail);
   const { orderId, items, customerDetails } = req.body || {};
@@ -2380,9 +2414,13 @@ app.post('/api/payment/charge', requireUser, async (req, res) => {
           id: raw.category === 'audio' ? raw.trackId || raw.id : raw.deckId || raw.topicId || raw.id,
           cartItemId: raw.id,
         };
-        const price = await serverItemPrice(item, email);
+        storedItems.push(item);
+      }
+      await assertNotOwned(email, storedItems);
+      for (let i = 0; i < storedItems.length; i++) {
+        const price = await serverItemPrice(storedItems[i], email);
         subtotal += price;
-        storedItems.push({ ...item, price });
+        storedItems[i] = { ...storedItems[i], price };
       }
       gross = subtotal + Math.round(subtotal * 0.11); // PPN 11%, sama dengan keranjang di klien
       if (gross < 1) return res.status(400).json({ error: 'Total pembayaran tidak valid.' });
@@ -2418,9 +2456,10 @@ app.post('/api/payment/charge', requireUser, async (req, res) => {
        WHERE payment_orders.user_email = EXCLUDED.user_email AND payment_orders.fulfilled = FALSE`,
       [orderId, email, kind, gross, JSON.stringify(storedItems)]
     );
+    console.log(`[payment] pesanan pending dibuat: ${orderId} (${email}, Rp${gross})`);
     res.json({ snapToken: snap.token, amount: gross });
   } catch (err: any) {
-    if (err instanceof CheckoutError) return res.status(400).json({ error: err.message });
+    if (err instanceof CheckoutError) { console.warn(`[payment] charge ditolak (${email}): ${err.message}`); return res.status(400).json({ error: err.message }); }
     console.error('[payment] charge error:', err);
     res.status(500).json({ error: 'Gagal membuat transaksi pembayaran.' });
   }

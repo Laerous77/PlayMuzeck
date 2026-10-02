@@ -98,16 +98,53 @@ export async function payWithQris(params: QrisChargeParams, handlers: QrisHandle
     const { snapToken } = await res.json();
     if (!snapToken) return false;
 
+    lastOrderId = params.orderId;
+    let settled = false; // true bila Snap melaporkan sukses / pending -> jangan dibatalkan saat popup ditutup
     snap.pay(snapToken, {
-      onSuccess: () => handlers.onSuccess(),
-      onPending: () => handlers.onPending?.(),
+      onSuccess: () => {
+        settled = true;
+        lastOrderId = null;
+        handlers.onSuccess();
+      },
+      onPending: () => {
+        settled = true;
+        handlers.onPending?.();
+      },
       onError: () => handlers.onError?.(),
-      onClose: () => handlers.onClose?.(),
+      onClose: () => {
+        // Popup ditutup tanpa menyelesaikan pembayaran -> pesanan 'Menunggu' dihapus.
+        if (!settled) void cancelPendingOrder(params.orderId);
+        handlers.onClose?.();
+      },
     });
     return true;
   } catch {
     console.warn('Backend Midtrans belum aktif, beralih ke panel QRIS lokal.');
     return false;
+  }
+}
+
+/** ID pesanan terakhir yang sudah dibuat di server tapi belum selesai dibayar. */
+let lastOrderId: string | null = null;
+
+/**
+ * Batalkan pesanan 'Menunggu' di server (hilang dari admin & transaksi Midtrans dibatalkan).
+ * Panggil saat keranjang dikosongkan / item dihapus setelah checkout sempat dibuka.
+ * Tanpa argumen = pesanan terakhir yang dibuka lewat payWithQris. Aman dipanggil berulang.
+ */
+export async function cancelPendingOrder(orderId?: string): Promise<void> {
+  const id = orderId || lastOrderId;
+  if (!id) return;
+  if (!orderId || orderId === lastOrderId) lastOrderId = null;
+  try {
+    await fetch('/api/payment/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ orderId: id }),
+    });
+  } catch {
+    /* server menyapu pesanan menunggu otomatis */
   }
 }
 
