@@ -12,6 +12,8 @@ import { CustomAudioModal } from './components/Modals/CustomAudioModal';
 import { ProfileDashboardModal } from './components/Modals/ProfileDashboardModal';
 import { DestinationModal } from './components/Modals/DestinationModal';
 import { Toast } from './components/Toast';
+import { ThemeModal } from './components/Modals/ThemeModal';
+import { ThemeProvider } from './theme/ThemeContext';
 import { AppMode, CartItem, AudioEntitlements, UserSession, Deck, Topic, AudioTrackItem } from './types';
 import { storage } from './services/storage';
 import { audioEngine } from './services/audioEngine';
@@ -25,7 +27,7 @@ import { removeDeckFromJsonStore } from './services/quizJsonStore';
 import { notifyUserScopeChanged } from './services/userScope';
 import { isBuiltinDeckId } from './data/quiz';
 import { installAuthFetch, clearUserToken, authApi, AUTH_EXPIRED_EVENT } from './services/authToken';
-import { RotateCcw, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { RotateCcw, ShieldCheck, AlertTriangle, Palette as PaletteIcon } from 'lucide-react';
 
 installAuthFetch(); // semua request /api/* otomatis membawa cookie sesi httpOnly
 
@@ -207,6 +209,7 @@ function MainApp() {
   const [isProfileDashboardOpen, setIsProfileDashboardOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCustomAudioOpen, setIsCustomAudioOpen] = useState(false);
+  const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [deckToPlay, setDeckToPlay] = useState<Deck | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -843,7 +846,8 @@ function MainApp() {
   );
 
   return (
-    <div className="min-h-screen bg-[#000000] text-[#E5E5E5] flex flex-col selection:bg-[#FCA311] selection:text-black">
+    <ThemeProvider isLoggedIn={Boolean(userSession?.isLoggedIn)} userKey={userSession?.email || ''}>
+    <div className="min-h-screen bg-[#000000] text-[#E5E5E5] flex flex-col selection:bg-accent selection:text-on-accent">
       <Header
         currentMode={currentMode}
         onModeChange={(mode) => {
@@ -960,11 +964,11 @@ function MainApp() {
         </AnimatePresence>
       </main>
 
-      <footer className="w-full bg-[#14213D]/40 border-t border-white/[0.08] py-8 px-4 sm:px-8 mt-auto">
+      <footer className="w-full bg-surface/40 border-t border-white/[0.08] py-8 px-4 sm:px-8 mt-auto">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
           <div className="flex items-center gap-2">
             <span className="font-extrabold text-white text-sm tracking-tight">
-              {siteSettings.siteName}<span className="text-[#FCA311]">.</span>
+              {siteSettings.siteName}<span className="text-accent">.</span>
             </span>
             <span>— {siteSettings.footerNote}</span>
           </div>
@@ -973,8 +977,17 @@ function MainApp() {
             <span className="flex items-center gap-1 text-emerald-400">
               <ShieldCheck className="w-3.5 h-3.5" /> Aman & Tepercaya
             </span>
+            {userSession?.isLoggedIn && (
+              <button
+                type="button"
+                onClick={() => setIsThemeOpen(true)}
+                className="flex items-center gap-1 text-accent font-bold hover:underline cursor-pointer"
+              >
+                <PaletteIcon className="w-3.5 h-3.5" /> Tema saya
+              </button>
+            )}
             {isAdmin && (
-              <a href="/admin" className="text-[#FCA311] font-bold hover:underline">
+              <a href="/admin" className="text-accent font-bold hover:underline">
                 Developer Console ⚙️
               </a>
             )}
@@ -1078,8 +1091,11 @@ function MainApp() {
         />
       )}
 
+      <ThemeModal isOpen={isThemeOpen} onClose={() => setIsThemeOpen(false)} />
+
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </div>
+    </ThemeProvider>
   );
 }
 

@@ -1,11 +1,29 @@
 @import "tailwindcss";
 
+/* ── Tema ────────────────────────────────────────────────────────────────
+   3 warna utama dikendalikan lewat CSS variable. Nilai di bawah adalah tema
+   BAWAAN (Oxford Amber); ThemeProvider menimpanya lewat applyPalette().
+   Setelah ini, kelas Tailwind bg-surface / text-accent / border-accent2/30
+   dst. (termasuk modifier opacity) langsung mengikuti tema aktif.          */
+:root {
+  --t-surface: #14213D;
+  --t-accent: #FCA311;
+  --t-accent2: #FC1212;
+  --t-on-accent: #000000;
+  --t-on-accent2: #ffffff;
+}
+
+@theme inline {
+  --color-surface: var(--t-surface);
+  --color-accent: var(--t-accent);
+  --color-accent2: var(--t-accent2);
+  --color-on-accent: var(--t-on-accent);
+  --color-on-accent2: var(--t-on-accent2);
+}
+
 @layer base {
   :root {
     --bg-black: #000000;
-    --bg-oxford: #14213D;
-    --accent-amber: #FCA311;
-    --accent-crimson: #780000;
     --text-primary: #FFFFFF;
     --text-muted: #E5E5E5;
   }
@@ -30,23 +48,22 @@
   background: #000000;
 }
 ::-webkit-scrollbar-thumb {
-  background: #14213D;
+  background: var(--t-surface);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #FCA311;
+  background: var(--t-accent);
 }
 
 @keyframes pulseGlow {
   0%, 100% {
-    box-shadow: 0 0 15px rgba(252, 163, 17, 0.25);
+    box-shadow: 0 0 15px color-mix(in srgb, var(--t-accent) 25%, transparent);
   }
   50% {
-    box-shadow: 0 0 25px rgba(252, 163, 17, 0.45);
+    box-shadow: 0 0 25px color-mix(in srgb, var(--t-accent) 45%, transparent);
   }
 }
 
 .glow-amber {
   animation: pulseGlow 2.5s infinite ease-in-out;
 }
-
