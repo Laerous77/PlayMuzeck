@@ -94,7 +94,7 @@ export const SettingsPage: React.FC = () => {
 
       <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
         <h3 className="font-bold text-white">Database</h3>
-        <p className="text-sm text-gray-400">SQLite tersimpan di `data/PlayMuzeck.sqlite`. Audio unggahan ada di `data/uploads`.</p>
+        <p className="text-sm text-gray-400">Data tersimpan di PostgreSQL (lihat DB_HOST / DB_NAME di .env). Audio unggahan disimpan di Supabase Storage (bucket audio-products) atau folder uploads/ di server.</p>
         <div className="flex flex-wrap gap-2">
           <button onClick={exportDb} className="rounded-xl border border-white/15 px-4 py-2 text-sm">
             Unduh backup JSON

@@ -81,6 +81,14 @@ async function sendMail(to: string, subject: string, text: string) {
   }
 }
 
+const SUSPENDED_MSG = 'Akun kamu sedang ditangguhkan. Hubungi admin untuk informasi lebih lanjut.';
+
+/** Dipakai panel admin (server/index.ts): kirim email TANPA menelan error, supaya admin tahu kalau gagal. */
+export async function sendMailStrict(to: string, subject: string, text: string) {
+  if (!mailer) throw new Error('SMTP belum dikonfigurasi di .env (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM).');
+  await mailer.sendMail({ from: process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text });
+}
+
 type Purpose = 'verify_email' | 'reset_password';
 
 /** Buat token sekali pakai. Maks 5 per jam per user per tujuan (anti spam email). */
@@ -153,7 +161,8 @@ export const requireAuth = wrap(async (req, res, next) => {
   const { rows } = await pool.query(
     `SELECT u.id, u.email, u.name, u.role
        FROM sessions s JOIN users u ON u.id = s.user_id
-      WHERE s.id_hash=$1 AND s.expires_at > now() AND u.email_verified_at IS NOT NULL`,
+      WHERE s.id_hash=$1 AND s.expires_at > now() AND u.email_verified_at IS NOT NULL
+        AND u.suspended_at IS NULL`,
     [sha256(sid)]
   );
   if (!rows[0]) return res.status(401).json({ error: 'UNAUTHENTICATED' });
@@ -242,7 +251,7 @@ r.post('/login', strict, wrap(async (req, res) => {
   const { email, password } = p.data;
 
   const u = (await pool.query(
-    `SELECT id, password_hash, email_verified_at, locked_until FROM users WHERE lower(email)=$1`, [email]
+    `SELECT id, password_hash, email_verified_at, locked_until, suspended_at FROM users WHERE lower(email)=$1`, [email]
   )).rows[0];
 
   if (u?.locked_until && new Date(u.locked_until) > new Date())
@@ -258,6 +267,9 @@ r.post('/login', strict, wrap(async (req, res) => {
         WHERE id=$1`, [u.id]);
     return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Email atau password salah.' });
   }
+  // Dicek SETELAH password benar supaya status akun tidak bocor ke orang yang bukan pemiliknya.
+  if (u.suspended_at)
+    return res.status(403).json({ error: 'ACCOUNT_SUSPENDED', message: SUSPENDED_MSG });
   if (!u.email_verified_at)
     return res.status(403).json({ error: 'EMAIL_NOT_VERIFIED', message: 'Email belum diverifikasi. Cek inbox kamu atau kirim ulang link verifikasi.' });
 
@@ -319,6 +331,11 @@ r.post('/google', strict, wrap(async (req, res) => {
 
   const email = payload.email.trim().toLowerCase();
   const name = (payload.name || email.split('@')[0]).replace(/[<>]/g, '').slice(0, 60);
+
+  const blocked = (await pool.query(
+    `SELECT 1 FROM users WHERE (google_sub=$1 OR lower(email)=$2) AND suspended_at IS NOT NULL`, [payload.sub, email]
+  )).rowCount;
+  if (blocked) return res.status(403).json({ error: 'ACCOUNT_SUSPENDED', message: SUSPENDED_MSG });
 
   let u = (await pool.query(`SELECT id FROM users WHERE google_sub=$1`, [payload.sub])).rows[0];
   if (!u) {

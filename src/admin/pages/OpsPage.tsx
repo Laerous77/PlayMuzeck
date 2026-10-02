@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Pencil, X, Check, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Check, Loader2, ChevronDown, ChevronRight, Mail, Ban, RotateCcw, ExternalLink } from 'lucide-react';
 import { adminFetch } from '../adminApi';
 
 // ---------- Tipe data ----------
@@ -51,12 +51,38 @@ interface UserRow {
   created_at: string;
   last_seen: string;
   has_password: boolean;
+  has_google: boolean;
   is_super_admin: boolean;
+  suspended_at: string | null;
+  suspended_reason: string | null;
+  email_verified_at: string | null;
+  owned_items: number;
+  paid_orders: number;
 }
 
-interface CatalogOption {
+interface CatalogTrack {
   id: string;
   title: string;
+  artist: string;
+  products: Record<string, number>;
+  bundle: number;
+}
+interface CatalogDeck {
+  id: string;
+  title: string;
+  price: number;
+  badge: string | null;
+}
+interface CatalogTopic {
+  id: string;
+  title: string;
+  price: number;
+}
+interface Catalog {
+  tracks: CatalogTrack[];
+  decks: CatalogDeck[];
+  topics: CatalogTopic[];
+  features: { editor8Bar: number; audioTools: number; quizCreator: number };
 }
 
 // ---------- Konstanta & helper ----------
@@ -75,14 +101,25 @@ const INQUIRY_STATUSES = [
   { id: 'selesai', label: 'Selesai', cls: 'bg-emerald-500/20 text-emerald-300' },
 ] as const;
 
+// Produk audio PER LAGU. Editor 8 Bar & Audio Tools sekali beli = permanen untuk semua lagu,
+// jadi dipilih sebagai jenis produk tersendiri (bukan per track).
 const AUDIO_PRODUCTS = [
   { key: 'fullMaster', label: 'Full Master' },
   { key: 'loopVersion', label: 'Loop' },
   { key: 'separatedStems', label: 'Stems' },
   { key: 'sheetMusic', label: 'Partitur' },
-  { key: 'fullEditor8Bar', label: 'Editor 8 Bar' },
-  { key: 'audioToolsSuite', label: 'Audio Tools' },
 ];
+
+const KEY_LABEL: Record<string, string> = {
+  fullMaster: 'Full Master',
+  loopVersion: 'Loop',
+  separatedStems: 'Stems',
+  sheetMusic: 'Partitur',
+  fullEditor8Bar: 'Editor 8 Bar',
+  audioToolsSuite: 'Audio Tools',
+  quizCreatorSuite: 'Kreator Kuis',
+  all: 'Bundle',
+};
 
 const statusMeta = (id: string) =>
   STATUSES.find((s) => s.id === id) ?? { id, label: id, cls: 'bg-white/10 text-gray-300' };
@@ -101,8 +138,7 @@ const itemLabel = (item: any): string => {
   if (!item) return '-';
   if (item.category === 'donation') return 'Donasi';
   const name = item.title || item.name || item.id || item.deckId || item.topicId || '?';
-  const key =
-    item.itemTypeKey === 'all' ? ' (bundle)' : item.itemTypeKey ? ` (${item.itemTypeKey})` : '';
+  const key = item.itemTypeKey ? ` (${KEY_LABEL[item.itemTypeKey] ?? item.itemTypeKey})` : '';
   return `${name}${key}`;
 };
 
@@ -113,31 +149,39 @@ const Badge: React.FC<{ cls: string; children: React.ReactNode }> = ({ cls, chil
   <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-bold ${cls}`}>{children}</span>
 );
 
-type ItemKind = 'audio' | 'deck' | 'topic' | 'quizCreator';
+type ItemKind = 'audio' | 'editor8Bar' | 'audioTools' | 'deck' | 'topic' | 'quizCreator';
+
+// Item yang sudah dipilih admin. `ref` dikirim ke server; server memvalidasi ke DB & menghitung harga sendiri.
+interface DraftItem {
+  key: string;
+  ref: Record<string, unknown>;
+  label: string;
+  price: number;
+}
 
 interface NewOrderForm {
   user_email: string;
-  customer_name: string;
   kind: 'cart' | 'donation';
   status: string;
+  autoAmount: boolean;
   gross_amount: string;
   itemKind: ItemKind;
   refId: string;
-  theme: string;
   audioKeys: string[];
-  items: any[];
+  bundle: boolean;
+  items: DraftItem[];
 }
 
 const emptyOrderForm: NewOrderForm = {
   user_email: '',
-  customer_name: '',
   kind: 'cart',
   status: 'paid',
+  autoAmount: true,
   gross_amount: '0',
   itemKind: 'audio',
   refId: '',
-  theme: '',
   audioKeys: ['fullMaster'],
+  bundle: false,
   items: [],
 };
 
@@ -168,9 +212,7 @@ export const OpsPage: React.FC = () => {
   const [buyers, setBuyers] = useState<Buyer[]>([]);
   const [inquiries, setInquiries] = useState<InquiryRow[]>([]);
   const [users, setUsers] = useState<UserRow[]>([]);
-  const [tracks, setTracks] = useState<CatalogOption[]>([]);
-  const [decks, setDecks] = useState<CatalogOption[]>([]);
-  const [topics, setTopics] = useState<CatalogOption[]>([]);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
 
   // pesanan
   const [filter, setFilter] = useState('all');
@@ -185,7 +227,9 @@ export const OpsPage: React.FC = () => {
   const [inqForm, setInqForm] = useState<InquiryForm | null>(null);
   // pengguna
   const [userSearch, setUserSearch] = useState('');
+  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'suspended'>('all');
   const [userForm, setUserForm] = useState<UserForm | null>(null);
+  const [emailForm, setEmailForm] = useState<{ user: UserRow; subject: string; message: string } | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -213,9 +257,7 @@ export const OpsPage: React.FC = () => {
 
   useEffect(() => {
     load();
-    adminFetch<any[]>('/api/admin/tracks').then((r) => setTracks(r.map((t) => ({ id: t.id, title: t.title })))).catch(() => {});
-    adminFetch<any[]>('/api/admin/decks').then((r) => setDecks(r.map((d) => ({ id: d.id, title: d.title })))).catch(() => {});
-    adminFetch<any[]>('/api/admin/topics').then((r) => setTopics(r.map((t) => ({ id: t.id, title: t.title })))).catch(() => {});
+    adminFetch<Catalog>('/api/admin/product-catalog').then(setCatalog).catch((err) => fail(err, 'Gagal memuat katalog produk.'));
   }, []);
 
   // ===== PESANAN =====
@@ -282,42 +324,62 @@ export const OpsPage: React.FC = () => {
     }
   };
 
+  const draftTotal = orderForm ? orderForm.items.reduce((a, b) => a + b.price, 0) : 0;
+
   const addItem = () => {
-    if (!orderForm) return;
-    const id = orderForm.refId.trim();
-    if (orderForm.itemKind !== 'quizCreator' && !id) return fail(null, 'Pilih atau isi ID produk dulu.');
-    let newItems: any[] = [];
-    if (orderForm.itemKind === 'audio') {
-      if (!orderForm.audioKeys.length) return fail(null, 'Pilih minimal satu jenis produk audio.');
-      const t = tracks.find((x) => x.id === id);
-      newItems = orderForm.audioKeys.map((k) => ({ category: 'audio', id, trackId: id, itemTypeKey: k, title: t?.title || id, price: 0 }));
-    } else if (orderForm.itemKind === 'deck') {
-      const d = decks.find((x) => x.id === id);
-      newItems = [{ category: 'deck', id, deckId: id, title: d?.title || id, badge: orderForm.theme.trim() || undefined, price: 0 }];
-    } else if (orderForm.itemKind === 'topic') {
-      const t = topics.find((x) => x.id === id);
-      newItems = [{ category: 'topic', id, topicId: id, title: t?.title || id, price: 0 }];
+    if (!orderForm || !catalog) return;
+    const f = orderForm;
+    let item: DraftItem | null = null;
+
+    if (f.itemKind === 'audio') {
+      const t = catalog.tracks.find((x) => x.id === f.refId);
+      if (!t) return fail(null, 'Pilih lagu dari daftar.');
+      if (f.bundle) {
+        item = { key: `audio|${t.id}|all`, ref: { kind: 'audio', trackId: t.id, bundle: true }, label: `${t.title} — Bundle lengkap`, price: t.bundle };
+      } else {
+        if (!f.audioKeys.length) return fail(null, 'Pilih minimal satu jenis produk audio.');
+        const names = f.audioKeys.map((k) => KEY_LABEL[k] ?? k).join(', ');
+        const price = f.audioKeys.reduce((a, k) => a + (t.products[k] ?? 0), 0);
+        item = { key: `audio|${t.id}|${[...f.audioKeys].sort().join(',')}`, ref: { kind: 'audio', trackId: t.id, keys: f.audioKeys }, label: `${t.title} — ${names}`, price };
+      }
+    } else if (f.itemKind === 'editor8Bar') {
+      item = { key: 'editor8Bar', ref: { kind: 'editor8Bar' }, label: 'Editor 8 Bar (permanen, semua lagu)', price: catalog.features.editor8Bar };
+    } else if (f.itemKind === 'audioTools') {
+      item = { key: 'audioTools', ref: { kind: 'audioTools' }, label: 'Audio Tools (permanen)', price: catalog.features.audioTools };
+    } else if (f.itemKind === 'quizCreator') {
+      item = { key: 'quizCreator', ref: { kind: 'quizCreator' }, label: 'Kreator Kuis (permanen)', price: catalog.features.quizCreator };
+    } else if (f.itemKind === 'deck') {
+      const d = catalog.decks.find((x) => x.id === f.refId);
+      if (!d) return fail(null, 'Pilih deck dari daftar.');
+      item = { key: `deck|${d.id}`, ref: { kind: 'deck', deckId: d.id }, label: `Deck: ${d.title}`, price: d.price };
     } else {
-      newItems = [{ category: 'feature', id: 'quiz-creator-suite', itemTypeKey: 'quizCreatorSuite', title: 'Kreator Kuis', price: 0 }];
+      const t = catalog.topics.find((x) => x.id === f.refId);
+      if (!t) return fail(null, 'Pilih topik dari daftar.');
+      item = { key: `topic|${t.id}`, ref: { kind: 'topic', topicId: t.id }, label: `Topik: ${t.title} (termasuk semua deck-nya)`, price: t.price };
     }
+
+    if (f.items.some((x) => x.key === item!.key)) return fail(null, 'Produk itu sudah ada di pesanan ini.');
     setError('');
-    setOrderForm({ ...orderForm, items: [...orderForm.items, ...newItems], refId: '', theme: '' });
+    setOrderForm({ ...f, items: [...f.items, item], refId: '' });
   };
 
   const submitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!orderForm) return;
+    const account = users.find((u) => u.email.toLowerCase() === orderForm.user_email.trim().toLowerCase());
+    if (!account) return fail(null, 'Email itu belum terdaftar. Pilih dari daftar pengguna, atau buat akunnya dulu di tab Pengguna.');
+    if (orderForm.kind === 'cart' && !orderForm.items.length) return fail(null, 'Tambahkan minimal satu produk ke pesanan.');
     setBusy(true);
     try {
+      const needsAmount = orderForm.kind === 'donation' || !orderForm.autoAmount;
       await adminFetch('/api/admin/payment-orders', {
         method: 'POST',
         body: JSON.stringify({
-          user_email: orderForm.user_email,
-          customer_name: orderForm.customer_name,
+          user_email: account.email,
           kind: orderForm.kind,
           status: orderForm.status,
-          gross_amount: Number(orderForm.gross_amount) || 0,
-          items: orderForm.kind === 'cart' ? orderForm.items : [],
+          gross_amount: needsAmount ? Number(orderForm.gross_amount) || 0 : null,
+          items: orderForm.kind === 'cart' ? orderForm.items.map((i) => i.ref) : [],
         }),
       });
       ok(orderForm.status === 'paid' ? 'Pesanan dibuat dan akses langsung diberikan.' : 'Pesanan manual dibuat.');
@@ -399,8 +461,54 @@ export const OpsPage: React.FC = () => {
   // ===== PENGGUNA =====
   const visibleUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
-    return users.filter((u) => !q || u.email.toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q));
-  }, [users, userSearch]);
+    return users.filter(
+      (u) =>
+        (userFilter === 'all' || (userFilter === 'suspended' ? !!u.suspended_at : !u.suspended_at)) &&
+        (!q || u.email.toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q))
+    );
+  }, [users, userSearch, userFilter]);
+  const suspendedCount = users.filter((u) => u.suspended_at).length;
+
+  const suspendUser = async (u: UserRow) => {
+    const reason = prompt(`Tangguhkan akun ${u.email}?\n\nPengguna langsung ter-logout dan tidak bisa masuk lagi sampai dipulihkan. Produk yang sudah dibeli tetap tersimpan.\n\nAlasan (opsional):`);
+    if (reason === null) return;
+    try {
+      await adminFetch(`/api/admin/users/${u.id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) });
+      ok(`Akun ${u.email} ditangguhkan.`);
+      await load();
+    } catch (err) {
+      fail(err, 'Gagal menangguhkan akun.');
+    }
+  };
+
+  const restoreUser = async (u: UserRow) => {
+    if (!confirm(`Pulihkan akun ${u.email}? Pengguna bisa masuk lagi.`)) return;
+    try {
+      await adminFetch(`/api/admin/users/${u.id}/restore`, { method: 'POST' });
+      ok(`Akun ${u.email} dipulihkan.`);
+      await load();
+    } catch (err) {
+      fail(err, 'Gagal memulihkan akun.');
+    }
+  };
+
+  const sendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailForm) return;
+    setBusy(true);
+    try {
+      await adminFetch(`/api/admin/users/${emailForm.user.id}/email`, {
+        method: 'POST',
+        body: JSON.stringify({ subject: emailForm.subject, message: emailForm.message }),
+      });
+      ok(`Email terkirim ke ${emailForm.user.email}.`);
+      setEmailForm(null);
+    } catch (err) {
+      fail(err, 'Gagal mengirim email.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submitUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -441,7 +549,6 @@ export const OpsPage: React.FC = () => {
     }
   };
 
-  const optionsFor = orderForm?.itemKind === 'audio' ? tracks : orderForm?.itemKind === 'deck' ? decks : topics;
 
   return (
     <div className="space-y-4">
@@ -503,9 +610,10 @@ export const OpsPage: React.FC = () => {
                   <X className="w-4 h-4" />
                 </button>
               </div>
+              {!catalog && <p className="text-xs text-gray-400">Memuat katalog produk dari database...</p>}
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="text-xs text-gray-400">
-                  Email pengguna (harus sama dengan email akunnya)
+                  Pengguna (harus sudah punya akun)
                   <input required type="email" list="ops-user-emails" className={inputCls} value={orderForm.user_email} onChange={(e) => setOrderForm({ ...orderForm, user_email: e.target.value })} />
                   <datalist id="ops-user-emails">
                     {users.map((u) => (
@@ -514,10 +622,9 @@ export const OpsPage: React.FC = () => {
                       </option>
                     ))}
                   </datalist>
-                </label>
-                <label className="text-xs text-gray-400">
-                  Nama (opsional)
-                  <input className={inputCls} value={orderForm.customer_name} onChange={(e) => setOrderForm({ ...orderForm, customer_name: e.target.value })} />
+                  {orderForm.user_email && !users.some((u) => u.email.toLowerCase() === orderForm.user_email.trim().toLowerCase()) && (
+                    <span className="text-[10px] text-red-300">Belum terdaftar — buat akunnya dulu di tab Pengguna.</span>
+                  )}
                 </label>
                 <label className="text-xs text-gray-400">
                   Jenis
@@ -536,71 +643,132 @@ export const OpsPage: React.FC = () => {
                     ))}
                   </select>
                 </label>
-                <label className="text-xs text-gray-400">
-                  Nominal yang dibayar (Rp)
-                  <input type="number" min={0} className={inputCls} value={orderForm.gross_amount} onChange={(e) => setOrderForm({ ...orderForm, gross_amount: e.target.value })} />
-                </label>
+                <div className="text-xs text-gray-400">
+                  Nominal (Rp)
+                  {orderForm.kind === 'cart' && (
+                    <label className="flex items-center gap-2 mt-1 text-gray-300">
+                      <input type="checkbox" checked={orderForm.autoAmount} onChange={(e) => setOrderForm({ ...orderForm, autoAmount: e.target.checked })} />
+                      Otomatis dari harga produk ({rupiah(draftTotal)})
+                    </label>
+                  )}
+                  {(orderForm.kind === 'donation' || !orderForm.autoAmount) && (
+                    <input type="number" min={0} className={inputCls} value={orderForm.gross_amount} onChange={(e) => setOrderForm({ ...orderForm, gross_amount: e.target.value })} />
+                  )}
+                </div>
               </div>
 
-              {orderForm.kind === 'cart' && (
+              {orderForm.kind === 'cart' && catalog && (
                 <div className="rounded-xl border border-white/10 p-3 space-y-3">
-                  <p className="text-xs font-semibold text-white">Produk di pesanan ini</p>
-                  <div className="grid sm:grid-cols-2 gap-3">
-                    <label className="text-xs text-gray-400">
-                      Tipe produk
-                      <select className={inputCls} value={orderForm.itemKind} onChange={(e) => setOrderForm({ ...orderForm, itemKind: e.target.value as ItemKind, refId: '' })}>
-                        <option value="audio">Audio (track)</option>
+                  <p className="text-xs font-semibold text-white">Produk di pesanan ini (hanya produk yang ada di database)</p>
+                  <label className="text-xs text-gray-400 block">
+                    Tipe produk
+                    <select className={inputCls} value={orderForm.itemKind} onChange={(e) => setOrderForm({ ...orderForm, itemKind: e.target.value as ItemKind, refId: '' })}>
+                      <optgroup label="Audio">
+                        <option value="audio">Lagu (Master / Loop / Stems / Partitur)</option>
+                        <option value="editor8Bar">Editor 8 Bar — sekali beli, permanen</option>
+                        <option value="audioTools">Audio Tools — sekali beli, permanen</option>
+                      </optgroup>
+                      <optgroup label="Kuis">
                         <option value="deck">Deck kuis</option>
                         <option value="topic">Topik kuis</option>
-                        <option value="quizCreator">Kreator Kuis (fitur)</option>
-                      </select>
-                    </label>
-                    {orderForm.itemKind !== 'quizCreator' && (
-                      <label className="text-xs text-gray-400">
-                        Pilih / ketik ID
-                        <input list="ops-catalog" className={inputCls} value={orderForm.refId} onChange={(e) => setOrderForm({ ...orderForm, refId: e.target.value })} placeholder="ID produk" />
-                        <datalist id="ops-catalog">
-                          {optionsFor.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.title}
+                        <option value="quizCreator">Kreator Kuis — sekali beli, permanen</option>
+                      </optgroup>
+                    </select>
+                  </label>
+
+                  {orderForm.itemKind === 'audio' && (
+                    <>
+                      <label className="text-xs text-gray-400 block">
+                        Lagu
+                        <select className={inputCls} value={orderForm.refId} onChange={(e) => setOrderForm({ ...orderForm, refId: e.target.value })}>
+                          <option value="">— pilih lagu —</option>
+                          {catalog.tracks.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.title} · {t.artist}
                             </option>
                           ))}
-                        </datalist>
+                        </select>
                       </label>
-                    )}
-                  </div>
-                  {orderForm.itemKind === 'audio' && (
-                    <div className="flex flex-wrap gap-2">
-                      {AUDIO_PRODUCTS.map((p) => {
-                        const on = orderForm.audioKeys.includes(p.key);
+                      {(() => {
+                        const t = catalog.tracks.find((x) => x.id === orderForm.refId);
                         return (
-                          <button
-                            type="button"
-                            key={p.key}
-                            onClick={() => setOrderForm({ ...orderForm, audioKeys: on ? orderForm.audioKeys.filter((k) => k !== p.key) : [...orderForm.audioKeys, p.key] })}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${on ? 'bg-[#FCA311] text-black' : 'bg-black/40 border border-white/10 text-gray-300'}`}
-                          >
-                            {p.label}
-                          </button>
+                          <div className="space-y-2">
+                            <label className="flex items-center gap-2 text-xs text-gray-300">
+                              <input type="checkbox" checked={orderForm.bundle} onChange={(e) => setOrderForm({ ...orderForm, bundle: e.target.checked })} />
+                              Bundle lengkap (semua produk lagu + Editor 8 Bar + Audio Tools){t ? ` — ${rupiah(t.bundle)}` : ''}
+                            </label>
+                            {!orderForm.bundle && (
+                              <div className="flex flex-wrap gap-2">
+                                {AUDIO_PRODUCTS.map((p) => {
+                                  const on = orderForm.audioKeys.includes(p.key);
+                                  return (
+                                    <button
+                                      type="button"
+                                      key={p.key}
+                                      onClick={() => setOrderForm({ ...orderForm, audioKeys: on ? orderForm.audioKeys.filter((k) => k !== p.key) : [...orderForm.audioKeys, p.key] })}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${on ? 'bg-[#FCA311] text-black' : 'bg-black/40 border border-white/10 text-gray-300'}`}
+                                    >
+                                      {p.label}
+                                      {t ? ` · ${rupiah(t.products[p.key] ?? 0)}` : ''}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
                         );
-                      })}
-                    </div>
+                      })()}
+                    </>
                   )}
+
+                  {orderForm.itemKind === 'editor8Bar' && (
+                    <p className="text-xs text-gray-300 bg-black/30 rounded-lg p-2">Editor 8 Bar · {rupiah(catalog.features.editor8Bar)} · sekali beli, terbuka permanen untuk SEMUA lagu di akun ini. Kalau sudah dimiliki, tidak dobel.</p>
+                  )}
+                  {orderForm.itemKind === 'audioTools' && (
+                    <p className="text-xs text-gray-300 bg-black/30 rounded-lg p-2">Audio Tools · {rupiah(catalog.features.audioTools)} · sekali beli, terbuka permanen di akun ini.</p>
+                  )}
+                  {orderForm.itemKind === 'quizCreator' && (
+                    <p className="text-xs text-gray-300 bg-black/30 rounded-lg p-2">Kreator Kuis (editor kuis) · {rupiah(catalog.features.quizCreator)} · sekali beli, terbuka permanen di akun ini.</p>
+                  )}
+
                   {orderForm.itemKind === 'deck' && (
                     <label className="text-xs text-gray-400 block">
-                      Tema / badge deck (opsional, mis. Olahraga)
-                      <input className={inputCls} value={orderForm.theme} onChange={(e) => setOrderForm({ ...orderForm, theme: e.target.value })} />
+                      Deck
+                      <select className={inputCls} value={orderForm.refId} onChange={(e) => setOrderForm({ ...orderForm, refId: e.target.value })}>
+                        <option value="">— pilih deck —</option>
+                        {catalog.decks.map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.title} · {rupiah(d.price)}
+                          </option>
+                        ))}
+                      </select>
                     </label>
                   )}
+                  {orderForm.itemKind === 'topic' && (
+                    <label className="text-xs text-gray-400 block">
+                      Topik
+                      <select className={inputCls} value={orderForm.refId} onChange={(e) => setOrderForm({ ...orderForm, refId: e.target.value })}>
+                        <option value="">— pilih topik —</option>
+                        {catalog.topics.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.title} · {rupiah(t.price)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+
                   <button type="button" onClick={addItem} className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold">
                     + Tambahkan ke pesanan
                   </button>
                   {orderForm.items.length > 0 && (
                     <ul className="space-y-1">
-                      {orderForm.items.map((it, idx) => (
-                        <li key={idx} className="flex items-center justify-between text-xs text-gray-300 bg-black/30 rounded-lg px-2 py-1">
-                          <span>{itemLabel(it)}</span>
-                          <button type="button" onClick={() => setOrderForm({ ...orderForm, items: orderForm.items.filter((_, i) => i !== idx) })} className="text-red-300">
+                      {orderForm.items.map((it) => (
+                        <li key={it.key} className="flex items-center justify-between text-xs text-gray-300 bg-black/30 rounded-lg px-2 py-1">
+                          <span>
+                            {it.label} · <span className="text-gray-500">{rupiah(it.price)}</span>
+                          </span>
+                          <button type="button" onClick={() => setOrderForm({ ...orderForm, items: orderForm.items.filter((x) => x.key !== it.key) })} className="text-red-300">
                             <X className="w-3.5 h-3.5" />
                           </button>
                         </li>
@@ -610,7 +778,7 @@ export const OpsPage: React.FC = () => {
                 </div>
               )}
 
-              <button disabled={busy} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
+              <button disabled={busy || !catalog} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan pesanan
               </button>
             </form>
@@ -909,7 +1077,21 @@ export const OpsPage: React.FC = () => {
       {tab === 'users' && (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-xs text-gray-400">Data langsung dari tabel users di database.</p>
+            {(
+              [
+                ['all', `Semua (${users.length})`],
+                ['active', `Aktif (${users.length - suspendedCount})`],
+                ['suspended', `Ditangguhkan (${suspendedCount})`],
+              ] as const
+            ).map(([id, label]) => (
+              <button
+                key={id}
+                onClick={() => setUserFilter(id)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${userFilter === id ? 'bg-white text-black' : 'bg-[#14213D] border border-white/10 text-gray-300'}`}
+              >
+                {label}
+              </button>
+            ))}
             <input
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
@@ -956,34 +1138,96 @@ export const OpsPage: React.FC = () => {
             </form>
           )}
 
+          {emailForm && (
+            <form onSubmit={sendEmail} className="rounded-2xl bg-[#14213D] border border-sky-400/40 p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-white">
+                  Email ke {emailForm.user.name || emailForm.user.email} <span className="text-gray-400 font-normal text-xs">&lt;{emailForm.user.email}&gt;</span>
+                </h3>
+                <button type="button" onClick={() => setEmailForm(null)} className="text-gray-400 hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <label className="text-xs text-gray-400 block">
+                Subjek
+                <input required className={inputCls} value={emailForm.subject} onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })} />
+              </label>
+              <label className="text-xs text-gray-400 block">
+                Pesan
+                <textarea required rows={6} className={inputCls} value={emailForm.message} onChange={(e) => setEmailForm({ ...emailForm, message: e.target.value })} />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button disabled={busy} className="rounded-xl bg-sky-400 text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
+                  {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} Kirim dari server
+                </button>
+                <a
+                  href={`mailto:${emailForm.user.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.message)}`}
+                  className="rounded-xl border border-white/15 px-4 py-2 text-sm flex items-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" /> Buka di aplikasi email
+                </a>
+              </div>
+            </form>
+          )}
+
           <div className="rounded-2xl bg-[#14213D] border border-white/10 overflow-x-auto">
-            <table className="w-full text-sm min-w-[760px]">
+            <table className="w-full text-sm min-w-[900px]">
               <thead className="text-gray-400 text-left">
                 <tr>
                   <th className="p-3">Nama</th>
                   <th>Email</th>
-                  <th>Role</th>
+                  <th>Status</th>
+                  <th>Pembelian</th>
                   <th>Dibuat</th>
                   <th>Terakhir terlihat</th>
-                  <th className="w-20"></th>
+                  <th className="w-32"></th>
                 </tr>
               </thead>
               <tbody>
                 {visibleUsers.map((u) => (
-                  <tr key={u.id} className="border-t border-white/5">
+                  <tr key={u.id} className={`border-t border-white/5 ${u.suspended_at ? 'bg-red-500/5' : ''}`}>
                     <td className="p-3">
                       {u.name}
                       {u.is_super_admin && <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-500/20 text-[#FCA311] font-bold text-[10px]">SUPER ADMIN</span>}
-                      {!u.has_password && <div className="text-[10px] text-gray-500">tanpa kata sandi (login Google)</div>}
+                      <div className="text-[10px] text-gray-500">
+                        {u.has_google && !u.has_password ? 'login Google' : u.has_password ? 'kata sandi' : 'tanpa kata sandi'}
+                        {!u.email_verified_at && ' · email belum diverifikasi'}
+                      </div>
                     </td>
                     <td>{u.email}</td>
-                    <td>{u.role}</td>
+                    <td>
+                      {u.suspended_at ? (
+                        <div title={u.suspended_reason || ''}>
+                          <Badge cls="bg-red-500/20 text-red-300">Ditangguhkan</Badge>
+                          <div className="text-[10px] text-gray-500 max-w-[160px] truncate">{u.suspended_reason || fmtTime(u.suspended_at)}</div>
+                        </div>
+                      ) : (
+                        <Badge cls="bg-emerald-500/20 text-emerald-300">Aktif</Badge>
+                      )}
+                    </td>
+                    <td className="text-xs text-gray-300">
+                      {u.paid_orders} pesanan
+                      <div className="text-[10px] text-gray-500">{u.owned_items} produk dimiliki</div>
+                    </td>
                     <td className="text-gray-400 whitespace-nowrap">{fmtTime(u.created_at)}</td>
                     <td className="text-gray-400 whitespace-nowrap">{fmtTime(u.last_seen)}</td>
                     <td className="pr-3 text-right whitespace-nowrap">
+                      <button onClick={() => setEmailForm({ user: u, subject: '', message: '' })} className="p-1.5 rounded-lg text-sky-300 hover:bg-sky-500/10" title="Kirim email">
+                        <Mail className="w-4 h-4" />
+                      </button>
                       <button onClick={() => setUserForm({ id: u.id, email: u.email, name: u.name || '', role: u.role || 'user', password: '' })} className="p-1.5 rounded-lg text-gray-300 hover:bg-white/10" title="Edit">
                         <Pencil className="w-4 h-4" />
                       </button>
+                      {!u.is_super_admin &&
+                        (u.suspended_at ? (
+                          <button onClick={() => restoreUser(u)} className="p-1.5 rounded-lg text-emerald-300 hover:bg-emerald-500/10" title="Pulihkan akun">
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button onClick={() => suspendUser(u)} className="p-1.5 rounded-lg text-amber-300 hover:bg-amber-500/10" title="Tangguhkan akun">
+                            <Ban className="w-4 h-4" />
+                          </button>
+                        ))}
                       {!u.is_super_admin && (
                         <button onClick={() => removeUser(u)} className="p-1.5 rounded-lg text-red-300 hover:bg-red-500/10" title="Hapus">
                           <Trash2 className="w-4 h-4" />
@@ -994,7 +1238,7 @@ export const OpsPage: React.FC = () => {
                 ))}
                 {visibleUsers.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-4 text-center text-xs text-gray-500">
+                    <td colSpan={7} className="p-4 text-center text-xs text-gray-500">
                       Tidak ada pengguna.
                     </td>
                   </tr>

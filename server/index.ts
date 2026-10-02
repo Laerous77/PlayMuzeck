@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import { attachMultiplayerSocket } from './multiplayerSocket';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
-import { authRouter, requireAuth, originGuard, isAllowedOrigin } from './auth/authRoutes';
+import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -619,47 +619,82 @@ app.post('/api/admin/import-content', requireAdmin, async (req, res) => {
 // ==========================================
 app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
   try {
-    const [cTracks, cTopics, cDecks, cUsers, cOrders, cInq, cEvt] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM audio_tracks'),
-      pool.query('SELECT COUNT(*) FROM topics'),
-      pool.query('SELECT COUNT(*) FROM decks'),
-      pool.query('SELECT COUNT(*) FROM users'),
-      pool.query('SELECT COUNT(*), COALESCE(SUM(total), 0) as rev FROM orders'),
-      pool.query("SELECT COUNT(*), COUNT(*) FILTER (WHERE status = 'baru') as open FROM inquiries"),
-      pool.query('SELECT COUNT(*) FROM analytics_events'),
+    const [cat, usr, pay, inq, evt, days, byType, top, statuses, recentEv, recentOrd] = await Promise.all([
+      pool.query(`SELECT
+          (SELECT COUNT(*) FROM audio_tracks)::int AS tracks,
+          (SELECT COUNT(*) FROM topics)::int AS topics,
+          (SELECT COUNT(*) FROM decks WHERE COALESCE(is_custom, FALSE) = FALSE)::int AS decks`),
+      pool.query(`SELECT COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE suspended_at IS NOT NULL)::int AS suspended,
+          COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int AS new7d
+        FROM users`),
+      pool.query(`SELECT
+          COUNT(*) FILTER (WHERE status = 'paid')::int AS paid,
+          COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+          COALESCE(SUM(gross_amount) FILTER (WHERE status = 'paid'), 0)::bigint AS revenue,
+          COALESCE(SUM(gross_amount) FILTER (WHERE status = 'paid' AND kind = 'donation'), 0)::bigint AS donations,
+          COUNT(DISTINCT user_email) FILTER (WHERE status = 'paid')::int AS buyers
+        FROM payment_orders`),
+      pool.query(`SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'baru')::int AS open FROM inquiries`),
+      pool.query('SELECT COUNT(*)::int AS total FROM analytics_events'),
+      pool.query(`
+        WITH d AS (
+          SELECT generate_series(
+            (NOW() AT TIME ZONE 'Asia/Jakarta')::date - 13,
+            (NOW() AT TIME ZONE 'Asia/Jakarta')::date, INTERVAL '1 day')::date AS day
+        )
+        SELECT TO_CHAR(d.day, 'YYYY-MM-DD') AS date,
+          (SELECT COUNT(*) FROM analytics_events e
+             WHERE (e.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')::date = d.day)::int AS events,
+          (SELECT COUNT(*) FROM payment_orders p
+             WHERE p.status = 'paid' AND (p.created_at AT TIME ZONE 'Asia/Jakarta')::date = d.day)::int AS orders,
+          (SELECT COALESCE(SUM(p.gross_amount), 0) FROM payment_orders p
+             WHERE p.status = 'paid' AND (p.created_at AT TIME ZONE 'Asia/Jakarta')::date = d.day)::int AS revenue,
+          (SELECT COUNT(*) FROM users u
+             WHERE (u.created_at AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Jakarta')::date = d.day)::int AS users
+        FROM d ORDER BY d.day ASC`),
+      pool.query(`SELECT event_type AS type, COUNT(*)::int AS count FROM analytics_events
+                  GROUP BY event_type ORDER BY count DESC LIMIT 8`),
+      pool.query(`
+        SELECT COALESCE(it->>'title', it->>'id') AS title,
+               COALESCE(NULLIF(it->>'itemTypeKey', ''), it->>'category') AS type_key,
+               COUNT(*)::int AS sold
+        FROM payment_orders p,
+             jsonb_array_elements(CASE WHEN jsonb_typeof(p.items) = 'array' THEN p.items ELSE '[]'::jsonb END) it
+        WHERE p.status = 'paid' AND p.kind = 'cart'
+        GROUP BY 1, 2 ORDER BY sold DESC LIMIT 6`),
+      pool.query(`SELECT status, COUNT(*)::int AS count FROM payment_orders GROUP BY status`),
+      pool.query('SELECT id, event_type, payload, created_at FROM analytics_events ORDER BY created_at DESC LIMIT 12'),
+      pool.query(`SELECT order_id, user_email, kind, gross_amount, status, created_at
+                  FROM payment_orders ORDER BY created_at DESC LIMIT 8`),
     ]);
-
-    const daysRes = await pool.query(`
-      SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as date, COUNT(*)::int as count
-      FROM analytics_events
-      GROUP BY date ORDER BY date DESC LIMIT 14
-    `);
-
-    const byTypeRes = await pool.query(`
-      SELECT event_type as type, COUNT(*)::int as count
-      FROM analytics_events
-      GROUP BY event_type ORDER BY count DESC LIMIT 5
-    `);
-
-    const recentRes = await pool.query('SELECT * FROM analytics_events ORDER BY created_at DESC LIMIT 10');
 
     res.json({
       totals: {
-        tracks: parseInt(cTracks.rows[0].count),
-        topics: parseInt(cTopics.rows[0].count),
-        decks: parseInt(cDecks.rows[0].count),
-        users: parseInt(cUsers.rows[0].count),
-        orders: parseInt(cOrders.rows[0].count),
-        revenue: parseInt(cOrders.rows[0].rev),
-        inquiries: parseInt(cInq.rows[0].count),
-        openInquiries: parseInt(cInq.rows[0].open || 0),
-        events: parseInt(cEvt.rows[0].count),
+        tracks: cat.rows[0].tracks,
+        topics: cat.rows[0].topics,
+        decks: cat.rows[0].decks,
+        users: usr.rows[0].total,
+        newUsers7d: usr.rows[0].new7d,
+        suspendedUsers: usr.rows[0].suspended,
+        orders: pay.rows[0].paid,
+        pendingOrders: pay.rows[0].pending,
+        buyers: pay.rows[0].buyers,
+        revenue: Number(pay.rows[0].revenue),
+        donations: Number(pay.rows[0].donations),
+        inquiries: inq.rows[0].total,
+        openInquiries: inq.rows[0].open,
+        events: evt.rows[0].total,
       },
-      days: daysRes.rows,
-      byType: byTypeRes.rows,
-      recentEvents: recentRes.rows,
+      days: days.rows,
+      byType: byType.rows,
+      topProducts: top.rows,
+      orderStatuses: statuses.rows,
+      recentEvents: recentEv.rows,
+      recentOrders: recentOrd.rows.map((o) => ({ ...o, gross_amount: Number(o.gross_amount) })),
     });
   } catch (err) {
+    console.error('[admin] analytics:', err);
     res.status(500).json({ error: 'Gagal memuat analitik.' });
   }
 });
@@ -726,7 +761,24 @@ async function ensureUserRow(db: { query: (q: string, p?: any[]) => Promise<any>
   ]);
 }
 
-// Beri akses sesuai isi pesanan. Dipanggil di dalam transaksi.
+const GLOBAL_KEYS = new Set(['fullEditor8Bar', 'audioToolsSuite', 'quizCreatorSuite']);
+const refKey = (r: CollectionRef) => (GLOBAL_KEYS.has(r.typeKey) ? `G|${r.typeKey}` : `${r.category}|${r.id}|${r.typeKey}`);
+
+// Fitur permanen cukup SATU baris per akun, berapa kali pun dibeli.
+async function insertRef(client: any, email: string, r: CollectionRef) {
+  if (GLOBAL_KEYS.has(r.typeKey)) {
+    const ex = await client.query(
+      `SELECT 1 FROM public.user_collections WHERE user_email = $1 AND item_type_key = $2 LIMIT 1`,
+      [email, r.typeKey]
+    );
+    if (ex.rowCount) return;
+  }
+  await client.query(
+    `INSERT INTO public.user_collections (user_email, item_category, item_id, item_type_key) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+    [email, r.category, r.id, r.typeKey]
+  );
+}
+
 async function grantOrderAccess(client: any, order: any) {
   const items: any[] = typeof order.items === 'string' ? JSON.parse(order.items) : order.items || [];
   const email = order.user_email;
@@ -743,15 +795,9 @@ async function grantOrderAccess(client: any, order: any) {
       );
     }
   } else {
-    for (const r of await collectionRefsForItems(client, items)) {
-      await client.query(
-        `INSERT INTO public.user_collections (user_email, item_category, item_id, item_type_key) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
-        [email, r.category, r.id, r.typeKey]
-      );
-    }
+    for (const r of await collectionRefsForItems(client, items)) await insertRef(client, email, r);
   }
 
-  // Cerminkan ke tabel `orders` supaya Pendapatan di Dashboard ikut terhitung.
   await client.query(
     `INSERT INTO orders (id, customer_email, customer_name, items, total, status)
      VALUES ($1, $2::varchar, (SELECT name FROM users WHERE email = $2::varchar), $3::jsonb, $4::int, 'completed')
@@ -760,14 +806,13 @@ async function grantOrderAccess(client: any, order: any) {
   );
 }
 
-// Cabut akses pesanan ini, KECUALI item yang sama juga dimiliki lewat pesanan paid lain milik user yang sama.
 async function revokeOrderAccess(client: any, order: any) {
   const items: any[] = typeof order.items === 'string' ? JSON.parse(order.items) : order.items || [];
   const email = order.user_email;
 
   if (order.kind === 'donation') {
     await client.query('DELETE FROM donations WHERE id = $1', [`don_${order.order_id}`]);
-    const { rows } = await client.query('SELECT COALESCE(SUM(amount),0) AS total, COALESCE(MAX(amount),0) AS biggest FROM donations WHERE user_email = $1', [email]);
+    const { rows } = await client.query('SELECT COALESCE(MAX(amount),0) AS biggest FROM donations WHERE user_email = $1', [email]);
     const biggest = Number(rows[0].biggest);
     const stillEarned = new Set(DONATION_FRAME_TIERS.filter((t) => biggest >= t.min).map((t) => t.frameId));
     for (const t of DONATION_FRAME_TIERS) {
@@ -785,15 +830,19 @@ async function revokeOrderAccess(client: any, order: any) {
     for (const o of others.rows) {
       const its = typeof o.items === 'string' ? JSON.parse(o.items) : o.items || [];
       try {
-        for (const r of await collectionRefsForItems(client, its)) keep.add(`${r.category}|${r.id}|${r.typeKey}`);
+        for (const r of await collectionRefsForItems(client, its)) keep.add(refKey(r));
       } catch { /* abaikan item tak dikenali */ }
     }
     for (const r of mine) {
-      if (keep.has(`${r.category}|${r.id}|${r.typeKey}`)) continue;
-      await client.query(
-        `DELETE FROM public.user_collections WHERE user_email = $1 AND item_category = $2 AND item_id = $3 AND item_type_key = $4`,
-        [email, r.category, r.id, r.typeKey]
-      );
+      if (keep.has(refKey(r))) continue;
+      if (GLOBAL_KEYS.has(r.typeKey)) {
+        await client.query(`DELETE FROM public.user_collections WHERE user_email = $1 AND item_type_key = $2`, [email, r.typeKey]);
+      } else {
+        await client.query(
+          `DELETE FROM public.user_collections WHERE user_email = $1 AND item_category = $2 AND item_id = $3 AND item_type_key = $4`,
+          [email, r.category, r.id, r.typeKey]
+        );
+      }
     }
   }
   await client.query('DELETE FROM orders WHERE id = $1', [`pay_${order.order_id}`]);
@@ -852,35 +901,133 @@ app.get('/api/admin/buyers', requireAdmin, async (_req, res) => {
   }
 });
 
-// CREATE: buat pesanan manual. status 'paid' langsung memberi akses.
+const NO_OWN: AudioOwn = { fullMaster: false, loopVersion: false, separatedStems: false, sheetMusic: false, fullEditor8Bar: false, audioToolsSuite: false };
+const TRACK_KEYS = ['fullMaster', 'loopVersion', 'separatedStems', 'sheetMusic'];
+
+app.get('/api/admin/product-catalog', requireAdmin, async (_req, res) => {
+  try {
+    const [tr, dk, tp] = await Promise.all([
+      pool.query('SELECT id, title, artist, price FROM audio_tracks ORDER BY title'),
+      pool.query(`SELECT id, topic_id, title, price, badge, is_free FROM decks WHERE COALESCE(is_custom, FALSE) = FALSE ORDER BY title`),
+      pool.query('SELECT id, title, price, badge FROM topics ORDER BY title'),
+    ]);
+    res.json({
+      tracks: tr.rows.map((t) => {
+        const c = calcAudioPricing(Number(t.price) || 70000, NO_OWN);
+        return { id: t.id, title: t.title, artist: t.artist, products: c.products, bundle: c.bundle };
+      }),
+      decks: dk.rows.map((d) => ({ ...d, price: Number(d.price) || 0 })),
+      topics: tp.rows.map((t) => ({ ...t, price: Number(t.price) || 0 })),
+      features: {
+        editor8Bar: calcAudioPricing(70000, NO_OWN).products.fullEditor8Bar,
+        audioTools: calcAudioPricing(70000, NO_OWN).products.audioToolsSuite,
+        quizCreator: CREATOR_SUITE_PRICE,
+      },
+    });
+  } catch (err) {
+    console.error('[admin] product-catalog:', err);
+    res.status(500).json({ error: 'Gagal memuat katalog produk.' });
+  }
+});
+
+// Ubah referensi ringan dari form -> item pesanan kanonik. Semua produk DIVALIDASI ke database
+// dan harganya dihitung server (tidak percaya angka dari browser).
+async function buildManualItems(db: { query: (q: string, p?: any[]) => Promise<any> }, raw: any[]) {
+  const items: any[] = [];
+  const seen = new Set<string>();
+  let total = 0;
+  const add = (dedupe: string, item: any) => {
+    if (seen.has(dedupe)) return;
+    seen.add(dedupe);
+    items.push(item);
+    total += Number(item.price) || 0;
+  };
+
+  for (const r of raw.slice(0, 100)) {
+    const kind = String(r?.kind || '');
+    if (kind === 'audio') {
+      const trackId = String(r.trackId || '');
+      const t = await db.query('SELECT id, title, price FROM audio_tracks WHERE id = $1', [trackId]);
+      if (!t.rows[0]) throw new Error(`Track "${trackId}" tidak ada di database.`);
+      const calc = calcAudioPricing(Number(t.rows[0].price) || 70000, NO_OWN);
+      if (r.bundle) {
+        add(`audio|${trackId}|all`, { category: 'audio', id: trackId, trackId, itemTypeKey: 'all', title: t.rows[0].title, price: calc.bundle });
+      } else {
+        const keys: string[] = (Array.isArray(r.keys) ? r.keys : []).map(String);
+        if (!keys.length) throw new Error('Pilih minimal satu jenis produk audio.');
+        for (const k of keys) {
+          if (!TRACK_KEYS.includes(k)) throw new Error(`Jenis produk audio "${k}" tidak dikenali.`);
+          add(`audio|${trackId}|${k}`, { category: 'audio', id: trackId, trackId, itemTypeKey: k, title: t.rows[0].title, price: calc.products[k as keyof AudioOwn] });
+        }
+      }
+    } else if (kind === 'editor8Bar') {
+      add('G|fullEditor8Bar', { category: 'audio', id: 'feature-editor-8bar', trackId: 'feature-editor-8bar', itemTypeKey: 'fullEditor8Bar', title: 'Editor 8 Bar (permanen)', price: NO_OWN_PRICES.editor });
+    } else if (kind === 'audioTools') {
+      add('G|audioToolsSuite', { category: 'audio', id: 'feature-audio-tools', trackId: 'feature-audio-tools', itemTypeKey: 'audioToolsSuite', title: 'Audio Tools (permanen)', price: NO_OWN_PRICES.tools });
+    } else if (kind === 'quizCreator') {
+      add('G|quizCreatorSuite', { category: 'feature', id: 'quiz-creator-suite', itemTypeKey: 'quizCreatorSuite', title: 'Kreator Kuis (permanen)', price: CREATOR_SUITE_PRICE });
+    } else if (kind === 'deck') {
+      const d = await db.query(`SELECT id, title, price, badge FROM decks WHERE id = $1 AND COALESCE(is_custom, FALSE) = FALSE`, [String(r.deckId || '')]);
+      if (!d.rows[0]) throw new Error(`Deck "${r.deckId}" tidak ada di database.`);
+      add(`deck|${d.rows[0].id}`, { category: 'deck', id: d.rows[0].id, deckId: d.rows[0].id, title: d.rows[0].title, badge: d.rows[0].badge || undefined, price: Number(d.rows[0].price) || 0 });
+    } else if (kind === 'topic') {
+      const t = await db.query('SELECT id, title, price FROM topics WHERE id = $1', [String(r.topicId || '')]);
+      if (!t.rows[0]) throw new Error(`Topik "${r.topicId}" tidak ada di database.`);
+      add(`topic|${t.rows[0].id}`, { category: 'topic', id: t.rows[0].id, topicId: t.rows[0].id, title: t.rows[0].title, price: Number(t.rows[0].price) || 0 });
+    } else {
+      throw new Error(`Jenis produk "${kind}" tidak dikenali.`);
+    }
+  }
+  return { items, total };
+}
+const NO_OWN_PRICES = {
+  editor: calcAudioPricing(70000, NO_OWN).products.fullEditor8Bar,
+  tools: calcAudioPricing(70000, NO_OWN).products.audioToolsSuite,
+};
+
+// CREATE pesanan manual — pesanan manual sekarang hanya menerima
+// produk yang ada di DB, pengguna harus sudah terdaftar, dan nominal otomatis dari harga server.
 app.post('/api/admin/payment-orders', requireAdmin, async (req, res) => {
   const email = String(req.body?.user_email || '').trim().toLowerCase();
   const kind = req.body?.kind === 'donation' ? 'donation' : 'cart';
   const status = MANUAL_STATUSES.includes(req.body?.status) ? req.body.status : 'pending';
-  const gross = Math.max(0, Math.round(Number(req.body?.gross_amount) || 0));
-  const items: any[] = Array.isArray(req.body?.items) ? req.body.items.slice(0, 100) : [];
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Email pengguna tidak valid.' });
-  if (kind === 'cart' && !items.length) return res.status(400).json({ error: 'Pilih minimal satu produk.' });
-  if (kind === 'donation' && gross <= 0) return res.status(400).json({ error: 'Nominal donasi harus lebih dari 0.' });
+  if (!isValidEmail(email)) return res.status(400).json({ error: 'Email pengguna tidak valid.' });
 
-  const orderId = `man_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await ensureUserRow(client, email, req.body?.customer_name);
-    if (req.body?.customer_name) await client.query('UPDATE users SET name = $1 WHERE email = $2 AND (name IS NULL OR name = split_part(email, \'@\', 1))', [String(req.body.customer_name).slice(0, 255), email]);
-    const storedItems = kind === 'donation' ? [{ category: 'donation', price: gross }] : items;
-    if (kind === 'cart') await collectionRefsForItems(client, storedItems); // validasi: lempar error kalau ada item tak dikenali
+    const u = await client.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
+    if (!u.rowCount) throw new Error('Pengguna belum terdaftar di database. Buat akunnya dulu di tab Pengguna.');
+    const accountEmail = (await client.query('SELECT email FROM users WHERE lower(email) = $1', [email])).rows[0].email;
+
+    let storedItems: any[];
+    let gross: number;
+    const override = req.body?.gross_amount;
+    const hasOverride = override !== null && override !== undefined && override !== '';
+    if (kind === 'donation') {
+      gross = Math.max(0, Math.round(Number(override) || 0));
+      if (gross <= 0) throw new Error('Nominal donasi harus lebih dari 0.');
+      storedItems = [{ category: 'donation', price: gross }];
+    } else {
+      const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+      if (!raw.length) throw new Error('Pilih minimal satu produk.');
+      const built = await buildManualItems(client, raw);
+      storedItems = built.items;
+      gross = hasOverride ? Math.max(0, Math.round(Number(override) || 0)) : built.total;
+      await collectionRefsForItems(client, storedItems); // validasi terakhir
+    }
+
+    const orderId = `man_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     await client.query(
       `INSERT INTO payment_orders (order_id, user_email, kind, gross_amount, items, status, fulfilled) VALUES ($1, $2, $3, $4, $5, $6, FALSE)`,
-      [orderId, email, kind, gross, JSON.stringify(storedItems), status]
+      [orderId, accountEmail, kind, gross, JSON.stringify(storedItems), status]
     );
     if (status === 'paid') {
-      await grantOrderAccess(client, { order_id: orderId, user_email: email, kind, gross_amount: gross, items: storedItems });
+      await grantOrderAccess(client, { order_id: orderId, user_email: accountEmail, kind, gross_amount: gross, items: storedItems });
       await client.query('UPDATE payment_orders SET fulfilled = TRUE WHERE order_id = $1', [orderId]);
     }
     await client.query('COMMIT');
-    res.status(201).json({ success: true, order_id: orderId });
+    res.status(201).json({ success: true, order_id: orderId, gross_amount: gross });
   } catch (err: any) {
     await client.query('ROLLBACK').catch(() => {});
     console.error('[admin] create payment-order:', err);
@@ -1026,9 +1173,13 @@ const USER_ROLES = ['user', 'admin'];
 app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   try {
     const { rows } = await pool.query(
-      `SELECT id, email, name, role, active_frame_id, created_at, last_seen,
-              (password_hash IS NOT NULL) AS has_password
-       FROM users ORDER BY created_at DESC`
+      `SELECT u.id, u.email, u.name, u.role, u.active_frame_id, u.created_at, u.last_seen,
+              u.suspended_at, u.suspended_reason, u.email_verified_at,
+              (u.password_hash IS NOT NULL) AS has_password,
+              (u.google_sub IS NOT NULL) AS has_google,
+              (SELECT COUNT(*) FROM public.user_collections c WHERE c.user_email = u.email AND c.item_category <> 'frame')::int AS owned_items,
+              (SELECT COUNT(*) FROM payment_orders p WHERE p.user_email = u.email AND p.status = 'paid')::int AS paid_orders
+       FROM users u ORDER BY u.created_at DESC`
     );
     res.json(rows.map((u) => ({ ...u, last_seen: u.last_seen || u.created_at, is_super_admin: u.email === SUPER_ADMIN_EMAIL })));
   } catch (err) {
@@ -1046,9 +1197,10 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     const exists = await pool.query('SELECT 1 FROM users WHERE LOWER(email) = $1', [cleanEmail]);
     if (exists.rows.length) return res.status(409).json({ error: 'Email ini sudah terdaftar.' });
     const hash = password ? await bcrypt.hash(String(password), 10) : null;
-    const id = `usr_${Date.now()}`;
+    const id = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    // email_verified_at diisi: akun buatan admin tidak perlu verifikasi email lagi, jadi bisa langsung login.
     await pool.query(
-      `INSERT INTO users (id, email, name, role, password_hash, last_seen) VALUES ($1, $2, $3, $4, $5, NOW())`,
+      `INSERT INTO users (id, email, name, role, password_hash, last_seen, email_verified_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
       [id, cleanEmail, String(name || '').trim().slice(0, 255) || cleanEmail.split('@')[0], USER_ROLES.includes(role) ? role : 'user', hash]
     );
     res.status(201).json({ success: true, id });
@@ -1091,6 +1243,70 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   } catch (err: any) {
     console.error('[admin] delete user:', err);
     res.status(500).json({ error: err?.message || 'Gagal menghapus pengguna.' });
+  }
+});
+
+app.post('/api/admin/users/:id/suspend', requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const reason = String(req.body?.reason || '').trim().slice(0, 500);
+    const found = await client.query('SELECT email FROM users WHERE id = $1', [req.params.id]);
+    if (!found.rows[0]) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+    const email = found.rows[0].email;
+    if (email === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Akun Super Admin tidak bisa ditangguhkan.' });
+    if (await isServerAdminEmail(email)) return res.status(403).json({ error: 'Akun ini admin. Cabut akses adminnya dulu di menu Admin & Akses.' });
+
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE users SET suspended_at = NOW(), suspended_reason = $2 WHERE id = $1`,
+      [req.params.id, reason || null]
+    );
+    await client.query('DELETE FROM sessions WHERE user_id = $1', [req.params.id]); // langsung ter-logout
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (err: any) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[admin] suspend user:', err);
+    res.status(500).json({ error: err?.message || 'Gagal menangguhkan akun.' });
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/admin/users/:id/restore', requireAdmin, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `UPDATE users SET suspended_at = NULL, suspended_reason = NULL WHERE id = $1`,
+      [req.params.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[admin] restore user:', err);
+    res.status(500).json({ error: err?.message || 'Gagal mengaktifkan kembali akun.' });
+  }
+});
+
+// Kirim email ke pengguna lewat SMTP yang SAMA dengan email verifikasi/reset password (sendMailStrict di authRoutes.ts).
+app.post('/api/admin/users/:id/email', requireAdmin, async (req, res) => {
+  const subject = String(req.body?.subject || '').trim().slice(0, 200);
+  const message = String(req.body?.message || '').trim().slice(0, 5000);
+  if (!subject || !message) return res.status(400).json({ error: 'Subjek dan isi pesan wajib diisi.' });
+  try {
+    const found = await pool.query('SELECT email, name FROM users WHERE id = $1', [req.params.id]);
+    const user = found.rows[0];
+    if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+
+    await sendMailStrict(user.email, subject, message);
+    await pool.query('INSERT INTO analytics_events (id, event_type, payload) VALUES ($1, $2, $3)', [
+      `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      'admin_email',
+      JSON.stringify({ to: user.email, subject, by: (req as any).adminEmail || 'server-password' }),
+    ]);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error('[admin] email user:', err);
+    res.status(500).json({ error: err?.message || 'Gagal mengirim email.' });
   }
 });
 
