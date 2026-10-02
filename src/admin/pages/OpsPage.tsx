@@ -13,6 +13,9 @@ interface PaymentOrder {
   status: string;
   fulfilled: boolean;
   created_at: string;
+  expires_at?: string | null;
+  cancelled_at?: string | null;
+  cancel_reason?: string | null;
   items: any[];
 }
 
@@ -22,6 +25,7 @@ interface Buyer {
   paid: number;
   failed: number;
   pending: number;
+  cancelled?: number;
   spent: number;
   last_order: string;
   owned_items: number;
@@ -91,6 +95,8 @@ const STATUSES = [
   { id: 'pending', label: 'Menunggu', cls: 'bg-amber-500/20 text-amber-300' },
   { id: 'paid', label: 'Berhasil', cls: 'bg-emerald-500/20 text-emerald-300' },
   { id: 'failed', label: 'Gagal', cls: 'bg-red-500/20 text-red-300' },
+  // Dibatalkan pembeli, admin, atau otomatis karena lewat batas bayar (24 jam). Tetap tercatat.
+  { id: 'cancelled', label: 'Dibatalkan', cls: 'bg-gray-500/20 text-gray-300' },
 ] as const;
 
 // Nilai di database tetap baru/proses/selesai; yang tampil: Menunggu/Diproses/Selesai.
@@ -657,7 +663,7 @@ export const OpsPage: React.FC = () => {
                 <label className="text-xs text-gray-400">
                   Status awal
                   <select className={inputCls} value={orderForm.status} onChange={(e) => setOrderForm({ ...orderForm, status: e.target.value })}>
-                    {STATUSES.map((s) => (
+                    {STATUSES.filter((s) => s.id !== 'cancelled').map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.label}
                       </option>
@@ -845,6 +851,15 @@ export const OpsPage: React.FC = () => {
                           ))}
                         </select>
                         <div className="text-[10px] mt-1 text-gray-500">{order.fulfilled ? 'akses aktif' : 'akses belum diberikan'}</div>
+                        {order.status === 'pending' && order.expires_at && (
+                          <div className="text-[10px] mt-0.5 text-amber-300/80">bayar sebelum {fmtTime(order.expires_at)}</div>
+                        )}
+                        {order.status === 'cancelled' && (
+                          <div className="text-[10px] mt-0.5 text-gray-400">
+                            {order.cancel_reason || 'dibatalkan'}
+                            {order.cancelled_at ? ` • ${fmtTime(order.cancelled_at)}` : ''}
+                          </div>
+                        )}
                       </td>
                       <td className="py-3 max-w-xs text-gray-400 text-xs">{order.kind === 'donation' ? 'Donasi' : order.items.map(itemLabel).join(', ') || '-'}</td>
                       <td className="py-3 pr-3 text-right">
@@ -873,13 +888,14 @@ export const OpsPage: React.FC = () => {
         <div className="space-y-2">
           <p className="text-xs text-gray-400">Klik nama pembeli untuk melihat semua produk, status, tanggal, dan ID pesanannya.</p>
           <div className="rounded-2xl bg-[#14213D] border border-white/10 overflow-x-auto">
-            <table className="w-full text-sm min-w-[720px]">
+            <table className="w-full text-sm min-w-[800px]">
               <thead className="text-gray-400 text-left">
                 <tr>
                   <th className="p-3">Pengguna</th>
                   <th>Berhasil</th>
                   <th>Gagal</th>
                   <th>Menunggu</th>
+                  <th>Dibatalkan</th>
                   <th>Total bayar</th>
                   <th>Produk dimiliki</th>
                   <th>Pesanan terakhir</th>
@@ -903,6 +919,7 @@ export const OpsPage: React.FC = () => {
                         <td className="text-emerald-300 font-bold">{b.paid}</td>
                         <td className="text-red-300 font-bold">{b.failed}</td>
                         <td className="text-amber-300">{b.pending}</td>
+                        <td className="text-gray-400">{b.cancelled ?? 0}</td>
                         <td>{rupiah(b.spent)}</td>
                         <td>{b.owned_items}</td>
                         <td className="text-gray-400 whitespace-nowrap">{fmtTime(b.last_order)}</td>

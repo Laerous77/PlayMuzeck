@@ -23,6 +23,7 @@ interface AnalyticsPayload {
     suspendedUsers: number;
     orders: number;
     pendingOrders: number;
+    cancelledOrders?: number;
     buyers: number;
     revenue: number;
     donations: number;
@@ -51,6 +52,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   paid: { label: 'Berhasil', cls: 'text-emerald-300' },
   pending: { label: 'Menunggu', cls: 'text-amber-300' },
   failed: { label: 'Gagal', cls: 'text-red-300' },
+  cancelled: { label: 'Dibatalkan', cls: 'text-gray-400' },
 };
 
 const KEY_LABEL: Record<string, string> = {
@@ -103,7 +105,7 @@ export const DashboardPage: React.FC = () => {
 
   const cards = [
     { label: 'Pendapatan', value: rupiah(t.revenue), sub: t.donations ? `termasuk donasi ${rupiah(t.donations)}` : 'pesanan berhasil', icon: Wallet },
-    { label: 'Pesanan berhasil', value: t.orders, sub: `${t.pendingOrders} menunggu`, icon: ShoppingBag },
+    { label: 'Pesanan berhasil', value: t.orders, sub: `${t.pendingOrders} menunggu${t.cancelledOrders ? ` · ${t.cancelledOrders} dibatalkan` : ''}`, icon: ShoppingBag },
     { label: 'Pembeli', value: t.buyers, sub: 'akun unik', icon: UserCheck },
     { label: 'Pengguna', value: t.users, sub: `+${t.newUsers7d} 7 hari${t.suspendedUsers ? ` · ${t.suspendedUsers} ditangguhkan` : ''}`, icon: Users },
     { label: 'Event', value: t.events, sub: 'total tercatat', icon: Activity },

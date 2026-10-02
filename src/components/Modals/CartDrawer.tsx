@@ -1,5 +1,5 @@
 // src/components/Modals/CartDrawer.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
@@ -20,7 +20,18 @@ import { CartItem } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
 import { downloadBlob } from '../../services/exporters';
 import { storage } from '../../services/storage';
-import { payWithQris, getPaymentStatus } from '../../services/payment';
+import {
+  payWithQris,
+  resumePayment,
+  getPendingOrders,
+  cancelPendingOrder,
+  getPaymentStatus,
+  formatDeadline,
+  timeLeftLabel,
+  PendingOrder,
+  QrisHandlers,
+} from '../../services/payment';
+import { Clock as ClockIcon, Ban as BanIcon, RefreshCw as RefreshIcon } from 'lucide-react';
 import { QrisPanel } from './QrisPanel';
 
 interface CartDrawerProps {
@@ -28,7 +39,8 @@ interface CartDrawerProps {
   onClose: () => void;
   cartItems: CartItem[];
   onRemoveItem: (id: string) => void;
-  onCheckoutSuccess: () => void;
+  /** purchasedItems = item pesanan yang benar-benar dibayar; App hanya membuang item ini dari keranjang. */
+  onCheckoutSuccess: (purchasedItems?: CartItem[]) => void;
   onOpenLibrary: () => void;
   onSuccessToast?: (msg: string) => void;
 }
@@ -53,6 +65,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   // Invoice yang sedang berjalan. Dipertahankan supaya "Coba Simpan Ulang"
   // memakai invoice yang SAMA, bukan membuat invoice baru tiap klik.
   const [activeInvoiceId, setActiveInvoiceId] = useState<string | null>(null);
+
+  // Model pesanan seperti marketplace: pesanan 'Menunggu' dibuat di server begitu checkout dibuka.
+  // Menutup popup Snap / drawer TIDAK membatalkannya; pembeli harus bayar atau membatalkan sendiri.
+  const [pendingOrder, setPendingOrder] = useState<PendingOrder | null>(null);
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [isLoadingPending, setIsLoadingPending] = useState(false);
+  // true hanya di mode demo server (panel QRIS lokal tanpa pesanan di server).
+  const [demoFlow, setDemoFlow] = useState(false);
+  const demoFlowRef = useRef(false);
+  const finishingRef = useRef(false);
+  const [, setTick] = useState(0); // render ulang hitung mundur
 
   const userSession = storage.getUserSession();
 
@@ -91,6 +114,61 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     buyer: { name: string; email: string };
   } | null>(null);
 
+  // Muat pesanan 'Menunggu' milik pembeli (dipanggil saat drawer dibuka & berkala). Mengembalikan state
+  // layar ke "Menunggu Pembayaran" bila ada pesanan yang belum selesai.
+  const loadPending = async () => {
+    if (!storage.getUserSession()?.isLoggedIn) return;
+    const list = await getPendingOrders();
+    if (list === null) return; // gagal memuat: jangan ubah tampilan
+    const cartOrder = list.find((o) => o.kind === 'cart') || null;
+
+    if (cartOrder && cartOrder.status === 'paid') {
+      // Sudah dibayar tapi akses belum diaktifkan (mis. popup ditutup setelah membayar) -> aktifkan otomatis.
+      if (finishingRef.current) return;
+      finishingRef.current = true;
+      setPendingOrder(cartOrder);
+      try {
+        await handleFinishTransaction(cartOrder.orderId, { items: cartOrder.items, total: cartOrder.amount });
+      } finally {
+        finishingRef.current = false;
+      }
+      return;
+    }
+
+    setPendingOrder(cartOrder);
+    if (cartOrder) {
+      setActiveInvoiceId(cartOrder.orderId);
+      setCurrentStep((s) => (s === 'success' ? s : 'payment_process'));
+    } else {
+      setCurrentStep((s) => (s === 'payment_process' && !demoFlowRef.current ? 'cart' : s));
+    }
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    let alive = true;
+    setIsLoadingPending(true);
+    loadPending().finally(() => {
+      if (alive) setIsLoadingPending(false);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Selama ada pesanan menunggu: segarkan hitung mundur & cek status tiap 30 detik
+  // (menangkap pembayaran yang masuk lewat webhook dan pesanan yang melewati batas bayar).
+  useEffect(() => {
+    if (!isOpen || !pendingOrder) return;
+    const timer = setInterval(() => {
+      setTick((t) => t + 1);
+      loadPending();
+    }, 30000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, pendingOrder?.orderId]);
+
   const subtotal = cartItems.reduce((sum, item) => sum + item.price, 0);
   const tax = Math.round(subtotal * 0.11);
   const grandTotal = subtotal + tax;
@@ -99,6 +177,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleProceedToBuyerData = () => {
     if (cartItems.length === 0) return;
+    if (isLoadingPending) return; // tunggu cek pesanan menunggu selesai
     if (!userSession?.isLoggedIn) {
       alert("Harap login terlebih dahulu untuk melanjutkan proses checkout. Data pembelian akan diikat secara permanen pada akun Anda di database.");
       return;
@@ -107,7 +186,8 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   };
 
   const syncPurchasesToDatabase = async (
-    invoiceId: string
+    invoiceId: string,
+    override?: { items: any[]; total: number }
   ): Promise<{ ok: boolean; message?: string; partialWarning?: string }> => {
     setIsSyncingWithDB(true);
     try {
@@ -119,12 +199,12 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       const payload = {
         invoiceId,
         email: buyerEmail,
-        items: cartItems.map((item: any) => ({
+        items: (override && override.items.length ? override.items : cartItems).map((item: any) => ({
           ...item,
           id: item.category === 'audio' ? (item.trackId || item.id) : (item.deckId || item.topicId || item.id),
-          cartItemId: item.id,
+          cartItemId: item.cartItemId ?? item.id,
         })),
-        totalPaid: grandTotal,
+        totalPaid: override ? override.total : grandTotal,
       };
 
       const res = await fetch('/api/user/checkout', {
@@ -165,10 +245,10 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     }
   };
 
-  const handleFinishTransaction = async (invoiceId: string) => {
+  const handleFinishTransaction = async (invoiceId: string, override?: { items: any[]; total: number }) => {
     setSyncError(null);
     setActiveInvoiceId(invoiceId);
-    const result = await syncPurchasesToDatabase(invoiceId);
+    const result = await syncPurchasesToDatabase(invoiceId, override);
     if (!result.ok) {
       // Tetap di layar QRIS dan tampilkan alasan sebenarnya + tombol coba ulang.
       setSyncError(`${result.message} (Invoice: ${invoiceId})`);
@@ -188,15 +268,82 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setCompletedOrder({
       invoiceId,
       timestamp: formattedDate,
-      items: [...cartItems],
-      total: grandTotal,
+      items: override && override.items.length ? [...override.items] : [...cartItems],
+      total: override ? override.total : grandTotal,
       paymentMethodName: 'QRIS Dinamis (Midtrans Verified)',
       buyer: { name: buyerName, email: buyerEmail },
     });
 
+    setPendingOrder(null);
     setCurrentStep('success');
     audioEngine.playCorrectSound();
-    onCheckoutSuccess();
+    // Hanya item yang ada di PESANAN ini yang dianggap terbeli (item yang ditambahkan belakangan tetap di keranjang).
+    onCheckoutSuccess(((override && override.items.length ? override.items : cartItems) as unknown) as CartItem[]);
+  };
+
+  // Handler Snap yang sama untuk "Bayar" pertama kali maupun "Bayar Sekarang" (lanjutkan).
+  const buildSnapHandlers = (
+    orderId: string,
+    order?: { items: any[]; total: number },
+    extra?: Partial<QrisHandlers>
+  ): QrisHandlers => ({
+    onSuccess: () => {
+      setIsProcessingCheckout(false);
+      handleFinishTransaction(orderId, order);
+    },
+    onPending: () => {
+      setIsProcessingCheckout(false);
+      setCurrentStep('payment_process');
+      if (onSuccessToast) onSuccessToast('Menunggu Anda menyelesaikan pembayaran QRIS...');
+    },
+    onError: (msg, code) => {
+      setIsProcessingCheckout(false);
+      if (code === 'PENDING_EXISTS') {
+        // Masih ada pesanan lain yang menunggu: tampilkan, jangan buat yang baru.
+        loadPending();
+        if (onSuccessToast) onSuccessToast(msg || 'Masih ada pesanan yang menunggu pembayaran.');
+        return;
+      }
+      if (code === 'GONE') {
+        loadPending();
+        if (onSuccessToast) onSuccessToast(msg || 'Pesanan ini sudah tidak bisa dilanjutkan.');
+        return;
+      }
+      alert(msg || 'Pembayaran Midtrans QRIS gagal atau dibatalkan.');
+    },
+    // Menutup popup TIDAK membatalkan pesanan: pembeli kembali ke layar "Menunggu Pembayaran".
+    onClose: () => setIsProcessingCheckout(false),
+    ...extra,
+  });
+
+  const handleResumePayment = async () => {
+    if (!pendingOrder) return;
+    setIsProcessingCheckout(true);
+    setSyncError(null);
+    const opened = await resumePayment(
+      pendingOrder.orderId,
+      buildSnapHandlers(pendingOrder.orderId, { items: pendingOrder.items, total: pendingOrder.amount })
+    );
+    if (!opened) setIsProcessingCheckout(false);
+  };
+
+  const handleCancelPending = async () => {
+    if (!pendingOrder || isCancelling) return;
+    if (!confirm('Batalkan pesanan ini?\n\nPembayaran yang belum dilakukan tidak akan diproses. Item tetap ada di keranjang dan kamu bisa membuat pesanan baru.')) return;
+    setIsCancelling(true);
+    const ok = await cancelPendingOrder(pendingOrder.orderId);
+    setIsCancelling(false);
+    if (!ok) {
+      // Mungkin sudah lunas / sudah dibatalkan oleh batas bayar: ambil status terbaru dari server.
+      await loadPending();
+      if (onSuccessToast) onSuccessToast('Pesanan tidak bisa dibatalkan (mungkin sudah dibayar atau sudah dibatalkan).');
+      return;
+    }
+    setPendingOrder(null);
+    setActiveInvoiceId(null);
+    setSyncError(null);
+    setCurrentStep('cart');
+    if (onSuccessToast) onSuccessToast('Pesanan dibatalkan. Item masih ada di keranjang.');
   };
 
   const handleProceedToPayment = async (e: React.FormEvent) => {
@@ -219,22 +366,21 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         customer: { name: buyerName, email: buyerEmail },
         items: cartItems,
       },
-      {
-        onSuccess: () => {
-          setIsProcessingCheckout(false);
-          handleFinishTransaction(orderId);
-        },
-        onPending: () => {
-          setIsProcessingCheckout(false);
+      buildSnapHandlers(orderId, { items: cartItems as any[], total: grandTotal }, {
+        // Pesanan sudah tercatat di server: mulai sekarang pembeli harus membayar atau membatalkannya.
+        onCreated: ({ expiresAt }) => {
+          setPendingOrder({
+            orderId,
+            kind: 'cart',
+            amount: grandTotal,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            expiresAt,
+            items: cartItems as any[],
+          });
           setCurrentStep('payment_process');
-          if (onSuccessToast) onSuccessToast('Menunggu Anda menyelesaikan pembayaran QRIS...');
         },
-        onError: (msg) => {
-          setIsProcessingCheckout(false);
-          alert(msg || 'Pembayaran Midtrans QRIS gagal atau dibatalkan.');
-        },
-        onClose: () => setIsProcessingCheckout(false),
-      }
+      })
     );
     if (snapOpened) return;
 
@@ -250,11 +396,15 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
       );
       return;
     }
+    demoFlowRef.current = true;
+    setDemoFlow(true);
     setCurrentStep('payment_process');
   };
 
   const handleDownloadInvoice = () => {
     if (!completedOrder) return;
+    const orderSubtotal = completedOrder.items.reduce((sum, it: any) => sum + (Number(it.price) || 0), 0);
+    const orderTax = Math.max(0, completedOrder.total - orderSubtotal);
     const invoiceContent = `=====================================================
                  PlayMuzeck DIGITAL STUDIO
             BUKTI PEMBAYARAN & INVOICE RESMI
@@ -274,8 +424,8 @@ ${completedOrder.items
   .map((it, idx) => `${idx + 1}. ${it.title.padEnd(35)}${formatIDR(it.price)}`)
   .join('\n')}
 -----------------------------------------------------
-Subtotal         : ${formatIDR(subtotal)}
-PPN 11%          : ${formatIDR(tax)}
+Subtotal         : ${formatIDR(orderSubtotal)}
+PPN 11%          : ${formatIDR(orderTax)}
 TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
 =====================================================`;
 
@@ -312,7 +462,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
       >
         <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/40 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            {currentStep !== 'cart' && currentStep !== 'success' && (
+            {currentStep !== 'cart' && currentStep !== 'success' && !(currentStep === 'payment_process' && pendingOrder && !demoFlow) && (
               <button
                 onClick={() => {
                   if (currentStep === 'payment_process') setCurrentStep('buyer_data');
@@ -330,12 +480,14 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
               <h3 className="text-base font-bold text-white">
                 {currentStep === 'cart' && 'Keranjang Belanja'}
                 {currentStep === 'buyer_data' && 'Konfirmasi & QRIS Midtrans'}
-                {currentStep === 'payment_process' && 'Pindai QRIS Midtrans'}
+                {currentStep === 'payment_process' && (pendingOrder && !demoFlow ? 'Menunggu Pembayaran' : 'Pindai QRIS Midtrans')}
                 {currentStep === 'success' && 'Pembayaran Terverifikasi'}
               </h3>
               <p className="text-xs text-gray-400 font-medium">
                 {currentStep === 'success'
                   ? 'Transaksi Lunas Terverifikasi'
+                  : currentStep === 'payment_process' && pendingOrder && !demoFlow
+                  ? `${pendingOrder.items.length || cartItems.length} Produk • ${pendingOrder.orderId}`
                   : `${cartItems.length} Produk Digital Terpilih`}
               </p>
             </div>
@@ -439,7 +591,94 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
               </motion.div>
             )}
 
-            {currentStep === 'payment_process' && (
+            {currentStep === 'payment_process' && pendingOrder && !demoFlow && (
+              <motion.div key="pending_payment" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+                <div className="p-4 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 space-y-2">
+                  <div className="flex items-center gap-2 text-[#FCA311] font-black text-sm">
+                    <ClockIcon className="w-4 h-4" />
+                    <span>Menunggu Pembayaran</span>
+                  </div>
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    Pesananmu sudah dibuat. Menutup jendela pembayaran tidak membatalkannya. Selesaikan pembayaran,
+                    atau batalkan pesanan jika tidak jadi membeli.
+                  </p>
+                  {pendingOrder.expiresAt && (
+                    <div className="text-xs text-gray-200">
+                      Bayar sebelum <span className="font-bold text-white">{formatDeadline(pendingOrder.expiresAt)}</span>
+                      <span className="text-[#FCA311] font-bold"> • sisa {timeLeftLabel(pendingOrder.expiresAt)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] text-xs space-y-2">
+                  <div className="flex justify-between text-gray-400">
+                    <span>No. Pesanan:</span>
+                    <span className="font-mono text-white font-bold break-all text-right">{pendingOrder.orderId}</span>
+                  </div>
+                  {pendingOrder.items.length > 0 && (
+                    <div className="pt-2 border-t border-white/[0.08] space-y-1">
+                      {pendingOrder.items.map((it: any, idx: number) => (
+                        <div key={`${it.cartItemId || it.id}-${idx}`} className="flex justify-between gap-3 text-gray-300">
+                          <span className="truncate">{it.title || it.id}</span>
+                          <span className="font-mono shrink-0">{formatIDR(Number(it.price) || 0)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="pt-2 border-t border-white/[0.08] flex justify-between font-bold text-white">
+                    <span>Total (termasuk PPN):</span>
+                    <span className="text-base text-[#FCA311] font-mono">{formatIDR(pendingOrder.amount)}</span>
+                  </div>
+                </div>
+
+                {syncError && (
+                  <div className="p-3 rounded-xl bg-[#780000]/25 border border-[#780000] text-red-200 text-xs">{syncError}</div>
+                )}
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={isProcessingCheckout || isSyncingWithDB || isCancelling}
+                    onClick={handleResumePayment}
+                    className="w-full py-3.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-extrabold text-sm shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {isProcessingCheckout ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Membuka Midtrans Snap...</span>
+                      </>
+                    ) : (
+                      <>
+                        <QrCode className="w-4 h-4" />
+                        <span>Bayar Sekarang</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isProcessingCheckout || isSyncingWithDB || isCancelling}
+                    onClick={() => handleFinishTransaction(pendingOrder.orderId, { items: pendingOrder.items, total: pendingOrder.amount })}
+                    className="w-full py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSyncingWithDB ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshIcon className="w-4 h-4 text-[#FCA311]" />}
+                    <span>Saya sudah bayar — cek status</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isProcessingCheckout || isSyncingWithDB || isCancelling}
+                    onClick={handleCancelPending}
+                    className="w-full py-2.5 rounded-xl border border-red-400/40 text-red-300 hover:bg-red-500/10 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <BanIcon className="w-4 h-4" />}
+                    <span>Batalkan Pesanan</span>
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {currentStep === 'payment_process' && (!pendingOrder || demoFlow) && (
               <QrisPanel
                 key="payment_process"
                 amount={grandTotal}

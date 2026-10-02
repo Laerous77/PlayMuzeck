@@ -673,6 +673,7 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
       pool.query(`SELECT
           COUNT(*) FILTER (WHERE status = 'paid')::int AS paid,
           COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+          COUNT(*) FILTER (WHERE status = 'cancelled')::int AS cancelled,
           COALESCE(SUM(gross_amount) FILTER (WHERE status = 'paid'), 0)::bigint AS revenue,
           COALESCE(SUM(gross_amount) FILTER (WHERE status = 'paid' AND kind = 'donation'), 0)::bigint AS donations,
           COUNT(DISTINCT user_email) FILTER (WHERE status = 'paid')::int AS buyers
@@ -723,6 +724,7 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
         suspendedUsers: usr.rows[0].suspended,
         orders: pay.rows[0].paid,
         pendingOrders: pay.rows[0].pending,
+        cancelledOrders: pay.rows[0].cancelled,
         buyers: pay.rows[0].buyers,
         revenue: Number(pay.rows[0].revenue),
         donations: Number(pay.rows[0].donations),
@@ -763,7 +765,7 @@ app.get('/api/admin/orders', requireAdmin, async (_req, res) => {
 // Mengubah status ke 'paid' otomatis MEMBERI akses (user_collections), mengubah dari
 // 'paid' ke status lain MENCABUT akses (kecuali item itu juga dimiliki lewat pesanan paid lain).
 // ==========================================
-const MANUAL_STATUSES = ['pending', 'paid', 'failed'];
+const MANUAL_STATUSES = ['pending', 'paid', 'failed', 'cancelled'];
 
 type CollectionRef = { category: string; id: string; typeKey: string };
 
@@ -901,6 +903,9 @@ const mapPaymentOrder = (o: any) => ({
   status: o.status,
   fulfilled: Boolean(o.fulfilled),
   created_at: o.created_at,
+  expires_at: o.expires_at ?? null,
+  cancelled_at: o.cancelled_at ?? null,
+  cancel_reason: o.cancel_reason ?? null,
   items: typeof o.items === 'string' ? JSON.parse(o.items) : o.items || [],
 });
 
@@ -926,6 +931,7 @@ app.get('/api/admin/buyers', requireAdmin, async (_req, res) => {
               COUNT(*) FILTER (WHERE p.status = 'paid')      AS paid,
               COUNT(*) FILTER (WHERE p.status = 'failed')    AS failed,
               COUNT(*) FILTER (WHERE p.status = 'pending')   AS pending,
+              COUNT(*) FILTER (WHERE p.status = 'cancelled') AS cancelled,
               COALESCE(SUM(p.gross_amount) FILTER (WHERE p.status = 'paid'), 0) AS spent,
               MAX(p.created_at) AS last_order,
               (SELECT COUNT(*) FROM public.user_collections c
@@ -935,7 +941,7 @@ app.get('/api/admin/buyers', requireAdmin, async (_req, res) => {
     );
     res.json(rows.map((r) => ({
       email: r.email, name: r.name || r.email.split('@')[0],
-      paid: Number(r.paid), failed: Number(r.failed), pending: Number(r.pending),
+      paid: Number(r.paid), failed: Number(r.failed), pending: Number(r.pending), cancelled: Number(r.cancelled),
       spent: Number(r.spent), last_order: r.last_order, owned_items: Number(r.owned_items),
     })));
   } catch (err) {
@@ -1096,6 +1102,11 @@ app.patch('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, asyn
     const wasAccess = order.fulfilled && order.status === 'paid';
     const next = { ...order, gross_amount: newAmount, status: newStatus };
 
+    // Pesanan Midtrans yang masih menunggu dibatalkan admin -> transaksi di Midtrans ikut dibatalkan (best-effort).
+    if (newStatus === 'cancelled' && order.status === 'pending' && !String(order.order_id).startsWith('man_')) {
+      await midtransCancel(order.order_id);
+    }
+
     if (wasAccess && newStatus !== 'paid') {
       if (req.body?.revoke !== false) await revokeOrderAccess(client, order);
       await client.query('UPDATE payment_orders SET status = $1, gross_amount = $2, fulfilled = FALSE WHERE order_id = $3', [newStatus, newAmount, order.order_id]);
@@ -1104,6 +1115,18 @@ app.patch('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, asyn
       await client.query('UPDATE payment_orders SET status = $1, gross_amount = $2, fulfilled = TRUE WHERE order_id = $3', [newStatus, newAmount, order.order_id]);
     } else {
       await client.query('UPDATE payment_orders SET status = $1, gross_amount = $2 WHERE order_id = $3', [newStatus, newAmount, order.order_id]);
+    }
+    if (newStatus === 'cancelled') {
+      await client.query(
+        `UPDATE payment_orders SET cancelled_at = COALESCE(cancelled_at, NOW()), cancel_reason = COALESCE(cancel_reason, 'dibatalkan admin'), snap_token = NULL WHERE order_id = $1`,
+        [order.order_id]
+      );
+    } else if (newStatus === 'pending' && order.status !== 'pending') {
+      // Dikembalikan ke Menunggu oleh admin: beri batas bayar baru supaya tidak langsung disapu.
+      await client.query(
+        `UPDATE payment_orders SET cancelled_at = NULL, cancel_reason = NULL, expires_at = NOW() + ($2 || ' minutes')::interval WHERE order_id = $1`,
+        [order.order_id, String(PENDING_ORDER_TTL_MIN)]
+      );
     }
     await client.query('COMMIT');
     res.json({ success: true });
@@ -2249,9 +2272,13 @@ async function ensurePaymentTables() {
       fulfilled BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
-  // Status 'cancelled' sudah dihapus dari sistem: bersihkan sisa datanya.
-  await pool.query(`DELETE FROM payment_orders WHERE status = 'cancelled' AND fulfilled = FALSE`);
-  await pool.query(`UPDATE payment_orders SET status = 'failed' WHERE status = 'cancelled'`);
+  // Model Shopee: pesanan 'pending' punya batas bayar; yang dibatalkan/kedaluwarsa jadi 'cancelled' (tetap tercatat).
+  await pool.query(`
+    ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+    ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS cancelled_at TIMESTAMPTZ;
+    ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS cancel_reason TEXT;
+    ALTER TABLE payment_orders ADD COLUMN IF NOT EXISTS snap_token TEXT;
+  `);
 }
 
 // ---- Harga audio di server: cerminan src/services/pricing.ts (harus dijaga tetap sama) ----
@@ -2391,9 +2418,12 @@ app.post('/api/payment/charge', requireUser, async (req, res) => {
   if (!Array.isArray(items) || !items.length) return res.status(400).json({ error: 'Item pembayaran kosong.' });
 
   try {
-    const existing = await pool.query('SELECT user_email, fulfilled FROM payment_orders WHERE order_id = $1', [orderId]);
+    const existing = await pool.query('SELECT user_email, fulfilled, status FROM payment_orders WHERE order_id = $1', [orderId]);
     if (existing.rows[0] && (existing.rows[0].user_email !== email || existing.rows[0].fulfilled)) {
       return res.status(409).json({ error: 'ID pesanan sudah dipakai. Ulangi pembayaran.' });
+    }
+    if (existing.rows[0] && existing.rows[0].status === 'cancelled') {
+      return res.status(409).json({ error: 'Pesanan ini sudah dibatalkan. Buat pesanan baru.' });
     }
 
     let kind: 'cart' | 'donation';
@@ -2426,11 +2456,29 @@ app.post('/api/payment/charge', requireUser, async (req, res) => {
       if (gross < 1) return res.status(400).json({ error: 'Total pembayaran tidak valid.' });
     }
 
+    // Satu pesanan menunggu per jenis (keranjang / donasi), seperti marketplace: selesaikan atau batalkan dulu.
+    const open = await pool.query(
+      `SELECT order_id FROM payment_orders
+        WHERE user_email = $1 AND kind = $2 AND status = 'pending' AND fulfilled = FALSE
+          AND order_id <> $3 AND order_id NOT LIKE 'man\\_%'
+          AND COALESCE(expires_at, created_at + interval '24 hours') > NOW()
+        LIMIT 1`,
+      [email, kind, orderId]
+    );
+    if (open.rows[0]) {
+      return res.status(409).json({
+        code: 'PENDING_EXISTS',
+        pendingOrderId: open.rows[0].order_id,
+        error: 'Masih ada pesanan yang menunggu pembayaran. Selesaikan atau batalkan dulu sebelum membuat pesanan baru.',
+      });
+    }
+
     const snapRes = await fetch(MIDTRANS_SNAP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: midtransAuth() },
       body: JSON.stringify({
         transaction_details: { order_id: orderId, gross_amount: gross },
+        expiry: { unit: 'minute', duration: PENDING_ORDER_TTL_MIN },
         customer_details: { first_name: String(customerDetails?.name || 'Pelanggan').slice(0, 50), email },
       }),
     });
@@ -2440,24 +2488,17 @@ app.post('/api/payment/charge', requireUser, async (req, res) => {
       return res.status(502).json({ error: 'Gateway pembayaran menolak transaksi. Coba lagi.' });
     }
 
-    // Checkout baru menggantikan checkout lama yang belum dibayar (hindari pesanan 'Menunggu' dobel).
-    try {
-      const stale = await pool.query(
-        `SELECT order_id FROM payment_orders WHERE user_email = $1 AND status = 'pending' AND fulfilled = FALSE AND order_id <> $2 AND order_id NOT LIKE 'man\\_%' LIMIT 20`,
-        [email, orderId]
-      );
-      for (const r of stale.rows) await dropPendingOrder(r.order_id, email).catch(() => false);
-    } catch (e) { console.error('[payment] bersihkan pending lama gagal:', e); }
-
-    await pool.query(
-      `INSERT INTO payment_orders (order_id, user_email, kind, gross_amount, items, status)
-       VALUES ($1, $2, $3, $4, $5, 'pending')
-       ON CONFLICT (order_id) DO UPDATE SET kind = EXCLUDED.kind, gross_amount = EXCLUDED.gross_amount, items = EXCLUDED.items, status = 'pending'
-       WHERE payment_orders.user_email = EXCLUDED.user_email AND payment_orders.fulfilled = FALSE`,
-      [orderId, email, kind, gross, JSON.stringify(storedItems)]
+    const ins = await pool.query(
+      `INSERT INTO payment_orders (order_id, user_email, kind, gross_amount, items, status, snap_token, expires_at)
+       VALUES ($1, $2, $3, $4, $5, 'pending', $6, NOW() + ($7 || ' minutes')::interval)
+       ON CONFLICT (order_id) DO UPDATE SET kind = EXCLUDED.kind, gross_amount = EXCLUDED.gross_amount, items = EXCLUDED.items,
+         status = 'pending', snap_token = EXCLUDED.snap_token, expires_at = EXCLUDED.expires_at
+       WHERE payment_orders.user_email = EXCLUDED.user_email AND payment_orders.fulfilled = FALSE AND payment_orders.status <> 'cancelled'
+       RETURNING expires_at`,
+      [orderId, email, kind, gross, JSON.stringify(storedItems), snap.token, String(PENDING_ORDER_TTL_MIN)]
     );
     console.log(`[payment] pesanan pending dibuat: ${orderId} (${email}, Rp${gross})`);
-    res.json({ snapToken: snap.token, amount: gross });
+    res.json({ snapToken: snap.token, amount: gross, expiresAt: ins.rows[0]?.expires_at ?? null });
   } catch (err: any) {
     if (err instanceof CheckoutError) { console.warn(`[payment] charge ditolak (${email}): ${err.message}`); return res.status(400).json({ error: err.message }); }
     console.error('[payment] charge error:', err);
@@ -2478,17 +2519,44 @@ async function refreshPaymentStatus(orderId: string) {
   if (!order || order.status === 'paid') return;
   const amountOk = Number(d.gross_amount) === Number(order.gross_amount);
   const paid = amountOk && (d.transaction_status === 'settlement' || (d.transaction_status === 'capture' && d.fraud_status === 'accept'));
-  const failed = ['deny', 'cancel', 'expire', 'failure'].includes(d.transaction_status);
-  const status = paid ? 'paid' : failed ? 'failed' : 'pending';
-  if (status !== order.status) await pool.query('UPDATE payment_orders SET status = $1 WHERE order_id = $2', [status, orderId]);
+  if (order.status === 'cancelled' && !paid) return; // sudah dibatalkan: jangan dihidupkan lagi oleh status Midtrans
+  const cancelled = ['cancel', 'expire'].includes(d.transaction_status);
+  const failed = ['deny', 'failure'].includes(d.transaction_status);
+  const status = paid ? 'paid' : cancelled ? 'cancelled' : failed ? 'failed' : 'pending';
+  if (status === order.status) return;
+  if (status === 'cancelled') {
+    await pool.query(
+      `UPDATE payment_orders SET status = 'cancelled', cancelled_at = COALESCE(cancelled_at, NOW()),
+         cancel_reason = COALESCE(cancel_reason, 'dibatalkan / kedaluwarsa di Midtrans'), snap_token = NULL WHERE order_id = $1`,
+      [orderId]
+    );
+  } else {
+    await pool.query('UPDATE payment_orders SET status = $1 WHERE order_id = $2', [status, orderId]);
+  }
+}
+
+// ---------- Siklus hidup pesanan (model marketplace) ----------
+// 'pending' punya batas bayar (expires_at; bawaan 24 jam, ubah lewat PENDING_ORDER_TTL_MIN dalam menit).
+// Menutup popup Snap TIDAK membatalkan pesanan: pembeli bisa melanjutkan bayar atau membatalkan sendiri.
+// Dibatalkan / lewat batas bayar -> status 'cancelled' (tetap tercatat & terlihat di admin, tidak dihapus).
+const PENDING_ORDER_TTL_MIN = Math.max(5, Number(process.env.PENDING_ORDER_TTL_MIN) || 1440);
+
+/** Batalkan transaksi di Midtrans (best-effort) supaya tidak bisa dibayar belakangan. */
+async function midtransCancel(orderId: string) {
+  if (!MIDTRANS_SERVER_KEY) return;
+  try {
+    await fetch(`${MIDTRANS_API_URL}/v2/${encodeURIComponent(orderId)}/cancel`, {
+      method: 'POST',
+      headers: { Accept: 'application/json', Authorization: midtransAuth() },
+    });
+  } catch { /* Midtrans tidak terjangkau: status lokal tetap dibatalkan */ }
 }
 
 /**
- * Hapus pesanan 'Menunggu' yang batal dibayar (keranjang dihapus / popup ditutup / kedaluwarsa).
- * Transaksi di Midtrans ikut dibatalkan (best-effort) supaya tidak bisa dibayar belakangan.
- * Tidak menyentuh pesanan yang sudah lunas atau sudah diproses. `email` null = dipanggil sistem.
+ * Ubah pesanan 'pending' menjadi 'cancelled'. Tidak menyentuh pesanan yang sudah lunas atau sudah diproses.
+ * `email` null = dipanggil sistem (sapuan kedaluwarsa).
  */
-async function dropPendingOrder(orderId: string, email: string | null): Promise<boolean> {
+async function cancelOrder(orderId: string, email: string | null, reason: string): Promise<boolean> {
   const { rows } = await pool.query('SELECT user_email, status, fulfilled FROM payment_orders WHERE order_id = $1', [orderId]);
   const o = rows[0];
   if (!o) return false;
@@ -2497,50 +2565,104 @@ async function dropPendingOrder(orderId: string, email: string | null): Promise<
   if (MIDTRANS_SERVER_KEY) {
     try { await refreshPaymentStatus(orderId); } catch { /* lanjut */ }
     const again = await pool.query('SELECT status FROM payment_orders WHERE order_id = $1', [orderId]);
-    if (!again.rows[0] || again.rows[0].status !== 'pending') return false; // ternyata sudah lunas / gagal
-    try {
-      await fetch(`${MIDTRANS_API_URL}/v2/${encodeURIComponent(orderId)}/cancel`, {
-        method: 'POST',
-        headers: { Accept: 'application/json', Authorization: midtransAuth() },
-      });
-    } catch { /* Midtrans tidak terjangkau: tetap hapus dari daftar */ }
+    if (!again.rows[0] || again.rows[0].status !== 'pending') return false; // ternyata sudah lunas / gagal / dibatalkan
+    await midtransCancel(orderId);
   }
-  const del = await pool.query(`DELETE FROM payment_orders WHERE order_id = $1 AND status = 'pending' AND fulfilled = FALSE`, [orderId]);
-  return (del.rowCount || 0) > 0;
+  const upd = await pool.query(
+    `UPDATE payment_orders SET status = 'cancelled', cancelled_at = NOW(), cancel_reason = $2, snap_token = NULL
+      WHERE order_id = $1 AND status = 'pending' AND fulfilled = FALSE`,
+    [orderId, reason]
+  );
+  return (upd.rowCount || 0) > 0;
 }
 
-// Pengguna membatalkan pembayaran / mengosongkan keranjang -> pesanan 'Menunggu' hilang dari admin.
+// Pembeli membatalkan pesanannya sendiri (tombol "Batalkan pesanan").
 app.post('/api/payment/cancel', requireUser, async (req, res) => {
   const email = String((req as any).userEmail);
   const orderId = String(req.body?.orderId || '');
   if (!/^[A-Za-z0-9_-]{6,60}$/.test(orderId)) return res.status(400).json({ error: 'ID pesanan tidak valid.' });
   try {
-    res.json({ success: true, removed: await dropPendingOrder(orderId, email) });
+    const cancelled = await cancelOrder(orderId, email, 'dibatalkan pembeli');
+    res.json({ success: true, cancelled });
   } catch (err) {
     console.error('[payment] cancel error:', err);
     res.status(500).json({ error: 'Gagal membatalkan pesanan.' });
   }
 });
 
-// Sapu otomatis: pesanan 'Menunggu' dari checkout (bukan pesanan manual admin) yang tidak
-// dibayar dalam PENDING_ORDER_TTL_MIN menit (bawaan 60) dihapus.
-const PENDING_ORDER_TTL_MIN = Math.max(5, Number(process.env.PENDING_ORDER_TTL_MIN) || 60);
-async function purgeStalePendingOrders() {
+// Pesanan milik pembeli yang belum selesai: menunggu bayar (belum lewat batas) ATAU sudah dibayar tapi
+// aksesnya belum diaktifkan (mis. pembeli menutup popup setelah membayar).
+app.get('/api/payment/pending', requireUser, async (req, res) => {
+  const email = String((req as any).userEmail);
+  try {
+    const { rows } = await pool.query(
+      `SELECT order_id, kind, gross_amount, items, status, created_at, expires_at
+         FROM payment_orders
+        WHERE user_email = $1 AND fulfilled = FALSE AND order_id NOT LIKE 'man\\_%'
+          AND (status = 'paid'
+               OR (status = 'pending' AND snap_token IS NOT NULL
+                   AND COALESCE(expires_at, created_at + interval '24 hours') > NOW()))
+        ORDER BY created_at DESC LIMIT 5`,
+      [email]
+    );
+    res.json(rows.map((r) => ({
+      orderId: r.order_id,
+      kind: r.kind,
+      amount: Number(r.gross_amount),
+      status: r.status,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      items: typeof r.items === 'string' ? JSON.parse(r.items) : r.items || [],
+    })));
+  } catch (err) {
+    console.error('[payment] pending error:', err);
+    res.status(500).json({ error: 'Gagal memuat pesanan menunggu.' });
+  }
+});
+
+// Lanjutkan pembayaran pesanan yang sama (membuka Snap lagi dengan token yang tersimpan).
+app.post('/api/payment/resume', requireUser, async (req, res) => {
+  const email = String((req as any).userEmail);
+  const orderId = String(req.body?.orderId || '');
+  if (!/^[A-Za-z0-9_-]{6,60}$/.test(orderId)) return res.status(400).json({ error: 'ID pesanan tidak valid.' });
+  try {
+    const { rows } = await pool.query(
+      `SELECT snap_token, gross_amount, status, fulfilled, COALESCE(expires_at, created_at + interval '24 hours') AS due
+         FROM payment_orders WHERE order_id = $1 AND user_email = $2`,
+      [orderId, email]
+    );
+    const o = rows[0];
+    if (!o || o.fulfilled || o.status !== 'pending' || !o.snap_token) {
+      return res.status(404).json({ error: 'Pesanan ini tidak bisa dilanjutkan.' });
+    }
+    if (new Date(o.due).getTime() <= Date.now()) {
+      await cancelOrder(orderId, email, 'melewati batas pembayaran').catch(() => false);
+      return res.status(410).json({ error: 'Batas pembayaran pesanan ini sudah lewat dan pesanan dibatalkan.' });
+    }
+    res.json({ snapToken: o.snap_token, amount: Number(o.gross_amount), expiresAt: o.due });
+  } catch (err) {
+    console.error('[payment] resume error:', err);
+    res.status(500).json({ error: 'Gagal melanjutkan pembayaran.' });
+  }
+});
+
+// Sapu otomatis: pesanan 'Menunggu' dari checkout (bukan pesanan manual admin) yang lewat batas bayar -> 'Dibatalkan'.
+async function purgeExpiredPendingOrders() {
   try {
     const { rows } = await pool.query(
       `SELECT order_id FROM payment_orders
         WHERE status = 'pending' AND fulfilled = FALSE AND order_id NOT LIKE 'man\\_%'
-          AND created_at < NOW() - ($1 || ' minutes')::interval
+          AND COALESCE(expires_at, created_at + ($1 || ' minutes')::interval) < NOW()
         LIMIT 50`,
       [String(PENDING_ORDER_TTL_MIN)]
     );
-    for (const r of rows) await dropPendingOrder(r.order_id, null).catch(() => false);
+    for (const r of rows) await cancelOrder(r.order_id, null, 'melewati batas pembayaran').catch(() => false);
   } catch (e) {
-    console.error('[payment] purge pending gagal:', e);
+    console.error('[payment] sapu kedaluwarsa gagal:', e);
   }
 }
-setInterval(purgeStalePendingOrders, 10 * 60 * 1000).unref();
-setTimeout(purgeStalePendingOrders, 15 * 1000).unref();
+setInterval(purgeExpiredPendingOrders, 2 * 60 * 1000).unref();
+setTimeout(purgeExpiredPendingOrders, 15 * 1000).unref();
 
 async function requirePaidOrder(
   invoiceId: string,

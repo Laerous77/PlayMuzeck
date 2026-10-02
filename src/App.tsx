@@ -523,7 +523,7 @@ function MainApp() {
     audioEngine.playClickSound();
   };
 
-  const handleCheckoutSuccess = () => {
+  const handleCheckoutSuccess = (purchasedItems?: CartItem[]) => {
     // CATATAN PENTING: CartDrawer HANYA memanggil onCheckoutSuccess() setelah
     // POST /api/user/checkout benar-benar sukses (res.ok true). Jadi di sini
     // kita TIDAK BOLEH lagi menebak-nebak status kepemilikan dari isi
@@ -533,7 +533,12 @@ function MainApp() {
     const newUnlockedDeckIds = [...unlockedDeckIds];
     const newUnlockedTopicIds = [...unlockedTopicIds];
 
-    (cartItems || []).forEach((item) => {
+    // Yang dibuka & dibuang dari keranjang hanya item pada pesanan yang dibayar. Item yang baru ditambahkan
+    // selama pesanan menunggu tetap di keranjang. Tanpa daftar (mode demo) -> seluruh keranjang, seperti dulu.
+    const bought: CartItem[] = purchasedItems && purchasedItems.length ? purchasedItems : cartItems || [];
+    const boughtKeys = new Set(bought.map((b: any) => `${b.cartItemId ?? b.id}::${b.itemTypeKey || ''}`));
+
+    bought.forEach((item) => {
       if (item.category === 'deck' && item.deckId) {
         if (!newUnlockedDeckIds.includes(item.deckId)) newUnlockedDeckIds.push(item.deckId);
       } else if (item.category === 'topic' && item.topicId) {
@@ -551,7 +556,11 @@ function MainApp() {
 
     setUnlockedDeckIds(newUnlockedDeckIds);
     setUnlockedTopicIds(newUnlockedTopicIds);
-    setCartItems([]);
+    if (purchasedItems && purchasedItems.length) {
+      setCartItems((prev) => (prev || []).filter((i) => !boughtKeys.has(cartKeyOf(i))));
+    } else {
+      setCartItems([]);
+    }
     refreshEntitlementsFromDB(userSession?.email);
     showToast('Pembayaran berhasil! Seluruh item bundle telah aktif.');
   };

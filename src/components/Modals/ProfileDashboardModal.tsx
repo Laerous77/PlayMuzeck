@@ -37,7 +37,19 @@ import {
 import { UserSession, Deck, AudioTrackItem } from '../../types';
 import { storage } from '../../services/storage';
 import { BUILTIN_DECKS } from '../../data/quiz';
-import { payWithQris, getPaymentStatus, formatIDR } from '../../services/payment';
+import {
+  payWithQris,
+  resumePayment,
+  getPendingOrders,
+  cancelPendingOrder,
+  getPaymentStatus,
+  formatIDR,
+  formatDeadline,
+  timeLeftLabel,
+  PendingOrder,
+  QrisHandlers,
+} from '../../services/payment';
+import { Clock as ClockIcon, Ban as BanIcon, RefreshCw as RefreshIcon } from 'lucide-react';
 import { QrisPanel } from './QrisPanel';
 import { 
   fetchUserCollectionsFromDB, 
@@ -430,6 +442,51 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   const [donationOrderId, setDonationOrderId] = useState<string | null>(null);
   const [donationError, setDonationError] = useState<string | null>(null);
 
+  // Donasi memakai model pesanan yang sama dengan keranjang: pesanan 'Menunggu' tetap ada (batas bayar 24 jam)
+  // sampai dibayar atau dibatalkan pembeli. Menutup popup Snap tidak membatalkannya.
+  const [pendingDonation, setPendingDonation] = useState<PendingOrder | null>(null);
+  const [isCancellingDonation, setIsCancellingDonation] = useState(false);
+  const donationFinishingRef = useRef(false);
+  const [, setDonationTick] = useState(0);
+
+  const loadPendingDonation = async () => {
+    if (!userSession.isLoggedIn || !userSession.email) return;
+    const list = await getPendingOrders();
+    if (list === null) return; // gagal memuat: jangan ubah tampilan
+    const don = list.find((o) => o.kind === 'donation') || null;
+    if (don && don.status === 'paid') {
+      // Sudah dibayar tapi belum dicatat (popup ditutup setelah membayar) -> catat otomatis.
+      if (donationFinishingRef.current) return;
+      donationFinishingRef.current = true;
+      setPendingDonation(don);
+      setDonationOrderId(don.orderId);
+      try {
+        await recordDonation(don.orderId, don.amount);
+      } finally {
+        donationFinishingRef.current = false;
+      }
+      return;
+    }
+    setPendingDonation(don);
+    if (don) setDonationOrderId(don.orderId);
+  };
+
+  useEffect(() => {
+    if (!isOpen || !userSession.isLoggedIn) return;
+    loadPendingDonation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, userSession.isLoggedIn, userSession.email]);
+
+  useEffect(() => {
+    if (!isOpen || !pendingDonation) return;
+    const timer = setInterval(() => {
+      setDonationTick((t) => t + 1);
+      loadPendingDonation();
+    }, 30000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, pendingDonation?.orderId]);
+
   // PERBAIKAN: kuis buatan sendiri kini dikirim ke database secara otomatis
   // saat dibuat (lihat handleDeckCreatedOrUpdated di App.tsx -> POST
   // /api/user/decks), jadi untuk deck BARU cukup dbData.quiz.decks saja yang
@@ -612,6 +669,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       setCustomAmount('');
       setDonationStep('form');
       setDonationOrderId(null);
+      setPendingDonation(null);
       await refetchCollections();
       const unlockedFrame = PROFILE_FRAMES.find((f) => f.id === data.unlockedFrameId);
       onSuccessToast(
@@ -650,19 +708,20 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         customer: { name: userSession.name || 'Donatur', email: userSession.email },
         items: [{ id: orderId, title: 'Donasi PlayMuzeck', price: amount, quantity: 1, category: 'donation' }],
       },
-      {
-        onSuccess: () => { recordDonation(orderId, amount); },
-        onPending: () => {
-          setIsSendingDonation(false);
-          setDonationStep('qris');
-          onSuccessToast('Menunggu Anda menyelesaikan pembayaran QRIS...');
+      donationSnapHandlers(orderId, amount, {
+        // Pesanan donasi sudah tercatat di server: tampilkan "Menunggu Pembayaran" (bayar atau batalkan).
+        onCreated: ({ expiresAt }) => {
+          setPendingDonation({
+            orderId,
+            kind: 'donation',
+            amount,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            expiresAt,
+            items: [],
+          });
         },
-        onError: (msg) => {
-          setIsSendingDonation(false);
-          onSuccessToast(msg || 'Pembayaran QRIS gagal atau dibatalkan.');
-        },
-        onClose: () => setIsSendingDonation(false),
-      }
+      })
     );
 
     if (!snapOpened) {
@@ -674,6 +733,55 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       }
       setDonationStep('qris'); // panel lokal hanya untuk mode demo
     }
+  };
+
+  // Handler Snap bersama untuk donasi baru & "Bayar Sekarang" (lanjutkan pesanan yang sama).
+  function donationSnapHandlers(orderId: string, amount: number, extra?: Partial<QrisHandlers>): QrisHandlers {
+    return {
+      onSuccess: () => { recordDonation(orderId, amount); },
+      onPending: () => {
+        setIsSendingDonation(false);
+        onSuccessToast('Menunggu Anda menyelesaikan pembayaran QRIS...');
+      },
+      onError: (msg, code) => {
+        setIsSendingDonation(false);
+        if (code === 'PENDING_EXISTS' || code === 'GONE') {
+          loadPendingDonation();
+          onSuccessToast(msg || 'Pesanan donasi ini tidak bisa dilanjutkan.');
+          return;
+        }
+        onSuccessToast(msg || 'Pembayaran QRIS gagal atau dibatalkan.');
+      },
+      // Menutup popup TIDAK membatalkan pesanan.
+      onClose: () => setIsSendingDonation(false),
+      ...extra,
+    };
+  }
+
+  const handleResumeDonation = async () => {
+    if (!pendingDonation) return;
+    setDonationError(null);
+    setIsSendingDonation(true);
+    const opened = await resumePayment(pendingDonation.orderId, donationSnapHandlers(pendingDonation.orderId, pendingDonation.amount));
+    if (!opened) setIsSendingDonation(false);
+  };
+
+  const handleCancelDonation = async () => {
+    if (!pendingDonation || isCancellingDonation) return;
+    if (!confirm('Batalkan pesanan donasi ini?\n\nPembayaran yang belum dilakukan tidak akan diproses. Kamu bisa berdonasi lagi kapan saja.')) return;
+    setIsCancellingDonation(true);
+    const ok = await cancelPendingOrder(pendingDonation.orderId);
+    setIsCancellingDonation(false);
+    if (!ok) {
+      await loadPendingDonation();
+      onSuccessToast('Pesanan donasi tidak bisa dibatalkan (mungkin sudah dibayar atau sudah dibatalkan).');
+      return;
+    }
+    setPendingDonation(null);
+    setDonationOrderId(null);
+    setDonationError(null);
+    setDonationStep('form');
+    onSuccessToast('Pesanan donasi dibatalkan.');
   };
 
   const handleGoogleLogin = () => {
@@ -942,7 +1050,74 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="px-4 py-2 rounded-xl bg-[#FCA311] text-black font-bold text-xs cursor-pointer">Masuk Akun</button>
                 </div>
               ) : (
-                donationStep === 'qris' ? (
+                pendingDonation ? (
+                  <div className="space-y-4">
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 space-y-2">
+                      <div className="flex items-center gap-2 text-[#FCA311] font-black text-sm">
+                        <ClockIcon className="w-4 h-4" />
+                        <span>Donasi Menunggu Pembayaran</span>
+                      </div>
+                      <p className="text-xs text-gray-300 leading-relaxed">
+                        Pesanan donasimu sudah dibuat. Menutup jendela pembayaran tidak membatalkannya. Selesaikan
+                        pembayaran, atau batalkan jika tidak jadi berdonasi.
+                      </p>
+                      {pendingDonation.expiresAt && (
+                        <div className="text-xs text-gray-200">
+                          Bayar sebelum <span className="font-bold text-white">{formatDeadline(pendingDonation.expiresAt)}</span>
+                          <span className="text-[#FCA311] font-bold"> • sisa {timeLeftLabel(pendingDonation.expiresAt)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-4 rounded-xl bg-black/60 border border-white/[0.08] text-xs space-y-2">
+                      <div className="flex justify-between text-gray-400">
+                        <span>No. Pesanan:</span>
+                        <span className="font-mono text-white font-bold break-all text-right">{pendingDonation.orderId}</span>
+                      </div>
+                      <div className="pt-2 border-t border-white/[0.08] flex justify-between font-bold text-white">
+                        <span>Nominal Donasi:</span>
+                        <span className="text-base text-[#FCA311] font-mono">{formatIDR(pendingDonation.amount)}</span>
+                      </div>
+                    </div>
+
+                    {donationError && (
+                      <div className="p-3 rounded-xl bg-[#780000]/25 border border-[#780000] text-red-200 text-xs">{donationError}</div>
+                    )}
+
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        disabled={isSendingDonation || isCancellingDonation}
+                        onClick={handleResumeDonation}
+                        className="w-full py-3 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95 disabled:opacity-50"
+                      >
+                        {isSendingDonation ? (
+                          <><Loader2 className="w-4 h-4 animate-spin" /> <span>Memproses...</span></>
+                        ) : (
+                          <><Heart className="w-4 h-4 fill-current" /> <span>Bayar Sekarang</span></>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSendingDonation || isCancellingDonation}
+                        onClick={() => recordDonation(pendingDonation.orderId, pendingDonation.amount)}
+                        className="w-full py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshIcon className="w-4 h-4 text-[#FCA311]" />
+                        <span>Saya sudah bayar — cek status</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isSendingDonation || isCancellingDonation}
+                        onClick={handleCancelDonation}
+                        className="w-full py-2.5 rounded-xl border border-red-400/40 text-red-300 hover:bg-red-500/10 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        {isCancellingDonation ? <Loader2 className="w-4 h-4 animate-spin" /> : <BanIcon className="w-4 h-4" />}
+                        <span>Batalkan Pesanan</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : donationStep === 'qris' ? (
                   <div className="space-y-3">
                     <button
                       type="button"
