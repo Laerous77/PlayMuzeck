@@ -1,26 +1,29 @@
 // src/admin/components/AdminThemeManager.tsx
-// Admin: kelola maksimal 7 tema, pakai di konsol admin, + terapkan/kunci tema untuk pengguna tertentu.
-import React, { useEffect, useState } from 'react';
-import { Lock, Monitor, Plus, RotateCcw, Trash2 } from 'lucide-react';
+// Admin: kelola maksimal 7 tema, pakai di konsol admin, + terapkan/kunci/reset tema untuk
+// SEMUA pengguna atau pengguna terpilih, lengkap dengan notifikasi (template / tulis sendiri).
+import React, { useEffect, useMemo, useState } from 'react';
+import { Bell, Lock, Monitor, Plus, RotateCcw, Send, Trash2, Users } from 'lucide-react';
 import { adminFetch } from '../adminApi';
 import { PalettePicker } from '../../theme/PalettePicker';
 import { BUILTIN_THEME, LIMITS, NAME_MAX, Palette, ThemeRecord, samePalette } from '../../theme/theme';
 import { loadAdminPalette, saveAdminPalette } from '../adminTheme';
+import { READONLY_MSG, useAdminRole } from '../useAdminRole';
+import {
+  APPLY_TEMPLATES, CUSTOM_ID, NOTICE_MESSAGE_MAX, NOTICE_TITLE_MAX, NoticeTemplate, RESET_TEMPLATES, fillNotice,
+} from '../themeNotice';
 
 type Sel = number | 'new' | null;
+type TargetMode = 'selected' | 'all';
 
-interface UserThemeState {
-  activeId: number | null;
-  active: ThemeRecord | null;
-  mine: ThemeRecord[];
-  locked: boolean;
-}
+interface NoticeDraft { tpl: string; title: string; message: string }
 
-// 404 dari /api/admin/themes artinya router tema belum terpasang di server.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// 404 dari endpoint tema artinya router tema belum terpasang di server.
 const explain = (e: unknown, fallback: string) => {
   const m = e instanceof Error ? e.message : fallback;
   return m.includes('(404)')
-    ? 'Endpoint tema belum ada di server (404). Pasang themeRoutes di server/index.ts lalu restart server.'
+    ? 'Endpoint tema belum ada di server (404). Pasang themeRoutes / themeBulkRoutes di server/index.ts lalu restart server.'
     : m;
 };
 
@@ -36,7 +39,72 @@ const Dots: React.FC<{ p?: Palette }> = ({ p }) => (
   </div>
 );
 
+const initNotice = (list: NoticeTemplate[]): NoticeDraft => ({
+  tpl: list[0].id,
+  title: list[0].title,
+  message: list[0].message,
+});
+
+interface NoticeEditorProps {
+  label: string;
+  templates: NoticeTemplate[];
+  value: NoticeDraft;
+  onChange: (v: NoticeDraft) => void;
+  disabled: boolean;
+}
+
+const NoticeEditor: React.FC<NoticeEditorProps> = ({ label, templates, value, onChange, disabled }) => {
+  const pickTemplate = (id: string) => {
+    if (id === CUSTOM_ID) { onChange({ ...value, tpl: CUSTOM_ID }); return; }
+    const t = templates.find((x) => x.id === id);
+    if (t) onChange({ tpl: t.id, title: t.title, message: t.message });
+  };
+  return (
+    <div className={`space-y-2 rounded-xl border border-white/10 p-3 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+      <p className="text-xs font-semibold text-white">{label}</p>
+      <select
+        value={value.tpl}
+        onChange={(e) => pickTemplate(e.target.value)}
+        className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white"
+      >
+        {templates.map((t) => (
+          <option key={t.id} value={t.id}>{t.label}</option>
+        ))}
+        <option value={CUSTOM_ID}>Tulis sendiri</option>
+      </select>
+      <input
+        value={value.title}
+        maxLength={NOTICE_TITLE_MAX}
+        onChange={(e) => onChange({ ...value, tpl: CUSTOM_ID, title: e.target.value })}
+        placeholder="Judul notifikasi"
+        className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white outline-none focus:border-accent"
+      />
+      <textarea
+        value={value.message}
+        maxLength={NOTICE_MESSAGE_MAX}
+        rows={3}
+        onChange={(e) => onChange({ ...value, tpl: CUSTOM_ID, message: e.target.value })}
+        placeholder="Isi pesan"
+        className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white outline-none focus:border-accent resize-y"
+      />
+      <p className="text-[10px] text-gray-500">
+        Tulis <span className="font-mono">{'{tema}'}</span> untuk menyisipkan nama tema otomatis. {value.message.length}/{NOTICE_MESSAGE_MAX}
+      </p>
+    </div>
+  );
+};
+
+interface BulkResult {
+  total?: number;
+  updated?: number;
+  restored?: number;
+  skipped?: string[];
+  notified?: number;
+}
+
 export const AdminThemeManager: React.FC = () => {
+  const { isSuperAdmin } = useAdminRole();
+
   const [themes, setThemes] = useState<ThemeRecord[]>([]);
   const [max, setMax] = useState<number>(LIMITS.admin);
   const [sel, setSel] = useState<Sel>(null);
@@ -47,11 +115,19 @@ export const AdminThemeManager: React.FC = () => {
   const [busy, setBusy] = useState(false);
   const [consolePalette, setConsolePalette] = useState<Palette>(loadAdminPalette);
 
-  // Terapkan ke pengguna
-  const [email, setEmail] = useState('');
-  const [target, setTarget] = useState<{ email: string; state: UserThemeState } | null>(null);
-  const [pick, setPick] = useState('builtin'); // 'builtin' | id tema admin
+  // ── Terapkan ke pengguna ───────────────────────────────────────────────
+  const [users, setUsers] = useState<string[]>([]);
+  const [usersLoaded, setUsersLoaded] = useState(false);
+  const [targetMode, setTargetMode] = useState<TargetMode>('selected');
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [q, setQ] = useState('');
+  const [manual, setManual] = useState('');
+  const [pick, setPick] = useState('');
   const [lock, setLock] = useState(false);
+  const [notifyOn, setNotifyOn] = useState(true);
+  const [applyNotice, setApplyNotice] = useState<NoticeDraft>(() => initNotice(APPLY_TEMPLATES));
+  const [resetNotice, setResetNotice] = useState<NoticeDraft>(() => initNotice(RESET_TEMPLATES));
+  const [uBusy, setUBusy] = useState(false);
   const [uErr, setUErr] = useState('');
   const [uMsg, setUMsg] = useState('');
 
@@ -64,6 +140,18 @@ export const AdminThemeManager: React.FC = () => {
   useEffect(() => {
     load().catch((e) => setErr(explain(e, 'Gagal memuat tema.')));
   }, []);
+
+  useEffect(() => {
+    adminFetch<{ users: Array<{ email: string }> }>('/api/admin/theme-bulk/users')
+      .then((r) => { setUsers(r.users.map((u) => u.email.toLowerCase())); setUsersLoaded(true); })
+      .catch((e) => setUErr(explain(e, 'Gagal memuat daftar pengguna.')));
+  }, []);
+
+  // Pilih tema pertama otomatis agar tombol Terapkan langsung siap.
+  useEffect(() => {
+    if (themes.length === 0) { setPick(''); return; }
+    if (!themes.some((t) => String(t.id) === pick)) setPick(String(themes[0].id));
+  }, [themes, pick]);
 
   const choose = (s: Sel) => {
     setSel(s);
@@ -118,58 +206,101 @@ export const AdminThemeManager: React.FC = () => {
     setMsg(p ? 'Tampilan konsol admin diganti (hanya di browser ini).' : 'Tampilan konsol admin dikembalikan ke bawaan.');
   };
 
-  // ── Terapkan ke pengguna ────────────────────────────────────────────────
-  const syncTarget = (e: string, state: UserThemeState) => {
-    setTarget({ email: e, state });
-    setPick(state.active?.scope === 'admin' ? String(state.active.id) : 'builtin');
-    setLock(state.locked);
+  // ── Pemilihan pengguna ──────────────────────────────────────────────────
+  const userSet = useMemo(() => new Set(users), [users]);
+  const chosenSet = useMemo(() => new Set(chosen), [chosen]);
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return users.filter((u) => !s || u.includes(s)).slice(0, 200);
+  }, [users, q]);
+
+  const toggle = (e: string) =>
+    setChosen((prev) => (prev.includes(e) ? prev.filter((x) => x !== e) : [...prev, e]));
+  const selectVisible = () => setChosen((prev) => Array.from(new Set([...prev, ...filtered])));
+
+  const addManual = () => {
+    setUErr('');
+    const e = manual.trim().toLowerCase();
+    if (!EMAIL_RE.test(e)) { setUErr('Alamat email tidak valid.'); return; }
+    if (usersLoaded && !userSet.has(e)) { setUErr('Email ini belum terdaftar sebagai pengguna.'); return; }
+    setChosen((prev) => (prev.includes(e) ? prev : [...prev, e]));
+    setManual('');
   };
 
-  const loadUser = async () => {
-    setUErr(''); setUMsg('');
-    const e = email.trim().toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { setUErr('Alamat email tidak valid.'); return; }
-    try {
-      const state = await adminFetch<UserThemeState>(`/api/admin/users/${encodeURIComponent(e)}/theme`);
-      syncTarget(e, state);
-    } catch (er) {
-      setTarget(null);
-      setUErr(explain(er, 'Gagal memuat tema pengguna.'));
-    }
+  // ── Kirim ke server ─────────────────────────────────────────────────────
+  const themeName = themes.find((t) => String(t.id) === pick)?.name ?? '';
+  const targetCount = targetMode === 'all' ? users.length : chosen.length;
+  const targetLabel = targetMode === 'all' ? `SEMUA pengguna (${users.length})` : `${chosen.length} pengguna terpilih`;
+
+  const buildNotify = (n: NoticeDraft, tema: string) => {
+    if (!notifyOn) return null;
+    const title = fillNotice(n.title, { tema }).trim();
+    const message = fillNotice(n.message, { tema }).trim();
+    if (!title || !message) throw new Error('Judul dan isi notifikasi tidak boleh kosong (atau matikan notifikasi).');
+    return { title, message };
   };
 
-  const applyToUser = async (reset = false) => {
-    if (!target) return;
+  const describeSkipped = (skipped?: string[]) =>
+    skipped && skipped.length
+      ? ` Dilewati ${skipped.length}: ${skipped.slice(0, 5).join(', ')}${skipped.length > 5 ? ', …' : ''}.`
+      : '';
+
+  const runBulk = async (action: 'apply' | 'reset-previous' | 'reset-builtin') => {
     setUErr(''); setUMsg('');
-    const themeId = reset || pick === 'builtin' ? null : Number(pick);
-    const wantLock = themeId != null && !reset && lock;
+    if (!isSuperAdmin) { setUErr(READONLY_MSG); return; }
+    if (targetCount === 0) { setUErr(targetMode === 'all' ? 'Belum ada pengguna.' : 'Pilih minimal satu pengguna.'); return; }
+    if (action === 'apply' && !pick) { setUErr('Pilih tema admin dulu.'); return; }
+
+    const verb =
+      action === 'apply' ? `Terapkan tema "${themeName}"${lock ? ' (dikunci)' : ''}`
+      : action === 'reset-previous' ? 'Kembalikan ke tema sebelumnya'
+      : 'Kembalikan ke tema bawaan & buka kunci';
+    if (!confirm(`${verb} untuk ${targetLabel}?${notifyOn ? ' Notifikasi akan dikirim ke pengguna.' : ''}`)) return;
+
+    setUBusy(true);
     try {
-      // Server membalas state TERBARU pengguna; pesan sukses hanya muncul kalau state itu cocok.
-      const state = await adminFetch<UserThemeState>(
-        `/api/admin/users/${encodeURIComponent(target.email)}/theme`,
-        { method: 'PUT', body: JSON.stringify({ themeId, locked: wantLock }) },
-      );
-      if ((state?.activeId ?? null) !== themeId) throw new Error('Server tidak menyimpan tema ini.');
-      if (!!state.locked !== wantLock) throw new Error('Server tidak menyimpan status kunci.');
-      syncTarget(target.email, state);
-      setUMsg(
-        themeId == null
-          ? 'Tersimpan: pengguna kembali ke tema bawaan.'
-          : `Tersimpan: ${state.active?.name ?? 'tema admin'}${state.locked ? ' (terkunci)' : ''}. Pengguna melihatnya setelah halaman dibuka/di-refresh.`,
-      );
+      const scopeBody = { scope: targetMode, emails: targetMode === 'selected' ? chosen : undefined };
+      if (action === 'apply') {
+        const r = await adminFetch<BulkResult>('/api/admin/theme-bulk/apply', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...scopeBody,
+            themeId: Number(pick),
+            locked: lock,
+            notify: buildNotify(applyNotice, themeName),
+          }),
+        });
+        setUMsg(
+          `Tema "${themeName}" diterapkan ke ${r.updated ?? 0} pengguna${lock ? ' (terkunci)' : ''}.` +
+          `${notifyOn ? ` Notifikasi terkirim: ${r.notified ?? 0}.` : ''}${describeSkipped(r.skipped)} ` +
+          'Pengguna melihatnya otomatis dalam ±30 detik.',
+        );
+      } else {
+        const mode = action === 'reset-previous' ? 'previous' : 'builtin';
+        const r = await adminFetch<BulkResult>('/api/admin/theme-bulk/reset', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...scopeBody,
+            mode,
+            notify: buildNotify(resetNotice, mode === 'builtin' ? BUILTIN_THEME.name : 'sebelumnya'),
+          }),
+        });
+        setUMsg(
+          `${r.restored ?? 0} pengguna ${mode === 'previous' ? 'dikembalikan ke tema sebelumnya' : 'dikembalikan ke tema bawaan'}.` +
+          `${notifyOn ? ` Notifikasi terkirim: ${r.notified ?? 0}.` : ''}` +
+          `${mode === 'previous' && r.skipped?.length ? ` ${r.skipped.length} dilewati karena tidak ada riwayat tema sebelumnya.` : ''}`,
+        );
+      }
     } catch (er) {
-      setUErr(explain(er, 'Gagal menerapkan tema.'));
+      setUErr(explain(er, 'Gagal memproses permintaan.'));
+    } finally {
+      setUBusy(false);
     }
   };
 
   const slots = Array.from({ length: max }, (_, i) => themes[i]);
   const isFull = themes.length >= max;
   const consoleIsDefault = samePalette(consolePalette, loadAdminPalette()) && !localStorage.getItem('pm_admin_palette');
-  const userActiveLabel = target
-    ? target.state.active
-      ? `${target.state.active.name} (${target.state.active.scope === 'admin' ? 'dari admin' : 'tema buatan user'})`
-      : `${BUILTIN_THEME.name} (bawaan)`
-    : '';
 
   return (
     <>
@@ -277,71 +408,180 @@ export const AdminThemeManager: React.FC = () => {
         {msg && <p className="text-xs text-emerald-400 font-medium">{msg}</p>}
       </section>
 
-      <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-3">
+      <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-4">
         <div>
-          <h3 className="font-bold text-white">Terapkan tema ke pengguna</h3>
+          <h3 className="font-bold text-white flex items-center gap-2">
+            <Users className="w-4 h-4 text-accent" /> Terapkan tema ke pengguna
+          </h3>
           <p className="text-xs text-gray-400">
-            Masukkan email pengguna terdaftar, pilih tema admin, dan kunci kalau pengguna tidak boleh menggantinya
-            sendiri.
+            Terapkan satu tema admin ke semua pengguna atau ke pengguna yang dipilih manual. Tema yang dipakai sebelumnya
+            disimpan otomatis, jadi bisa dikembalikan kapan saja lewat tombol reset.
           </p>
         </div>
 
-        <div className="flex gap-2">
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && loadUser()}
-            placeholder="email pengguna"
-            className="flex-1 rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-accent"
-          />
-          <button type="button" onClick={loadUser} className="rounded-xl border border-white/15 px-4 py-2 text-sm cursor-pointer">
-            Muat
-          </button>
-        </div>
+        {!isSuperAdmin && (
+          <p className="text-xs rounded-xl bg-accent/10 border border-accent/30 text-accent px-3 py-2">{READONLY_MSG}</p>
+        )}
 
-        {target && (
-          <div className="space-y-3 rounded-xl border border-white/10 p-4">
-            <p className="text-xs text-gray-300">
-              <span className="font-mono text-white">{target.email}</span> sedang memakai{' '}
-              <strong>{userActiveLabel}</strong>
-              {target.state.locked && (
-                <span className="ml-2 inline-flex items-center gap-1 text-amber-200">
-                  <Lock className="w-3 h-3" /> terkunci
-                </span>
-              )}
-              . Tema pribadi: {target.state.mine.length ? target.state.mine.map((t) => t.name).join(', ') : 'belum ada'}.
-            </p>
+        <div className={`space-y-4 ${isSuperAdmin ? '' : 'opacity-60 pointer-events-none'}`}>
+          {/* 1. Target */}
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400">1. Siapa yang kena?</p>
+            <div className="inline-flex rounded-xl border border-white/10 p-0.5">
+              {([['selected', 'Pengguna terpilih'], ['all', 'Semua pengguna']] as const).map(([m, label]) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setTargetMode(m)}
+                  className={`px-3 py-1.5 rounded-[10px] text-xs font-bold cursor-pointer ${
+                    targetMode === m ? 'bg-accent text-on-accent' : 'text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
 
-            <label className="text-xs text-gray-400 block">
-              Tema untuk pengguna ini
+            {targetMode === 'all' ? (
+              <p className="text-xs text-amber-200 rounded-xl bg-amber-500/10 border border-amber-400/30 px-3 py-2">
+                Perubahan berlaku ke {usersLoaded ? users.length : '…'} pengguna terdaftar.
+              </p>
+            ) : (
+              <div className="space-y-2 rounded-xl border border-white/10 p-3">
+                <div className="flex gap-2">
+                  <input
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                    placeholder="Cari email pengguna…"
+                    className="flex-1 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white outline-none focus:border-accent"
+                  />
+                  <button type="button" onClick={selectVisible} className="rounded-lg border border-white/15 px-3 py-2 text-xs cursor-pointer">
+                    Pilih hasil
+                  </button>
+                  <button type="button" onClick={() => setChosen([])} disabled={chosen.length === 0} className="rounded-lg border border-white/15 px-3 py-2 text-xs cursor-pointer disabled:opacity-40">
+                    Kosongkan
+                  </button>
+                </div>
+
+                <div className="max-h-48 overflow-auto rounded-lg border border-white/5 divide-y divide-white/5">
+                  {!usersLoaded && <p className="p-3 text-xs text-gray-500">Memuat pengguna…</p>}
+                  {usersLoaded && filtered.length === 0 && <p className="p-3 text-xs text-gray-500">Tidak ada yang cocok.</p>}
+                  {filtered.map((e) => (
+                    <label key={e} className="flex items-center gap-2 px-3 py-1.5 text-xs text-gray-200 cursor-pointer hover:bg-white/5">
+                      <input type="checkbox" checked={chosenSet.has(e)} onChange={() => toggle(e)} />
+                      <span className="font-mono truncate">{e}</span>
+                    </label>
+                  ))}
+                </div>
+                {users.length > 200 && <p className="text-[10px] text-gray-500">Menampilkan 200 pertama — persempit dengan pencarian, atau tambah manual di bawah.</p>}
+
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={manual}
+                    onChange={(e) => setManual(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && addManual()}
+                    placeholder="Tambah manual: email pengguna"
+                    className="flex-1 rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white outline-none focus:border-accent"
+                  />
+                  <button type="button" onClick={addManual} className="rounded-lg border border-white/15 px-3 py-2 text-xs cursor-pointer">
+                    Tambah
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 max-h-24 overflow-auto">
+                  {chosen.length === 0 && <span className="text-[11px] text-gray-500">Belum ada yang dipilih.</span>}
+                  {chosen.map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => toggle(e)}
+                      title="Klik untuk hapus"
+                      className="rounded-full bg-accent/15 border border-accent/30 text-accent px-2 py-0.5 text-[10px] font-mono cursor-pointer"
+                    >
+                      {e} ×
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 2. Tema */}
+          <div className="space-y-2">
+            <p className="text-xs text-gray-400">2. Tema yang diterapkan</p>
+            {themes.length === 0 ? (
+              <p className="text-xs text-gray-500">Buat dulu minimal satu tema admin di atas.</p>
+            ) : (
               <select
                 value={pick}
                 onChange={(e) => setPick(e.target.value)}
-                className="mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
+                className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white"
               >
-                <option value="builtin">{BUILTIN_THEME.name} (bawaan)</option>
                 {themes.map((t) => (
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-            </label>
-
+            )}
             <label className="flex items-center gap-2 text-xs text-gray-300">
-              <input type="checkbox" checked={lock} disabled={pick === 'builtin'} onChange={(e) => setLock(e.target.checked)} />
-              Kunci (pengguna tidak bisa mengganti tema sendiri)
+              <input type="checkbox" checked={lock} onChange={(e) => setLock(e.target.checked)} />
+              <Lock className="w-3 h-3" /> Kunci (pengguna tidak bisa mengganti tema sendiri)
             </label>
+          </div>
 
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => applyToUser(false)} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm cursor-pointer">
-                Terapkan
-              </button>
-              <button type="button" onClick={() => applyToUser(true)} className="rounded-xl border border-white/15 px-4 py-2 text-sm cursor-pointer">
-                Reset ke bawaan & buka kunci
-              </button>
+          {/* 3. Notifikasi */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs text-gray-400">
+              <input type="checkbox" checked={notifyOn} onChange={(e) => setNotifyOn(e.target.checked)} />
+              <Bell className="w-3.5 h-3.5" /> 3. Kirim notifikasi ke pengguna
+            </label>
+            <div className="grid md:grid-cols-2 gap-3">
+              <NoticeEditor
+                label="Pesan saat tema diterapkan"
+                templates={APPLY_TEMPLATES}
+                value={applyNotice}
+                onChange={setApplyNotice}
+                disabled={!notifyOn}
+              />
+              <NoticeEditor
+                label="Pesan saat tema direset"
+                templates={RESET_TEMPLATES}
+                value={resetNotice}
+                onChange={setResetNotice}
+                disabled={!notifyOn}
+              />
             </div>
           </div>
-        )}
+
+          {/* Aksi */}
+          <div className="flex flex-wrap gap-2 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              onClick={() => runBulk('apply')}
+              disabled={uBusy || !pick}
+              className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <Send className="w-4 h-4" /> Terapkan ke {targetMode === 'all' ? 'semua' : `${chosen.length} pengguna`}
+            </button>
+            <button
+              type="button"
+              onClick={() => runBulk('reset-previous')}
+              disabled={uBusy}
+              className="rounded-xl border border-white/15 px-4 py-2 text-sm flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4" /> Reset ke tema sebelumnya
+            </button>
+            <button
+              type="button"
+              onClick={() => runBulk('reset-builtin')}
+              disabled={uBusy}
+              className="rounded-xl border border-white/15 px-4 py-2 text-sm disabled:opacity-50 cursor-pointer"
+            >
+              Reset ke bawaan & buka kunci
+            </button>
+          </div>
+        </div>
+
         {uErr && <p className="text-xs text-red-400 font-medium">{uErr}</p>}
         {uMsg && <p className="text-xs text-emerald-400 font-medium">{uMsg}</p>}
       </section>
