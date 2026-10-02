@@ -1,22 +1,23 @@
-// server/themeRoutes.js
-// Router tema. Pasang sekali di server utama:
+// server/themeRoutes.ts
+// Router tema (pengganti themeRoutes.js — HAPUS file .js lama supaya tidak bentrok).
+// Dipasang di server/index.ts:
 //
-//   import { createThemeRouter, ensureThemeSchema } from './themeRoutes.js';
-//   await ensureThemeSchema(db);   // membuat tabel themes & user_theme_prefs bila belum ada
-//   app.use(createThemeRouter({ db, requireUser, requireAdmin }));
-//
-// - db            : objek dengan db.query(sql, params) -> { rows } (gaya node-postgres)
-// - requireUser   : middleware login pengguna biasa (mengisi req.user)
-// - requireAdmin  : middleware login admin
-// - getUserEmail  : opsional, default req.user.email
+//   import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
+//   ... initDatabase().then(() => ensureThemeSchema(pool)) ...
+//   app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
 //
 // Batas (maks 7 tema admin, 2 tema per pengguna) DITEGAKKAN DI SINI, bukan cuma di UI.
-import express, { Router } from 'express';
+import { Router, type Request, type RequestHandler, type Response } from 'express';
+import type { Pool } from 'pg';
 
-export const LIMITS = { admin: 7, user: 2 };
+type Db = Pick<Pool, 'query'>;
+type Scope = 'admin' | 'user';
+
+export const LIMITS: Record<Scope, number> = { admin: 7, user: 2 };
 const NAME_MAX = 24;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export const THEME_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS themes (
   id SERIAL PRIMARY KEY,
@@ -36,18 +37,21 @@ CREATE TABLE IF NOT EXISTS user_theme_prefs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );`;
 
-export const ensureThemeSchema = (db) => db.query(THEME_SCHEMA_SQL);
+export const ensureThemeSchema = (db: Db) => db.query(THEME_SCHEMA_SQL);
 
-const isHex = (v) => typeof v === 'string' && HEX.test(v);
+interface Palette { surface: string; accent: string; accent2: string }
+interface ParsedTheme { name: string; palette: Palette }
 
-const toTheme = (r) => ({
+const isHex = (v: unknown): v is string => typeof v === 'string' && HEX.test(v);
+
+const toTheme = (r: any) => ({
   id: r.id,
   name: r.name,
   scope: r.scope,
   palette: { surface: r.surface, accent: r.accent, accent2: r.accent2 },
 });
 
-function parseThemeBody(body) {
+function parseThemeBody(body: any): ParsedTheme | { error: string } {
   const name = typeof body?.name === 'string' ? body.name.trim() : '';
   const p = body?.palette;
   if (!name || name.length > NAME_MAX) return { error: `Nama tema wajib diisi (maks ${NAME_MAX} karakter).` };
@@ -60,23 +64,36 @@ function parseThemeBody(body) {
   };
 }
 
-const parseId = (v) => {
-  const n = Number.parseInt(v, 10);
+const parseId = (v: unknown): number | null => {
+  const n = Number.parseInt(String(v), 10);
   return Number.isInteger(n) && n > 0 ? n : null;
 };
 
-export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail = (req) => req.user?.email }) {
-  const router = Router();
-  router.use(express.json());
+interface Options {
+  db: Db;
+  requireUser: RequestHandler;
+  requireAdmin: RequestHandler;
+  getUserEmail?: (req: Request) => string | undefined;
+}
 
-  const h = (fn) => (req, res) =>
+export function createThemeRouter({
+  db,
+  requireUser,
+  requireAdmin,
+  getUserEmail = (req) => (req as any).user?.email,
+}: Options) {
+  const router = Router();
+  // Body JSON sudah di-parse oleh express.json() global di index.ts.
+
+  const h = (fn: (req: Request, res: Response) => Promise<unknown>): RequestHandler => (req, res) => {
     Promise.resolve(fn(req, res)).catch((err) => {
       console.error('[theme]', err);
-      res.status(500).json({ error: 'Terjadi kesalahan server.' });
+      if (!res.headersSent) res.status(500).json({ error: 'Terjadi kesalahan server.' });
     });
+  };
 
   // ── helper data ──────────────────────────────────────────────────────────
-  async function insertTheme(scope, owner, t) {
+  async function insertTheme(scope: Scope, owner: string | null, t: ParsedTheme) {
     // Cek batas & insert dalam SATU statement supaya tidak bisa menembus batas.
     const { rows } = await db.query(
       `INSERT INTO themes (scope, owner_email, name, surface, accent, accent2)
@@ -89,7 +106,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     return rows[0] ? toTheme(rows[0]) : null;
   }
 
-  async function upsertPref(email, activeId, locked) {
+  async function upsertPref(email: string, activeId: number | null, locked: boolean) {
     await db.query(
       `INSERT INTO user_theme_prefs (email, active_theme_id, locked) VALUES ($1, $2, $3)
        ON CONFLICT (email) DO UPDATE
@@ -98,12 +115,12 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     );
   }
 
-  async function loadState(email) {
+  async function loadState(email: string) {
     const { rows: mine } = await db.query(
       `SELECT * FROM themes WHERE scope = 'user' AND owner_email = $1 ORDER BY id`, [email]);
     const { rows: [pref] } = await db.query(
       `SELECT active_theme_id, locked FROM user_theme_prefs WHERE email = $1`, [email]);
-    let active = null;
+    let active: ReturnType<typeof toTheme> | null = null;
     if (pref?.active_theme_id) {
       const { rows: [t] } = await db.query(`SELECT * FROM themes WHERE id = $1`, [pref.active_theme_id]);
       // hanya tema admin atau tema milik user itu sendiri yang boleh jadi aktif
@@ -118,13 +135,13 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     };
   }
 
-  async function isLocked(email) {
+  async function isLocked(email: string) {
     const { rows: [r] } = await db.query(
       `SELECT locked, active_theme_id FROM user_theme_prefs WHERE email = $1`, [email]);
     return !!(r?.locked && r?.active_theme_id);
   }
 
-  const ownEmail = (req) => String(getUserEmail(req) || '').trim().toLowerCase();
+  const ownEmail = (req: Request) => String(getUserEmail(req) || '').trim().toLowerCase();
 
   // ════════════════ PENGGUNA ════════════════════════════════════════════════
   router.get('/api/me/theme', requireUser, h(async (req, res) => {
@@ -139,7 +156,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     if (await isLocked(email)) return res.status(403).json({ error: 'Tema dikunci oleh admin.' });
 
     const raw = req.body?.themeId;
-    let id = null;
+    let id: number | null = null;
     if (raw !== null && raw !== undefined) {
       id = parseId(raw);
       if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
@@ -162,7 +179,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     if (!email) return res.status(401).json({ error: 'Belum login.' });
     if (await isLocked(email)) return res.status(403).json({ error: 'Tema dikunci oleh admin.' });
     const t = parseThemeBody(req.body);
-    if (t.error) return res.status(400).json({ error: t.error });
+    if ('error' in t) return res.status(400).json({ error: t.error });
 
     const created = await insertTheme('user', email, t);
     if (!created) return res.status(409).json({ error: `Slot tema penuh (maks ${LIMITS.user}). Hapus salah satu dulu.` });
@@ -177,7 +194,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     const id = parseId(req.params.id);
     const t = parseThemeBody(req.body);
     if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
-    if (t.error) return res.status(400).json({ error: t.error });
+    if ('error' in t) return res.status(400).json({ error: t.error });
 
     const { rowCount } = await db.query(
       `UPDATE themes SET name = $3, surface = $4, accent = $5, accent2 = $6
@@ -207,7 +224,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
 
   router.post('/api/admin/themes', requireAdmin, h(async (req, res) => {
     const t = parseThemeBody(req.body);
-    if (t.error) return res.status(400).json({ error: t.error });
+    if ('error' in t) return res.status(400).json({ error: t.error });
     const created = await insertTheme('admin', null, t);
     if (!created) return res.status(409).json({ error: `Tema admin sudah penuh (maks ${LIMITS.admin}). Hapus salah satu dulu.` });
     res.json({ theme: created });
@@ -217,7 +234,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     const id = parseId(req.params.id);
     const t = parseThemeBody(req.body);
     if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
-    if (t.error) return res.status(400).json({ error: t.error });
+    if ('error' in t) return res.status(400).json({ error: t.error });
     const { rows } = await db.query(
       `UPDATE themes SET name = $2, surface = $3, accent = $4, accent2 = $5
        WHERE id = $1 AND scope = 'admin' RETURNING *`,
@@ -245,7 +262,7 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     const email = String(req.params.email || '').trim().toLowerCase();
     if (!EMAIL.test(email)) return res.status(400).json({ error: 'Email tidak valid.' });
 
-    let id = null;
+    let id: number | null = null;
     if (req.body?.themeId !== null && req.body?.themeId !== undefined) {
       id = parseId(req.body.themeId);
       if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });

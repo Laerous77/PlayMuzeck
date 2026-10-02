@@ -14,6 +14,7 @@ import { attachMultiplayerSocket } from './multiplayerSocket';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
+import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -121,6 +122,7 @@ app.use('/api/user', requireUser);
 
 Promise.resolve(initDatabase())
   .then(() => ensurePaymentTables())
+  .then(() => ensureThemeSchema(pool)) // tabel themes & user_theme_prefs
   .catch((err) => console.error('[DB] init gagal:', err));
 
 // 1. Folder penyimpanan file fisik (Audio MP3/WAV/M4A/FLAC & PDF)
@@ -201,6 +203,10 @@ const requireSuperAdmin = (req: express.Request, res: express.Response, next: ex
   }
   next();
 };
+
+// ---- Tema: /api/me/theme*, /api/admin/themes*, /api/admin/users/:email/theme ----
+// Sebelumnya router ini TIDAK PERNAH dipasang, jadi semua endpoint tema membalas 404.
+app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
 
 // ---- Kepemilikan: admin biasa hanya boleh mengubah audio/kuis BUATANNYA SENDIRI ----
 // Super Admin boleh semuanya. Baris lama tanpa owner_email, deck bawaan, dan deck buatan

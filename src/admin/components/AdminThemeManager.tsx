@@ -15,6 +15,14 @@ interface UserThemeState {
   locked: boolean;
 }
 
+// 404 dari /api/admin/themes artinya router tema belum terpasang di server.
+const explain = (e: unknown, fallback: string) => {
+  const m = e instanceof Error ? e.message : fallback;
+  return m.includes('(404)')
+    ? 'Endpoint tema belum ada di server (404). Pasang themeRoutes di server/index.ts lalu restart server.'
+    : m;
+};
+
 const Dots: React.FC<{ p?: Palette }> = ({ p }) => (
   <div className="flex gap-1 mb-2 h-4 items-center">
     {p ? (
@@ -52,7 +60,7 @@ export const AdminThemeManager: React.FC = () => {
   };
 
   useEffect(() => {
-    load().catch((e) => setErr(e.message));
+    load().catch((e) => setErr(explain(e, 'Gagal memuat tema.')));
   }, []);
 
   const choose = (s: Sel) => {
@@ -78,7 +86,7 @@ export const AdminThemeManager: React.FC = () => {
       await load();
       setMsg('Tema disimpan.');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Gagal menyimpan tema.');
+      setErr(explain(e, 'Gagal menyimpan tema.'));
     } finally {
       setBusy(false);
     }
@@ -94,7 +102,7 @@ export const AdminThemeManager: React.FC = () => {
       await load();
       setMsg('Tema dihapus.');
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Gagal menghapus tema.');
+      setErr(explain(e, 'Gagal menghapus tema.'));
     } finally {
       setBusy(false);
     }
@@ -111,7 +119,7 @@ export const AdminThemeManager: React.FC = () => {
       setPick(state.active?.scope === 'admin' ? String(state.active.id) : 'builtin');
       setLock(state.locked);
     } catch (er) {
-      setUErr(er instanceof Error ? er.message : 'Gagal memuat tema pengguna.');
+      setUErr(explain(er, 'Gagal memuat tema pengguna.'));
     }
   };
 
@@ -127,7 +135,7 @@ export const AdminThemeManager: React.FC = () => {
       await loadUser();
       setUMsg(reset ? 'Tema pengguna direset ke bawaan.' : 'Tema diterapkan untuk pengguna ini.');
     } catch (er) {
-      setUErr(er instanceof Error ? er.message : 'Gagal menerapkan tema.');
+      setUErr(explain(er, 'Gagal menerapkan tema.'));
     }
   };
 

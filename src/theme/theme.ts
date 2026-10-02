@@ -130,19 +130,25 @@ export function withMode(p: Palette, mode: Mode): Palette {
   return { surface, accent: ensureContrast(p.accent, surface), accent2: ensureContrast(p.accent2, surface) };
 }
 
+/** Daftar variabel CSS (--t-*) untuk sebuah palette. Dipakai applyPalette (seluruh halaman) dan konsol admin (terbatas di satu elemen). */
+export function paletteVars(p: Palette): Record<string, string> {
+  const mode = modeOf(p.surface);
+  return {
+    '--t-surface': p.surface,
+    '--t-accent': p.accent,
+    '--t-accent2': p.accent2,
+    '--t-on-accent': readableOn(p.accent),
+    '--t-on-accent2': readableOn(p.accent2),
+    '--t-deep': mixHex(p.surface, '#000000', mode === 'dark' ? 0.35 : 0.035),
+    '--t-bg': mode === 'dark' ? '#000000' : mixHex(p.surface, '#000000', 0.05),
+    '--t-fg': mode === 'dark' ? '#E5E5E5' : '#1f2937',
+  };
+}
+
 export function applyPalette(p: Palette) {
   const root = document.documentElement;
-  const s = root.style;
-  const mode = modeOf(p.surface);
-  s.setProperty('--t-surface', p.surface);
-  s.setProperty('--t-accent', p.accent);
-  s.setProperty('--t-accent2', p.accent2);
-  s.setProperty('--t-on-accent', readableOn(p.accent));
-  s.setProperty('--t-on-accent2', readableOn(p.accent2));
-  s.setProperty('--t-deep', mixHex(p.surface, '#000000', mode === 'dark' ? 0.35 : 0.035));
-  s.setProperty('--t-bg', mode === 'dark' ? '#000000' : mixHex(p.surface, '#000000', 0.05));
-  s.setProperty('--t-fg', mode === 'dark' ? '#E5E5E5' : '#1f2937');
-  root.dataset.mode = mode;
+  for (const [k, v] of Object.entries(paletteVars(p))) root.style.setProperty(k, v);
+  root.dataset.mode = modeOf(p.surface);
 }
 
 // ── Cache lokal ────────────────────────────────────────────────────────────

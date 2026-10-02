@@ -1,5 +1,5 @@
 // src/admin/AdminApp.tsx
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
   Brain,
@@ -31,7 +31,8 @@ import { ContentPage } from './pages/ContentPage';
 import { OpsPage } from './pages/OpsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminsPage } from './pages/AdminsPage';
-import { applyCachedPalette } from '../theme/theme';
+import { applyCachedPalette, applyPalette } from '../theme/theme';
+import { ADMIN_PALETTE, ADMIN_VARS } from './adminTheme';
 
 type AdminPage = 'dashboard' | 'audio' | 'content' | 'ops' | 'settings' | 'admins';
 
@@ -45,10 +46,15 @@ const NAV: Array<{ id: AdminPage; label: string; icon: React.ComponentType<{ cla
 ];
 
 export default function AdminApp() {
-  // Admin berada di halaman terpisah dari situs utama: pasang palette tema terakhir (cache) supaya
-  // variabel --t-* terisi sebelum komponen admin dirender.
-  useEffect(() => {
-    applyCachedPalette();
+  // Konsol admin punya tampilan SENDIRI (ADMIN_PALETTE) yang tidak ikut tema pengguna.
+  // Sebelumnya di sini dipanggil applyCachedPalette(), yang membaca cache tema PENGGUNA
+  // (localStorage 'pm_palette', satu origin dengan situs utama) — itu sebabnya tema
+  // pengguna "bocor" ke admin. Selain variabel yang dipasang langsung di elemen root
+  // admin (ADMIN_VARS), kita juga set di <html> supaya background halaman & data-mode
+  // ikut konsisten. Saat keluar dari admin, tema pengguna dipulihkan dari cache.
+  useLayoutEffect(() => {
+    applyPalette(ADMIN_PALETTE);
+    return () => applyCachedPalette();
   }, []);
 
   const [token, setToken] = useState(getAdminToken());
@@ -161,7 +167,7 @@ export default function AdminApp() {
 
   if (!token) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
+      <div style={ADMIN_VARS} data-mode="dark" className="min-h-screen bg-black text-white flex items-center justify-center p-4">
         <div className="w-full max-w-md rounded-3xl bg-surface border border-white/15 p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-1.5">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 text-accent text-xs font-black border border-accent/30">
@@ -255,7 +261,7 @@ export default function AdminApp() {
   const activeAdminEmail = me?.email || (me?.isSuperAdmin ? 'Operator Server (kata sandi)' : 'Admin');
 
   return (
-    <div className="min-h-screen bg-black text-[#E5E5E5] flex">
+    <div style={ADMIN_VARS} data-mode="dark" className="min-h-screen bg-black text-[#E5E5E5] flex">
       <aside className="w-64 shrink-0 bg-surface border-r border-white/10 hidden md:flex flex-col">
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center justify-between">
