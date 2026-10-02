@@ -141,6 +141,12 @@ export function createThemeRouter({
     return !!(r?.locked && r?.active_theme_id);
   }
 
+  // Admin hanya boleh mengatur tema untuk akun yang benar-benar ada.
+  async function userExists(email: string) {
+    const { rows } = await db.query(`SELECT 1 FROM users WHERE lower(email) = $1 LIMIT 1`, [email]);
+    return rows.length > 0;
+  }
+
   const ownEmail = (req: Request) => String(getUserEmail(req) || '').trim().toLowerCase();
 
   // ════════════════ PENGGUNA ════════════════════════════════════════════════
@@ -255,12 +261,14 @@ export function createThemeRouter({
   router.get('/api/admin/users/:email/theme', requireAdmin, h(async (req, res) => {
     const email = String(req.params.email || '').trim().toLowerCase();
     if (!EMAIL.test(email)) return res.status(400).json({ error: 'Email tidak valid.' });
+    if (!(await userExists(email))) return res.status(404).json({ error: 'Pengguna dengan email itu tidak ditemukan.' });
     res.json(await loadState(email));
   }));
 
   router.put('/api/admin/users/:email/theme', requireAdmin, h(async (req, res) => {
     const email = String(req.params.email || '').trim().toLowerCase();
     if (!EMAIL.test(email)) return res.status(400).json({ error: 'Email tidak valid.' });
+    if (!(await userExists(email))) return res.status(404).json({ error: 'Pengguna dengan email itu tidak ditemukan.' });
 
     let id: number | null = null;
     if (req.body?.themeId !== null && req.body?.themeId !== undefined) {

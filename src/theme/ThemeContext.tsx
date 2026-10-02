@@ -69,6 +69,31 @@ export const ThemeProvider: React.FC<Props> = ({ isLoggedIn, userKey, getToken, 
     return () => { cancelled = true; };
   }, [isLoggedIn, userKey, getToken]);
 
+  // Sinkron ulang diam-diam: kalau admin menerapkan/mengunci/mereset tema, pengguna yang
+  // sedang membuka situs ikut berubah saat tab kembali aktif atau tiap 30 detik.
+  useEffect(() => {
+    if (!isLoggedIn || !loaded) return;
+    let stop = false;
+    const sync = () => {
+      if (stop || document.visibilityState === 'hidden') return;
+      api.fetchMyTheme()
+        .then((s) => {
+          if (stop) return;
+          setData((prev) => (JSON.stringify(prev) === JSON.stringify(s) ? prev : s));
+        })
+        .catch(() => { /* abaikan, coba lagi nanti */ });
+    };
+    const timer = window.setInterval(sync, 30000);
+    document.addEventListener('visibilitychange', sync);
+    window.addEventListener('focus', sync);
+    return () => {
+      stop = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', sync);
+      window.removeEventListener('focus', sync);
+    };
+  }, [isLoggedIn, loaded]);
+
   // Logout → balik ke bawaan & buang cache supaya akun lain di browser yang sama tidak ketularan.
   useEffect(() => {
     if (isLoggedIn || !wasLoggedIn.current) return;

@@ -32,7 +32,7 @@ import { OpsPage } from './pages/OpsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminsPage } from './pages/AdminsPage';
 import { applyCachedPalette, applyPalette } from '../theme/theme';
-import { ADMIN_PALETTE, ADMIN_VARS } from './adminTheme';
+import { ADMIN_PALETTE_EVENT, adminVars, loadAdminPalette } from './adminTheme';
 
 type AdminPage = 'dashboard' | 'audio' | 'content' | 'ops' | 'settings' | 'admins';
 
@@ -46,16 +46,21 @@ const NAV: Array<{ id: AdminPage; label: string; icon: React.ComponentType<{ cla
 ];
 
 export default function AdminApp() {
-  // Konsol admin punya tampilan SENDIRI (ADMIN_PALETTE) yang tidak ikut tema pengguna.
-  // Sebelumnya di sini dipanggil applyCachedPalette(), yang membaca cache tema PENGGUNA
-  // (localStorage 'pm_palette', satu origin dengan situs utama) — itu sebabnya tema
-  // pengguna "bocor" ke admin. Selain variabel yang dipasang langsung di elemen root
-  // admin (ADMIN_VARS), kita juga set di <html> supaya background halaman & data-mode
-  // ikut konsisten. Saat keluar dari admin, tema pengguna dipulihkan dari cache.
-  useLayoutEffect(() => {
-    applyPalette(ADMIN_PALETTE);
-    return () => applyCachedPalette();
+  // Palette konsol admin: punya cache sendiri (pm_admin_palette), TIDAK ikut tema pengguna
+  // (pm_palette). Berubah langsung saat admin menekan "Pakai di konsol admin".
+  const [palette, setPalette] = useState(loadAdminPalette);
+  useEffect(() => {
+    const sync = () => setPalette(loadAdminPalette());
+    window.addEventListener(ADMIN_PALETTE_EVENT, sync);
+    return () => window.removeEventListener(ADMIN_PALETTE_EVENT, sync);
   }, []);
+  const ADMIN_VARS = useMemo(() => adminVars(palette), [palette]);
+
+  useLayoutEffect(() => {
+    applyPalette(palette);
+  }, [palette]);
+  // Saat keluar dari admin, tema pengguna dipulihkan dari cache.
+  useLayoutEffect(() => () => applyCachedPalette(), []);
 
   const [token, setToken] = useState(getAdminToken());
   const [password, setPassword] = useState('');
@@ -66,8 +71,7 @@ export default function AdminApp() {
     return NAV.some((item) => item.id === hash) ? hash : 'dashboard';
   });
 
-  // Sesi situs utama = cookie httpOnly, tidak bisa dibaca JavaScript. Satu-satunya
-  // cara tahu apakah masih berlaku adalah bertanya ke server (/api/auth/me).
+  // Sesi situs utama = cookie httpOnly; satu-satunya cara tahu masih berlaku adalah tanya server.
   const clientSession = storage.getUserSession();
   const [mainSiteEmail, setMainSiteEmail] = useState<string | null>(null);
 
@@ -92,9 +96,6 @@ export default function AdminApp() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
-  // Setiap kali token admin berubah (habis login / logout), tanyakan ke
-  // server siapa sebenarnya yang sedang login (email asli + status Super
-  // Admin) — dipakai untuk menampilkan menu "Admin & Akses" dengan benar.
   useEffect(() => {
     if (!token) {
       setMe(null);
@@ -105,8 +106,6 @@ export default function AdminApp() {
       .catch(() => setMe(null));
   }, [token]);
 
-  // "Masuk pakai sesi situs utama": server memverifikasi cookie sesi asli dan
-  // mengecek daftar admin, jadi tidak ada email yang bisa dipalsukan dari browser.
   const handleSessionLogin = async () => {
     if (!mainSiteEmail) return;
     setError('');
@@ -118,10 +117,6 @@ export default function AdminApp() {
     }
   };
 
-  // Login dengan Google Sign-In SUNGGUHAN langsung dari halaman /admin
-  // (dipakai kalau belum login sama sekali di situs utama). credential adalah
-  // ID token asli dari Google yang diverifikasi server sebelum mengecek
-  // apakah emailnya terdaftar sebagai admin.
   const handleGoogleCredential = async (credential: string) => {
     setError('');
     try {
@@ -146,11 +141,6 @@ export default function AdminApp() {
       setAdminToken(data.token);
       setToken(data.token);
     } catch (err) {
-      // PERBAIKAN: fallback kata sandi lokal ('PlayMuzeck-admin') dihapus.
-      // Fallback itu membuat token palsu ('dev-admin-token-PlayMuzeck') yang
-      // tidak dikenal server, sehingga login "berhasil" di UI tapi semua
-      // permintaan data admin tetap gagal (401). Sekarang login hanya sah
-      // jika server benar-benar mengeluarkan token.
       setError(err instanceof Error ? err.message : 'Kata sandi admin tidak tepat atau server API belum aktif.');
     }
   };
@@ -184,9 +174,6 @@ export default function AdminApp() {
 
           {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
 
-          {/* Opsi 1: Sudah login di situs utama -> naikkan sesi itu jadi admin,
-              tanpa perlu login Google kedua kalinya. Server yang memverifikasi
-              token sesi & mengecek daftar admin. */}
           {mainSiteEmail && (
             <div className="p-4 rounded-2xl bg-accent/10 border border-accent/40 space-y-2.5">
               <div className="flex items-center gap-2 text-xs font-bold text-accent">
@@ -208,7 +195,6 @@ export default function AdminApp() {
             </div>
           )}
 
-          {/* Opsi 2: Login dengan Google Sign-In sungguhan (tanpa perlu login di situs utama dulu) */}
           <div className="space-y-2">
             <GoogleSignInButton onCredential={handleGoogleCredential} onError={setError} text="signin_with" />
           </div>
@@ -218,7 +204,6 @@ export default function AdminApp() {
             <span className="bg-surface px-3 text-[11px] text-gray-500 uppercase font-mono">atau kata sandi</span>
           </div>
 
-          {/* Opsi 3: Login Kata Sandi Cadangan */}
           <form onSubmit={handlePasswordLogin} className="space-y-3">
             <label className="block text-xs font-semibold text-gray-300">
               Kata Sandi Admin Server
@@ -254,10 +239,6 @@ export default function AdminApp() {
     );
   }
 
-  // Email & status Super Admin didapat dari server (/api/admin/me), bukan
-  // ditebak dari sesi klien — supaya benar-benar mencerminkan siapa yang
-  // sedang login (bisa jadi Super Admin, admin yang di-grant, atau lewat
-  // kata sandi server yang diperlakukan setara Super Admin).
   const activeAdminEmail = me?.email || (me?.isSuperAdmin ? 'Operator Server (kata sandi)' : 'Admin');
 
   return (

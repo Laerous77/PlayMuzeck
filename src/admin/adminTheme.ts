@@ -1,17 +1,34 @@
 // src/admin/adminTheme.ts
-// Tampilan khusus konsol admin. Sengaja TERPISAH dari sistem tema pengguna:
-// - tidak membaca/menulis cache 'pm_palette' milik situs utama,
-// - tidak tergantung ThemeProvider / akun pengguna,
-// - tema yang dibuat/diterapkan lewat "Tema & Pengaturan" hanya untuk pengguna, bukan untuk konsol ini.
+// Tampilan konsol admin. Terpisah dari tema pengguna:
+// - cache sendiri ('pm_admin_palette'), tidak menyentuh 'pm_palette' milik situs utama,
+// - default slate + teal, tapi admin sekarang BISA menggantinya lewat "Tema & Pengaturan".
 import type { CSSProperties } from 'react';
-import { Palette, paletteVars } from '../theme/theme';
+import { Palette, isPalette, paletteVars } from '../theme/theme';
 
-/** Palette konsol admin (slate + teal) — beda dari Oxford Amber bawaan situs pengguna. */
 export const ADMIN_PALETTE: Palette = {
   surface: '#0F172A',
   accent: '#2DD4BF',
   accent2: '#818CF8',
 };
 
-/** Variabel --t-* untuk dipasang di style elemen root admin; menimpa apa pun yang diwarisi dari <html>. */
-export const ADMIN_VARS = paletteVars(ADMIN_PALETTE) as CSSProperties;
+const KEY = 'pm_admin_palette';
+export const ADMIN_PALETTE_EVENT = 'pm-admin-palette-change';
+
+export function loadAdminPalette(): Palette {
+  try {
+    const p = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (isPalette(p)) return p;
+  } catch { /* abaikan */ }
+  return ADMIN_PALETTE;
+}
+
+/** null = kembali ke tampilan admin bawaan. */
+export function saveAdminPalette(p: Palette | null) {
+  try {
+    if (p) localStorage.setItem(KEY, JSON.stringify(p));
+    else localStorage.removeItem(KEY);
+  } catch { /* storage diblokir */ }
+  window.dispatchEvent(new Event(ADMIN_PALETTE_EVENT));
+}
+
+export const adminVars = (p: Palette) => paletteVars(p) as CSSProperties;

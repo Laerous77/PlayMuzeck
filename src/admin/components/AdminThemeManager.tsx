@@ -1,10 +1,11 @@
 // src/admin/components/AdminThemeManager.tsx
-// Admin: kelola maksimal 7 tema + terapkan/kunci tema untuk pengguna tertentu.
+// Admin: kelola maksimal 7 tema, pakai di konsol admin, + terapkan/kunci tema untuk pengguna tertentu.
 import React, { useEffect, useState } from 'react';
-import { Lock, Plus, Trash2 } from 'lucide-react';
+import { Lock, Monitor, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import { adminFetch } from '../adminApi';
 import { PalettePicker } from '../../theme/PalettePicker';
-import { BUILTIN_THEME, LIMITS, NAME_MAX, Palette, ThemeRecord } from '../../theme/theme';
+import { BUILTIN_THEME, LIMITS, NAME_MAX, Palette, ThemeRecord, samePalette } from '../../theme/theme';
+import { loadAdminPalette, saveAdminPalette } from '../adminTheme';
 
 type Sel = number | 'new' | null;
 
@@ -44,6 +45,7 @@ export const AdminThemeManager: React.FC = () => {
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const [consolePalette, setConsolePalette] = useState<Palette>(loadAdminPalette);
 
   // Terapkan ke pengguna
   const [email, setEmail] = useState('');
@@ -108,17 +110,30 @@ export const AdminThemeManager: React.FC = () => {
     }
   };
 
+  // ── Konsol admin ────────────────────────────────────────────────────────
+  const useForConsole = (p: Palette | null) => {
+    saveAdminPalette(p);
+    setConsolePalette(loadAdminPalette());
+    setErr('');
+    setMsg(p ? 'Tampilan konsol admin diganti (hanya di browser ini).' : 'Tampilan konsol admin dikembalikan ke bawaan.');
+  };
+
   // ── Terapkan ke pengguna ────────────────────────────────────────────────
+  const syncTarget = (e: string, state: UserThemeState) => {
+    setTarget({ email: e, state });
+    setPick(state.active?.scope === 'admin' ? String(state.active.id) : 'builtin');
+    setLock(state.locked);
+  };
+
   const loadUser = async () => {
     setUErr(''); setUMsg('');
     const e = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) { setUErr('Alamat email tidak valid.'); return; }
     try {
       const state = await adminFetch<UserThemeState>(`/api/admin/users/${encodeURIComponent(e)}/theme`);
-      setTarget({ email: e, state });
-      setPick(state.active?.scope === 'admin' ? String(state.active.id) : 'builtin');
-      setLock(state.locked);
+      syncTarget(e, state);
     } catch (er) {
+      setTarget(null);
       setUErr(explain(er, 'Gagal memuat tema pengguna.'));
     }
   };
@@ -127,13 +142,21 @@ export const AdminThemeManager: React.FC = () => {
     if (!target) return;
     setUErr(''); setUMsg('');
     const themeId = reset || pick === 'builtin' ? null : Number(pick);
+    const wantLock = themeId != null && !reset && lock;
     try {
-      await adminFetch(`/api/admin/users/${encodeURIComponent(target.email)}/theme`, {
-        method: 'PUT',
-        body: JSON.stringify({ themeId, locked: themeId != null && !reset && lock }),
-      });
-      await loadUser();
-      setUMsg(reset ? 'Tema pengguna direset ke bawaan.' : 'Tema diterapkan untuk pengguna ini.');
+      // Server membalas state TERBARU pengguna; pesan sukses hanya muncul kalau state itu cocok.
+      const state = await adminFetch<UserThemeState>(
+        `/api/admin/users/${encodeURIComponent(target.email)}/theme`,
+        { method: 'PUT', body: JSON.stringify({ themeId, locked: wantLock }) },
+      );
+      if ((state?.activeId ?? null) !== themeId) throw new Error('Server tidak menyimpan tema ini.');
+      if (!!state.locked !== wantLock) throw new Error('Server tidak menyimpan status kunci.');
+      syncTarget(target.email, state);
+      setUMsg(
+        themeId == null
+          ? 'Tersimpan: pengguna kembali ke tema bawaan.'
+          : `Tersimpan: ${state.active?.name ?? 'tema admin'}${state.locked ? ' (terkunci)' : ''}. Pengguna melihatnya setelah halaman dibuka/di-refresh.`,
+      );
     } catch (er) {
       setUErr(explain(er, 'Gagal menerapkan tema.'));
     }
@@ -141,6 +164,7 @@ export const AdminThemeManager: React.FC = () => {
 
   const slots = Array.from({ length: max }, (_, i) => themes[i]);
   const isFull = themes.length >= max;
+  const consoleIsDefault = samePalette(consolePalette, loadAdminPalette()) && !localStorage.getItem('pm_admin_palette');
   const userActiveLabel = target
     ? target.state.active
       ? `${target.state.active.name} (${target.state.active.scope === 'admin' ? 'dari admin' : 'tema buatan user'})`
@@ -154,7 +178,8 @@ export const AdminThemeManager: React.FC = () => {
           <h3 className="font-bold text-white">Tema admin</h3>
           <p className="text-xs text-gray-400">
             1 tema bawaan (tetap) + maksimal {max} tema buatan admin ({themes.length}/{max} terpakai). Tema ini bisa
-            diterapkan ke pengguna di bagian bawah. Pengguna sendiri punya batas {LIMITS.user} tema pribadi.
+            diterapkan ke pengguna di bagian bawah, atau dipakai untuk konsol admin ini. Pengguna sendiri punya batas{' '}
+            {LIMITS.user} tema pribadi.
           </p>
         </div>
 
@@ -212,6 +237,13 @@ export const AdminThemeManager: React.FC = () => {
               >
                 {sel === 'new' ? 'Simpan tema' : 'Perbarui tema'}
               </button>
+              <button
+                type="button"
+                onClick={() => useForConsole(draft)}
+                className="rounded-xl border border-white/15 px-4 py-2 text-sm flex items-center gap-1.5 cursor-pointer"
+              >
+                <Monitor className="w-4 h-4" /> Pakai di konsol admin
+              </button>
               {typeof sel === 'number' && (
                 <button
                   type="button"
@@ -225,6 +257,22 @@ export const AdminThemeManager: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 border-t border-white/10 pt-3">
+          <span>Tampilan konsol admin sekarang:</span>
+          {[consolePalette.surface, consolePalette.accent, consolePalette.accent2].map((c, i) => (
+            <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
+          ))}
+          <button
+            type="button"
+            onClick={() => useForConsole(null)}
+            disabled={consoleIsDefault}
+            className="ml-auto rounded-xl border border-white/15 px-3 py-1.5 text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-40"
+          >
+            <RotateCcw className="w-3.5 h-3.5" /> Kembalikan tampilan admin
+          </button>
+        </div>
+
         {err && <p className="text-xs text-red-400 font-medium">{err}</p>}
         {msg && <p className="text-xs text-emerald-400 font-medium">{msg}</p>}
       </section>
@@ -233,7 +281,8 @@ export const AdminThemeManager: React.FC = () => {
         <div>
           <h3 className="font-bold text-white">Terapkan tema ke pengguna</h3>
           <p className="text-xs text-gray-400">
-            Masukkan email pengguna, pilih tema admin, dan kunci kalau pengguna tidak boleh menggantinya sendiri.
+            Masukkan email pengguna terdaftar, pilih tema admin, dan kunci kalau pengguna tidak boleh menggantinya
+            sendiri.
           </p>
         </div>
 
