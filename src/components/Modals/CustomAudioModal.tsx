@@ -60,12 +60,12 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-lg rounded-2xl bg-[#14213D] border border-white/[0.1] shadow-2xl overflow-hidden my-auto"
+        className="w-full max-w-lg rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden my-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/[0.08] bg-black/40">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-[#FCA311] text-black">
+            <div className="p-2 rounded-xl bg-accent text-on-accent">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
@@ -98,7 +98,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                 <div>
                   <h4 className="text-lg font-bold text-white">Permintaan Terkirim!</h4>
                   <p className="text-xs text-gray-300 max-w-sm mx-auto mt-1 leading-relaxed">
-                    Brief musikmu untuk proyek <strong className="text-white">"{title || 'Musik Custom'}"</strong> telah diterima tim produser PlayMuzeck. Estimasi draf sampel audio akan diproses ke surel <span className="text-[#FCA311]">{email}</span>.
+                    Brief musikmu untuk proyek <strong className="text-white">"{title || 'Musik Custom'}"</strong> telah diterima tim produser PlayMuzeck. Estimasi draf sampel audio akan diproses ke surel <span className="text-accent">{email}</span>.
                   </p>
                 </div>
 
@@ -110,7 +110,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
 
                 <button
                   onClick={handleReset}
-                  className="px-6 py-2.5 rounded-xl bg-[#FCA311] text-black font-extrabold text-xs shadow hover:bg-[#FCA311]/90 transition-all cursor-pointer"
+                  className="px-6 py-2.5 rounded-xl bg-accent text-on-accent font-extrabold text-xs shadow hover:bg-accent/90 transition-all cursor-pointer"
                 >
                   Selesai & Tutup
                 </button>
@@ -125,7 +125,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                     placeholder="Contoh: Tema Game Petualangan Luar Angkasa"
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                    className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                   />
                 </div>
 
@@ -135,7 +135,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                     <select
                       value={genre}
                       onChange={(e) => setGenre(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl px-3 py-2 text-xs text-white outline-none"
                     >
                       <option value="Ambient Synthwave">Ambient Synthwave</option>
                       <option value="Cinematic Orchestral">Cinematic Orchestral</option>
@@ -150,7 +150,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                     <select
                       value={duration}
                       onChange={(e) => setDuration(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl px-3 py-2 text-xs text-white outline-none"
                     >
                       <option value="30 Detik (Jingle / Teaser)">30 Detik (Jingle / Teaser)</option>
                       <option value="1 Menit (Video Pendek)">1 Menit (Video Pendek)</option>
@@ -167,7 +167,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                     placeholder="Contoh: Misterius, hangat, megah dengan reverb luas"
                     value={mood}
                     onChange={(e) => setMood(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                    className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                   />
                 </div>
 
@@ -178,7 +178,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                     placeholder="Tuliskan referensi musisi, instrumen utama yang diinginkan, atau penggunaan video..."
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl p-3 text-xs text-white placeholder-gray-500 outline-none resize-none"
+                    className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl p-3 text-xs text-white placeholder-gray-500 outline-none resize-none"
                   />
                 </div>
 
@@ -190,13 +190,13 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
                     placeholder="nama@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-black/60 border border-white/[0.08] focus:border-[#FCA311] rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                    className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#FCA311]/90 text-black font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
+                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>Kirim Permintaan Custom Audio</span>

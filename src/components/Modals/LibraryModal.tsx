@@ -74,12 +74,12 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className="w-full max-w-3xl rounded-2xl bg-[#14213D] border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto"
+        className="w-full max-w-3xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto"
       >
         {/* Header */}
         <div className="flex items-center justify-between p-5 sm:p-6 border-b border-white/[0.08] bg-black/40">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-[#FCA311] text-black flex items-center justify-center shadow-md">
+            <div className="w-10 h-10 rounded-xl bg-accent text-on-accent flex items-center justify-center shadow-md">
               <Library className="w-5 h-5" />
             </div>
             <div>
@@ -105,7 +105,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
             onClick={() => setActiveTab('audio')}
             className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
               activeTab === 'audio'
-                ? 'border-[#FCA311] text-[#FCA311]'
+                ? 'border-accent text-accent'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -117,7 +117,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
             onClick={() => setActiveTab('quiz')}
             className={`pb-3 px-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
               activeTab === 'quiz'
-                ? 'border-[#FC1212] text-[#FC1212]'
+                ? 'border-accent2 text-accent2'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
@@ -143,7 +143,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                         onClose();
                         onNavigateAudio();
                       }}
-                      className="px-4 py-2 rounded-xl bg-[#FCA311] text-black font-bold text-xs shadow hover:bg-[#FCA311]/90 transition-all cursor-pointer inline-flex items-center gap-1.5"
+                      className="px-4 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs shadow hover:bg-accent/90 transition-all cursor-pointer inline-flex items-center gap-1.5"
                     >
                       <Sliders className="w-3.5 h-3.5" />
                       <span>Kunjungi Audio Studio</span>
@@ -159,7 +159,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                             <span className="font-bold text-white text-sm">
                               Cahaya Cakrawala - Full Audio Master
                             </span>
-                            <span className="text-[10px] font-bold text-black bg-[#FCA311] px-1.5 py-0.2 rounded">
+                            <span className="text-[10px] font-bold text-on-accent bg-accent px-1.5 py-0.2 rounded">
                               24-bit WAV / 320kbps MP3
                             </span>
                           </div>
@@ -172,7 +172,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                             onClick={() => handleDownloadItem('Cahaya_Cakrawala_Master', 'WAV')}
                             className="px-3.5 py-2 rounded-lg bg-black/60 hover:bg-black text-white text-xs font-bold border border-white/[0.1] flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Download className="w-3.5 h-3.5 text-[#FCA311]" />
+                            <Download className="w-3.5 h-3.5 text-accent" />
                             <span>Unduh Audio</span>
                           </button>
                         </div>
@@ -201,7 +201,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                               onClose();
                               onNavigateAudio();
                             }}
-                            className="px-3 py-2 rounded-lg bg-[#FCA311] text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:bg-[#FCA311]/90"
+                            className="px-3 py-2 rounded-lg bg-accent text-on-accent text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:bg-accent/90"
                           >
                             <Sliders className="w-3.5 h-3.5" />
                             <span>Buka Mixer</span>
@@ -210,7 +210,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                             onClick={() => handleDownloadItem('Cahaya_Cakrawala_4Stems_ZIP', 'ZIP')}
                             className="px-3 py-2 rounded-lg bg-black/60 hover:bg-black text-white text-xs font-bold border border-white/[0.1] flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Download className="w-3.5 h-3.5 text-[#FCA311]" />
+                            <Download className="w-3.5 h-3.5 text-accent" />
                             <span>Unduh Stems</span>
                           </button>
                         </div>
@@ -232,7 +232,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                           onClick={() => handleDownloadItem('Cahaya_Cakrawala_Seamless_Loop', 'WAV')}
                           className="px-3.5 py-2 rounded-lg bg-black/60 hover:bg-black text-white text-xs font-bold border border-white/[0.1] flex items-center gap-1.5 cursor-pointer"
                         >
-                          <Download className="w-3.5 h-3.5 text-[#FCA311]" />
+                          <Download className="w-3.5 h-3.5 text-accent" />
                           <span>Unduh Loop</span>
                         </button>
                       </div>
@@ -253,7 +253,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                           onClick={() => handleDownloadItem('Cahaya_Cakrawala_Partitur_Resmi', 'PDF')}
                           className="px-3.5 py-2 rounded-lg bg-black/60 hover:bg-black text-white text-xs font-bold border border-white/[0.1] flex items-center gap-1.5 cursor-pointer"
                         >
-                          <FileText className="w-3.5 h-3.5 text-[#FCA311]" />
+                          <FileText className="w-3.5 h-3.5 text-accent" />
                           <span>Unduh Partitur</span>
                         </button>
                       </div>
@@ -275,7 +275,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                             onClose();
                             onNavigateAudio();
                           }}
-                          className="px-3.5 py-2 rounded-lg bg-[#FCA311] text-black text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:bg-[#FCA311]/90"
+                          className="px-3.5 py-2 rounded-lg bg-accent text-on-accent text-xs font-bold flex items-center gap-1.5 cursor-pointer hover:bg-accent/90"
                         >
                           <Sliders className="w-3.5 h-3.5" />
                           <span>Buka Pad Studio</span>
@@ -297,7 +297,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                       <div className="flex items-center gap-2 flex-wrap">
                         <h4 className="text-sm font-bold text-white">{deck.title}</h4>
                         {deck.badge === 'Kustom Kamu' ? (
-                          <span className="text-[10px] font-bold text-[#FC1212] bg-[#FC1212]/15 px-2 py-0.5 rounded border border-[#FC1212]/30">
+                          <span className="text-[10px] font-bold text-accent2 bg-accent2/15 px-2 py-0.5 rounded border border-accent2/30">
                             Kustom Buatanmu
                           </span>
                         ) : (
@@ -317,7 +317,7 @@ Terima kasih telah mendukung PlayMuzeck Music Collective.`;
                         onClose();
                         onPlayDeck(deck);
                       }}
-                      className="px-4 py-2 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-md shadow-red-600/25 transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0 active:scale-95"
+                      className="px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-md shadow-red-600/25 transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0 active:scale-95"
                     >
                       <Play className="w-3.5 h-3.5 fill-current" />
                       <span>Mainkan Sekarang</span>

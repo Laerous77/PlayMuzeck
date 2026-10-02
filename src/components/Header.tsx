@@ -287,7 +287,7 @@ export const Header: React.FC<HeaderProps> = ({
                             : 'bg-black/40 text-gray-200 hover:bg-white/10'
                         }`}
                       >
-                        <Layers className={`w-4 h-4 shrink-0 stroke-[2.5] ${activeQuizSection === 'all' ? 'text-on-accent2' : 'text-amber-400'}`} />
+                        <Layers className={`w-4 h-4 shrink-0 stroke-[2.5] ${activeQuizSection === 'all' ? 'text-on-accent2' : 'text-accent'}`} />
                         <div>
                           <div className="leading-tight">Perpustakaan Kuis</div>
                           <div className={`text-[10px] font-normal ${activeQuizSection === 'all' ? 'text-on-accent2/80' : 'text-gray-400'}`}>

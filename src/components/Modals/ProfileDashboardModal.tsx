@@ -49,6 +49,8 @@ import {
   PendingOrder,
   QrisHandlers,
 } from '../../services/payment';
+import { Palette as PaletteIcon } from 'lucide-react';
+import { ThemeSettings } from '../../theme/ThemeSettings';
 import { Clock as ClockIcon, Ban as BanIcon, RefreshCw as RefreshIcon } from 'lucide-react';
 import { QrisPanel } from './QrisPanel';
 import { 
@@ -344,7 +346,7 @@ interface ProfileDashboardModalProps {
   onSuccessToast: (msg: string) => void;
 }
 
-type ProfileTab = 'collection' | 'frames' | 'donate' | 'contact';
+type ProfileTab = 'collection' | 'theme' | 'frames' | 'donate' | 'contact';
 
 export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   isOpen,
@@ -887,6 +889,9 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
             <Library className="w-4 h-4" /> Koleksi Saya
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 text-white font-mono">{totalCollectionCount}</span>
           </button>
+          <button type="button" onClick={() => setActiveTab('theme')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'theme' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
+            <PaletteIcon className="w-4 h-4" /> Tema Saya
+          </button>
           <button type="button" onClick={() => setActiveTab('frames')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'frames' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
             <Award className="w-4 h-4 text-accent" /> Album Bingkai
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-accent/20 text-accent font-mono">{totalUnlockedFrames}/{PROFILE_FRAMES.length}</span>
@@ -994,6 +999,10 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          ) : activeTab === 'theme' ? (
+            <div className="animate-in fade-in duration-300">
+              <ThemeSettings embedded />
             </div>
           ) : activeTab === 'frames' ? (
             <div className="space-y-4 animate-in fade-in duration-300">
