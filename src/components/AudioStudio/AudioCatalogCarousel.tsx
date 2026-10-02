@@ -190,7 +190,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
   return (
     <div className="space-y-6 pt-2">
       {/* Search Bar & Filter Row */}
-      <div className="p-4 sm:p-5 rounded-2xl bg-[#14213D]/60 border border-white/[0.08] space-y-3.5 shadow-lg">
+      <div className="p-4 sm:p-5 rounded-2xl bg-surface/60 border border-white/[0.08] space-y-3.5 shadow-lg">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
           <div className="relative w-full md:w-80">
             <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -202,7 +202,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                 setSearchQuery(e.target.value);
                 setCurrentPage(0);
               }}
-              className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder:text-gray-400 focus:outline-none focus:border-[#FCA311] transition-colors"
+              className="w-full bg-black/60 border border-white/10 rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder:text-gray-400 focus:outline-none focus:border-accent transition-colors"
             />
             {searchQuery && (
               <button
@@ -222,11 +222,11 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                 setSelectedGenre(e.target.value);
                 setCurrentPage(0);
               }}
-              className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-gray-200 focus:border-[#FCA311] outline-none cursor-pointer"
+              className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-gray-200 focus:border-accent outline-none cursor-pointer"
             >
               <option value="all">Semua Genre</option>
               {availableGenres.map((g) => (
-                <option key={g} value={g} className="bg-[#14213D] text-white">
+                <option key={g} value={g} className="bg-surface text-white">
                   {g}
                 </option>
               ))}
@@ -238,7 +238,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                 setDurationRange(e.target.value as any);
                 setCurrentPage(0);
               }}
-              className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-gray-200 focus:border-[#FCA311] outline-none cursor-pointer"
+              className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-gray-200 focus:border-accent outline-none cursor-pointer"
             >
               <option value="all">Semua Durasi</option>
               <option value="short">&lt; 2 Menit</option>
@@ -252,7 +252,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                 setStemsFilter(e.target.value as any);
                 setCurrentPage(0);
               }}
-              className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-gray-200 focus:border-[#FCA311] outline-none cursor-pointer"
+              className="bg-black/60 border border-white/10 rounded-xl px-3 py-2 text-gray-200 focus:border-accent outline-none cursor-pointer"
             >
               <option value="all">Semua Stem</option>
               <option value="2-3">2 – 3 Stems</option>
@@ -293,7 +293,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
           <button
             type="button"
             onClick={handleResetFilters}
-            className="px-4 py-2 rounded-xl bg-[#FCA311] text-black text-xs font-bold cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-accent text-on-accent text-xs font-bold cursor-pointer"
           >
             Bersihkan Filter
           </button>
@@ -316,15 +316,15 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                   audioEngine.playClickSound();
                   setDetailModalTrack(track);
                 }}
-                className={`rounded-2xl p-3.5 flex flex-col justify-between transition-all cursor-pointer group relative bg-[#14213D]/90 border ${
+                className={`rounded-2xl p-3.5 flex flex-col justify-between transition-all cursor-pointer group relative bg-surface/90 border ${
                   isActive
-                    ? 'border-2 border-[#FCA311] shadow-[0_0_25px_rgba(252,163,17,0.35)] ring-2 ring-[#FCA311]/40 scale-[1.01]'
-                    : 'border-white/10 hover:border-[#FCA311]/60 hover:bg-[#14213D]'
+                    ? 'border-2 border-accent shadow-[0_0_25px_color-mix(in_srgb,var(--t-accent)_35%,transparent)] ring-2 ring-accent/40 scale-[1.01]'
+                    : 'border-white/10 hover:border-accent/60 hover:bg-surface'
                 }`}
               >
                 <div>
                   {/* Artwork Box dengan Latar Jelas & Terang */}
-                  <div className="w-full h-36 rounded-xl overflow-hidden relative mb-3 bg-gradient-to-tr from-[#1a294a] via-[#14213D] to-[#1f3159] flex items-center justify-center border border-white/10 shadow-inner">
+                  <div className="w-full h-36 rounded-xl overflow-hidden relative mb-3 bg-gradient-to-tr from-surface via-surface to-surface flex items-center justify-center border border-white/10 shadow-inner">
                     <span className="absolute top-2 left-2 z-10 px-2.5 py-0.5 rounded-md bg-black/80 backdrop-blur-md text-[10px] font-bold text-white border border-white/15 font-mono shadow">
                       {genre}
                     </span>
@@ -344,10 +344,10 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
 
                     {/* Fallback Icon Lingkaran Terang */}
                     <div
-                      className="w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500/30 to-amber-600/10 border border-amber-500/40 items-center justify-center shadow-lg"
+                      className="w-16 h-16 rounded-full bg-gradient-to-tr from-accent/30 to-accent/10 border border-accent/40 items-center justify-center shadow-lg"
                       style={{ display: coverUrl ? 'none' : 'flex' }}
                     >
-                      <Music className="w-7 h-7 text-[#FCA311]" />
+                      <Music className="w-7 h-7 text-accent" />
                     </div>
 
                     {/* Tombol Load — area ini SATU-SATUNYA yang langsung memuat
@@ -364,7 +364,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                           onSelectTrack(track);
                         }}
                         title="Muat langsung ke Audio Studio"
-                        className="w-11 h-11 rounded-full bg-[#FCA311] text-black flex items-center justify-center shadow-xl shadow-amber-500/40 pointer-events-auto hover:scale-110 hover:brightness-110 active:scale-95 transition-transform cursor-pointer"
+                        className="w-11 h-11 rounded-full bg-accent text-on-accent flex items-center justify-center shadow-xl shadow-accent/40 pointer-events-auto hover:scale-110 hover:brightness-110 active:scale-95 transition-transform cursor-pointer"
                       >
                         <Download className="w-5 h-5 stroke-[2.5]" />
                       </button>
@@ -385,11 +385,11 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                       {bpm} BPM
                     </span>
                     <span className="px-2 py-0.5 rounded bg-black/60 border border-white/10 flex items-center gap-1">
-                      <Clock className="w-3 h-3 text-[#FCA311]" />
+                      <Clock className="w-3 h-3 text-accent" />
                       <span>{durationStr}</span>
                     </span>
                     <span className="px-2 py-0.5 rounded bg-black/60 border border-white/10 flex items-center gap-1">
-                      <Layers className="w-3 h-3 text-[#FCA311]" />
+                      <Layers className="w-3 h-3 text-accent" />
                       <span>{stems} Stems</span>
                     </span>
                   </div>
@@ -397,7 +397,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
 
                 <div className="flex items-center justify-between pt-2.5 border-t border-white/10 text-xs">
                   <span className="text-gray-300 text-[11px] font-medium">Lisensi Komersial</span>
-                  <span className="font-black text-[#FCA311] font-mono">
+                  <span className="font-black text-accent font-mono">
                     Rp {(track.price || 70000).toLocaleString('id-ID')}
                   </span>
                 </div>
@@ -409,7 +409,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
 
       {/* Navigasi Paginasi */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-[#14213D]/60 border border-white/[0.08]">
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-surface/60 border border-white/[0.08]">
           <button
             type="button"
             disabled={safeCurrentPage === 0}
@@ -434,7 +434,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                 }}
                 className={`w-8 h-8 rounded-lg text-xs font-mono font-bold transition-all cursor-pointer ${
                   safeCurrentPage === idx
-                    ? 'bg-[#FCA311] text-black font-black shadow'
+                    ? 'bg-accent text-on-accent font-black shadow'
                     : 'bg-black/50 text-gray-300 hover:text-white border border-white/10'
                 }`}
               >
@@ -450,7 +450,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
               audioEngine.playClickSound();
               setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1));
             }}
-            className="px-4 py-2 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] disabled:opacity-30 disabled:cursor-not-allowed text-xs font-black text-black flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
+            className="px-4 py-2 rounded-xl bg-accent hover:bg-accent/80 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-black text-on-accent flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
           >
             <span>Selanjutnya (8 Kartu)</span>
             <ChevronRight className="w-4 h-4" />
@@ -478,7 +478,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
             onClick={() => setDetailModalTrack(null)}
           >
             <div
-              className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-[#0d1527] border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl"
+              className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-surface border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -489,8 +489,8 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
               </button>
 
               <div className="flex items-start gap-4 sm:gap-6">
-                <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden border-2 border-zinc-700 flex items-center justify-center shadow-lg bg-gradient-to-br from-amber-500/30 via-[#14213D] to-black">
-                  <div className="w-12 h-12 rounded-full bg-[#FCA311] flex items-center justify-center shadow-md">
+                <div className="relative w-24 h-24 sm:w-28 sm:h-28 shrink-0 rounded-2xl overflow-hidden border-2 border-white/10 flex items-center justify-center shadow-lg bg-gradient-to-br from-accent/30 via-surface to-black">
+                  <div className="w-12 h-12 rounded-full bg-accent flex items-center justify-center shadow-md">
                     <Music className="w-6 h-6 text-black" />
                   </div>
                   {modalCover && (
@@ -506,7 +506,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#FCA311]">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-accent">
                     {genre}
                   </span>
                   <h2 className="text-2xl sm:text-3xl font-black text-white">
@@ -597,7 +597,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
                     onSelectTrack(detailModalTrack);
                     setDetailModalTrack(null);
                   }}
-                  className="flex-1 py-3.5 rounded-2xl bg-[#FCA311] text-black font-extrabold text-sm hover:brightness-110 cursor-pointer text-center shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+                  className="flex-1 py-3.5 rounded-2xl bg-accent text-on-accent font-extrabold text-sm hover:brightness-110 cursor-pointer text-center shadow-lg shadow-accent/20 flex items-center justify-center gap-2"
                 >
                   <Check className="w-4 h-4" />
                   <span>Pilih & Muat ke Audio Studio</span>

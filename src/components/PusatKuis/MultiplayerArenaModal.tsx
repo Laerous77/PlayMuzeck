@@ -87,7 +87,7 @@ interface GlobalRoomListing {
 
 const SOCKET_URL = typeof window !== 'undefined' ? window.location.origin : '';
 
-const FALLBACK_COLORS = ['bg-[#FC1212]', 'bg-blue-600', 'bg-emerald-600', 'bg-amber-600', 'bg-purple-600', 'bg-sky-600'];
+const FALLBACK_COLORS = ['bg-accent2', 'bg-blue-600', 'bg-emerald-600', 'bg-accent', 'bg-purple-600', 'bg-sky-600'];
 const fallbackColorFor = (id: string) => {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
@@ -473,7 +473,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="w-full max-w-3xl rounded-2xl bg-[#14213D] border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh] relative"
+        className="w-full max-w-3xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh] relative"
       >
         {/* Overlay reaction emoji melayang */}
         <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
@@ -496,13 +496,13 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
         <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/50 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-[#FC1212] text-white shadow-md shadow-red-600/20">
+            <div className="p-2.5 rounded-xl bg-accent2 text-on-accent2 shadow-md shadow-accent2/20">
               <Users className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold text-white">Multiplayer Arena</h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#FC1212]/20 text-[#FC1212] border border-[#FC1212]/30">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent2/20 text-accent2 border border-accent2/30">
                   Online Match
                 </span>
               </div>
@@ -516,8 +516,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
         </div>
 
         {!isOnline && (
-          <div className="bg-[#780000]/40 border-b border-[#FC1212]/30 px-5 py-2.5 flex items-center gap-2.5 text-xs text-red-200">
-            <WifiOff className="w-4 h-4 text-[#FC1212] flex-shrink-0" />
+          <div className="bg-red-900/40 border-b border-accent2/30 px-5 py-2.5 flex items-center gap-2.5 text-xs text-red-200">
+            <WifiOff className="w-4 h-4 text-accent2 flex-shrink-0" />
             <span>Mode Offline Terdeteksi. Fitur Multiplayer membutuhkan koneksi jaringan aktif.</span>
           </div>
         )}
@@ -526,7 +526,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
           <div className="bg-black/40 border-b border-white/10 px-5 py-2.5 flex items-center gap-2.5 text-xs text-gray-300">
             {connectionState === 'connecting' ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin text-[#FCA311]" />
+                <Loader2 className="w-4 h-4 animate-spin text-accent" />
                 <span>Menghubungkan ke server multiplayer...</span>
               </>
             ) : (
@@ -536,7 +536,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
         )}
 
         {errorMsg && connectionState === 'connected' && (
-          <div className="bg-[#780000]/30 border-b border-red-500/20 px-5 py-2 text-xs text-red-200">{errorMsg}</div>
+          <div className="bg-red-900/30 border-b border-red-500/20 px-5 py-2 text-xs text-red-200">{errorMsg}</div>
         )}
 
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
@@ -545,13 +545,13 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               <div className="flex rounded-xl bg-black/40 p-1 border border-white/[0.08]">
                 <button
                   onClick={() => setActiveTab('create')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'create' ? 'bg-[#FC1212] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'create' ? 'bg-accent2 text-on-accent2 shadow' : 'text-gray-400 hover:text-white'}`}
                 >
                   Buat Ruangan Baru
                 </button>
                 <button
                   onClick={() => setActiveTab('join')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'join' ? 'bg-[#FC1212] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${activeTab === 'join' ? 'bg-accent2 text-on-accent2 shadow' : 'text-gray-400 hover:text-white'}`}
                 >
                   Gabung dengan Kode Room
                 </button>
@@ -564,10 +564,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <select
                       value={selectedDeckId}
                       onChange={(e) => setSelectedDeckId(e.target.value)}
-                      className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs focus:border-[#FC1212] focus:outline-none"
+                      className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs focus:border-accent2 focus:outline-none"
                     >
                       {playableDecks.map((d) => (
-                        <option key={d.id} value={d.id} className="bg-[#14213D] text-white">
+                        <option key={d.id} value={d.id} className="bg-surface text-white">
                           {d.title} ({d.cardCount} Soal • {d.difficulty})
                         </option>
                       ))}
@@ -582,7 +582,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         onClick={() => setRoomVisibility('invite')}
                         className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           roomVisibility === 'invite'
-                            ? 'bg-[#FC1212] border-[#FC1212] text-white'
+                            ? 'bg-accent2 border-accent2 text-on-accent2'
                             : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/30'
                         }`}
                       >
@@ -590,7 +590,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                           <Lock className="w-3.5 h-3.5" />
                           <span>Undangan</span>
                         </div>
-                        <p className={`text-[10px] mt-0.5 ${roomVisibility === 'invite' ? 'text-red-100' : 'text-gray-500'}`}>
+                        <p className={`text-[10px] mt-0.5 ${roomVisibility === 'invite' ? 'text-on-accent2/80' : 'text-gray-500'}`}>
                           Hanya bisa dimasuki lewat kode ruangan.
                         </p>
                       </button>
@@ -599,7 +599,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         onClick={() => setRoomVisibility('global')}
                         className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           roomVisibility === 'global'
-                            ? 'bg-[#FC1212] border-[#FC1212] text-white'
+                            ? 'bg-accent2 border-accent2 text-on-accent2'
                             : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/30'
                         }`}
                       >
@@ -607,7 +607,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                           <Globe className="w-3.5 h-3.5" />
                           <span>Global</span>
                         </div>
-                        <p className={`text-[10px] mt-0.5 ${roomVisibility === 'global' ? 'text-red-100' : 'text-gray-500'}`}>
+                        <p className={`text-[10px] mt-0.5 ${roomVisibility === 'global' ? 'text-on-accent2/80' : 'text-gray-500'}`}>
                           Muncul di daftar publik, bisa digabung tanpa kode.
                         </p>
                       </button>
@@ -625,7 +625,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                           onChange={(e) => setRoomPassword(e.target.value)}
                           placeholder="Kosongkan agar bebas dimasuki siapa saja"
                           maxLength={32}
-                          className="w-full p-2.5 rounded-lg bg-black/50 border border-white/[0.08] text-white text-xs focus:border-[#FC1212] focus:outline-none"
+                          className="w-full p-2.5 rounded-lg bg-black/50 border border-white/[0.08] text-white text-xs focus:border-accent2 focus:outline-none"
                         />
                         <p className="text-[10px] text-gray-500">
                           Kalau diisi, pemain lain harus memasukkan password ini dulu sebelum bisa join dari daftar
@@ -662,7 +662,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         step={5}
                         value={fullPointPercent}
                         onChange={(e) => setFullPointPercent(Number(e.target.value))}
-                        className="w-full accent-[#FC1212]"
+                        className="w-full accent-accent2"
                       />
                     </div>
 
@@ -678,7 +678,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         step={5}
                         value={minPointsPercent}
                         onChange={(e) => setMinPointsPercent(Number(e.target.value))}
-                        className="w-full accent-[#FC1212]"
+                        className="w-full accent-accent2"
                       />
                       <p className="text-[10px] text-gray-500">
                         Dihitung sebagai persentase dari poin soal itu sendiri (bukan angka tetap), jadi otomatis selalu
@@ -704,7 +704,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                       step={1}
                       value={roundGapSec}
                       onChange={(e) => setRoundGapSec(Number(e.target.value))}
-                      className="w-full accent-[#FC1212]"
+                      className="w-full accent-accent2"
                     />
                     <p className="text-[10px] text-gray-500">
                       Setelah waktu jawab habis, semua pemain melihat jawaban benar & papan skor selama jeda ini
@@ -715,7 +715,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   <button
                     onClick={handleCreateRoom}
                     disabled={!isOnline || connectionState !== 'connected'}
-                    className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                    className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-lg shadow-accent2/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>Buat Ruangan &amp; Undang Teman</span>
@@ -753,14 +753,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                           value={joinCodeInput}
                           onChange={(e) => setJoinCodeInput(e.target.value)}
                           placeholder="Misal: MZK-842"
-                          className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs font-mono uppercase tracking-widest focus:border-[#FC1212] focus:outline-none"
+                          className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs font-mono uppercase tracking-widest focus:border-accent2 focus:outline-none"
                         />
                       </div>
 
                       <button
                         onClick={handleJoinRoom}
                         disabled={!isOnline || connectionState !== 'connected'}
-                        className="w-full py-3 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
+                        className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-lg shadow-accent2/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
                       >
                         <Users className="w-4 h-4" />
                         <span>Masuk ke Ruangan</span>
@@ -800,8 +800,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                             >
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-xs font-mono font-black text-[#FC1212]">{r.code}</span>
-                                  {r.hasPassword && <Lock className="w-3 h-3 text-amber-400 shrink-0" />}
+                                  <span className="text-xs font-mono font-black text-accent2">{r.code}</span>
+                                  {r.hasPassword && <Lock className="w-3 h-3 text-accent shrink-0" />}
                                 </div>
                                 <p className="text-[11px] text-gray-300 truncate">{r.deckTitle}</p>
                                 <p className="text-[10px] text-gray-500">{r.playerCount} pemain di lobby</p>
@@ -815,11 +815,11 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                                     value={globalPasswordInput}
                                     onChange={(e) => setGlobalPasswordInput(e.target.value)}
                                     placeholder="Password"
-                                    className="w-24 p-1.5 rounded-lg bg-black/60 border border-white/10 text-white text-[11px] focus:border-[#FC1212] focus:outline-none"
+                                    className="w-24 p-1.5 rounded-lg bg-black/60 border border-white/10 text-white text-[11px] focus:border-accent2 focus:outline-none"
                                   />
                                   <button
                                     onClick={handleConfirmGlobalPassword}
-                                    className="px-2.5 py-1.5 rounded-lg bg-[#FC1212] hover:bg-[#e01010] text-white text-[11px] font-bold cursor-pointer"
+                                    className="px-2.5 py-1.5 rounded-lg bg-accent2 hover:bg-accent2/80 text-on-accent2 text-[11px] font-bold cursor-pointer"
                                   >
                                     OK
                                   </button>
@@ -827,7 +827,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                               ) : (
                                 <button
                                   onClick={() => handlePickGlobalRoom(r)}
-                                  className="px-3 py-1.5 rounded-lg bg-[#FC1212] hover:bg-[#e01010] text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                                  className="px-3 py-1.5 rounded-lg bg-accent2 hover:bg-accent2/80 text-on-accent2 text-[11px] font-bold shrink-0 cursor-pointer"
                                 >
                                   Gabung
                                 </button>
@@ -859,7 +859,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-xl font-mono font-black text-[#FC1212] tracking-wider">{room.code}</span>
+                    <span className="text-xl font-mono font-black text-accent2 tracking-wider">{room.code}</span>
                     <button onClick={handleCopyCode} className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-gray-300 text-xs transition-colors cursor-pointer">
                       {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </button>
@@ -874,7 +874,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   <button
                     onClick={handleStartGame}
                     disabled={room.players.length < 2}
-                    className="px-6 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white font-extrabold text-xs shadow-lg shadow-red-600/25 transition-all cursor-pointer disabled:opacity-40"
+                    className="px-6 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-lg shadow-accent2/25 transition-all cursor-pointer disabled:opacity-40"
                   >
                     {room.players.length < 2 ? 'Menunggu Pemain Lain...' : 'Mulai Kuis'}
                   </button>
@@ -896,7 +896,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         {p.name}
                         {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
                       </span>
-                      {p.isHost && <Crown className="w-3.5 h-3.5 text-amber-400" />}
+                      {p.isHost && <Crown className="w-3.5 h-3.5 text-accent" />}
                     </div>
                   </div>
                 ))}
@@ -928,7 +928,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   let optStyle = 'border-white/10 bg-black/40 text-gray-200 hover:border-white/30';
                   if (hasAnswered) {
                     if (isCorrectOption) optStyle = 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold';
-                    else if (isSelected) optStyle = 'border-[#FC1212] bg-[#780000]/40 text-red-100 font-semibold';
+                    else if (isSelected) optStyle = 'border-accent2 bg-accent2/40 text-white font-semibold';
                     else optStyle = 'border-white/[0.04] bg-black/20 opacity-40 text-gray-400';
                   }
                   return (
@@ -947,7 +947,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               {hasAnswered && answerResult && (
                 <div
                   className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
-                    answerResult.isCorrect ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-[#780000]/25 border-red-500/30'
+                    answerResult.isCorrect ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-accent2/25 border-red-500/30'
                   }`}
                 >
                   <div className="flex items-center justify-between font-bold">
@@ -957,7 +957,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   </div>
                   {currentQ.explanation && (
                     <div className="flex items-start gap-2 text-gray-300 pt-1 border-t border-white/[0.06]">
-                      <Lightbulb className="w-3.5 h-3.5 text-[#FCA311] shrink-0 mt-0.5" />
+                      <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
                       <p className="leading-relaxed">{currentQ.explanation}</p>
                     </div>
                   )}
@@ -986,14 +986,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                       {p.name}
                       {p.id === mySocketId && <span className="text-[10px] text-gray-500">(Kamu)</span>}
                     </span>
-                    <span className="font-mono font-bold text-[#FC1212]">{p.score}</span>
+                    <span className="font-mono font-bold text-accent2">{p.score}</span>
                   </div>
                 ))}
               </div>
             </div>
           ) : screen === 'podium' && room ? (
             <div className="text-center space-y-5 py-2">
-              <div className="w-14 h-14 rounded-full bg-[#FC1212]/20 border border-[#FC1212] text-[#FC1212] mx-auto flex items-center justify-center">
+              <div className="w-14 h-14 rounded-full bg-accent2/20 border border-accent2 text-accent2 mx-auto flex items-center justify-center">
                 <Award className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-black text-white">Pertandingan Selesai</h3>
@@ -1004,18 +1004,18 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   <div
                     key={p.id}
                     className={`flex items-center justify-between p-3 rounded-xl border ${
-                      rank === 0 ? 'bg-amber-950/30 border-amber-500/40' : p.id === mySocketId ? 'bg-[#FC1212]/10 border-[#FC1212]/30' : 'bg-black/40 border-white/[0.08]'
+                      rank === 0 ? 'bg-accent/10 border-accent/40' : p.id === mySocketId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
-                      {rank === 0 ? <Crown className="w-4 h-4 text-amber-400 shrink-0" /> : <span className="text-xs font-mono font-bold text-gray-400 w-4 text-center shrink-0">{rank + 1}</span>}
+                      {rank === 0 ? <Crown className="w-4 h-4 text-accent shrink-0" /> : <span className="text-xs font-mono font-bold text-gray-400 w-4 text-center shrink-0">{rank + 1}</span>}
                       <PlayerAvatar player={p} size="md" />
                       <span className="text-sm font-bold text-white truncate">
                         {p.name}
                         {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
                       </span>
                     </div>
-                    <span className="text-sm font-mono font-black text-[#FC1212] shrink-0">{p.score} Poin</span>
+                    <span className="text-sm font-mono font-black text-accent2 shrink-0">{p.score} Poin</span>
                   </div>
                 ))}
               </div>
@@ -1036,7 +1036,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 {isHost && (
                   <button
                     onClick={handleStartGame}
-                    className="px-5 py-2.5 rounded-xl bg-[#FC1212] hover:bg-[#e01010] text-white text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                    className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Main Lagi</span>

@@ -477,7 +477,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
   };
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#14213D]/80 via-black to-[#090D16] border border-white/10 p-6 sm:p-8 shadow-2xl">
+    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-black to-surface border border-white/10 p-6 sm:p-8 shadow-2xl">
       <audio
         ref={audioRef}
         key={activeTrack?.id}
@@ -492,7 +492,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
       <div className="grid lg:grid-cols-[auto_1fr] items-center gap-8">
         <div className="relative flex justify-center items-center">
           <div
-            className={`relative w-44 h-44 sm:w-52 sm:h-52 rounded-full bg-gradient-to-tr from-zinc-950 via-zinc-900 to-black border-4 border-zinc-800 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex items-center justify-center transition-transform duration-700 ${
+            className={`relative w-44 h-44 sm:w-52 sm:h-52 rounded-full bg-gradient-to-tr from-surface via-surface to-black border-4 border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex items-center justify-center transition-transform duration-700 ${
               isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''
             }`}
           >
@@ -501,7 +501,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
             <div className="absolute inset-10 rounded-full border border-white/[0.06]" />
             <div className="absolute inset-14 rounded-full border border-white/[0.04]" />
 
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-[#FCA311] border-2 border-black flex flex-col items-center justify-center p-2 text-center shadow-inner">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-accent border-2 border-black flex flex-col items-center justify-center p-2 text-center shadow-inner">
               <div className="w-3 h-3 rounded-full bg-black mb-1" />
               <span className="text-[8px] font-black text-black leading-tight uppercase truncate max-w-full">
                 {activeTrack?.title || 'No Audio'}
@@ -515,7 +515,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 <CheckCircle2 className="w-3 h-3" /> Full Audio Master Aktif
               </span>
             ) : (
-              <span className="text-amber-400 flex items-center gap-1">
+              <span className="text-accent flex items-center gap-1">
                 <Lock className="w-3 h-3" /> Preview 7 Detik
               </span>
             )}
@@ -526,7 +526,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#FCA311]/10 text-[#FCA311] border border-[#FCA311]/30 font-semibold">
+                <span className="text-xs px-2.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30 font-semibold">
                   {activeTrack?.genre || 'General'}
                 </span>
                 <span className="text-xs text-gray-400">{activeTrack?.bpm || 120} BPM</span>
@@ -557,15 +557,15 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                       )}
                     </button>
                     {showDownloadMenu && !isExporting && (
-                      <div className="absolute right-0 mt-2 w-48 rounded-xl bg-[#14213D] border border-white/15 p-1.5 shadow-2xl z-30 text-xs">
-                        <p className="text-[10px] uppercase font-bold text-[#FCA311] px-2.5 py-1">
+                      <div className="absolute right-0 mt-2 w-48 rounded-xl bg-surface border border-white/15 p-1.5 shadow-2xl z-30 text-xs">
+                        <p className="text-[10px] uppercase font-bold text-accent px-2.5 py-1">
                           Render Efek Studio ke:
                         </p>
                         {['WAV', 'MP3', 'FLAC', 'M4A'].map((fmt) => (
                           <button
                             key={fmt}
                             onClick={() => handleDownloadProcessedAudio(fmt)}
-                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-white hover:bg-[#FCA311] hover:text-black font-semibold flex justify-between cursor-pointer"
+                            className="w-full text-left px-2.5 py-1.5 rounded-lg text-white hover:bg-accent hover:text-on-accent font-semibold flex justify-between cursor-pointer"
                           >
                             <span>Master .{fmt}</span>
                             <span className="text-[10px] opacity-70">
@@ -580,7 +580,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                   <button
                     onClick={() => setShowDspPanel(!showDspPanel)}
                     className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      showDspPanel ? 'bg-[#FCA311] text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                      showDspPanel ? 'bg-accent text-on-accent' : 'bg-white/10 text-white hover:bg-white/20'
                     }`}
                   >
                     <Sliders className="w-3.5 h-3.5" /> Studio FX Rack
@@ -589,7 +589,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
               ) : (
                 <button
                   onClick={onUnlockMaster}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#FCA311] text-black font-bold text-xs hover:brightness-110 shadow-lg shadow-amber-500/10 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs hover:brightness-110 shadow-lg shadow-accent/10 cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" /> Buka Full Audio Master
                 </button>
@@ -609,7 +609,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeek}
-                className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                className="flex-1 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
               />
               <span className="text-xs font-mono text-gray-400 w-10">
                 {formatTime(effectiveMaxDuration)}
@@ -620,7 +620,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
               <div className="flex items-center gap-3">
                 <button
                   onClick={togglePlay}
-                  className="w-12 h-12 rounded-2xl bg-[#FCA311] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-amber-500/20 cursor-pointer"
+                  className="w-12 h-12 rounded-2xl bg-accent text-on-accent flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-accent/20 cursor-pointer"
                 >
                   {isPlaying ? <Pause className="w-6 h-6 fill-black" /> : <Play className="w-6 h-6 fill-black ml-0.5" />}
                 </button>
@@ -642,7 +642,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                   onClick={handleToggleLoop}
                   title="Ulangi Lagu (Loop)"
                   className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
-                    isLooping ? 'bg-[#FCA311]/20 text-[#FCA311] border border-[#FCA311]/40' : 'bg-white/5 text-gray-400 hover:text-white'
+                    isLooping ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-white/5 text-gray-400 hover:text-white'
                   }`}
                 >
                   <Repeat className="w-4 h-4" />
@@ -665,7 +665,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                     // audioRef.current.volume (yang akan bikin slider terasa tidak linear).
                     if (!audioCtxRef.current && audioRef.current) audioRef.current.volume = v;
                   }}
-                  className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                  className="w-20 sm:w-24 h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
                 />
                 <span className="text-xs font-mono text-gray-300 w-9 text-right font-semibold">
                   {Math.round(volume * 100)}%
@@ -680,7 +680,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
         <div className="mt-6 pt-6 border-t border-white/10 animate-in fade-in duration-300">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Sliders className="w-4 h-4 text-[#FCA311]" /> Rak Efek Audio & Equalizer (Master Studio)
+              <Sliders className="w-4 h-4 text-accent" /> Rak Efek Audio & Equalizer (Master Studio)
             </h3>
           </div>
 
@@ -693,7 +693,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
               <select
                 value={speed}
                 onChange={(e) => setSpeed(Number(e.target.value))}
-                className="w-full bg-zinc-900 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#FCA311]"
+                className="w-full bg-black/50 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-accent"
               >
                 <option value={0.5}>0.5x (Slow Motion)</option>
                 <option value={0.75}>0.75x</option>
@@ -707,7 +707,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                   type="checkbox"
                   checked={keepPitch}
                   onChange={(e) => setKeepPitch(e.target.checked)}
-                  className="accent-[#FCA311] rounded cursor-pointer"
+                  className="accent-accent rounded cursor-pointer"
                 />
                 <span>Kunci Nada (Keep Pitch)</span>
               </label>
@@ -725,7 +725,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 step={1}
                 value={bassGain}
                 onChange={(e) => setBassGain(Number(e.target.value))}
-                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                className="w-full h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
               />
             </div>
 
@@ -741,7 +741,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 step={1}
                 value={trebleGain}
                 onChange={(e) => setTrebleGain(Number(e.target.value))}
-                className="w-full h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-[#FCA311]"
+                className="w-full h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
               />
             </div>
 
@@ -750,7 +750,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsDelay(!isDelay)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isDelay ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isDelay ? 'bg-accent text-on-accent border-accent' : 'bg-black/50 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isDelay ? '✓ Delay On' : 'Delay'}
@@ -759,7 +759,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsReverb(!isReverb)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isReverb ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isReverb ? 'bg-accent text-on-accent border-accent' : 'bg-black/50 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isReverb ? '✓ Reverb On' : 'Reverb'}
@@ -771,7 +771,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsChorus(!isChorus)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isChorus ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isChorus ? 'bg-accent text-on-accent border-accent' : 'bg-black/50 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isChorus ? '✓ Chorus' : 'Chorus'}
@@ -780,7 +780,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 type="button"
                 onClick={() => setIsCompressor(!isCompressor)}
                 className={`flex-1 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer ${
-                  isCompressor ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-zinc-900 border-white/10 text-gray-400 hover:text-white'
+                  isCompressor ? 'bg-accent text-on-accent border-accent' : 'bg-black/50 border-white/10 text-gray-400 hover:text-white'
                 }`}
               >
                 {isCompressor ? '✓ Comp' : 'Compressor'}
