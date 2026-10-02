@@ -15,6 +15,7 @@ import {
   ChevronUp,
 } from 'lucide-react';
 import { adminFetch } from '../adminApi';
+import { useAdminRole } from '../useAdminRole';
 import { Deck, Topic, QuizQuestion } from '../../types';
 import { BUILTIN_DECKS } from '../../data/quiz';
 import { findDuplicateQuestions } from '../../services/quizJsonStore';
@@ -263,6 +264,8 @@ const deriveInitial = (deck: DeckWithSettings, topics: Topic[]) => {
 /* -------------------------------------------------------------------------- */
 
 interface DeckWizardProps {
+  /** true = deck milik admin lain / bawaan / pengguna: hanya bisa dilihat & diekspor. */
+  readOnly?: boolean;
   deck: DeckWithSettings;
   topics: Topic[];
   allDecks: Deck[];
@@ -271,7 +274,7 @@ interface DeckWizardProps {
   onStatus: (msg: string) => void;
 }
 
-const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave, onDelete, onStatus }) => {
+const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave, onDelete, onStatus, readOnly = false }) => {
   const initial = useMemo(() => deriveInitial(deck, topics), []); // eslint-disable-line react-hooks/exhaustive-deps
   const legacyQuestionCount = useRef(initial.questions.length);
   const legacyChoiceCount = useRef(initial.questions.length ? initial.choicesPerQuestion : 0);
@@ -710,6 +713,12 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         <div className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 text-xs text-red-200 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-red-400 shrink-0" />
           <span>{errorMsg}</span>
+        </div>
+      )}
+
+      {readOnly && (
+        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs text-amber-200">
+          Mode hanya-baca: kuis ini bukan buatanmu, jadi tidak bisa disimpan atau dihapus. Kamu masih bisa melihat isinya, mengekspor JSON, atau membuat kuis baru.
         </div>
       )}
 
@@ -1295,9 +1304,11 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
       {/* Aksi deck (selalu tersedia) */}
       <div className="flex flex-wrap gap-2 pt-1">
-        <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 disabled:opacity-50">
-          <Save className="w-4 h-4" /> {saving ? 'Menyimpan...' : 'Simpan deck'}
-        </button>
+        {!readOnly && (
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 disabled:opacity-50">
+            <Save className="w-4 h-4" /> {saving ? 'Menyimpan...' : 'Simpan deck'}
+          </button>
+        )}
         <button
           onClick={handleExport}
           title="Unduh sebagai berkas JSON bawaan (format sama seperti deck-builtin-*.json) — taruh di src/data/quiz/decks/ lalu daftarkan di index.ts"
@@ -1305,7 +1316,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         >
           <Download className="w-4 h-4" /> Ekspor sebagai JSON
         </button>
-        {deck.id && onDelete && (
+        {!readOnly && deck.id && onDelete && (
           <button
             onClick={async () => {
               if (!confirm('Hapus deck ini?')) return;
@@ -1339,6 +1350,7 @@ const blankDeck = (topicId = '', price = 15000): DeckWithSettings => ({
 });
 
 export const ContentPage: React.FC = () => {
+  const { isSuperAdmin, email: myEmail } = useAdminRole();
   const [tab, setTab] = useState<'decks' | 'import'>('decks');
   const [topics, setTopics] = useState<Topic[]>([]);
   const [decks, setDecks] = useState<AdminDeck[]>([]);
@@ -1347,6 +1359,9 @@ export const ContentPage: React.FC = () => {
   const [status, setStatus] = useState('');
   const [importText, setImportText] = useState('{\n  "topics": [],\n  "decks": []\n}');
 
+  /** Admin biasa hanya boleh mengubah deck buatannya sendiri; Super Admin semuanya. */
+  const canEditDeck = (d: AdminDeck): boolean =>
+    !d.id || isSuperAdmin || (!d.isCustom && Boolean(myEmail && d.ownerEmail && d.ownerEmail.toLowerCase() === myEmail));
   const adminDecks = decks.filter((d) => !d.isCustom);
   const userDecks = decks.filter((d) => d.isCustom);
   const dbIds = new Set(decks.map((d) => d.id));
@@ -1401,7 +1416,7 @@ export const ContentPage: React.FC = () => {
       <div className="flex gap-2">
         {[
           ['decks', 'Kuis'],
-          ['import', 'Unggah JSON'],
+          ...(isSuperAdmin ? [['import', 'Unggah JSON']] : []),
         ].map(([id, label]) => (
           <button
             key={id}
@@ -1447,7 +1462,7 @@ export const ContentPage: React.FC = () => {
                     </div>
                     <p className="text-[11px] text-gray-400 truncate">
                       {deck.cardCount} soal · {deck.difficulty}
-                      {deck.isCustom && deck.ownerEmail ? ` · ${deck.ownerEmail}` : ''}
+                      {deck.ownerEmail ? ` · ${deck.ownerEmail}` : ' · super admin'}{canEditDeck(deck) ? '' : ' · hanya-baca'}
                     </p>
                   </button>
                 ))}
@@ -1492,6 +1507,7 @@ export const ContentPage: React.FC = () => {
               onSave={saveDeck}
               onDelete={deleteDeck}
               onStatus={setStatus}
+              readOnly={Boolean(deckForm.id) && !canEditDeck(deckForm as AdminDeck)}
             />
           </div>
         </div>

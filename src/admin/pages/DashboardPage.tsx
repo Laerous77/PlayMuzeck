@@ -51,7 +51,6 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   paid: { label: 'Berhasil', cls: 'text-emerald-300' },
   pending: { label: 'Menunggu', cls: 'text-amber-300' },
   failed: { label: 'Gagal', cls: 'text-red-300' },
-  cancelled: { label: 'Dibatalkan', cls: 'text-gray-400' },
 };
 
 const KEY_LABEL: Record<string, string> = {

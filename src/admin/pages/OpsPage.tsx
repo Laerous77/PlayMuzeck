@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Pencil, X, Check, Loader2, ChevronDown, ChevronRight, Mail, Ban, RotateCcw, ExternalLink } from 'lucide-react';
 import { adminFetch } from '../adminApi';
+import { useAdminRole, READONLY_MSG } from '../useAdminRole';
 
 // ---------- Tipe data ----------
 interface PaymentOrder {
@@ -21,7 +22,6 @@ interface Buyer {
   paid: number;
   failed: number;
   pending: number;
-  cancelled: number;
   spent: number;
   last_order: string;
   owned_items: number;
@@ -91,7 +91,6 @@ const STATUSES = [
   { id: 'pending', label: 'Menunggu', cls: 'bg-amber-500/20 text-amber-300' },
   { id: 'paid', label: 'Berhasil', cls: 'bg-emerald-500/20 text-emerald-300' },
   { id: 'failed', label: 'Gagal', cls: 'bg-red-500/20 text-red-300' },
-  { id: 'cancelled', label: 'Dibatalkan', cls: 'bg-gray-500/20 text-gray-300' },
 ] as const;
 
 // Nilai di database tetap baru/proses/selesai; yang tampil: Menunggu/Diproses/Selesai.
@@ -207,6 +206,7 @@ const emptyUserForm: UserForm = { email: '', name: '', role: 'user', password: '
 
 // ---------- Halaman ----------
 export const OpsPage: React.FC = () => {
+  const { isSuperAdmin } = useAdminRole();
   const [tab, setTab] = useState<'orders' | 'buyers' | 'inquiries' | 'users'>('orders');
   const [orders, setOrders] = useState<PaymentOrder[]>([]);
   const [buyers, setBuyers] = useState<Buyer[]>([]);
@@ -278,6 +278,7 @@ export const OpsPage: React.FC = () => {
   }, [orders, filter, search]);
 
   const changeStatus = async (order: PaymentOrder, status: string) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (status === order.status) return;
     let revoke = true;
     if (order.status === 'paid' && order.fulfilled) {
@@ -296,6 +297,7 @@ export const OpsPage: React.FC = () => {
   };
 
   const editAmount = async (order: PaymentOrder) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     const v = prompt('Nominal baru (Rp):', String(order.gross_amount));
     if (v === null) return;
     const n = Number(v.replace(/[^\d]/g, ''));
@@ -310,6 +312,7 @@ export const OpsPage: React.FC = () => {
   };
 
   const removeOrder = async (order: PaymentOrder) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (!confirm(`Hapus pesanan ${order.user_email} (${rupiah(order.gross_amount)})?`)) return;
     let revoke = false;
     if (order.status === 'paid' && order.fulfilled) {
@@ -364,6 +367,8 @@ export const OpsPage: React.FC = () => {
   };
 
   const submitOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     e.preventDefault();
     if (!orderForm) return;
     const account = users.find((u) => u.email.toLowerCase() === orderForm.user_email.trim().toLowerCase());
@@ -420,6 +425,7 @@ export const OpsPage: React.FC = () => {
   const visibleInquiries = inquiries.filter((i) => inqFilter === 'all' || i.status === inqFilter);
 
   const setInquiryStatus = async (item: InquiryRow, status: string) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     try {
       await adminFetch(`/api/admin/inquiries/${item.id}`, { method: 'PATCH', body: JSON.stringify({ status }) });
       ok(`"${item.title}" → ${inquiryMeta(status).label}.`);
@@ -430,6 +436,8 @@ export const OpsPage: React.FC = () => {
   };
 
   const submitInquiry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     e.preventDefault();
     if (!inqForm) return;
     setBusy(true);
@@ -448,6 +456,7 @@ export const OpsPage: React.FC = () => {
   };
 
   const removeInquiry = async (item: InquiryRow) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (!confirm(`Hapus "${item.title}" dari ${item.email || 'pengirim'}?`)) return;
     try {
       await adminFetch(`/api/admin/inquiries/${item.id}`, { method: 'DELETE' });
@@ -470,6 +479,7 @@ export const OpsPage: React.FC = () => {
   const suspendedCount = users.filter((u) => u.suspended_at).length;
 
   const suspendUser = async (u: UserRow) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     const reason = prompt(`Tangguhkan akun ${u.email}?\n\nPengguna langsung ter-logout dan tidak bisa masuk lagi sampai dipulihkan. Produk yang sudah dibeli tetap tersimpan.\n\nAlasan (opsional):`);
     if (reason === null) return;
     try {
@@ -482,6 +492,7 @@ export const OpsPage: React.FC = () => {
   };
 
   const restoreUser = async (u: UserRow) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (!confirm(`Pulihkan akun ${u.email}? Pengguna bisa masuk lagi.`)) return;
     try {
       await adminFetch(`/api/admin/users/${u.id}/restore`, { method: 'POST' });
@@ -493,6 +504,8 @@ export const OpsPage: React.FC = () => {
   };
 
   const sendEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     e.preventDefault();
     if (!emailForm) return;
     setBusy(true);
@@ -511,6 +524,8 @@ export const OpsPage: React.FC = () => {
   };
 
   const submitUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     e.preventDefault();
     if (!userForm) return;
     setBusy(true);
@@ -534,6 +549,7 @@ export const OpsPage: React.FC = () => {
   };
 
   const removeUser = async (u: UserRow) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (
       !confirm(
         `Hapus pengguna ${u.email}?\n\nKoleksi produk, donasi, dan token reset milik pengguna ini ikut terhapus. Riwayat pesanannya tetap tersimpan.`
@@ -552,6 +568,11 @@ export const OpsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {!isSuperAdmin && (
+        <p className="text-xs rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 px-3 py-2">
+          Mode hanya-baca: akunmu bisa melihat semua data di sini, tetapi hanya Super Admin yang bisa mengubahnya.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -859,7 +880,6 @@ export const OpsPage: React.FC = () => {
                   <th>Berhasil</th>
                   <th>Gagal</th>
                   <th>Menunggu</th>
-                  <th>Batal</th>
                   <th>Total bayar</th>
                   <th>Produk dimiliki</th>
                   <th>Pesanan terakhir</th>
@@ -883,7 +903,6 @@ export const OpsPage: React.FC = () => {
                         <td className="text-emerald-300 font-bold">{b.paid}</td>
                         <td className="text-red-300 font-bold">{b.failed}</td>
                         <td className="text-amber-300">{b.pending}</td>
-                        <td className="text-gray-400">{b.cancelled}</td>
                         <td>{rupiah(b.spent)}</td>
                         <td>{b.owned_items}</td>
                         <td className="text-gray-400 whitespace-nowrap">{fmtTime(b.last_order)}</td>
@@ -1160,6 +1179,14 @@ export const OpsPage: React.FC = () => {
                 <button disabled={busy} className="rounded-xl bg-sky-400 text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
                   {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} Kirim dari server
                 </button>
+                <a
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailForm.user.email)}&su=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.message)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-xl border border-white/15 px-4 py-2 text-sm flex items-center gap-2"
+                >
+                  <ExternalLink className="w-4 h-4" /> Buka Gmail
+                </a>
                 <a
                   href={`mailto:${emailForm.user.email}?subject=${encodeURIComponent(emailForm.subject)}&body=${encodeURIComponent(emailForm.message)}`}
                   className="rounded-xl border border-white/15 px-4 py-2 text-sm flex items-center gap-2"

@@ -202,6 +202,33 @@ const requireSuperAdmin = (req: express.Request, res: express.Response, next: ex
   next();
 };
 
+// ---- Kepemilikan: admin biasa hanya boleh mengubah audio/kuis BUATANNYA SENDIRI ----
+// Super Admin boleh semuanya. Baris lama tanpa owner_email, deck bawaan, dan deck buatan
+// pengguna (is_custom) hanya bisa diubah Super Admin.
+const OWN_ONLY_MSG = 'Kamu hanya bisa mengubah audio/kuis buatanmu sendiri. Milik admin lain, data lama, dan bawaan hanya bisa diubah Super Admin.';
+const adminEmailOf = (req: express.Request): string | null => {
+  const e = (req as any).adminEmail;
+  return e ? String(e).toLowerCase() : null;
+};
+const canManageOwner = (req: express.Request, ownerEmail: unknown): boolean => {
+  if ((req as any).isSuperAdmin) return true;
+  const me = adminEmailOf(req);
+  return Boolean(me && ownerEmail && String(ownerEmail).toLowerCase() === me);
+};
+async function guardTrack(req: express.Request, res: express.Response, id: string): Promise<boolean> {
+  const { rows } = await pool.query('SELECT owner_email FROM audio_tracks WHERE id = $1', [id]);
+  if (!rows.length) { res.status(404).json({ error: 'Track tidak ditemukan.' }); return false; }
+  if (!canManageOwner(req, rows[0].owner_email)) { res.status(403).json({ error: OWN_ONLY_MSG }); return false; }
+  return true;
+}
+async function guardDeck(req: express.Request, res: express.Response, id: string): Promise<boolean> {
+  const { rows } = await pool.query('SELECT owner_email, is_custom FROM decks WHERE id = $1', [id]);
+  if (!rows.length) { res.status(404).json({ error: 'Deck tidak ditemukan.' }); return false; }
+  const allowed = rows[0].is_custom === true ? Boolean((req as any).isSuperAdmin) : canManageOwner(req, rows[0].owner_email);
+  if (!allowed) { res.status(403).json({ error: OWN_ONLY_MSG }); return false; }
+  return true;
+}
+
 // Helper format data track PostgreSQL ke bentuk AudioTrackItem
 const mapTrackRow = (t: any) => ({
   id: t.id,
@@ -228,6 +255,8 @@ const mapTrackRow = (t: any) => ({
   bassSequence: typeof t.bass_sequence === 'string' ? JSON.parse(t.bass_sequence) : t.bass_sequence || [],
   melodySequence: typeof t.melody_sequence === 'string' ? JSON.parse(t.melody_sequence) : t.melody_sequence || [],
 });
+
+const mapAdminTrack = (t: any) => ({ ...mapTrackRow(t), ownerEmail: t.owner_email || null });
 
 // ==========================================
 // A. AUTHENTICATION ADMIN
@@ -316,7 +345,7 @@ const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String
 app.get('/api/admin/tracks', requireAdmin, async (_req, res) => {
   try {
     const { rows } = await pool.query('SELECT * FROM audio_tracks ORDER BY id DESC');
-    res.json(rows.map(mapTrackRow));
+    res.json(rows.map(mapAdminTrack));
   } catch (err) {
     res.status(500).json({ error: 'Gagal mengambil data katalog audio.' });
   }
@@ -330,8 +359,8 @@ app.post('/api/admin/tracks', requireAdmin, async (req, res) => {
       INSERT INTO audio_tracks (
         id, title, artist, genre, bpm, duration, duration_sec,
         cover_gradient, cover_icon, license_info, price, is_flagship, is_published,
-        description, audio_url, loop_audio_url, sheet_music_url, stems, chord_sequence, bass_sequence, melody_sequence
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+        description, audio_url, loop_audio_url, sheet_music_url, stems, chord_sequence, bass_sequence, melody_sequence, owner_email
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       RETURNING *;
     `;
     const values = [
@@ -342,10 +371,11 @@ app.post('/api/admin/tracks', requireAdmin, async (req, res) => {
       Number(d.price) || 25000, Boolean(d.isFlagship), d.isPublished !== false,
       d.description || '', d.audioUrl || '', d.loopAudioUrl || '', d.sheetMusicUrl || '',
       JSON.stringify(d.stems || []), JSON.stringify(d.chordSequence || []),
-      JSON.stringify(d.bassSequence || []), JSON.stringify(d.melodySequence || [])
+      JSON.stringify(d.bassSequence || []), JSON.stringify(d.melodySequence || []),
+      adminEmailOf(req)
     ];
     const { rows } = await pool.query(query, values);
-    res.status(201).json(mapTrackRow(rows[0]));
+    res.status(201).json(mapAdminTrack(rows[0]));
   } catch (err) {
     res.status(500).json({ error: 'Gagal menambah track baru.' });
   }
@@ -353,6 +383,7 @@ app.post('/api/admin/tracks', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
   try {
+    if (!(await guardTrack(req, res, req.params.id))) return;
     const { id } = req.params;
     const d = req.body;
     const query = `
@@ -374,7 +405,7 @@ app.put('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
     ];
     const { rows } = await pool.query(query, values);
     if (!rows.length) return res.status(404).json({ error: 'Track tidak ditemukan.' });
-    res.json(mapTrackRow(rows[0]));
+    res.json(mapAdminTrack(rows[0]));
   } catch (err) {
     res.status(500).json({ error: 'Gagal memperbarui katalog audio.' });
   }
@@ -382,6 +413,7 @@ app.put('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
   try {
+    if (!(await guardTrack(req, res, req.params.id))) return;
     await pool.query('DELETE FROM audio_tracks WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
@@ -391,6 +423,7 @@ app.delete('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
 
 app.post('/api/admin/tracks/:id/audio', requireAdmin, upload.single('file'), async (req, res) => {
   try {
+    if (!(await guardTrack(req, res, req.params.id))) return;
     const { id } = req.params;
     const { kind, stemId, duration } = req.query as { kind: string; stemId?: string; duration?: string };
 
@@ -426,7 +459,7 @@ app.post('/api/admin/tracks/:id/audio', requireAdmin, upload.single('file'), asy
     }
 
     const updated = await pool.query(query, params);
-    res.json(mapTrackRow(updated.rows[0]));
+    res.json(mapAdminTrack(updated.rows[0]));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Gagal memproses berkas audio.' });
   }
@@ -434,6 +467,7 @@ app.post('/api/admin/tracks/:id/audio', requireAdmin, upload.single('file'), asy
 
 app.delete('/api/admin/tracks/:id/file', requireAdmin, async (req, res) => {
   try {
+    if (!(await guardTrack(req, res, req.params.id))) return;
     const { id } = req.params;
     const { kind, stemId } = req.query as { kind: string; stemId?: string };
 
@@ -457,7 +491,7 @@ app.delete('/api/admin/tracks/:id/file', requireAdmin, async (req, res) => {
     }
 
     const updated = await pool.query(query, params);
-    res.json(mapTrackRow(updated.rows[0]));
+    res.json(mapAdminTrack(updated.rows[0]));
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Gagal menghapus berkas' });
   }
@@ -478,7 +512,7 @@ app.get('/api/admin/topics', requireAdmin, async (_req, res) => {
   }
 });
 
-app.post('/api/admin/topics', requireAdmin, async (req, res) => {
+app.post('/api/admin/topics', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const t = req.body;
     const topicId = t.id || `topic-${Date.now()}`;
@@ -497,7 +531,7 @@ app.post('/api/admin/topics', requireAdmin, async (req, res) => {
   }
 });
 
-app.put('/api/admin/topics/:id', requireAdmin, async (req, res) => {
+app.put('/api/admin/topics/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const { id } = req.params;
     const t = req.body;
@@ -513,7 +547,7 @@ app.put('/api/admin/topics/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/topics/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/topics/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM topics WHERE id = $1', [req.params.id]);
     res.json({ success: true });
@@ -547,14 +581,14 @@ app.post('/api/admin/decks', requireAdmin, async (req, res) => {
     const deckId = d.id || `deck-${Date.now()}`;
     const questions = Array.isArray(d.questions) ? d.questions : [];
     const query = `
-      INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions, settings)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb) RETURNING *;
+      INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions, settings, owner_email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12) RETURNING *;
     `;
     const settings = d.settings && typeof d.settings === 'object' ? d.settings : {};
     const { rows } = await pool.query(query, [
       deckId, d.topicId || null, d.title, d.description || '', questions.length,
       d.difficulty || 'Sedang', Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(questions),
-      JSON.stringify(settings)
+      JSON.stringify(settings), adminEmailOf(req)
     ]);
     res.status(201).json(mapAdminDeck(rows[0]));
   } catch (err) {
@@ -564,6 +598,7 @@ app.post('/api/admin/decks', requireAdmin, async (req, res) => {
 
 app.put('/api/admin/decks/:id', requireAdmin, async (req, res) => {
   try {
+    if (!(await guardDeck(req, res, req.params.id))) return;
     const { id } = req.params;
     const d = req.body;
     const questions = Array.isArray(d.questions) ? d.questions : [];
@@ -586,6 +621,7 @@ app.put('/api/admin/decks/:id', requireAdmin, async (req, res) => {
 
 app.delete('/api/admin/decks/:id', requireAdmin, async (req, res) => {
   try {
+    if (!(await guardDeck(req, res, req.params.id))) return;
     await pool.query('DELETE FROM decks WHERE id = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err) {
@@ -594,7 +630,7 @@ app.delete('/api/admin/decks/:id', requireAdmin, async (req, res) => {
 });
 
 // Import JSON konten kuis secara instan
-app.post('/api/admin/import-content', requireAdmin, async (req, res) => {
+app.post('/api/admin/import-content', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const { topics = [], decks = [] } = req.body;
     for (const t of topics) {
@@ -707,7 +743,7 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
   }
 });
 
-app.post('/api/admin/clear-analytics', requireAdmin, async (_req, res) => {
+app.post('/api/admin/clear-analytics', requireAdmin, requireSuperAdmin, async (_req, res) => {
   await pool.query('DELETE FROM analytics_events');
   res.json({ success: true });
 });
@@ -727,7 +763,7 @@ app.get('/api/admin/orders', requireAdmin, async (_req, res) => {
 // Mengubah status ke 'paid' otomatis MEMBERI akses (user_collections), mengubah dari
 // 'paid' ke status lain MENCABUT akses (kecuali item itu juga dimiliki lewat pesanan paid lain).
 // ==========================================
-const MANUAL_STATUSES = ['pending', 'paid', 'failed', 'cancelled'];
+const MANUAL_STATUSES = ['pending', 'paid', 'failed'];
 
 type CollectionRef = { category: string; id: string; typeKey: string };
 
@@ -890,7 +926,6 @@ app.get('/api/admin/buyers', requireAdmin, async (_req, res) => {
               COUNT(*) FILTER (WHERE p.status = 'paid')      AS paid,
               COUNT(*) FILTER (WHERE p.status = 'failed')    AS failed,
               COUNT(*) FILTER (WHERE p.status = 'pending')   AS pending,
-              COUNT(*) FILTER (WHERE p.status = 'cancelled') AS cancelled,
               COALESCE(SUM(p.gross_amount) FILTER (WHERE p.status = 'paid'), 0) AS spent,
               MAX(p.created_at) AS last_order,
               (SELECT COUNT(*) FROM public.user_collections c
@@ -900,7 +935,7 @@ app.get('/api/admin/buyers', requireAdmin, async (_req, res) => {
     );
     res.json(rows.map((r) => ({
       email: r.email, name: r.name || r.email.split('@')[0],
-      paid: Number(r.paid), failed: Number(r.failed), pending: Number(r.pending), cancelled: Number(r.cancelled),
+      paid: Number(r.paid), failed: Number(r.failed), pending: Number(r.pending),
       spent: Number(r.spent), last_order: r.last_order, owned_items: Number(r.owned_items),
     })));
   } catch (err) {
@@ -995,7 +1030,7 @@ const NO_OWN_PRICES = {
 
 // CREATE pesanan manual — pesanan manual sekarang hanya menerima
 // produk yang ada di DB, pengguna harus sudah terdaftar, dan nominal otomatis dari harga server.
-app.post('/api/admin/payment-orders', requireAdmin, async (req, res) => {
+app.post('/api/admin/payment-orders', requireAdmin, requireSuperAdmin, async (req, res) => {
   const email = String(req.body?.user_email || '').trim().toLowerCase();
   const kind = req.body?.kind === 'donation' ? 'donation' : 'cart';
   const status = MANUAL_STATUSES.includes(req.body?.status) ? req.body.status : 'pending';
@@ -1046,7 +1081,7 @@ app.post('/api/admin/payment-orders', requireAdmin, async (req, res) => {
 });
 
 // UPDATE: ubah status (dan nominal). paid -> beri akses; keluar dari paid -> cabut akses.
-app.patch('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
+app.patch('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   const { status, gross_amount } = req.body || {};
   if (status !== undefined && !MANUAL_STATUSES.includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
   const client = await pool.connect();
@@ -1082,7 +1117,7 @@ app.patch('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
 });
 
 // DELETE: hapus pesanan. ?revoke=1 sekaligus mencabut akses yang diberikan pesanan ini.
-app.delete('/api/admin/payment-orders/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1119,7 +1154,7 @@ app.get('/api/admin/inquiries', requireAdmin, async (_req, res) => {
   }
 });
 
-app.post('/api/admin/inquiries', requireAdmin, async (req, res) => {
+app.post('/api/admin/inquiries', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const b = req.body || {};
     const status = INQUIRY_STATUSES.includes(b.status) ? b.status : 'baru';
@@ -1137,7 +1172,7 @@ app.post('/api/admin/inquiries', requireAdmin, async (req, res) => {
   }
 });
 
-app.patch('/api/admin/inquiries/:id', requireAdmin, async (req, res) => {
+app.patch('/api/admin/inquiries/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const b = req.body || {};
     if (b.status !== undefined && !INQUIRY_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Status tidak valid.' });
@@ -1161,7 +1196,7 @@ app.patch('/api/admin/inquiries/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/inquiries/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/inquiries/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const r = await pool.query('DELETE FROM inquiries WHERE id = $1', [req.params.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'Permintaan tidak ditemukan.' });
@@ -1196,7 +1231,7 @@ app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   }
 });
 
-app.post('/api/admin/users', requireAdmin, async (req, res) => {
+app.post('/api/admin/users', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const { email, name, role, password } = req.body || {};
     const cleanEmail = String(email || '').trim().toLowerCase();
@@ -1218,7 +1253,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
   }
 });
 
-app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
+app.patch('/api/admin/users/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const { name, role, password } = req.body || {};
     if (role !== undefined && !USER_ROLES.includes(role)) return res.status(400).json({ error: 'Role tidak valid.' });
@@ -1241,7 +1276,7 @@ app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
 
 // Menghapus pengguna ikut menghapus koleksi, donasi, dan token reset miliknya (ON DELETE CASCADE).
 // Riwayat pesanan (payment_orders / orders) tetap ada.
-app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
+app.delete('/api/admin/users/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const found = await pool.query('SELECT email FROM users WHERE id = $1', [req.params.id]);
     if (!found.rows[0]) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
@@ -1254,7 +1289,7 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/admin/users/:id/suspend', requireAdmin, async (req, res) => {
+app.post('/api/admin/users/:id/suspend', requireAdmin, requireSuperAdmin, async (req, res) => {
   const client = await pool.connect();
   try {
     const reason = String(req.body?.reason || '').trim().slice(0, 500);
@@ -1281,7 +1316,7 @@ app.post('/api/admin/users/:id/suspend', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/admin/users/:id/restore', requireAdmin, async (req, res) => {
+app.post('/api/admin/users/:id/restore', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
     const r = await pool.query(
       `UPDATE users SET suspended_at = NULL, suspended_reason = NULL WHERE id = $1`,
@@ -1296,7 +1331,7 @@ app.post('/api/admin/users/:id/restore', requireAdmin, async (req, res) => {
 });
 
 // Kirim email ke pengguna lewat SMTP yang SAMA dengan email verifikasi/reset password (sendMailStrict di authRoutes.ts).
-app.post('/api/admin/users/:id/email', requireAdmin, async (req, res) => {
+app.post('/api/admin/users/:id/email', requireAdmin, requireSuperAdmin, async (req, res) => {
   const subject = String(req.body?.subject || '').trim().slice(0, 200);
   const message = String(req.body?.message || '').trim().slice(0, 5000);
   if (!subject || !message) return res.status(400).json({ error: 'Subjek dan isi pesan wajib diisi.' });
@@ -1305,6 +1340,9 @@ app.post('/api/admin/users/:id/email', requireAdmin, async (req, res) => {
     const user = found.rows[0];
     if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
 
+    if (!process.env.SMTP_HOST) {
+      return res.status(503).json({ error: 'Email server belum aktif: SMTP_HOST (dan SMTP_PORT / SMTP_USER / SMTP_PASS / alamat pengirim) belum diisi di .env server. Pakai tombol "Buka Gmail" / "Buka di aplikasi email" sebagai gantinya.' });
+    }
     await sendMailStrict(user.email, subject, message);
     await pool.query('INSERT INTO analytics_events (id, event_type, payload) VALUES ($1, $2, $3)', [
       `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
@@ -1399,7 +1437,7 @@ app.get('/api/admin/settings', requireAdmin, async (_req, res) => {
   res.json(defaults);
 });
 
-app.put('/api/admin/settings', requireAdmin, async (req, res) => {
+app.put('/api/admin/settings', requireAdmin, requireSuperAdmin, async (req, res) => {
   const s = req.body;
   for (const [k, v] of Object.entries(s)) {
     await pool.query('INSERT INTO site_settings (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value', [k, String(v)]);
@@ -1407,7 +1445,7 @@ app.put('/api/admin/settings', requireAdmin, async (req, res) => {
   res.json(s);
 });
 
-app.get('/api/admin/export', requireAdmin, async (_req, res) => {
+app.get('/api/admin/export', requireAdmin, requireSuperAdmin, async (_req, res) => {
   const [tr, tp, dk] = await Promise.all([
     pool.query('SELECT * FROM audio_tracks'),
     pool.query('SELECT * FROM topics'),
@@ -2211,6 +2249,9 @@ async function ensurePaymentTables() {
       fulfilled BOOLEAN NOT NULL DEFAULT FALSE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`);
+  // Status 'cancelled' sudah dihapus dari sistem: bersihkan sisa datanya.
+  await pool.query(`DELETE FROM payment_orders WHERE status = 'cancelled' AND fulfilled = FALSE`);
+  await pool.query(`UPDATE payment_orders SET status = 'failed' WHERE status = 'cancelled'`);
 }
 
 // ---- Harga audio di server: cerminan src/services/pricing.ts (harus dijaga tetap sama) ----
@@ -2361,6 +2402,15 @@ app.post('/api/payment/charge', requireUser, async (req, res) => {
       return res.status(502).json({ error: 'Gateway pembayaran menolak transaksi. Coba lagi.' });
     }
 
+    // Checkout baru menggantikan checkout lama yang belum dibayar (hindari pesanan 'Menunggu' dobel).
+    try {
+      const stale = await pool.query(
+        `SELECT order_id FROM payment_orders WHERE user_email = $1 AND status = 'pending' AND fulfilled = FALSE AND order_id <> $2 AND order_id NOT LIKE 'man\\_%' LIMIT 20`,
+        [email, orderId]
+      );
+      for (const r of stale.rows) await dropPendingOrder(r.order_id, email).catch(() => false);
+    } catch (e) { console.error('[payment] bersihkan pending lama gagal:', e); }
+
     await pool.query(
       `INSERT INTO payment_orders (order_id, user_email, kind, gross_amount, items, status)
        VALUES ($1, $2, $3, $4, $5, 'pending')
@@ -2393,6 +2443,65 @@ async function refreshPaymentStatus(orderId: string) {
   const status = paid ? 'paid' : failed ? 'failed' : 'pending';
   if (status !== order.status) await pool.query('UPDATE payment_orders SET status = $1 WHERE order_id = $2', [status, orderId]);
 }
+
+/**
+ * Hapus pesanan 'Menunggu' yang batal dibayar (keranjang dihapus / popup ditutup / kedaluwarsa).
+ * Transaksi di Midtrans ikut dibatalkan (best-effort) supaya tidak bisa dibayar belakangan.
+ * Tidak menyentuh pesanan yang sudah lunas atau sudah diproses. `email` null = dipanggil sistem.
+ */
+async function dropPendingOrder(orderId: string, email: string | null): Promise<boolean> {
+  const { rows } = await pool.query('SELECT user_email, status, fulfilled FROM payment_orders WHERE order_id = $1', [orderId]);
+  const o = rows[0];
+  if (!o) return false;
+  if (email && o.user_email !== email) return false;
+  if (o.status !== 'pending' || o.fulfilled) return false;
+  if (MIDTRANS_SERVER_KEY) {
+    try { await refreshPaymentStatus(orderId); } catch { /* lanjut */ }
+    const again = await pool.query('SELECT status FROM payment_orders WHERE order_id = $1', [orderId]);
+    if (!again.rows[0] || again.rows[0].status !== 'pending') return false; // ternyata sudah lunas / gagal
+    try {
+      await fetch(`${MIDTRANS_API_URL}/v2/${encodeURIComponent(orderId)}/cancel`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', Authorization: midtransAuth() },
+      });
+    } catch { /* Midtrans tidak terjangkau: tetap hapus dari daftar */ }
+  }
+  const del = await pool.query(`DELETE FROM payment_orders WHERE order_id = $1 AND status = 'pending' AND fulfilled = FALSE`, [orderId]);
+  return (del.rowCount || 0) > 0;
+}
+
+// Pengguna membatalkan pembayaran / mengosongkan keranjang -> pesanan 'Menunggu' hilang dari admin.
+app.post('/api/payment/cancel', requireUser, async (req, res) => {
+  const email = String((req as any).userEmail);
+  const orderId = String(req.body?.orderId || '');
+  if (!/^[A-Za-z0-9_-]{6,60}$/.test(orderId)) return res.status(400).json({ error: 'ID pesanan tidak valid.' });
+  try {
+    res.json({ success: true, removed: await dropPendingOrder(orderId, email) });
+  } catch (err) {
+    console.error('[payment] cancel error:', err);
+    res.status(500).json({ error: 'Gagal membatalkan pesanan.' });
+  }
+});
+
+// Sapu otomatis: pesanan 'Menunggu' dari checkout (bukan pesanan manual admin) yang tidak
+// dibayar dalam PENDING_ORDER_TTL_MIN menit (bawaan 60) dihapus.
+const PENDING_ORDER_TTL_MIN = Math.max(5, Number(process.env.PENDING_ORDER_TTL_MIN) || 60);
+async function purgeStalePendingOrders() {
+  try {
+    const { rows } = await pool.query(
+      `SELECT order_id FROM payment_orders
+        WHERE status = 'pending' AND fulfilled = FALSE AND order_id NOT LIKE 'man\\_%'
+          AND created_at < NOW() - ($1 || ' minutes')::interval
+        LIMIT 50`,
+      [String(PENDING_ORDER_TTL_MIN)]
+    );
+    for (const r of rows) await dropPendingOrder(r.order_id, null).catch(() => false);
+  } catch (e) {
+    console.error('[payment] purge pending gagal:', e);
+  }
+}
+setInterval(purgeStalePendingOrders, 10 * 60 * 1000).unref();
+setTimeout(purgeStalePendingOrders, 15 * 1000).unref();
 
 async function requirePaidOrder(
   invoiceId: string,

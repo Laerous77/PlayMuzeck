@@ -13,6 +13,7 @@ import {
   FileCode,
 } from 'lucide-react';
 import { adminFetch } from '../adminApi';
+import { useAdminRole } from '../useAdminRole';
 import { AudioTrackItem } from '../../types';
 import { calculateAudioPricing } from '../../services/pricing';
 
@@ -22,6 +23,7 @@ type AdminTrack = AudioTrackItem & {
   loopDuration?: string;
   sheetMusicUrl?: string;
   coverImageUrl?: string;
+  ownerEmail?: string | null;
   licenseFileUrl?: string;
   licenseText?: string;
 };
@@ -73,6 +75,7 @@ const getAudioDuration = (file: File): Promise<{ text: string; sec: number }> =>
 };
 
 export const AudioPage: React.FC = () => {
+  const { isSuperAdmin, email: myEmail } = useAdminRole();
   const [tracks, setTracks] = useState<AdminTrack[]>([]);
   const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<Partial<AdminTrack>>(emptyTrack());
@@ -84,6 +87,10 @@ export const AudioPage: React.FC = () => {
   const [pendingCoverFile, setPendingCoverFile] = useState<File | null>(null);
   const [pendingSheetFile, setPendingSheetFile] = useState<File | null>(null);
   const [pendingLicenseFile, setPendingLicenseFile] = useState<File | null>(null);
+
+  // Admin biasa hanya boleh mengubah track buatannya sendiri; Super Admin semuanya.
+  const readOnly =
+    Boolean(selectedId) && selectedId !== 'new' && !isSuperAdmin && !(myEmail && form.ownerEmail && form.ownerEmail.toLowerCase() === myEmail);
 
   const load = async () => {
     try {
@@ -468,6 +475,7 @@ export const AudioPage: React.FC = () => {
               <p className="text-sm font-semibold text-white truncate">{track.title || 'Untitled'}</p>
               <div className="flex items-center gap-2 text-[11px] text-gray-400 mt-1">
                 <span>{track.genre || 'Tanpa Genre'}</span>
+                <span className="text-gray-500">· {track.ownerEmail || 'super admin'}</span>
               </div>
             </button>
           ))}
@@ -481,7 +489,12 @@ export const AudioPage: React.FC = () => {
       <section className="rounded-2xl bg-[#14213D] border border-white/10 p-6 space-y-6 shadow-xl">
         {!selectedId && <p className="text-gray-400">Pilih track dari daftar sebelah kiri atau klik "Track Baru".</p>}
         {selectedId && (
-          <>
+          <fieldset disabled={readOnly} className="contents">
+            {readOnly && (
+              <p className="text-xs rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 px-3 py-2">
+                Mode hanya-baca: track ini bukan buatanmu (milik {form.ownerEmail || 'super admin'}). Kamu hanya bisa melihatnya.
+              </p>
+            )}
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
               <div>
                 <h2 className="text-xl font-extrabold text-white">{form.title || 'Track Baru'}</h2>
@@ -490,13 +503,15 @@ export const AudioPage: React.FC = () => {
                 </p>
               </div>
               <div className="flex gap-2">
+                {!readOnly && (
                 <button
                   onClick={handleSaveTrack}
                   className="flex items-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 hover:brightness-110 cursor-pointer text-sm"
                 >
                   <Save className="w-4 h-4" /> Simpan Data
                 </button>
-                {selectedId !== 'new' && (
+                )}
+                {selectedId !== 'new' && !readOnly && (
                   <button
                     onClick={removeTrack}
                     className="flex items-center gap-2 rounded-xl border border-red-500/40 text-red-300 px-3 py-2 hover:bg-red-500/10 cursor-pointer text-sm"
@@ -854,7 +869,7 @@ export const AudioPage: React.FC = () => {
                 <span>{status}</span>
               </div>
             )}
-          </>
+          </fieldset>
         )}
       </section>
     </div>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { adminFetch } from '../adminApi';
 import { SiteSettings } from '../../services/cms';
+import { useAdminRole, READONLY_MSG } from '../useAdminRole';
 
 const THEMES = [
   { id: 'oxford-amber', label: 'Oxford Amber', accentAudio: '#FCA311', accentQuiz: '#FC1212' },
@@ -12,6 +13,7 @@ const THEMES = [
 export const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [status, setStatus] = useState('');
+  const { isSuperAdmin } = useAdminRole();
 
   useEffect(() => {
     adminFetch<SiteSettings>('/api/admin/settings').then(setSettings).catch((err) => setStatus(err.message));
@@ -20,6 +22,7 @@ export const SettingsPage: React.FC = () => {
   if (!settings) return <p className="text-gray-400">Memuat pengaturan...</p>;
 
   const save = async () => {
+    if (!isSuperAdmin) { setStatus(READONLY_MSG); return; }
     const saved = await adminFetch<SiteSettings>('/api/admin/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
@@ -29,6 +32,7 @@ export const SettingsPage: React.FC = () => {
   };
 
   const exportDb = async () => {
+    if (!isSuperAdmin) { setStatus(READONLY_MSG); return; }
     const data = await adminFetch('/api/admin/export');
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -41,6 +45,11 @@ export const SettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-4 max-w-3xl">
+      {!isSuperAdmin && (
+        <p className="text-xs rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 px-3 py-2">
+          Mode hanya-baca: pengaturan situs hanya bisa diubah Super Admin.
+        </p>
+      )}
       <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
         <h3 className="font-bold text-white">Identitas & tema visual</h3>
         <label className="text-xs text-gray-400 block">
@@ -101,6 +110,7 @@ export const SettingsPage: React.FC = () => {
           </button>
           <button
             onClick={async () => {
+              if (!isSuperAdmin) { setStatus(READONLY_MSG); return; }
               if (!confirm('Hapus semua event analitik?')) return;
               await adminFetch('/api/admin/clear-analytics', { method: 'POST' });
               setStatus('Analitik dikosongkan.');

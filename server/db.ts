@@ -93,6 +93,7 @@ export async function initDatabase() {
       );
       ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS cover_image_url TEXT;
       ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS loop_duration VARCHAR(20) DEFAULT '00:00';
+      ALTER TABLE audio_tracks ADD COLUMN IF NOT EXISTS owner_email VARCHAR(255);
     `);
 
     // 4. Tabel Pengguna
