@@ -25,12 +25,23 @@ const SESSION_COOKIE = 'muzeck_sid';
 const SESSION_DAYS = 30;
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const SMTP_PORT = Number(process.env.SMTP_PORT || 587);
+// Port 465 = SSL langsung (secure: true); 587/25 = STARTTLS (secure: false). SMTP_SECURE di .env tetap boleh
+// menimpa, tapi kalau tidak diisi, ditebak dari port supaya 465 tidak menggantung menunggu sapaan server.
+const SMTP_SECURE = process.env.SMTP_SECURE !== undefined && process.env.SMTP_SECURE !== ''
+  ? process.env.SMTP_SECURE === 'true'
+  : SMTP_PORT === 465;
 const mailer = process.env.SMTP_HOST
   ? nodemailer.createTransport({
       host: process.env.SMTP_HOST,
-      port: Number(process.env.SMTP_PORT || 587),
-      secure: process.env.SMTP_SECURE === 'true',
+      port: SMTP_PORT,
+      secure: SMTP_SECURE,
       auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
+      // Batas waktu: bawaan nodemailer terlalu panjang (koneksi 2 menit) sehingga panel admin terlihat "loading terus"
+      // bila port diblokir hosting / host salah. Lebih baik gagal cepat dengan pesan yang jelas.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     })
   : null;
 
@@ -86,7 +97,25 @@ const SUSPENDED_MSG = 'Akun kamu sedang ditangguhkan. Hubungi admin untuk inform
 /** Dipakai panel admin (server/index.ts): kirim email TANPA menelan error, supaya admin tahu kalau gagal. */
 export async function sendMailStrict(to: string, subject: string, text: string) {
   if (!mailer) throw new Error('SMTP belum dikonfigurasi di .env (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM).');
-  await mailer.sendMail({ from: process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text });
+  try {
+    await mailer.sendMail({ from: process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text });
+  } catch (e: any) {
+    console.error('[mail] gagal kirim (strict):', e?.code, e?.command, e?.message);
+    const where = `${process.env.SMTP_HOST}:${SMTP_PORT} (${SMTP_SECURE ? 'SSL' : 'STARTTLS'})`;
+    switch (e?.code) {
+      case 'ETIMEDOUT':
+      case 'ESOCKET':
+      case 'ECONNECTION':
+        throw new Error(`Tidak bisa tersambung ke server email ${where}. Biasanya port diblokir oleh hosting, atau host/port salah. Pakai tombol "Buka Gmail" sebagai gantinya.`);
+      case 'EDNS':
+      case 'ENOTFOUND':
+        throw new Error(`Alamat server email tidak ditemukan (${process.env.SMTP_HOST}). Periksa SMTP_HOST di .env.`);
+      case 'EAUTH':
+        throw new Error('Server email menolak login. Periksa SMTP_USER / SMTP_PASS (untuk Gmail pakai App Password).');
+      default:
+        throw new Error(`Gagal mengirim email lewat ${where}: ${e?.message || 'galat tidak diketahui'}`);
+    }
+  }
 }
 
 type Purpose = 'verify_email' | 'reset_password';

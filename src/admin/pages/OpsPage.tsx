@@ -515,16 +515,25 @@ export const OpsPage: React.FC = () => {
     e.preventDefault();
     if (!emailForm) return;
     setBusy(true);
+    // Batas waktu 40 dtk (server sendiri menyerah di ~20 dtk) supaya tombol tidak "loading terus".
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 40000);
     try {
       await adminFetch(`/api/admin/users/${emailForm.user.id}/email`, {
         method: 'POST',
         body: JSON.stringify({ subject: emailForm.subject, message: emailForm.message }),
+        signal: controller.signal,
       });
       ok(`Email terkirim ke ${emailForm.user.email}.`);
       setEmailForm(null);
-    } catch (err) {
-      fail(err, 'Gagal mengirim email.');
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        fail(new Error('Server tidak menjawab dalam 40 detik, jadi pengiriman dihentikan. Cek pengaturan SMTP di server, atau pakai tombol "Buka Gmail".'), 'Gagal mengirim email.');
+      } else {
+        fail(err, 'Gagal mengirim email.');
+      }
     } finally {
+      clearTimeout(timer);
       setBusy(false);
     }
   };
