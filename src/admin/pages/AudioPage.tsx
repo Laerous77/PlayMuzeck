@@ -38,7 +38,7 @@ const emptyTrack = (): Partial<AdminTrack> => ({
   duration: '00:00',
   durationSec: 0,
   loopDuration: '00:00',
-  coverGradient: 'from-amber-500/30 via-orange-950/40 to-black',
+  coverGradient: 'from-accent/30 via-orange-950/40 to-black',
   coverIcon: 'Music',
   coverImageUrl: '',
   licenseInfo: FIXED_LICENSE,
@@ -455,10 +455,10 @@ export const AudioPage: React.FC = () => {
   return (
     <div className="grid lg:grid-cols-[300px_1fr] items-start gap-6">
       {/* 1. Sidebar Track Terkunci Sticky */}
-      <aside className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl bg-[#14213D] border border-white/10 p-4 space-y-3 shadow-xl">
+      <aside className="sticky top-6 max-h-[calc(100vh-3rem)] overflow-y-auto rounded-2xl bg-surface border border-white/10 p-4 space-y-3 shadow-xl">
         <button
           onClick={handleStartNewTrack}
-          className="w-full flex items-center justify-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold py-2.5 text-sm hover:brightness-110 cursor-pointer shadow-md"
+          className="w-full flex items-center justify-center gap-2 rounded-xl bg-accent text-on-accent font-bold py-2.5 text-sm hover:brightness-110 cursor-pointer shadow-md"
         >
           <Plus className="w-4 h-4" /> Track Baru
         </button>
@@ -469,7 +469,7 @@ export const AudioPage: React.FC = () => {
               key={track.id}
               onClick={() => selectTrack(track)}
               className={`w-full text-left rounded-xl p-3 border transition-all cursor-pointer ${
-                selectedId === track.id ? 'border-[#FCA311] bg-black/40' : 'border-white/5 hover:bg-black/20'
+                selectedId === track.id ? 'border-accent bg-black/40' : 'border-white/5 hover:bg-black/20'
               }`}
             >
               <p className="text-sm font-semibold text-white truncate">{track.title || 'Untitled'}</p>
@@ -486,12 +486,12 @@ export const AudioPage: React.FC = () => {
       </aside>
 
       {/* 2. Formulir & File Manager */}
-      <section className="rounded-2xl bg-[#14213D] border border-white/10 p-6 space-y-6 shadow-xl">
+      <section className="rounded-2xl bg-surface border border-white/10 p-6 space-y-6 shadow-xl">
         {!selectedId && <p className="text-gray-400">Pilih track dari daftar sebelah kiri atau klik "Track Baru".</p>}
         {selectedId && (
           <fieldset disabled={readOnly} className="contents">
             {readOnly && (
-              <p className="text-xs rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 px-3 py-2">
+              <p className="text-xs rounded-xl bg-accent/10 border border-accent/30 text-accent px-3 py-2">
                 Mode hanya-baca: track ini bukan buatanmu (milik {form.ownerEmail || 'super admin'}). Kamu hanya bisa melihatnya.
               </p>
             )}
@@ -506,7 +506,7 @@ export const AudioPage: React.FC = () => {
                 {!readOnly && (
                 <button
                   onClick={handleSaveTrack}
-                  className="flex items-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 hover:brightness-110 cursor-pointer text-sm"
+                  className="flex items-center gap-2 rounded-xl bg-accent text-on-accent font-bold px-4 py-2 hover:brightness-110 cursor-pointer text-sm"
                 >
                   <Save className="w-4 h-4" /> Simpan Data
                 </button>
@@ -529,7 +529,7 @@ export const AudioPage: React.FC = () => {
                   value={form.title || ''}
                   onChange={(e) => setForm({ ...form, title: e.target.value })}
                   placeholder="Contoh: Clockwork Steps"
-                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-[#FCA311] outline-none"
+                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-accent outline-none"
                 />
               </label>
               <label className="text-xs text-gray-400">
@@ -537,7 +537,7 @@ export const AudioPage: React.FC = () => {
                 <input
                   value={form.artist || ''}
                   onChange={(e) => setForm({ ...form, artist: e.target.value })}
-                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-[#FCA311] outline-none"
+                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-accent outline-none"
                 />
               </label>
               <label className="text-xs text-gray-400">
@@ -546,7 +546,7 @@ export const AudioPage: React.FC = () => {
                   value={form.genre || ''}
                   onChange={(e) => setForm({ ...form, genre: e.target.value })}
                   placeholder="Masukkan genre musik..."
-                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-[#FCA311] outline-none"
+                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-accent outline-none"
                 />
               </label>
               <label className="text-xs text-gray-400">
@@ -555,7 +555,7 @@ export const AudioPage: React.FC = () => {
                   type="number"
                   value={Number(form.bpm || 120)}
                   onChange={(e) => setForm({ ...form, bpm: Number(e.target.value) })}
-                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-[#FCA311] outline-none"
+                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white focus:border-accent outline-none"
                 />
               </label>
               <label className="text-xs text-gray-400">
@@ -574,7 +574,7 @@ export const AudioPage: React.FC = () => {
                   min={70000}
                   value={Number(form.price || 70000)}
                   onChange={(e) => setForm({ ...form, price: Math.max(70000, Number(e.target.value)) })}
-                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white font-mono focus:border-[#FCA311] outline-none"
+                  className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white font-mono focus:border-accent outline-none"
                 />
               </label>
             </div>
@@ -594,7 +594,7 @@ export const AudioPage: React.FC = () => {
                 value={form.description || ''}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Tuliskan catatan produksi atau deskripsi lagu..."
-                className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white min-h-20 focus:border-[#FCA311] outline-none"
+                className="mt-1.5 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white min-h-20 focus:border-accent outline-none"
               />
             </label>
 
@@ -602,7 +602,7 @@ export const AudioPage: React.FC = () => {
             <div className="space-y-5 rounded-xl bg-black/30 border border-white/10 p-5">
               <div>
                 <h3 className="font-bold text-white flex items-center gap-2">
-                  <Upload className="w-4 h-4 text-[#FCA311]" /> Unggah Berkas Studio, Partitur &amp; Lisensi
+                  <Upload className="w-4 h-4 text-accent" /> Unggah Berkas Studio, Partitur &amp; Lisensi
                 </h3>
                 <p className="text-xs text-gray-400 mt-1">
                   Kelola gambar sampul, master audio, loop, partitur PDF, dan dokumen lisensi Readme_License.txt.
@@ -613,7 +613,7 @@ export const AudioPage: React.FC = () => {
               <div className="p-4 rounded-xl bg-black/40 border border-white/5 space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <ImageIcon className="w-3.5 h-3.5 text-[#FCA311]" /> Gambar Sampul / Cover Audio
+                    <ImageIcon className="w-3.5 h-3.5 text-accent" /> Gambar Sampul / Cover Audio
                   </span>
                   {(form.coverImageUrl || pendingCoverFile) && (
                     <button
@@ -639,7 +639,7 @@ export const AudioPage: React.FC = () => {
                       }}
                     />
                   ) : (
-                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-amber-500/30 via-[#14213D] to-black border border-white/10 flex items-center justify-center text-[10px] text-gray-400 text-center p-1">
+                    <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent/30 via-surface to-black border border-white/10 flex items-center justify-center text-[10px] text-gray-400 text-center p-1">
                       Gradasi Standar
                     </div>
                   )}
@@ -648,7 +648,7 @@ export const AudioPage: React.FC = () => {
                     accept="image/png,image/jpeg,image/webp"
                     disabled={Boolean(uploading)}
                     onChange={(e) => e.target.files?.[0] && handleSelectCoverFile(e.target.files[0])}
-                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-[#FCA311] file:text-black file:font-semibold cursor-pointer"
+                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-black file:font-semibold cursor-pointer"
                   />
                 </div>
               </div>
@@ -658,13 +658,13 @@ export const AudioPage: React.FC = () => {
                 <div
                   className={`p-4 rounded-xl border space-y-2 ${
                     !form.audioUrl && !pendingMasterFile
-                      ? 'bg-amber-500/5 border-amber-500/30'
+                      ? 'bg-accent/5 border-accent/30'
                       : 'bg-black/40 border-white/5'
                   }`}
                 >
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                      Full Audio Master <span className="text-amber-400 font-bold">*Wajib</span>
+                      Full Audio Master <span className="text-accent font-bold">*Wajib</span>
                     </span>
                     <div className="flex items-center gap-2">
                       {(form.audioUrl || pendingMasterFile) && (
@@ -692,7 +692,7 @@ export const AudioPage: React.FC = () => {
                     accept=".mp3,.wav,.m4a,.flac,audio/*"
                     disabled={Boolean(uploading)}
                     onChange={(e) => e.target.files?.[0] && handleSelectMasterFile(e.target.files[0])}
-                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-[#FCA311] file:text-black file:font-semibold cursor-pointer"
+                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-black file:font-semibold cursor-pointer"
                   />
                 </div>
 
@@ -725,7 +725,7 @@ export const AudioPage: React.FC = () => {
                     accept=".mp3,.wav,.m4a,.flac,audio/*"
                     disabled={Boolean(uploading)}
                     onChange={(e) => e.target.files?.[0] && handleSelectLoopFile(e.target.files[0])}
-                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-[#FCA311] file:text-black file:font-semibold cursor-pointer"
+                    className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-black file:font-semibold cursor-pointer"
                   />
                 </div>
               </div>
@@ -734,7 +734,7 @@ export const AudioPage: React.FC = () => {
               <div className="p-4 rounded-xl bg-black/40 border border-white/5 space-y-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-semibold text-white flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-[#FCA311]" /> Lembar Partitur (Sheet Music PDF)
+                    <FileText className="w-3.5 h-3.5 text-accent" /> Lembar Partitur (Sheet Music PDF)
                   </span>
                   <div className="flex items-center gap-3">
                     {form.sheetMusicUrl && (
@@ -743,7 +743,7 @@ export const AudioPage: React.FC = () => {
                           href={form.sheetMusicUrl}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-[11px] text-[#FCA311] hover:underline font-semibold"
+                          className="text-[11px] text-accent hover:underline font-semibold"
                         >
                           Lihat PDF Terunggah
                         </a>
@@ -765,7 +765,7 @@ export const AudioPage: React.FC = () => {
                   accept=".pdf,application/pdf"
                   disabled={Boolean(uploading)}
                   onChange={(e) => e.target.files?.[0] && handleSelectSheetFile(e.target.files[0])}
-                  className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-[#FCA311] file:text-black file:font-semibold cursor-pointer"
+                  className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-black file:font-semibold cursor-pointer"
                 />
               </div>
 
@@ -800,7 +800,7 @@ export const AudioPage: React.FC = () => {
                   accept=".txt,text/plain"
                   disabled={Boolean(uploading)}
                   onChange={(e) => e.target.files?.[0] && handleSelectLicenseFile(e.target.files[0])}
-                  className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-[#FCA311] file:text-black file:font-semibold cursor-pointer"
+                  className="block w-full text-xs text-gray-400 file:mr-3 file:py-1 file:px-3 file:rounded-md file:border-0 file:bg-accent file:text-black file:font-semibold cursor-pointer"
                 />
                 {form.licenseText && (
                   <div className="mt-2 p-2.5 rounded-lg bg-black/60 border border-white/5 max-h-24 overflow-y-auto">
@@ -815,12 +815,12 @@ export const AudioPage: React.FC = () => {
               <div className="space-y-3 pt-2">
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-white flex items-center gap-1.5 uppercase tracking-wider">
-                    <Layers className="w-3.5 h-3.5 text-[#FCA311]" /> Separated Tracks ({form.stems?.length || 0} Stems)
+                    <Layers className="w-3.5 h-3.5 text-accent" /> Separated Tracks ({form.stems?.length || 0} Stems)
                   </span>
                   <button
                     type="button"
                     onClick={addStemSlot}
-                    className="text-xs bg-[#14213D] border border-[#FCA311] text-[#FCA311] px-3 py-1 rounded-lg hover:bg-[#FCA311] hover:text-black font-semibold cursor-pointer"
+                    className="text-xs bg-surface border border-accent text-accent px-3 py-1 rounded-lg hover:bg-accent hover:text-on-accent font-semibold cursor-pointer"
                   >
                     + Tambah Instrumen Stem
                   </button>
@@ -853,18 +853,18 @@ export const AudioPage: React.FC = () => {
                         accept=".mp3,.wav,.m4a,.flac,audio/*"
                         disabled={Boolean(uploading)}
                         onChange={(e) => e.target.files?.[0] && handleUploadStemAudio(stem.id, e.target.files[0])}
-                        className="block w-full text-[11px] text-gray-400 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:bg-[#FCA311] file:text-black cursor-pointer"
+                        className="block w-full text-[11px] text-gray-400 file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:bg-accent file:text-black cursor-pointer"
                       />
                     </div>
                   ))}
                 </div>
               </div>
 
-              {uploading && <p className="text-xs text-[#FCA311] animate-pulse">{uploading}</p>}
+              {uploading && <p className="text-xs text-accent animate-pulse">{uploading}</p>}
             </div>
 
             {status && (
-              <div className="p-3 rounded-xl border bg-amber-950/40 border-amber-500/20 text-amber-300 text-sm flex items-center gap-2">
+              <div className="p-3 rounded-xl border bg-accent/10 border-accent/20 text-accent text-sm flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{status}</span>
               </div>

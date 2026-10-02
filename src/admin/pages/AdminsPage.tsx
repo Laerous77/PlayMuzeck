@@ -69,9 +69,9 @@ export const AdminsPage: React.FC<AdminsPageProps> = ({ isSuperAdmin, currentEma
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
+      <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-3">
         <div className="flex items-center gap-2">
-          <ShieldCheck className="w-4 h-4 text-[#FCA311]" />
+          <ShieldCheck className="w-4 h-4 text-accent" />
           <h3 className="font-bold text-white">Siapa saja yang bisa masuk sebagai admin</h3>
         </div>
         <p className="text-xs text-gray-400">
@@ -99,11 +99,11 @@ export const AdminsPage: React.FC<AdminsPageProps> = ({ isSuperAdmin, currentEma
                 <tr key={a.email} className="border-t border-white/5">
                   <td className="p-3 font-mono text-white">
                     {a.email}
-                    {a.email === currentEmail && <span className="ml-2 text-[10px] text-[#FCA311]">(kamu)</span>}
+                    {a.email === currentEmail && <span className="ml-2 text-[10px] text-accent">(kamu)</span>}
                   </td>
                   <td className="text-gray-400 text-xs">
                     {a.isSuperAdmin ? (
-                      <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-[#FCA311] font-bold text-[10px]">
+                      <span className="px-1.5 py-0.5 rounded bg-accent/20 text-accent font-bold text-[10px]">
                         SUPER ADMIN
                       </span>
                     ) : (
@@ -142,12 +142,12 @@ export const AdminsPage: React.FC<AdminsPageProps> = ({ isSuperAdmin, currentEma
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="email@contoh.com"
-              className="flex-1 rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-[#FCA311]"
+              className="flex-1 rounded-xl bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-accent"
             />
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60"
+              className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60"
             >
               {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
               <span>Beri akses admin</span>

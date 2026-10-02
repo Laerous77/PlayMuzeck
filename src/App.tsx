@@ -12,7 +12,6 @@ import { CustomAudioModal } from './components/Modals/CustomAudioModal';
 import { ProfileDashboardModal } from './components/Modals/ProfileDashboardModal';
 import { DestinationModal } from './components/Modals/DestinationModal';
 import { Toast } from './components/Toast';
-import { ThemeModal } from './components/Modals/ThemeModal';
 import { ThemeProvider } from './theme/ThemeContext';
 import { AppMode, CartItem, AudioEntitlements, UserSession, Deck, Topic, AudioTrackItem } from './types';
 import { storage } from './services/storage';
@@ -27,7 +26,7 @@ import { removeDeckFromJsonStore } from './services/quizJsonStore';
 import { notifyUserScopeChanged } from './services/userScope';
 import { isBuiltinDeckId } from './data/quiz';
 import { installAuthFetch, clearUserToken, authApi, AUTH_EXPIRED_EVENT } from './services/authToken';
-import { RotateCcw, ShieldCheck, AlertTriangle, Palette as PaletteIcon } from 'lucide-react';
+import { RotateCcw, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 installAuthFetch(); // semua request /api/* otomatis membawa cookie sesi httpOnly
 
@@ -209,7 +208,6 @@ function MainApp() {
   const [isProfileDashboardOpen, setIsProfileDashboardOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCustomAudioOpen, setIsCustomAudioOpen] = useState(false);
-  const [isThemeOpen, setIsThemeOpen] = useState(false);
   const [deckToPlay, setDeckToPlay] = useState<Deck | null>(null);
 
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -977,15 +975,6 @@ function MainApp() {
             <span className="flex items-center gap-1 text-emerald-400">
               <ShieldCheck className="w-3.5 h-3.5" /> Aman & Tepercaya
             </span>
-            {userSession?.isLoggedIn && (
-              <button
-                type="button"
-                onClick={() => setIsThemeOpen(true)}
-                className="flex items-center gap-1 text-accent font-bold hover:underline cursor-pointer"
-              >
-                <PaletteIcon className="w-3.5 h-3.5" /> Tema saya
-              </button>
-            )}
             {isAdmin && (
               <a href="/admin" className="text-accent font-bold hover:underline">
                 Developer Console ⚙️
@@ -1091,7 +1080,6 @@ function MainApp() {
         />
       )}
 
-      <ThemeModal isOpen={isThemeOpen} onClose={() => setIsThemeOpen(false)} />
 
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </div>

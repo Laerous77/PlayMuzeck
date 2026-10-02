@@ -103,10 +103,10 @@ const STEPS: { id: WizardStep; label: string }[] = [
   { id: 'review', label: '5. Review' },
 ];
 
-const inputCls = 'mt-1 w-full rounded-lg bg-black/40 border border-white/10 focus:border-[#FCA311] outline-none px-3 py-2 text-sm text-white';
+const inputCls = 'mt-1 w-full rounded-lg bg-black/40 border border-white/10 focus:border-accent outline-none px-3 py-2 text-sm text-white';
 const chipCls = (active: boolean) =>
   `px-3 py-2 rounded-xl text-xs font-bold border transition-all ${
-    active ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-black/40 text-gray-400 border-white/10 hover:text-white'
+    active ? 'bg-accent text-on-accent border-accent' : 'bg-black/40 text-gray-400 border-white/10 hover:text-white'
   }`;
 
 const baseMaxQuestions = (d: Deck['difficulty']) => (d === 'Mudah' ? 25 : d === 'Biasa' ? 50 : 100);
@@ -697,7 +697,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
 
   return (
-    <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-4">
+    <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-4">
       <input ref={fileInputRef} type="file" accept="image/*,audio/*,video/*" className="hidden" onChange={handleFileUpload} />
 
       {/* Stepper */}
@@ -717,7 +717,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
       )}
 
       {readOnly && (
-        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-400/30 text-xs text-amber-200">
+        <div className="p-3 rounded-xl bg-accent/10 border border-accent/30 text-xs text-accent">
           Mode hanya-baca: kuis ini bukan buatanmu, jadi tidak bisa disimpan atau dihapus. Kamu masih bisa melihat isinya, mengekspor JSON, atau membuat kuis baru.
         </div>
       )}
@@ -739,7 +739,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                   setThemeTouched(true);
                 }}
                 className={`text-left p-4 rounded-2xl border transition-all ${
-                  themeId === t.id ? 'bg-[#FCA311]/15 border-[#FCA311] ring-2 ring-[#FCA311]/40' : 'bg-black/40 border-white/10 hover:border-white/20'
+                  themeId === t.id ? 'bg-accent/15 border-accent ring-2 ring-accent/40' : 'bg-black/40 border-white/10 hover:border-white/20'
                 }`}
               >
                 <span className="text-2xl block mb-2">{t.icon}</span>
@@ -770,12 +770,12 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
           <div>
             <div className="flex items-center gap-1.5 mb-1.5">
               <span className="text-xs text-gray-400">Tingkat kesulitan</span>
-              <button type="button" onClick={() => setShowDifficultyHelp((v) => !v)} className="text-gray-400 hover:text-[#FCA311]" title="Perbedaan tiap tingkat kesulitan">
+              <button type="button" onClick={() => setShowDifficultyHelp((v) => !v)} className="text-gray-400 hover:text-accent" title="Perbedaan tiap tingkat kesulitan">
                 <HelpCircle className="w-3.5 h-3.5" />
               </button>
             </div>
             {showDifficultyHelp && (
-              <div className="mb-3 p-3.5 rounded-xl bg-black/60 border border-[#FCA311]/40 text-[11px] text-gray-300 space-y-1.5 leading-relaxed">
+              <div className="mb-3 p-3.5 rounded-xl bg-black/60 border border-accent/40 text-[11px] text-gray-300 space-y-1.5 leading-relaxed">
                 <p><strong className="text-white">Mudah:</strong> maks 25 soal, maks 5 opsi, poin sama rata, tanpa nilai minus.</p>
                 <p><strong className="text-white">Biasa:</strong> maks 50 soal, poin berbeda boleh, nilai minus 0–50%.</p>
                 <p><strong className="text-white">Sedang:</strong> maks 100 soal, tanpa aturan khusus.</p>
@@ -799,7 +799,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
               <input type="number" disabled={isFree} className={`${inputCls} disabled:opacity-40`} value={isFree ? 0 : price} onChange={(e) => setPrice(Number(e.target.value))} />
             </label>
             <label className="text-xs text-gray-400 flex items-center gap-2 mt-6">
-              <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="accent-[#FCA311]" />
+              <input type="checkbox" checked={isFree} onChange={(e) => setIsFree(e.target.checked)} className="accent-accent" />
               Gratis
             </label>
           </div>
@@ -817,7 +817,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
             <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-300">Jumlah butir soal</span>
-                <span className="text-[10px] text-[#FCA311]">Maks {maxQuestions}</span>
+                <span className="text-[10px] text-accent">Maks {maxQuestions}</span>
               </div>
               <input
                 type="number"
@@ -832,13 +832,13 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
             <div className="p-4 rounded-2xl bg-black/30 border border-white/10 space-y-2">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-300">Jumlah pilihan jawaban</span>
-                <span className="text-[10px] text-[#FCA311]">{difficulty === 'Mudah' ? `Maks ${maxChoices} opsi` : '2 s/d 10 opsi'}</span>
+                <span className="text-[10px] text-accent">{difficulty === 'Mudah' ? `Maks ${maxChoices} opsi` : '2 s/d 10 opsi'}</span>
               </div>
               <select value={choicesPerQuestion} onChange={(e) => setChoicesPerQuestion(Number(e.target.value))} className={inputCls}>
                 {[2, 3, 4, 5, 6, 7, 8, 9, 10]
                   .filter((n) => n <= maxChoices)
                   .map((n) => (
-                    <option key={n} value={n} className="bg-[#14213D]">
+                    <option key={n} value={n} className="bg-surface">
                       {n} pilihan (A s/d {String.fromCharCode(64 + n)})
                     </option>
                   ))}
@@ -861,7 +861,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                       max={scoreUnit === 'percent' ? 100 : 1000}
                       value={equalScorePerQuestion}
                       onChange={(e) => setEqualScorePerQuestion(Number(e.target.value) || 0)}
-                      className="w-20 bg-black/60 border border-white/20 rounded-lg px-2 py-1 text-center text-xs font-bold text-white outline-none focus:border-[#FCA311]"
+                      className="w-20 bg-black/60 border border-white/20 rounded-lg px-2 py-1 text-center text-xs font-bold text-white outline-none focus:border-accent"
                     />
                     <span className="text-[11px] text-gray-400">{scoreUnit === 'percent' ? '%' : 'pt'}</span>
                   </div>
@@ -869,14 +869,14 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
               )}
               <div className="flex items-center justify-between pt-1">
                 <label className="text-[11px] text-gray-300 flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={roundScores} onChange={(e) => setRoundScores(e.target.checked)} className="accent-[#FCA311]" />
+                  <input type="checkbox" checked={roundScores} onChange={(e) => setRoundScores(e.target.checked)} className="accent-accent" />
                   Bulatkan nilai
                 </label>
                 <button
                   type="button"
                   disabled={difficulty === 'Mudah'}
                   onClick={() => setPointSystem(pointSystem === 'equal' ? 'variable' : 'equal')}
-                  className="text-[11px] font-bold text-[#FCA311] underline disabled:opacity-30"
+                  className="text-[11px] font-bold text-accent underline disabled:opacity-30"
                 >
                   {pointSystem === 'equal' ? 'Ganti ke poin berbeda' : 'Ganti ke poin sama rata'}
                 </button>
@@ -892,7 +892,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                   disabled={difficulty === 'Mudah' || difficulty === 'Ekstrem'}
                   checked={enablePenaltyMinus}
                   onChange={(e) => setEnablePenaltyMinus(e.target.checked)}
-                  className="accent-[#FCA311] w-4 h-4"
+                  className="accent-accent w-4 h-4"
                 />
               </label>
               {enablePenaltyMinus && (
@@ -909,7 +909,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                     max={maxAllowedPenalty}
                     value={penaltyPercentage}
                     onChange={(e) => setPenaltyPercentage(Number(e.target.value))}
-                    className="w-full accent-[#FCA311]"
+                    className="w-full accent-accent"
                   />
                 </div>
               )}
@@ -920,7 +920,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                   disabled={difficulty === 'Mudah' || difficulty === 'Biasa' || difficulty === 'Ekstrem'}
                   checked={shuffleChoices}
                   onChange={(e) => setShuffleChoices(e.target.checked)}
-                  className="accent-[#FCA311] w-4 h-4"
+                  className="accent-accent w-4 h-4"
                 />
               </label>
             </div>
@@ -947,10 +947,10 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                   <div className="flex justify-between items-center">
                     <span className="text-xs font-bold text-white">
                       Aturan penilaian jawaban ganda{' '}
-                      <span className="text-[10px] text-[#FCA311]">({multiEvaluationMode === 'all_or_nothing' ? 'harus benar semua' : 'atur poin sendiri'})</span>
+                      <span className="text-[10px] text-accent">({multiEvaluationMode === 'all_or_nothing' ? 'harus benar semua' : 'atur poin sendiri'})</span>
                     </span>
-                    {difficulty === 'Mudah' && <span className="text-[10px] text-amber-300">*Mudah: wajib atur poin per opsi</span>}
-                    {difficulty === 'Ekstrem' && <span className="text-[10px] text-amber-300">*Ekstrem: wajib benar semua</span>}
+                    {difficulty === 'Mudah' && <span className="text-[10px] text-accent">*Mudah: wajib atur poin per opsi</span>}
+                    {difficulty === 'Ekstrem' && <span className="text-[10px] text-accent">*Ekstrem: wajib benar semua</span>}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
@@ -958,7 +958,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                       disabled={difficulty === 'Mudah'}
                       onClick={() => setMultiEvaluationMode('all_or_nothing')}
                       className={`p-3.5 rounded-xl border text-left disabled:opacity-30 disabled:cursor-not-allowed ${
-                        multiEvaluationMode === 'all_or_nothing' ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-black/40 text-gray-300 border-white/10 hover:border-white/25'
+                        multiEvaluationMode === 'all_or_nothing' ? 'bg-accent text-on-accent border-accent' : 'bg-black/40 text-gray-300 border-white/10 hover:border-white/25'
                       }`}
                     >
                       <div className="text-xs font-black">A. Seluruh jawaban benar harus dipilih</div>
@@ -969,7 +969,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                       disabled={difficulty === 'Ekstrem'}
                       onClick={() => setMultiEvaluationMode('partial')}
                       className={`p-3.5 rounded-xl border text-left disabled:opacity-30 disabled:cursor-not-allowed ${
-                        multiEvaluationMode === 'partial' ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-black/40 text-gray-300 border-white/10 hover:border-white/25'
+                        multiEvaluationMode === 'partial' ? 'bg-accent text-on-accent border-accent' : 'bg-black/40 text-gray-300 border-white/10 hover:border-white/25'
                       }`}
                     >
                       <div className="text-xs font-black">B. Nilai berdasarkan jumlah jawaban benar</div>
@@ -981,7 +981,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
               <div className="pt-3 border-t border-white/10 flex items-center justify-between text-xs flex-wrap gap-2">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={hasGlobalTimer} onChange={(e) => setHasGlobalTimer(e.target.checked)} className="accent-[#FCA311] w-4 h-4" />
+                  <input type="checkbox" checked={hasGlobalTimer} onChange={(e) => setHasGlobalTimer(e.target.checked)} className="accent-accent w-4 h-4" />
                   <span>Batasi waktu tiap soal (maks 180 detik)</span>
                 </label>
                 {hasGlobalTimer && (
@@ -992,7 +992,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                       max={180}
                       value={globalTimeLimitSec}
                       onChange={(e) => setGlobalTimeLimitSec(Math.min(180, Math.max(1, Number(e.target.value) || 1)))}
-                      className="w-16 bg-black/60 border border-white/20 rounded px-2 py-1 text-center text-[#FCA311] font-bold"
+                      className="w-16 bg-black/60 border border-white/20 rounded px-2 py-1 text-center text-accent font-bold"
                     />
                     <span>detik</span>
                   </div>
@@ -1016,7 +1016,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                   onClick={() => setActiveIdx(idx)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border ${
                     activeIdx === idx
-                      ? 'bg-[#FCA311] text-black border-[#FCA311]'
+                      ? 'bg-accent text-on-accent border-accent'
                       : ready
                         ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
                         : 'bg-black/40 text-gray-400 border-white/10'
@@ -1030,7 +1030,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
           <div className="p-5 rounded-3xl bg-black/30 border border-white/10 space-y-5">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <span className="px-3 py-1 rounded-full bg-[#FCA311] text-black text-xs font-black">
+              <span className="px-3 py-1 rounded-full bg-accent text-on-accent text-xs font-black">
                 Soal #{activeIdx + 1} dari {questions.length}
               </span>
               {pointSystem === 'variable' && (
@@ -1040,7 +1040,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                     type="number"
                     value={curQ.points}
                     onChange={(e) => updateActiveQ((q) => ({ ...q, points: Number(e.target.value) || 0 }))}
-                    className="w-16 bg-black/60 border border-white/20 rounded-lg px-2 py-1 text-center font-bold text-[#FCA311]"
+                    className="w-16 bg-black/60 border border-white/20 rounded-lg px-2 py-1 text-center font-bold text-accent"
                   />
                   <span>{scoreUnit === 'percent' ? '%' : 'poin'}</span>
                 </div>
@@ -1071,7 +1071,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                     onClick={() => fileInputRef.current?.click()}
                     className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold flex items-center gap-1"
                   >
-                    <Upload className="w-3 h-3 text-[#FCA311]" /> Unggah lokal (gambar ≤2MB, audio ≤5MB, video ≤10MB)
+                    <Upload className="w-3 h-3 text-accent" /> Unggah lokal (gambar ≤2MB, audio ≤5MB, video ≤10MB)
                   </button>
                 </div>
               </div>
@@ -1094,7 +1094,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                     updateActiveQ((q) => ({ ...q, mediaUrl: val, mediaType: val ? detectMediaType(val) : 'none' }));
                   }}
                   placeholder={curQ.mediaUrl.startsWith('data:') ? 'Berkas lokal terpasang' : 'Atau tautkan URL media online (https://...)'}
-                  className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-[#FCA311]"
+                  className="w-full bg-black/60 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-accent"
                 />
               </div>
               {curQ.mediaUrl && curQ.mediaType !== 'none' && (
@@ -1132,7 +1132,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                 <button
                   type="button"
                   onClick={() => updateActiveQ((q) => ({ ...q, showGeneralExplanation: !q.showGeneralExplanation }))}
-                  className="text-xs font-bold text-amber-300 flex items-center gap-1.5 w-full text-left"
+                  className="text-xs font-bold text-accent flex items-center gap-1.5 w-full text-left"
                 >
                   {curQ.showGeneralExplanation ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                   Penjelasan umum jika seluruh jawaban benar terpilih (opsional)
@@ -1179,7 +1179,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                       value={ch.text}
                       onChange={(e) => updateChoice(cIdx, { text: e.target.value })}
                       placeholder={`Pilihan ${String.fromCharCode(65 + cIdx)}...`}
-                      className="flex-1 bg-black/60 border border-white/15 focus:border-[#FCA311] rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      className="flex-1 bg-black/60 border border-white/15 focus:border-accent rounded-xl px-3 py-2 text-xs text-white outline-none"
                     />
 
                     {correctAnswerMode === 'multiple' && ch.isCorrect && multiEvaluationMode === 'partial' && (
@@ -1199,7 +1199,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                     <button
                       type="button"
                       onClick={() => updateChoice(cIdx, { showExplanation: !ch.showExplanation })}
-                      className={`p-1.5 rounded-lg border ${ch.showExplanation ? 'bg-[#FCA311] text-black border-[#FCA311]' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
+                      className={`p-1.5 rounded-lg border ${ch.showExplanation ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 border-white/10 text-gray-400 hover:text-white'}`}
                       title="Tampilkan / sembunyikan penjelasan opsi"
                     >
                       <HelpCircle className="w-4 h-4" />
@@ -1240,7 +1240,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         <div className="space-y-4">
           <h4 className="text-lg font-bold">Review sebelum disimpan</h4>
           <div className="p-5 rounded-2xl bg-black/30 border border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
-            <div><span className="text-gray-400 block text-[10px]">Tema</span><span className="font-bold text-[#FCA311] text-sm">{theme.name}</span></div>
+            <div><span className="text-gray-400 block text-[10px]">Tema</span><span className="font-bold text-accent text-sm">{theme.name}</span></div>
             
             <div><span className="text-gray-400 block text-[10px]">Judul kuis</span><span className="font-bold text-sm">{quizTitle || '-'}</span></div>
             <div><span className="text-gray-400 block text-[10px]">Kesulitan</span><span className="font-bold text-sm">{difficulty}</span></div>
@@ -1250,7 +1250,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
             <div><span className="text-gray-400 block text-[10px]">Harga</span><span className="font-bold">{isFree ? 'Gratis' : `Rp ${Number(price).toLocaleString('id-ID')}`}</span></div>
           </div>
           {duplicates.length > 0 && (
-            <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/40 text-xs text-amber-200 flex items-start gap-2">
+            <div className="p-3 rounded-xl bg-accent/10 border border-accent/40 text-xs text-accent flex items-start gap-2">
               <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
               <span>{duplicates.length} soal sama persis dengan soal di deck bawaan atau deck lain. Tetap bisa disimpan, tapi cek dulu supaya tidak dobel.</span>
             </div>
@@ -1269,7 +1269,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         </div>
         <div>
           {step === 'theme' && (
-            <button type="button" onClick={() => setStep('info')} className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5">
+            <button type="button" onClick={() => setStep('info')} className="px-5 py-2 rounded-xl bg-accent text-on-accent font-black text-xs flex items-center gap-1.5">
               Lanjut ke info kuis <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -1284,18 +1284,18 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
                 setErrorMsg(null);
                 setStep('settings');
               }}
-              className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5"
+              className="px-5 py-2 rounded-xl bg-accent text-on-accent font-black text-xs flex items-center gap-1.5"
             >
               Lanjut ke pengaturan <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
           {step === 'settings' && (
-            <button type="button" onClick={() => applySettings()} className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5">
+            <button type="button" onClick={() => applySettings()} className="px-5 py-2 rounded-xl bg-accent text-on-accent font-black text-xs flex items-center gap-1.5">
               Terapkan & mulai buat soal <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
           {step === 'questions' && curQ && (
-            <button type="button" onClick={handleNextQuestion} className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5">
+            <button type="button" onClick={handleNextQuestion} className="px-5 py-2 rounded-xl bg-accent text-on-accent font-black text-xs flex items-center gap-1.5">
               {activeIdx < questions.length - 1 ? 'Soal selanjutnya' : 'Lanjut ke review'} <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -1305,14 +1305,14 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
       {/* Aksi deck (selalu tersedia) */}
       <div className="flex flex-wrap gap-2 pt-1">
         {!readOnly && (
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 disabled:opacity-50">
+          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 rounded-xl bg-accent text-on-accent font-bold px-4 py-2 disabled:opacity-50">
             <Save className="w-4 h-4" /> {saving ? 'Menyimpan...' : 'Simpan deck'}
           </button>
         )}
         <button
           onClick={handleExport}
           title="Unduh sebagai berkas JSON bawaan (format sama seperti deck-builtin-*.json) — taruh di src/data/quiz/decks/ lalu daftarkan di index.ts"
-          className="flex items-center gap-2 rounded-xl border border-[#FCA311]/60 text-[#FCA311] px-4 py-2"
+          className="flex items-center gap-2 rounded-xl border border-accent/60 text-accent px-4 py-2"
         >
           <Download className="w-4 h-4" /> Ekspor sebagai JSON
         </button>
@@ -1421,7 +1421,7 @@ export const ContentPage: React.FC = () => {
           <button
             key={id}
             onClick={() => setTab(id as typeof tab)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === id ? 'bg-[#FCA311] text-black' : 'bg-[#14213D] border border-white/10'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === id ? 'bg-accent text-on-accent' : 'bg-surface border border-white/10'}`}
           >
             {label}
           </button>
@@ -1430,19 +1430,19 @@ export const ContentPage: React.FC = () => {
 
       {tab === 'decks' && (
         <div className="grid lg:grid-cols-[260px_1fr] gap-4">
-          <aside className="rounded-2xl bg-[#14213D] border border-white/10 p-3 space-y-2 max-h-[80vh] overflow-y-auto">
+          <aside className="rounded-2xl bg-surface border border-white/10 p-3 space-y-2 max-h-[80vh] overflow-y-auto">
             <button
               onClick={() => {
                 setDeckForm(blankDeck(''));
                 setNewDeckKey((k) => k + 1);
               }}
-              className="w-full rounded-xl bg-[#FCA311] text-black font-bold py-2 text-sm"
+              className="w-full rounded-xl bg-accent text-on-accent font-bold py-2 text-sm"
             >
               Kuis baru
             </button>
 
             {([
-              ['Buatan admin', adminDecks, 'bg-[#FCA311]/20 text-[#FCA311]', 'ADMIN'],
+              ['Buatan admin', adminDecks, 'bg-accent/20 text-accent', 'ADMIN'],
               ['Buatan pengguna', userDecks, 'bg-sky-500/20 text-sky-300', 'USER'],
             ] as const).map(([heading, list, badgeCls, badge]) => (
               <div key={heading} className="space-y-1">
@@ -1454,7 +1454,7 @@ export const ContentPage: React.FC = () => {
                   <button
                     key={deck.id}
                     onClick={() => setDeckForm(deck)}
-                    className={`w-full text-left px-3 py-2 rounded-xl ${deckForm.id === deck.id ? 'bg-black/40 border border-[#FCA311]' : 'hover:bg-black/20'}`}
+                    className={`w-full text-left px-3 py-2 rounded-xl ${deckForm.id === deck.id ? 'bg-black/40 border border-accent' : 'hover:bg-black/20'}`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-sm font-semibold truncate">{deck.title}</p>
@@ -1514,9 +1514,9 @@ export const ContentPage: React.FC = () => {
       )}
 
       {tab === 'import' && (
-        <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
+        <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-3">
           <h3 className="font-bold flex items-center gap-2">
-            <Upload className="w-4 h-4 text-[#FCA311]" /> Unggah kuis (JSON)
+            <Upload className="w-4 h-4 text-accent" /> Unggah kuis (JSON)
           </h3>
           <p className="text-sm text-gray-400">
             Format: {'{ "topics": [ { id, title, iconName, description, price } ], "decks": [ { id, topicId, title, questions: [...] } ] }'}
@@ -1531,13 +1531,13 @@ export const ContentPage: React.FC = () => {
             }}
           />
           <textarea value={importText} onChange={(e) => setImportText(e.target.value)} className="w-full min-h-64 rounded-xl bg-black/40 border border-white/10 p-3 font-mono text-xs" />
-          <button onClick={importJson} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2">
+          <button onClick={importJson} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2">
             Impor ke database
           </button>
         </section>
       )}
 
-      {status && <p className="text-sm text-amber-200">{status}</p>}
+      {status && <p className="text-sm text-accent">{status}</p>}
     </div>
   );
 };

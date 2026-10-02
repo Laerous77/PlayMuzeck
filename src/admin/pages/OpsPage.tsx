@@ -92,7 +92,7 @@ interface Catalog {
 // ---------- Konstanta & helper ----------
 // 'paid' = pengguna DIANGGAP SUDAH MEMBELI -> server otomatis memberi akses produk.
 const STATUSES = [
-  { id: 'pending', label: 'Menunggu', cls: 'bg-amber-500/20 text-amber-300' },
+  { id: 'pending', label: 'Menunggu', cls: 'bg-accent/20 text-accent' },
   { id: 'paid', label: 'Berhasil', cls: 'bg-emerald-500/20 text-emerald-300' },
   { id: 'failed', label: 'Gagal', cls: 'bg-red-500/20 text-red-300' },
   // Dibatalkan pembeli, admin, atau otomatis karena lewat batas bayar (24 jam). Tetap tercatat.
@@ -101,7 +101,7 @@ const STATUSES = [
 
 // Nilai di database tetap baru/proses/selesai; yang tampil: Menunggu/Diproses/Selesai.
 const INQUIRY_STATUSES = [
-  { id: 'baru', label: 'Menunggu', cls: 'bg-amber-500/20 text-amber-300' },
+  { id: 'baru', label: 'Menunggu', cls: 'bg-accent/20 text-accent' },
   { id: 'proses', label: 'Diproses', cls: 'bg-sky-500/20 text-sky-300' },
   { id: 'selesai', label: 'Selesai', cls: 'bg-emerald-500/20 text-emerald-300' },
 ] as const;
@@ -148,7 +148,7 @@ const itemLabel = (item: any): string => {
 };
 
 const inputCls =
-  'mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-[#FCA311]';
+  'mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-sm text-white outline-none focus:border-accent';
 
 const Badge: React.FC<{ cls: string; children: React.ReactNode }> = ({ cls, children }) => (
   <span className={`inline-block rounded-md px-2 py-0.5 text-[11px] font-bold ${cls}`}>{children}</span>
@@ -584,7 +584,7 @@ export const OpsPage: React.FC = () => {
   return (
     <div className="space-y-4">
       {!isSuperAdmin && (
-        <p className="text-xs rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 px-3 py-2">
+        <p className="text-xs rounded-xl bg-accent/10 border border-accent/30 text-accent px-3 py-2">
           Mode hanya-baca: akunmu bisa melihat semua data di sini, tetapi hanya Super Admin yang bisa mengubahnya.
         </p>
       )}
@@ -600,7 +600,7 @@ export const OpsPage: React.FC = () => {
           <button
             key={id}
             onClick={() => setTab(id)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === id ? 'bg-[#FCA311] text-black' : 'bg-[#14213D] border border-white/10'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-semibold ${tab === id ? 'bg-accent text-on-accent' : 'bg-surface border border-white/10'}`}
           >
             {label}
           </button>
@@ -622,7 +622,7 @@ export const OpsPage: React.FC = () => {
               <button
                 key={s.id}
                 onClick={() => setFilter(s.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filter === s.id ? 'bg-white text-black' : 'bg-[#14213D] border border-white/10 text-gray-300'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${filter === s.id ? 'bg-white text-black' : 'bg-surface border border-white/10 text-gray-300'}`}
               >
                 {s.label} ({counts[s.id] ?? 0})
               </button>
@@ -631,15 +631,15 @@ export const OpsPage: React.FC = () => {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Cari email / nama / ID..."
-              className="ml-auto rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:border-[#FCA311]"
+              className="ml-auto rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:border-accent"
             />
-            <button onClick={() => setOrderForm({ ...emptyOrderForm })} className="rounded-lg bg-[#FCA311] text-black font-bold px-3 py-1.5 text-xs flex items-center gap-1">
+            <button onClick={() => setOrderForm({ ...emptyOrderForm })} className="rounded-lg bg-accent text-on-accent font-bold px-3 py-1.5 text-xs flex items-center gap-1">
               <Plus className="w-3.5 h-3.5" /> Pesanan manual
             </button>
           </div>
 
           {orderForm && (
-            <form onSubmit={submitOrder} className="rounded-2xl bg-[#14213D] border border-[#FCA311]/40 p-5 space-y-3">
+            <form onSubmit={submitOrder} className="rounded-2xl bg-surface border border-accent/40 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-white">Tambah pesanan manual</h3>
                 <button type="button" onClick={() => setOrderForm(null)} className="text-gray-400 hover:text-white">
@@ -742,7 +742,7 @@ export const OpsPage: React.FC = () => {
                                       type="button"
                                       key={p.key}
                                       onClick={() => setOrderForm({ ...orderForm, audioKeys: on ? orderForm.audioKeys.filter((k) => k !== p.key) : [...orderForm.audioKeys, p.key] })}
-                                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${on ? 'bg-[#FCA311] text-black' : 'bg-black/40 border border-white/10 text-gray-300'}`}
+                                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold ${on ? 'bg-accent text-on-accent' : 'bg-black/40 border border-white/10 text-gray-300'}`}
                                     >
                                       {p.label}
                                       {t ? ` · ${rupiah(t.products[p.key] ?? 0)}` : ''}
@@ -814,13 +814,13 @@ export const OpsPage: React.FC = () => {
                 </div>
               )}
 
-              <button disabled={busy || !catalog} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
+              <button disabled={busy || !catalog} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan pesanan
               </button>
             </form>
           )}
 
-          <div className="rounded-2xl bg-[#14213D] border border-white/10 overflow-x-auto">
+          <div className="rounded-2xl bg-surface border border-white/10 overflow-x-auto">
             <table className="w-full text-sm min-w-[820px]">
               <thead className="text-gray-400 text-left">
                 <tr>
@@ -846,7 +846,7 @@ export const OpsPage: React.FC = () => {
                         <div className="text-xs text-gray-500">{order.user_email}</div>
                       </td>
                       <td className="py-3 whitespace-nowrap">
-                        <button onClick={() => editAmount(order)} className="hover:text-[#FCA311]" title="Klik untuk ubah nominal">
+                        <button onClick={() => editAmount(order)} className="hover:text-accent" title="Klik untuk ubah nominal">
                           {rupiah(order.gross_amount)}
                         </button>
                       </td>
@@ -854,14 +854,14 @@ export const OpsPage: React.FC = () => {
                         <select value={order.status} onChange={(e) => changeStatus(order, e.target.value)} className={`rounded-lg px-2 py-1 text-xs font-bold outline-none ${meta.cls}`}>
                           {!STATUSES.some((s) => s.id === order.status) && <option value={order.status}>{order.status}</option>}
                           {STATUSES.map((s) => (
-                            <option key={s.id} value={s.id} className="bg-[#14213D] text-white">
+                            <option key={s.id} value={s.id} className="bg-surface text-white">
                               {s.label}
                             </option>
                           ))}
                         </select>
                         <div className="text-[10px] mt-1 text-gray-500">{order.fulfilled ? 'akses aktif' : 'akses belum diberikan'}</div>
                         {order.status === 'pending' && order.expires_at && (
-                          <div className="text-[10px] mt-0.5 text-amber-300/80">bayar sebelum {fmtTime(order.expires_at)}</div>
+                          <div className="text-[10px] mt-0.5 text-accent/80">bayar sebelum {fmtTime(order.expires_at)}</div>
                         )}
                         {order.status === 'cancelled' && (
                           <div className="text-[10px] mt-0.5 text-gray-400">
@@ -896,7 +896,7 @@ export const OpsPage: React.FC = () => {
       {tab === 'buyers' && (
         <div className="space-y-2">
           <p className="text-xs text-gray-400">Klik nama pembeli untuk melihat semua produk, status, tanggal, dan ID pesanannya.</p>
-          <div className="rounded-2xl bg-[#14213D] border border-white/10 overflow-x-auto">
+          <div className="rounded-2xl bg-surface border border-white/10 overflow-x-auto">
             <table className="w-full text-sm min-w-[800px]">
               <thead className="text-gray-400 text-left">
                 <tr>
@@ -918,7 +918,7 @@ export const OpsPage: React.FC = () => {
                       <tr onClick={() => toggleBuyer(b.email)} className={`border-t border-white/5 cursor-pointer hover:bg-white/5 ${open ? 'bg-white/5' : ''}`}>
                         <td className="p-3">
                           <div className="flex items-center gap-2">
-                            {open ? <ChevronDown className="w-4 h-4 text-[#FCA311]" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
+                            {open ? <ChevronDown className="w-4 h-4 text-accent" /> : <ChevronRight className="w-4 h-4 text-gray-500" />}
                             <div>
                               {b.name}
                               <div className="text-xs text-gray-500">{b.email}</div>
@@ -927,7 +927,7 @@ export const OpsPage: React.FC = () => {
                         </td>
                         <td className="text-emerald-300 font-bold">{b.paid}</td>
                         <td className="text-red-300 font-bold">{b.failed}</td>
-                        <td className="text-amber-300">{b.pending}</td>
+                        <td className="text-accent">{b.pending}</td>
                         <td className="text-gray-400">{b.cancelled ?? 0}</td>
                         <td>{rupiah(b.spent)}</td>
                         <td>{b.owned_items}</td>
@@ -1022,18 +1022,18 @@ export const OpsPage: React.FC = () => {
               <button
                 key={s.id}
                 onClick={() => setInqFilter(s.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${inqFilter === s.id ? 'bg-white text-black' : 'bg-[#14213D] border border-white/10 text-gray-300'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${inqFilter === s.id ? 'bg-white text-black' : 'bg-surface border border-white/10 text-gray-300'}`}
               >
                 {s.label} ({inqCounts[s.id] ?? 0})
               </button>
             ))}
-            <button onClick={() => setInqForm({ ...emptyInquiryForm })} className="ml-auto rounded-lg bg-[#FCA311] text-black font-bold px-3 py-1.5 text-xs flex items-center gap-1">
+            <button onClick={() => setInqForm({ ...emptyInquiryForm })} className="ml-auto rounded-lg bg-accent text-on-accent font-bold px-3 py-1.5 text-xs flex items-center gap-1">
               <Plus className="w-3.5 h-3.5" /> Tambah
             </button>
           </div>
 
           {inqForm && (
-            <form onSubmit={submitInquiry} className="rounded-2xl bg-[#14213D] border border-[#FCA311]/40 p-5 space-y-3">
+            <form onSubmit={submitInquiry} className="rounded-2xl bg-surface border border-accent/40 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-white">{inqForm.id ? 'Edit permintaan' : 'Tambah permintaan'}</h3>
                 <button type="button" onClick={() => setInqForm(null)} className="text-gray-400 hover:text-white">
@@ -1072,7 +1072,7 @@ export const OpsPage: React.FC = () => {
                 Pesan / catatan
                 <textarea rows={4} className={inputCls} value={inqForm.notes} onChange={(e) => setInqForm({ ...inqForm, notes: e.target.value })} />
               </label>
-              <button disabled={busy} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
+              <button disabled={busy} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan
               </button>
             </form>
@@ -1081,7 +1081,7 @@ export const OpsPage: React.FC = () => {
           {visibleInquiries.map((item) => {
             const meta = inquiryMeta(item.status);
             return (
-              <div key={item.id} className="rounded-2xl bg-[#14213D] border border-white/10 p-4">
+              <div key={item.id} className="rounded-2xl bg-surface border border-white/10 p-4">
                 <div className="flex flex-wrap justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="font-bold text-white break-words">{item.title}</h3>
@@ -1093,7 +1093,7 @@ export const OpsPage: React.FC = () => {
                     <select value={item.status} onChange={(e) => setInquiryStatus(item, e.target.value)} className={`rounded-lg px-2 py-1 text-xs font-bold outline-none ${meta.cls}`}>
                       {!INQUIRY_STATUSES.some((s) => s.id === item.status) && <option value={item.status}>{item.status}</option>}
                       {INQUIRY_STATUSES.map((s) => (
-                        <option key={s.id} value={s.id} className="bg-[#14213D] text-white">
+                        <option key={s.id} value={s.id} className="bg-surface text-white">
                           {s.label}
                         </option>
                       ))}
@@ -1132,7 +1132,7 @@ export const OpsPage: React.FC = () => {
               <button
                 key={id}
                 onClick={() => setUserFilter(id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${userFilter === id ? 'bg-white text-black' : 'bg-[#14213D] border border-white/10 text-gray-300'}`}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold ${userFilter === id ? 'bg-white text-black' : 'bg-surface border border-white/10 text-gray-300'}`}
               >
                 {label}
               </button>
@@ -1141,15 +1141,15 @@ export const OpsPage: React.FC = () => {
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
               placeholder="Cari nama / email..."
-              className="ml-auto rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:border-[#FCA311]"
+              className="ml-auto rounded-lg bg-black/40 border border-white/10 px-3 py-1.5 text-xs text-white outline-none focus:border-accent"
             />
-            <button onClick={() => setUserForm({ ...emptyUserForm })} className="rounded-lg bg-[#FCA311] text-black font-bold px-3 py-1.5 text-xs flex items-center gap-1">
+            <button onClick={() => setUserForm({ ...emptyUserForm })} className="rounded-lg bg-accent text-on-accent font-bold px-3 py-1.5 text-xs flex items-center gap-1">
               <Plus className="w-3.5 h-3.5" /> Pengguna
             </button>
           </div>
 
           {userForm && (
-            <form onSubmit={submitUser} className="rounded-2xl bg-[#14213D] border border-[#FCA311]/40 p-5 space-y-3">
+            <form onSubmit={submitUser} className="rounded-2xl bg-surface border border-accent/40 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-white">{userForm.id ? 'Edit pengguna' : 'Tambah pengguna'}</h3>
                 <button type="button" onClick={() => setUserForm(null)} className="text-gray-400 hover:text-white">
@@ -1177,14 +1177,14 @@ export const OpsPage: React.FC = () => {
                   <input type="password" autoComplete="new-password" className={inputCls} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
                 </label>
               </div>
-              <button disabled={busy} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
+              <button disabled={busy} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan
               </button>
             </form>
           )}
 
           {emailForm && (
-            <form onSubmit={sendEmail} className="rounded-2xl bg-[#14213D] border border-sky-400/40 p-5 space-y-3">
+            <form onSubmit={sendEmail} className="rounded-2xl bg-surface border border-sky-400/40 p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="font-bold text-white">
                   Email ke {emailForm.user.name || emailForm.user.email} <span className="text-gray-400 font-normal text-xs">&lt;{emailForm.user.email}&gt;</span>
@@ -1223,7 +1223,7 @@ export const OpsPage: React.FC = () => {
             </form>
           )}
 
-          <div className="rounded-2xl bg-[#14213D] border border-white/10 overflow-x-auto">
+          <div className="rounded-2xl bg-surface border border-white/10 overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead className="text-gray-400 text-left">
                 <tr>
@@ -1241,7 +1241,7 @@ export const OpsPage: React.FC = () => {
                   <tr key={u.id} className={`border-t border-white/5 ${u.suspended_at ? 'bg-red-500/5' : ''}`}>
                     <td className="p-3">
                       {u.name}
-                      {u.is_super_admin && <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-500/20 text-[#FCA311] font-bold text-[10px]">SUPER ADMIN</span>}
+                      {u.is_super_admin && <span className="ml-2 px-1.5 py-0.5 rounded bg-accent/20 text-accent font-bold text-[10px]">SUPER ADMIN</span>}
                       <div className="text-[10px] text-gray-500">
                         {u.has_google && !u.has_password ? 'login Google' : u.has_password ? 'kata sandi' : 'tanpa kata sandi'}
                         {!u.email_verified_at && ' · email belum diverifikasi'}
@@ -1277,7 +1277,7 @@ export const OpsPage: React.FC = () => {
                             <RotateCcw className="w-4 h-4" />
                           </button>
                         ) : (
-                          <button onClick={() => suspendUser(u)} className="p-1.5 rounded-lg text-amber-300 hover:bg-amber-500/10" title="Tangguhkan akun">
+                          <button onClick={() => suspendUser(u)} className="p-1.5 rounded-lg text-accent hover:bg-accent/10" title="Tangguhkan akun">
                             <Ban className="w-4 h-4" />
                           </button>
                         ))}

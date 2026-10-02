@@ -120,8 +120,8 @@ export const DashboardPage: React.FC = () => {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {cards.map((card) => (
-          <div key={card.label} className="rounded-2xl bg-[#14213D] border border-white/10 p-4">
-            <card.icon className="w-4 h-4 text-[#FCA311] mb-2" />
+          <div key={card.label} className="rounded-2xl bg-surface border border-white/10 p-4">
+            <card.icon className="w-4 h-4 text-accent mb-2" />
             <p className="text-xs text-gray-400">{card.label}</p>
             <p className="text-lg font-extrabold text-white break-words">{card.value}</p>
             <p className="text-[10px] text-gray-500 mt-0.5">{card.sub}</p>
@@ -130,7 +130,7 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-4">
-        <section className="lg:col-span-2 rounded-2xl bg-[#14213D] border border-white/10 p-5">
+        <section className="lg:col-span-2 rounded-2xl bg-surface border border-white/10 p-5">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div>
               <h3 className="font-bold text-white">Aktivitas 14 hari terakhir</h3>
@@ -143,7 +143,7 @@ export const DashboardPage: React.FC = () => {
                 <button
                   key={m.id}
                   onClick={() => setMetric(m.id)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${metric === m.id ? 'bg-[#FCA311] text-black' : 'bg-black/30 text-gray-300'}`}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold ${metric === m.id ? 'bg-accent text-on-accent' : 'bg-black/30 text-gray-300'}`}
                 >
                   {m.label}
                 </button>
@@ -156,7 +156,7 @@ export const DashboardPage: React.FC = () => {
               return (
                 <div key={day.date} className="flex-1 flex flex-col items-center justify-end gap-1 h-full">
                   <div
-                    className={`w-full rounded-t ${v > 0 ? 'bg-[#FCA311]' : 'bg-white/10'}`}
+                    className={`w-full rounded-t ${v > 0 ? 'bg-accent' : 'bg-white/10'}`}
                     style={{ height: `${v > 0 ? Math.max(6, (v / maxVal) * 100) : 3}%` }}
                     title={`${day.date}: ${fmtMetric(v)}`}
                   />
@@ -167,7 +167,7 @@ export const DashboardPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-5">
+        <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-5">
           <div>
             <h3 className="font-bold text-white mb-3">Status pesanan</h3>
             <div className="space-y-1.5">
@@ -199,9 +199,9 @@ export const DashboardPage: React.FC = () => {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4">
-        <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5">
+        <section className="rounded-2xl bg-surface border border-white/10 p-5">
           <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-            <Heart className="w-4 h-4 text-[#FCA311]" /> Produk terlaris
+            <Heart className="w-4 h-4 text-accent" /> Produk terlaris
           </h3>
           {data.topProducts.length === 0 ? (
             <p className="text-sm text-gray-400">Belum ada penjualan.</p>
@@ -220,9 +220,9 @@ export const DashboardPage: React.FC = () => {
           )}
         </section>
 
-        <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 overflow-x-auto">
+        <section className="rounded-2xl bg-surface border border-white/10 p-5 overflow-x-auto">
           <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-[#FCA311]" /> Pesanan terbaru
+            <Clock className="w-4 h-4 text-accent" /> Pesanan terbaru
           </h3>
           <table className="w-full text-sm min-w-[360px]">
             <tbody>
@@ -249,7 +249,7 @@ export const DashboardPage: React.FC = () => {
         </section>
       </div>
 
-      <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 overflow-x-auto">
+      <section className="rounded-2xl bg-surface border border-white/10 p-5 overflow-x-auto">
         <h3 className="font-bold text-white mb-3">Event terbaru</h3>
         <table className="w-full text-sm">
           <thead className="text-gray-400 text-left">
@@ -263,7 +263,7 @@ export const DashboardPage: React.FC = () => {
             {data.recentEvents.map((event) => (
               <tr key={event.id} className="border-t border-white/5">
                 <td className="py-2 text-gray-400 whitespace-nowrap">{fmtTime(event.created_at)}</td>
-                <td className="text-[#FCA311]">{event.event_type}</td>
+                <td className="text-accent">{event.event_type}</td>
                 <td className="text-gray-300 truncate max-w-xl">{JSON.stringify(event.payload)}</td>
               </tr>
             ))}

@@ -31,6 +31,7 @@ import { ContentPage } from './pages/ContentPage';
 import { OpsPage } from './pages/OpsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminsPage } from './pages/AdminsPage';
+import { applyCachedPalette } from '../theme/theme';
 
 type AdminPage = 'dashboard' | 'audio' | 'content' | 'ops' | 'settings' | 'admins';
 
@@ -44,6 +45,12 @@ const NAV: Array<{ id: AdminPage; label: string; icon: React.ComponentType<{ cla
 ];
 
 export default function AdminApp() {
+  // Admin berada di halaman terpisah dari situs utama: pasang palette tema terakhir (cache) supaya
+  // variabel --t-* terisi sebelum komponen admin dirender.
+  useEffect(() => {
+    applyCachedPalette();
+  }, []);
+
   const [token, setToken] = useState(getAdminToken());
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -155,14 +162,14 @@ export default function AdminApp() {
   if (!token) {
     return (
       <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-        <div className="w-full max-w-md rounded-3xl bg-[#14213D] border border-white/15 p-8 shadow-2xl space-y-6">
+        <div className="w-full max-w-md rounded-3xl bg-surface border border-white/15 p-8 shadow-2xl space-y-6">
           <div className="text-center space-y-1.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#FCA311]/15 text-[#FCA311] text-xs font-black border border-[#FCA311]/30">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 text-accent text-xs font-black border border-accent/30">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Developer Console</span>
             </div>
             <h1 className="text-2xl font-black mt-1">
-              PlayMuzeck<span className="text-[#FCA311]">.</span> Admin
+              PlayMuzeck<span className="text-accent">.</span> Admin
             </h1>
             <p className="text-xs text-gray-400">
               Portal manajemen katalog audio, database kuis, analitik, dan pengaturan tema.
@@ -175,8 +182,8 @@ export default function AdminApp() {
               tanpa perlu login Google kedua kalinya. Server yang memverifikasi
               token sesi & mengecek daftar admin. */}
           {mainSiteEmail && (
-            <div className="p-4 rounded-2xl bg-amber-500/10 border border-[#FCA311]/40 space-y-2.5">
-              <div className="flex items-center gap-2 text-xs font-bold text-[#FCA311]">
+            <div className="p-4 rounded-2xl bg-accent/10 border border-accent/40 space-y-2.5">
+              <div className="flex items-center gap-2 text-xs font-bold text-accent">
                 <ShieldCheck className="w-4 h-4" />
                 <span>Sesi situs utama terdeteksi</span>
               </div>
@@ -184,7 +191,7 @@ export default function AdminApp() {
               <button
                 type="button"
                 onClick={handleSessionLogin}
-                className="w-full py-2.5 rounded-xl bg-[#FCA311] hover:bg-[#e58e00] text-black font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-amber-500/20 active:scale-95 transition-all"
+                className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/20 active:scale-95 transition-all"
               >
                 <LogIn className="w-4 h-4" />
                 <span>Masuk sebagai Admin dengan Akun Ini</span>
@@ -202,7 +209,7 @@ export default function AdminApp() {
 
           <div className="relative flex items-center justify-center">
             <div className="border-t border-white/10 w-full" />
-            <span className="bg-[#14213D] px-3 text-[11px] text-gray-500 uppercase font-mono">atau kata sandi</span>
+            <span className="bg-surface px-3 text-[11px] text-gray-500 uppercase font-mono">atau kata sandi</span>
           </div>
 
           {/* Opsi 3: Login Kata Sandi Cadangan */}
@@ -215,7 +222,7 @@ export default function AdminApp() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-xl bg-black/50 border border-white/10 pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-[#FCA311]"
+                  className="w-full rounded-xl bg-black/50 border border-white/10 pl-9 pr-3 py-2 text-xs text-white outline-none focus:border-accent"
                   placeholder="ADMIN_PASSWORD"
                 />
               </div>
@@ -249,16 +256,16 @@ export default function AdminApp() {
 
   return (
     <div className="min-h-screen bg-black text-[#E5E5E5] flex">
-      <aside className="w-64 shrink-0 bg-[#14213D] border-r border-white/10 hidden md:flex flex-col">
+      <aside className="w-64 shrink-0 bg-surface border-r border-white/10 hidden md:flex flex-col">
         <div className="p-5 border-b border-white/10">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-[0.2em] text-[#FCA311] font-bold">Developer Console</p>
-            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-[#FCA311] border border-amber-500/30">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold">Developer Console</p>
+            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/30">
               {me?.isSuperAdmin ? 'Super Admin' : 'Admin'}
             </span>
           </div>
           <h1 className="text-xl font-extrabold text-white mt-1">
-            PlayMuzeck<span className="text-[#FCA311]">.</span>
+            PlayMuzeck<span className="text-accent">.</span>
           </h1>
           <p className="text-[11px] text-gray-400 font-mono truncate mt-0.5" title={activeAdminEmail}>
             {activeAdminEmail}
@@ -277,7 +284,7 @@ export default function AdminApp() {
                   window.location.hash = item.id;
                 }}
                 className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors cursor-pointer ${
-                  active ? 'bg-[#FCA311] text-black font-bold shadow' : 'text-gray-300 hover:bg-black/30'
+                  active ? 'bg-accent text-on-accent font-bold shadow' : 'text-gray-300 hover:bg-black/30'
                 }`}
               >
                 <Icon className="w-4 h-4" />
@@ -303,11 +310,11 @@ export default function AdminApp() {
       <div className="flex-1 min-w-0 flex flex-col">
         <header className="sticky top-0 z-20 bg-black/90 backdrop-blur border-b border-white/10 px-4 py-3 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <current.icon className="w-4 h-4 text-[#FCA311]" />
+            <current.icon className="w-4 h-4 text-accent" />
             <h2 className="font-bold text-white">{current.label}</h2>
           </div>
           <select
-            className="md:hidden bg-[#14213D] border border-white/10 rounded-lg px-2 py-1 text-sm text-white"
+            className="md:hidden bg-surface border border-white/10 rounded-lg px-2 py-1 text-sm text-white"
             value={page}
             onChange={(e) => {
               const next = e.target.value as AdminPage;

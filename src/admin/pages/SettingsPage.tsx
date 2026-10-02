@@ -40,12 +40,12 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-4 max-w-3xl">
       {!isSuperAdmin && (
-        <p className="text-xs rounded-xl bg-amber-500/10 border border-amber-400/30 text-amber-200 px-3 py-2">
+        <p className="text-xs rounded-xl bg-accent/10 border border-accent/30 text-accent px-3 py-2">
           Mode hanya-baca: identitas situs hanya bisa diubah Super Admin.
         </p>
       )}
 
-      <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
+      <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-3">
         <h3 className="font-bold text-white">Identitas situs</h3>
         <label className="text-xs text-gray-400 block">
           Nama situs
@@ -59,7 +59,7 @@ export const SettingsPage: React.FC = () => {
           Catatan footer
           <input className="mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white" value={settings.footerNote} onChange={(e) => setSettings({ ...settings, footerNote: e.target.value })} />
         </label>
-        <button onClick={save} className="rounded-xl bg-[#FCA311] text-black font-bold px-4 py-2">
+        <button onClick={save} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2">
           Simpan identitas
         </button>
       </section>
@@ -67,7 +67,7 @@ export const SettingsPage: React.FC = () => {
       {/* Tema: 1 bawaan + 7 tema admin, plus terapkan/kunci per pengguna */}
       <AdminThemeManager />
 
-      <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
+      <section className="rounded-2xl bg-surface border border-white/10 p-5 space-y-3">
         <h3 className="font-bold text-white">Database</h3>
         <p className="text-sm text-gray-400">Data tersimpan di PostgreSQL (lihat DB_HOST / DB_NAME di .env). Audio unggahan disimpan di Supabase Storage (bucket audio-products) atau folder uploads/ di server.</p>
         <div className="flex flex-wrap gap-2">
@@ -88,7 +88,7 @@ export const SettingsPage: React.FC = () => {
         </div>
         <p className="text-xs text-gray-500">Kata sandi admin diatur lewat `ADMIN_PASSWORD` di file `.env`.</p>
       </section>
-      {status && <p className="text-sm text-amber-200">{status}</p>}
+      {status && <p className="text-sm text-accent">{status}</p>}
     </div>
   );
 };

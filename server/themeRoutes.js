@@ -1,7 +1,8 @@
 // server/themeRoutes.js
 // Router tema. Pasang sekali di server utama:
 //
-//   import { createThemeRouter } from './themeRoutes.js';
+//   import { createThemeRouter, ensureThemeSchema } from './themeRoutes.js';
+//   await ensureThemeSchema(db);   // membuat tabel themes & user_theme_prefs bila belum ada
 //   app.use(createThemeRouter({ db, requireUser, requireAdmin }));
 //
 // - db            : objek dengan db.query(sql, params) -> { rows } (gaya node-postgres)
@@ -10,12 +11,33 @@
 // - getUserEmail  : opsional, default req.user.email
 //
 // Batas (maks 7 tema admin, 2 tema per pengguna) DITEGAKKAN DI SINI, bukan cuma di UI.
-import { Router } from 'express';
+import express, { Router } from 'express';
 
 export const LIMITS = { admin: 7, user: 2 };
 const NAME_MAX = 24;
 const HEX = /^#[0-9a-fA-F]{6}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const THEME_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS themes (
+  id SERIAL PRIMARY KEY,
+  scope TEXT NOT NULL CHECK (scope IN ('admin','user')),
+  owner_email TEXT,
+  name TEXT NOT NULL,
+  surface TEXT NOT NULL,
+  accent TEXT NOT NULL,
+  accent2 TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS themes_owner_idx ON themes (scope, owner_email);
+CREATE TABLE IF NOT EXISTS user_theme_prefs (
+  email TEXT PRIMARY KEY,
+  active_theme_id INTEGER REFERENCES themes(id) ON DELETE SET NULL,
+  locked BOOLEAN NOT NULL DEFAULT FALSE,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);`;
+
+export const ensureThemeSchema = (db) => db.query(THEME_SCHEMA_SQL);
+
 const isHex = (v) => typeof v === 'string' && HEX.test(v);
 
 const toTheme = (r) => ({
@@ -45,6 +67,7 @@ const parseId = (v) => {
 
 export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail = (req) => req.user?.email }) {
   const router = Router();
+  router.use(express.json());
 
   const h = (fn) => (req, res) =>
     Promise.resolve(fn(req, res)).catch((err) => {
@@ -120,9 +143,15 @@ export function createThemeRouter({ db, requireUser, requireAdmin, getUserEmail 
     if (raw !== null && raw !== undefined) {
       id = parseId(raw);
       if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
-      const { rows } = await db.query(
-        `SELECT 1 FROM themes WHERE id = $1 AND scope = 'user' AND owner_email = $2`, [id, email]);
-      if (!rows.length) return res.status(404).json({ error: 'Tema tidak ditemukan.' });
+      const { rows: [t] } = await db.query(`SELECT scope, owner_email FROM themes WHERE id = $1`, [id]);
+      if (!t || (t.scope === 'user' && t.owner_email !== email)) {
+        return res.status(404).json({ error: 'Tema tidak ditemukan.' });
+      }
+      if (t.scope === 'admin') {
+        // Tema admin hanya boleh dipilih kalau memang sedang diterapkan admin untuk akun ini.
+        const cur = await loadState(email);
+        if (cur.activeId !== id) return res.status(403).json({ error: 'Tema admin ini tidak diterapkan untuk akunmu.' });
+      }
     }
     await upsertPref(email, id, false);
     res.json(await loadState(email));
