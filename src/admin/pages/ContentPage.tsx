@@ -40,7 +40,7 @@ const THEMES = [
 
 const DIFFICULTIES: Deck['difficulty'][] = ['Mudah', 'Biasa', 'Sedang', 'Sulit', 'Ekstrem', 'Tidak dispesifikasikan'];
 
-type WizardStep = 'theme' | 'topic' | 'info' | 'settings' | 'questions' | 'review';
+type WizardStep = 'theme' | 'info' | 'settings' | 'questions' | 'review';
 type MediaKind = 'none' | 'image' | 'audio' | 'video';
 interface DeckSettings {
   scoreUnit: 'point' | 'percent';
@@ -96,11 +96,10 @@ interface DetailedQuestion {
 
 const STEPS: { id: WizardStep; label: string }[] = [
   { id: 'theme', label: '1. Tema' },
-  { id: 'topic', label: '2. Topik' },
-  { id: 'info', label: '3. Info Kuis' },
-  { id: 'settings', label: '4. Pengaturan' },
-  { id: 'questions', label: '5. Butir Soal' },
-  { id: 'review', label: '6. Review' },
+  { id: 'info', label: '2. Info Kuis' },
+  { id: 'settings', label: '3. Pengaturan' },
+  { id: 'questions', label: '4. Butir Soal' },
+  { id: 'review', label: '5. Review' },
 ];
 
 const inputCls = 'mt-1 w-full rounded-lg bg-black/40 border border-white/10 focus:border-[#FCA311] outline-none px-3 py-2 text-sm text-white';
@@ -267,14 +266,12 @@ interface DeckWizardProps {
   deck: DeckWithSettings;
   topics: Topic[];
   allDecks: Deck[];
-  onSave: (deck: DeckWithSettings, newTopic: Partial<Topic> | null) => Promise<Deck | null>;
+  onSave: (deck: DeckWithSettings) => Promise<Deck | null>;
   onDelete?: () => Promise<void>;
-  onSaveTopic: (topic: Partial<Topic>) => Promise<Topic>;
-  onDeleteTopic: (id: string) => Promise<void>;
   onStatus: (msg: string) => void;
 }
 
-const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave, onDelete, onSaveTopic, onDeleteTopic, onStatus }) => {
+const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave, onDelete, onStatus }) => {
   const initial = useMemo(() => deriveInitial(deck, topics), []); // eslint-disable-line react-hooks/exhaustive-deps
   const legacyQuestionCount = useRef(initial.questions.length);
   const legacyChoiceCount = useRef(initial.questions.length ? initial.choicesPerQuestion : 0);
@@ -285,15 +282,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
   // Tema & topik
   const [themeId, setThemeId] = useState(initial.themeId);
   const [themeTouched, setThemeTouched] = useState(!deck.id);
-  const [topicMode, setTopicMode] = useState<'existing' | 'new'>(topics.length || deck.topicId ? 'existing' : 'new');
-  const [topicId, setTopicId] = useState(initial.topicId);
-  const [newTopicName, setNewTopicName] = useState('');
-  const [newTopicDesc, setNewTopicDesc] = useState('');
-  const [newTopicIcon, setNewTopicIcon] = useState('Sparkles');
-  const [newTopicPrice, setNewTopicPrice] = useState(20000);
-  const [newTopicOriginalPrice, setNewTopicOriginalPrice] = useState(28000);
-  const [showTopicEdit, setShowTopicEdit] = useState(false);
-  const [topicEdit, setTopicEdit] = useState<Partial<Topic>>({});
+  const topicId = initial.topicId; // topik tidak lagi dikelola admin; deck lama mempertahankan topicId-nya
 
   // Info kuis
   const [quizTitle, setQuizTitle] = useState(deck.title || '');
@@ -358,37 +347,6 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
   useEffect(() => {
     if (choicesPerQuestion === 2 && correctAnswerMode === 'multiple') setCorrectAnswerMode('single');
   }, [choicesPerQuestion, correctAnswerMode]);
-
-  // Topik baru dimuat setelah wizard tampil (mis. deck pertama)
-  useEffect(() => {
-    if (topicMode === 'existing' && !topicId && topics[0]) setTopicId(topics[0].id);
-  }, [topics, topicMode, topicId]);
-
-  const selectedTopic = topics.find((t) => t.id === topicId);
-  useEffect(() => {
-    setTopicEdit(selectedTopic ? { ...selectedTopic } : {});
-  }, [topicId, topics]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleSaveTopic = async () => {
-    try {
-      await onSaveTopic({ ...topicEdit, id: topicId });
-      onStatus('Topik disimpan.');
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Gagal menyimpan topik.');
-    }
-  };
-
-  const handleDeleteTopic = async () => {
-    if (!confirm('Hapus topik beserta semua deck di dalamnya?')) return;
-    try {
-      await onDeleteTopic(topicId);
-      setTopicId(topics.find((t) => t.id !== topicId)?.id || '');
-      setShowTopicEdit(false);
-      onStatus('Topik dihapus.');
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : 'Gagal menghapus topik.');
-    }
-  };
 
   const theme = THEMES.find((t) => t.id === themeId) || THEMES[THEMES.length - 1];
   const curQ = questions[activeIdx];
@@ -478,8 +436,6 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
   };
 
   const validateAll = (): string | null => {
-    const topicOk = topicMode === 'new' ? newTopicName.trim() : topicId;
-    if (!topicOk) return 'Topik wajib dipilih atau dibuat.';
     if (!quizTitle.trim()) return 'Judul kuis wajib diisi.';
     if (questions.length === 0) return 'Belum ada soal. Terapkan pengaturan dulu di langkah 4.';
     for (let i = 0; i < questions.length; i++) {
@@ -503,8 +459,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
   const handlePrev = () => {
     setErrorMsg(null);
-    if (step === 'topic') setStep('theme');
-    else if (step === 'info') setStep('topic');
+    if (step === 'info') setStep('theme');
     else if (step === 'settings') setStep('info');
     else if (step === 'questions') {
       if (activeIdx > 0) setActiveIdx((i) => i - 1);
@@ -625,10 +580,9 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
   /* ------------------------------ susun payload ---------------------------- */
 
-  const buildDraft = (): { deck: DeckWithSettings; newTopic: Partial<Topic> | null } => {
-    const isNewTopic = topicMode === 'new';
+  const buildDraft = (): { deck: DeckWithSettings } => {
     const existingTopic = topics.find((t) => t.id === topicId);
-    const topicTitle = isNewTopic ? newTopicName.trim() : existingTopic?.title || '';
+    const topicTitle = existingTopic?.title || '';
     const badge = themeTouched || !deck.badge ? theme.name : deck.badge;
 
     const formatted: QuizQuestion[] = questions.map((q) => {
@@ -661,19 +615,9 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
     });
 
     return {
-      newTopic: isNewTopic
-        ? {
-            title: topicTitle,
-            description: newTopicDesc.trim() || `Topik ${topicTitle} dalam tema ${theme.name}.`,
-            badge: theme.name,
-            iconName: newTopicIcon || 'Sparkles',
-            price: Number(newTopicPrice) || 0,
-            originalPrice: Number(newTopicOriginalPrice) || 0,
-          }
-        : null,
       deck: {
         ...deck,
-        topicId: isNewTopic ? '' : topicId,
+        topicId: topicId || '',
         title: quizTitle.trim(),
         description: quizDesc.trim() || `Kuis ${quizTitle.trim()} dengan ${formatted.length} butir soal.`,
         cardCount: formatted.length,
@@ -723,8 +667,8 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
     setErrorMsg(null);
     setSaving(true);
     try {
-      const { deck: draft, newTopic } = buildDraft();
-      const saved = await onSave(draft, newTopic);
+      const { deck: draft } = buildDraft();
+      const saved = await onSave(draft);
       if (saved) {
         const dupes = duplicates.length;
         onStatus(`Deck "${saved.title}" disimpan.` + (dupes ? ` Perhatian: ${dupes} soal sama dengan soal deck lain.` : ''));
@@ -743,16 +687,11 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
       return;
     }
     const { deck: draft } = buildDraft();
-    // Topik baru belum punya id di server; ekspor tetap butuh topicId yang rapi.
-    if (topicMode === 'new') draft.topicId = `topic-${themeId}-${slugify(newTopicName)}`;
     downloadDeckAsJson(draft, topics);
   };
 
   /* --------------------------------- render -------------------------------- */
 
-  const themeTopics = topics.filter((t) => (t.badge || '').toLowerCase() === theme.name.toLowerCase());
-  const otherTopics = topics.filter((t) => (t.badge || '').toLowerCase() !== theme.name.toLowerCase());
-  const topicTitleShown = topicMode === 'new' ? newTopicName : topics.find((t) => t.id === topicId)?.title || '';
 
   return (
     <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-4">
@@ -779,7 +718,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         <div className="space-y-3">
           <div>
             <h4 className="text-lg font-bold">Tentukan tema</h4>
-            <p className="text-xs text-gray-400">Tema menentukan badge deck dan pengelompokan topik.</p>
+            <p className="text-xs text-gray-400">Tema menentukan badge deck (pengelompokan di Perpustakaan Kuis).</p>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {THEMES.map((t) => (
@@ -803,133 +742,12 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         </div>
       )}
 
-      {/* STEP 2: TOPIK */}
-      {step === 'topic' && (
-        <div className="space-y-3 max-w-2xl">
-          <div>
-            <h4 className="text-lg font-bold">Tentukan topik</h4>
-            <p className="text-xs text-gray-400">
-              Topik berada di bawah tema <strong className="text-white">{theme.name}</strong>. Pilih topik yang sudah ada atau buat baru.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={() => setTopicMode('existing')} className={chipCls(topicMode === 'existing')}>
-              Topik yang ada
-            </button>
-            <button type="button" onClick={() => setTopicMode('new')} className={chipCls(topicMode === 'new')}>
-              Buat topik baru
-            </button>
-          </div>
-
-          {topicMode === 'existing' ? (
-            <label className="text-xs text-gray-400 block">
-              Topik
-              <select className={inputCls} value={topicId} onChange={(e) => setTopicId(e.target.value)}>
-                {themeTopics.length > 0 && (
-                  <optgroup label={`Tema ${theme.name}`}>
-                    {themeTopics.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-                {otherTopics.length > 0 && (
-                  <optgroup label="Topik lainnya">
-                    {otherTopics.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.title}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
-            </label>
-          ) : (
-            <div className="space-y-3 rounded-xl bg-black/30 p-4 border border-white/10">
-              <label className="text-xs text-gray-400 block">
-                Nama topik *
-                <input className={inputCls} value={newTopicName} onChange={(e) => setNewTopicName(e.target.value)} placeholder="Contoh: Pemrograman React & Arsitektur Cloud" />
-              </label>
-              <label className="text-xs text-gray-400 block">
-                Deskripsi topik
-                <textarea rows={3} className={inputCls} value={newTopicDesc} onChange={(e) => setNewTopicDesc(e.target.value)} placeholder="Cakupan materi topik ini..." />
-              </label>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <label className="text-xs text-gray-400">
-                  Ikon
-                  <input className={inputCls} value={newTopicIcon} onChange={(e) => setNewTopicIcon(e.target.value)} />
-                </label>
-                <label className="text-xs text-gray-400">
-                  Harga
-                  <input type="number" className={inputCls} value={newTopicPrice} onChange={(e) => setNewTopicPrice(Number(e.target.value))} />
-                </label>
-                <label className="text-xs text-gray-400">
-                  Harga coret
-                  <input type="number" className={inputCls} value={newTopicOriginalPrice} onChange={(e) => setNewTopicOriginalPrice(Number(e.target.value))} />
-                </label>
-              </div>
-              <p className="text-[11px] text-gray-500">Topik baru dibuat otomatis saat deck disimpan, dengan badge {theme.name}.</p>
-            </div>
-          )}
-
-          {topicMode === 'existing' && selectedTopic && (
-            <div className="rounded-xl bg-black/30 border border-white/10">
-              <button type="button" onClick={() => setShowTopicEdit((v) => !v)} className="w-full flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold text-[#FCA311] text-left">
-                {showTopicEdit ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                Ubah detail topik “{selectedTopic.title}”
-              </button>
-              {showTopicEdit && (
-                <div className="px-4 pb-4 space-y-3">
-                  <label className="text-xs text-gray-400 block">
-                    Judul
-                    <input className={inputCls} value={topicEdit.title || ''} onChange={(e) => setTopicEdit({ ...topicEdit, title: e.target.value })} />
-                  </label>
-                  <label className="text-xs text-gray-400 block">
-                    Deskripsi
-                    <textarea rows={2} className={inputCls} value={topicEdit.description || ''} onChange={(e) => setTopicEdit({ ...topicEdit, description: e.target.value })} />
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <label className="text-xs text-gray-400">
-                      Ikon
-                      <input className={inputCls} value={topicEdit.iconName || ''} onChange={(e) => setTopicEdit({ ...topicEdit, iconName: e.target.value })} />
-                    </label>
-                    <label className="text-xs text-gray-400">
-                      Badge
-                      <input className={inputCls} value={topicEdit.badge || ''} onChange={(e) => setTopicEdit({ ...topicEdit, badge: e.target.value })} />
-                    </label>
-                    <label className="text-xs text-gray-400">
-                      Harga
-                      <input type="number" className={inputCls} value={Number(topicEdit.price || 0)} onChange={(e) => setTopicEdit({ ...topicEdit, price: Number(e.target.value) })} />
-                    </label>
-                    <label className="text-xs text-gray-400">
-                      Harga coret
-                      <input type="number" className={inputCls} value={Number(topicEdit.originalPrice || 0)} onChange={(e) => setTopicEdit({ ...topicEdit, originalPrice: Number(e.target.value) })} />
-                    </label>
-                  </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={handleSaveTopic} className="flex items-center gap-2 rounded-xl bg-[#FCA311] text-black font-bold px-3 py-1.5 text-xs">
-                      <Save className="w-3.5 h-3.5" /> Simpan topik
-                    </button>
-                    <button type="button" onClick={handleDeleteTopic} className="flex items-center gap-2 rounded-xl border border-red-400/40 text-red-300 px-3 py-1.5 text-xs">
-                      <Trash2 className="w-3.5 h-3.5" /> Hapus topik
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* STEP 3: INFO */}
       {step === 'info' && (
         <div className="space-y-3 max-w-2xl">
           <div>
             <h4 className="text-lg font-bold">Informasi kuis</h4>
-            <p className="text-xs text-gray-400">
-              Judul kuis berada di bawah topik <strong className="text-white">{topicTitleShown || '(belum dipilih)'}</strong>.
-            </p>
+            <p className="text-xs text-gray-400">Judul, deskripsi, tingkat kesulitan, dan harga kuis.</p>
           </div>
           <label className="text-xs text-gray-400 block">
             Judul deck *
@@ -1414,7 +1232,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
           <h4 className="text-lg font-bold">Review sebelum disimpan</h4>
           <div className="p-5 rounded-2xl bg-black/30 border border-white/10 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
             <div><span className="text-gray-400 block text-[10px]">Tema</span><span className="font-bold text-[#FCA311] text-sm">{theme.name}</span></div>
-            <div><span className="text-gray-400 block text-[10px]">Topik</span><span className="font-bold text-sm">{topicTitleShown || '-'}</span></div>
+            
             <div><span className="text-gray-400 block text-[10px]">Judul kuis</span><span className="font-bold text-sm">{quizTitle || '-'}</span></div>
             <div><span className="text-gray-400 block text-[10px]">Kesulitan</span><span className="font-bold text-sm">{difficulty}</span></div>
             <div><span className="text-gray-400 block text-[10px]">Total soal</span><span className="font-bold">{questions.length} butir</span></div>
@@ -1442,23 +1260,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         </div>
         <div>
           {step === 'theme' && (
-            <button type="button" onClick={() => setStep('topic')} className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5">
-              Lanjut ke topik <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {step === 'topic' && (
-            <button
-              type="button"
-              onClick={() => {
-                if (topicMode === 'new' ? !newTopicName.trim() : !topicId) {
-                  setErrorMsg('Topik wajib dipilih atau dibuat.');
-                  return;
-                }
-                setErrorMsg(null);
-                setStep('info');
-              }}
-              className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5"
-            >
+            <button type="button" onClick={() => setStep('info')} className="px-5 py-2 rounded-xl bg-[#FCA311] text-black font-black text-xs flex items-center gap-1.5">
               Lanjut ke info kuis <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
@@ -1523,6 +1325,9 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 /*  Halaman utama                                                              */
 /* -------------------------------------------------------------------------- */
 
+/** Deck dari server + penanda asal (admin / pengguna). */
+type AdminDeck = Deck & { isCustom?: boolean; ownerEmail?: string | null };
+
 const blankDeck = (topicId = '', price = 15000): DeckWithSettings => ({
   title: '',
   topicId,
@@ -1536,14 +1341,19 @@ const blankDeck = (topicId = '', price = 15000): DeckWithSettings => ({
 export const ContentPage: React.FC = () => {
   const [tab, setTab] = useState<'decks' | 'import'>('decks');
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [decks, setDecks] = useState<Deck[]>([]);
+  const [decks, setDecks] = useState<AdminDeck[]>([]);
   const [deckForm, setDeckForm] = useState<DeckWithSettings>(blankDeck('', 0));
   const [newDeckKey, setNewDeckKey] = useState(0);
   const [status, setStatus] = useState('');
   const [importText, setImportText] = useState('{\n  "topics": [],\n  "decks": []\n}');
 
+  const adminDecks = decks.filter((d) => !d.isCustom);
+  const userDecks = decks.filter((d) => d.isCustom);
+  const dbIds = new Set(decks.map((d) => d.id));
+  const builtinOnly = BUILTIN_DECKS.filter((d) => !dbIds.has(d.id));
+
   const load = async () => {
-    const [t, d] = await Promise.all([adminFetch<Topic[]>('/api/admin/topics'), adminFetch<Deck[]>('/api/admin/decks')]);
+    const [t, d] = await Promise.all([adminFetch<Topic[]>('/api/admin/topics'), adminFetch<AdminDeck[]>('/api/admin/decks')]);
     setTopics(t);
     setDecks(d);
     if (!deckForm.id && d[0]) setDeckForm(d[0]);
@@ -1553,32 +1363,9 @@ export const ContentPage: React.FC = () => {
     load().catch((err) => setStatus(err.message));
   }, []);
 
-  const saveTopic = async (topic: Partial<Topic>): Promise<Topic> => {
-    const path = topic.id ? `/api/admin/topics/${topic.id}` : '/api/admin/topics';
-    const method = topic.id ? 'PUT' : 'POST';
-    const saved = await adminFetch<Topic>(path, { method, body: JSON.stringify(topic) });
-    await load();
-    return saved;
-  };
-
-  const deleteTopic = async (id: string) => {
-    await adminFetch(`/api/admin/topics/${id}`, { method: 'DELETE' });
-    // Deck di dalam topik ikut terhapus (ON DELETE CASCADE) — reset form kalau sedang membukanya.
-    if (deckForm.topicId === id) {
-      setDeckForm(blankDeck(topics.find((t) => t.id !== id)?.id || ''));
-      setNewDeckKey((k) => k + 1);
-    }
-    await load();
-  };
-
-  /** Simpan deck; kalau wizard membuat topik baru, topiknya dibuat dulu. */
-  const saveDeck = async (draft: DeckWithSettings, newTopic: Partial<Topic> | null): Promise<Deck | null> => {
-    let topicId = draft.topicId;
-    if (newTopic) {
-      const createdTopic = await adminFetch<Topic>('/api/admin/topics', { method: 'POST', body: JSON.stringify(newTopic) });
-      topicId = createdTopic.id;
-    }
-    const payload = { ...draft, topicId };
+  /** Simpan deck buatan admin (topik tidak dipakai lagi). */
+  const saveDeck = async (draft: DeckWithSettings): Promise<Deck | null> => {
+    const payload = { ...draft, topicId: draft.topicId || '' };
     const path = payload.id ? `/api/admin/decks/${payload.id}` : '/api/admin/decks';
     const method = payload.id ? 'PUT' : 'POST';
     const saved = await adminFetch<Deck>(path, { method, body: JSON.stringify(payload) });
@@ -1589,7 +1376,7 @@ export const ContentPage: React.FC = () => {
 
   const deleteDeck = async () => {
     await adminFetch(`/api/admin/decks/${deckForm.id}`, { method: 'DELETE' });
-    setDeckForm(blankDeck(topics[0]?.id || ''));
+    setDeckForm(blankDeck(''));
     setNewDeckKey((k) => k + 1);
     setStatus('Deck dihapus.');
     await load();
@@ -1613,7 +1400,7 @@ export const ContentPage: React.FC = () => {
     <div className="space-y-4">
       <div className="flex gap-2">
         {[
-          ['decks', 'Deck kuis'],
+          ['decks', 'Kuis'],
           ['import', 'Unggah JSON'],
         ].map(([id, label]) => (
           <button
@@ -1628,28 +1415,67 @@ export const ContentPage: React.FC = () => {
 
       {tab === 'decks' && (
         <div className="grid lg:grid-cols-[260px_1fr] gap-4">
-          <aside className="rounded-2xl bg-[#14213D] border border-white/10 p-3 space-y-2">
+          <aside className="rounded-2xl bg-[#14213D] border border-white/10 p-3 space-y-2 max-h-[80vh] overflow-y-auto">
             <button
               onClick={() => {
-                setDeckForm(blankDeck(topics[0]?.id || ''));
+                setDeckForm(blankDeck(''));
                 setNewDeckKey((k) => k + 1);
               }}
               className="w-full rounded-xl bg-[#FCA311] text-black font-bold py-2 text-sm"
             >
-              Deck baru
+              Kuis baru
             </button>
-            {decks.map((deck) => (
-              <button
-                key={deck.id}
-                onClick={() => setDeckForm(deck)}
-                className={`w-full text-left px-3 py-2 rounded-xl ${deckForm.id === deck.id ? 'bg-black/40 border border-[#FCA311]' : 'hover:bg-black/20'}`}
-              >
-                <p className="text-sm font-semibold">{deck.title}</p>
-                <p className="text-[11px] text-gray-400">
-                  {deck.cardCount} soal · {deck.difficulty}
+
+            {([
+              ['Buatan admin', adminDecks, 'bg-[#FCA311]/20 text-[#FCA311]', 'ADMIN'],
+              ['Buatan pengguna', userDecks, 'bg-sky-500/20 text-sky-300', 'USER'],
+            ] as const).map(([heading, list, badgeCls, badge]) => (
+              <div key={heading} className="space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-gray-500 px-1 pt-2">
+                  {heading} ({list.length})
                 </p>
-              </button>
+                {list.length === 0 && <p className="text-[11px] text-gray-500 px-1">Belum ada.</p>}
+                {list.map((deck) => (
+                  <button
+                    key={deck.id}
+                    onClick={() => setDeckForm(deck)}
+                    className={`w-full text-left px-3 py-2 rounded-xl ${deckForm.id === deck.id ? 'bg-black/40 border border-[#FCA311]' : 'hover:bg-black/20'}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold truncate">{deck.title}</p>
+                      <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black ${badgeCls}`}>{badge}</span>
+                    </div>
+                    <p className="text-[11px] text-gray-400 truncate">
+                      {deck.cardCount} soal · {deck.difficulty}
+                      {deck.isCustom && deck.ownerEmail ? ` · ${deck.ownerEmail}` : ''}
+                    </p>
+                  </button>
+                ))}
+              </div>
             ))}
+
+            <div className="space-y-1">
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 px-1 pt-2">
+                Bawaan aplikasi ({builtinOnly.length})
+              </p>
+              {builtinOnly.map((deck) => (
+                <button
+                  key={deck.id}
+                  onClick={() => {
+                    setDeckForm({ ...deck, id: undefined, title: `${deck.title} (salinan)` } as DeckWithSettings);
+                    setNewDeckKey((k) => k + 1);
+                    setStatus(`"${deck.title}" adalah deck bawaan (hanya-baca). Yang dibuka adalah salinannya — Simpan deck untuk menjadikannya deck admin.`);
+                  }}
+                  className="w-full text-left px-3 py-2 rounded-xl hover:bg-black/20"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold truncate">{deck.title}</p>
+                    <span className="shrink-0 px-1.5 py-0.5 rounded text-[9px] font-black bg-white/10 text-gray-300">BAWAAN</span>
+                  </div>
+                  <p className="text-[11px] text-gray-400">{deck.cardCount ?? deck.questions?.length ?? 0} soal · {deck.difficulty}</p>
+                </button>
+              ))}
+            </div>
           </aside>
 
           <div className="space-y-3 min-w-0">
@@ -1662,11 +1488,9 @@ export const ContentPage: React.FC = () => {
               key={deckForm.id || `new-${newDeckKey}`}
               deck={deckForm}
               topics={topics}
-              allDecks={decks}
+              allDecks={decks as Deck[]}
               onSave={saveDeck}
               onDelete={deleteDeck}
-              onSaveTopic={saveTopic}
-              onDeleteTopic={deleteTopic}
               onStatus={setStatus}
             />
           </div>
@@ -1676,7 +1500,7 @@ export const ContentPage: React.FC = () => {
       {tab === 'import' && (
         <section className="rounded-2xl bg-[#14213D] border border-white/10 p-5 space-y-3">
           <h3 className="font-bold flex items-center gap-2">
-            <Upload className="w-4 h-4 text-[#FCA311]" /> Unggah topik & deck (JSON)
+            <Upload className="w-4 h-4 text-[#FCA311]" /> Unggah kuis (JSON)
           </h3>
           <p className="text-sm text-gray-400">
             Format: {'{ "topics": [ { id, title, iconName, description, price } ], "decks": [ { id, topicId, title, questions: [...] } ] }'}

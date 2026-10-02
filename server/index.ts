@@ -522,15 +522,20 @@ app.delete('/api/admin/topics/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Pemetaan baris deck -> payload admin. `isCustom`/`ownerEmail` membedakan
+// kuis buatan admin (is_custom FALSE) dari kuis buatan pengguna (is_custom TRUE).
+const mapAdminDeck = (d: any) => ({
+  id: d.id, topicId: d.topic_id || '', title: d.title, description: d.description,
+  cardCount: d.card_count, difficulty: d.difficulty, isFree: Boolean(d.is_free),
+  price: d.price, badge: d.badge, settings: d.settings || {},
+  isCustom: d.is_custom === true, ownerEmail: d.owner_email || null,
+  questions: typeof d.questions === 'string' ? JSON.parse(d.questions) : d.questions || [],
+});
+
 app.get('/api/admin/decks', requireAdmin, async (_req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM decks ORDER BY id ASC');
-    res.json(rows.map(d => ({
-      id: d.id, topicId: d.topic_id, title: d.title, description: d.description,
-      cardCount: d.card_count, difficulty: d.difficulty, isFree: Boolean(d.is_free),
-      price: d.price, badge: d.badge, settings: d.settings || {},
-      questions: typeof d.questions === 'string' ? JSON.parse(d.questions) : d.questions || []
-    })));
+    const { rows } = await pool.query('SELECT * FROM decks ORDER BY COALESCE(is_custom, FALSE), id ASC');
+    res.json(rows.map(mapAdminDeck));
   } catch (err) {
     res.status(500).json({ error: 'Gagal memuat deck kuis.' });
   }
@@ -547,12 +552,11 @@ app.post('/api/admin/decks', requireAdmin, async (req, res) => {
     `;
     const settings = d.settings && typeof d.settings === 'object' ? d.settings : {};
     const { rows } = await pool.query(query, [
-      deckId, d.topicId, d.title, d.description || '', questions.length,
+      deckId, d.topicId || null, d.title, d.description || '', questions.length,
       d.difficulty || 'Sedang', Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(questions),
       JSON.stringify(settings)
     ]);
-    const r = rows[0];
-    res.status(201).json({ ...r, topicId: r.topic_id, cardCount: r.card_count, isFree: Boolean(r.is_free), questions });
+    res.status(201).json(mapAdminDeck(rows[0]));
   } catch (err) {
     res.status(500).json({ error: 'Gagal menyimpan deck kuis.' });
   }
@@ -571,10 +575,10 @@ app.put('/api/admin/decks/:id', requireAdmin, async (req, res) => {
     // Kalau klien tidak mengirim settings, nilai lama dibiarkan (tidak ditimpa {}).
     const settingsJson = d.settings && typeof d.settings === 'object' ? JSON.stringify(d.settings) : null;
     const { rows } = await pool.query(query, [
-      d.topicId, d.title, d.description || '', questions.length, d.difficulty, Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(questions), settingsJson, id
+      d.topicId || null, d.title, d.description || '', questions.length, d.difficulty, Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(questions), settingsJson, id
     ]);
-    const r = rows[0];
-    res.json({ ...r, topicId: r.topic_id, cardCount: r.card_count, isFree: Boolean(r.is_free), questions });
+    if (!rows.length) return res.status(404).json({ error: 'Deck tidak ditemukan.' });
+    res.json(mapAdminDeck(rows[0]));
   } catch (err) {
     res.status(500).json({ error: 'Gagal memperbarui deck kuis.' });
   }
@@ -606,7 +610,7 @@ app.post('/api/admin/import-content', requireAdmin, async (req, res) => {
         INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         ON CONFLICT(id) DO UPDATE SET title = EXCLUDED.title, questions = EXCLUDED.questions;
-      `, [d.id, d.topicId, d.title, d.description || '', q.length, d.difficulty || 'Sedang', Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(q)]);
+      `, [d.id, d.topicId || null, d.title, d.description || '', q.length, d.difficulty || 'Sedang', Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(q)]);
     }
     res.json({ topics: topics.length, decks: decks.length });
   } catch (err) {
@@ -623,7 +627,8 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
       pool.query(`SELECT
           (SELECT COUNT(*) FROM audio_tracks)::int AS tracks,
           (SELECT COUNT(*) FROM topics)::int AS topics,
-          (SELECT COUNT(*) FROM decks WHERE COALESCE(is_custom, FALSE) = FALSE)::int AS decks`),
+          (SELECT COUNT(*) FROM decks WHERE COALESCE(is_custom, FALSE) = FALSE)::int AS decks,
+          (SELECT COUNT(*) FROM decks WHERE is_custom IS TRUE)::int AS custom_decks`),
       pool.query(`SELECT COUNT(*)::int AS total,
           COUNT(*) FILTER (WHERE suspended_at IS NOT NULL)::int AS suspended,
           COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int AS new7d
@@ -674,6 +679,7 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
         tracks: cat.rows[0].tracks,
         topics: cat.rows[0].topics,
         decks: cat.rows[0].decks,
+        customDecks: cat.rows[0].custom_decks,
         users: usr.rows[0].total,
         newUsers7d: usr.rows[0].new7d,
         suspendedUsers: usr.rows[0].suspended,

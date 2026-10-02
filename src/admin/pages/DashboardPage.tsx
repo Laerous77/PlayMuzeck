@@ -15,6 +15,7 @@ interface AnalyticsPayload {
     tracks: number;
     topics: number;
     decks: number;
+    customDecks: number;
     users: number;
     newUsers7d: number;
     suspendedUsers: number;
@@ -103,7 +104,7 @@ export const DashboardPage: React.FC = () => {
     { label: 'Pengguna', value: t.users, sub: `+${t.newUsers7d} 7 hari${t.suspendedUsers ? ` · ${t.suspendedUsers} ditangguhkan` : ''}`, icon: Users },
     { label: 'Event', value: t.events, sub: 'total tercatat', icon: Activity },
     { label: 'Track audio', value: t.tracks, sub: 'di katalog', icon: Music },
-    { label: 'Deck & topik', value: `${t.decks} / ${t.topics}`, sub: 'deck / topik', icon: Brain },
+    { label: 'Kuis', value: t.decks + (t.customDecks || 0), sub: `${t.decks} admin · ${t.customDecks || 0} pengguna`, icon: Brain },
     { label: 'Pesan masuk', value: t.openInquiries, sub: `${t.inquiries} total`, icon: MessageSquare },
   ];
 
