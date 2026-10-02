@@ -4,7 +4,7 @@
 // Jika endpoint /api/me/theme* belum ada di server (404/405/5xx gateway, jaringan putus,
 // atau server membalas HTML), klien otomatis beralih ke penyimpanan lokal (localStorage per akun).
 // Pengguna tidak melihat error; tema tetap bisa dibuat, dipakai, dihapus, dan direset.
-// Setelah beralih, permintaan ke server tidak diulang selama tab terbuka.
+// Server selalu dicoba lagi pada panggilan berikutnya (tidak ada mode lokal permanen).
 import { LIMITS, NAME_MAX, Palette, ThemeRecord, isPalette } from './theme';
 
 export interface MyThemeState {
@@ -24,14 +24,15 @@ let userKey = 'anon';
 export const setThemeUserKey = (k?: string) => { userKey = k || 'anon'; };
 
 // ── Mode server / lokal ──────────────────────────────────────────────────────
-const MODE_KEY = 'pm_theme_api_mode';
-let localOnly = (() => {
-  try { return sessionStorage.getItem(MODE_KEY) === 'local'; } catch { return false; }
-})();
-const goLocal = () => {
-  localOnly = true;
-  try { sessionStorage.setItem(MODE_KEY, 'local'); } catch { /* abaikan */ }
-};
+// PERBAIKAN: dulu begitu SATU request gagal (server restart, 404 sebelum router dipasang, jaringan putus),
+// mode "lokal" disimpan di sessionStorage dan klien TIDAK PERNAH bertanya ke server lagi selama tab terbuka —
+// akibatnya tema yang diterapkan admin tidak pernah sampai ke pengguna. Sekarang server selalu dicoba lagi
+// di setiap panggilan (termasuk sinkron 30 detik). Lokal hanya cadangan sementara.
+const LEGACY_MODE_KEY = 'pm_theme_api_mode';
+try { sessionStorage.removeItem(LEGACY_MODE_KEY); } catch { /* abaikan */ }
+
+let localOnly = false;   // true = panggilan terakhir memakai penyimpanan browser
+let serverSeen = false;  // true = server tema pernah menjawab di halaman ini
 /** true = tema sedang disimpan di browser ini, bukan di server. */
 export const isLocalMode = () => localOnly;
 
@@ -143,15 +144,18 @@ const local = {
   },
 };
 
-/** Coba server dulu; kalau tidak tersedia, jalankan versi lokal. */
+/** Coba server dulu. Lokal hanya dipakai kalau server belum pernah menjawab di halaman ini. */
 async function call(remote: () => Promise<MyThemeState>, fallback: () => MyThemeState): Promise<MyThemeState> {
-  if (!localOnly) {
-    try {
-      return await remote();
-    } catch (e) {
-      if (!(e instanceof Unavailable)) throw e;
-      goLocal();
-    }
+  try {
+    const s = await remote();
+    serverSeen = true;
+    localOnly = false;
+    return s;
+  } catch (e) {
+    if (!(e instanceof Unavailable)) throw e;
+    // Server pernah menjawab → gangguan sementara: JANGAN ganti ke data lokal (bisa menimpa tema dari server).
+    if (serverSeen) throw new Error('Server tema sedang tidak bisa dihubungi. Coba lagi sebentar lagi.');
+    localOnly = true;
   }
   return fallback();
 }

@@ -13,6 +13,7 @@ import { ProfileDashboardModal } from './components/Modals/ProfileDashboardModal
 import { DestinationModal } from './components/Modals/DestinationModal';
 import { Toast } from './components/Toast';
 import { ThemeProvider } from './theme/ThemeContext';
+import { ThemeNotice } from './theme/ThemeNotice';
 import { AppMode, CartItem, AudioEntitlements, UserSession, Deck, Topic, AudioTrackItem } from './types';
 import { storage } from './services/storage';
 import { audioEngine } from './services/audioEngine';
@@ -845,6 +846,8 @@ function MainApp() {
 
   return (
     <ThemeProvider isLoggedIn={Boolean(userSession?.isLoggedIn)} userKey={userSession?.email || ''}>
+    {/* Notifikasi dari admin (mis. tema diterapkan/direset). Sebelumnya komponen ini tidak pernah dipasang. */}
+    <ThemeNotice isLoggedIn={Boolean(userSession?.isLoggedIn)} userKey={userSession?.email || ''} />
     <div className="min-h-screen bg-page text-fg flex flex-col selection:bg-accent selection:text-on-accent">
       <Header
         currentMode={currentMode}
