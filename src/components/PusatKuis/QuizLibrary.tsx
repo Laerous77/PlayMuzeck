@@ -25,6 +25,12 @@ import { BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '../../data/quiz'
 import { downloadDeckJson, removeDeckFromJsonStore } from '../../services/quizJsonStore';
 import { deckToCartItem, usePurchasedDeckIds } from '../../services/quizPurchases';
 
+// Satu sumber harga Kreator Kuis di sisi klien (harga yang ditagihkan tetap ditentukan server: CREATOR_SUITE_PRICE di server/index.ts).
+const CREATOR_SUITE_PRICE = 10000;
+const formatPriceShort = (n: number) => (n >= 1000 && n % 1000 === 0 ? `Rp${n / 1000}rb` : `Rp${n.toLocaleString('id-ID')}`);
+const formatPriceFull = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
+
+
 interface QuizLibraryProps {
   decks: Deck[];
   topics: Topic[];
@@ -283,7 +289,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
         id: `quiz-creator-suite-${Date.now()}`,
         title: 'Kreator Kuis & Topik Suite (Akses Penuh)',
         category: 'topic',
-        price: 10000,
+        price: CREATOR_SUITE_PRICE,
         description: 'Akses penuh penyusunan kuis mandiri dengan 12 tema admin baku, kustom topik, multimedia, dan variasi penilaian.',
         itemTypeKey: 'quizCreatorSuite',
       } as any,
@@ -332,7 +338,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             <span>Kreator Deck &amp; Topik</span>
             {!isCreatorUnlocked && (
               <span className="text-[9px] px-1.5 py-0.2 rounded bg-accent/20 text-accent font-mono">
-                Rp25rb
+                {formatPriceShort(CREATOR_SUITE_PRICE)}
               </span>
             )}
           </button>
@@ -701,7 +707,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             </div>
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 flex justify-between items-center text-xs">
               <span className="text-gray-400">Lisensi Pembuat Kuis Mandiri:</span>
-              <span className="text-sm font-black text-accent2 font-mono">Rp 10.000</span>
+              <span className="text-sm font-black text-accent2 font-mono">{formatPriceFull(CREATOR_SUITE_PRICE)}</span>
             </div>
             <div className="flex gap-2">
               <button
