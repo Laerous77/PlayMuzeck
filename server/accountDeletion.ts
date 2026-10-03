@@ -148,7 +148,9 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
         const check = await verifyPassword(hash, String(req.body?.password || ''));
         if (!check.ok) {
           console.log('[account] ditolak: kata sandi salah / kosong (akun ini punya kata sandi)');
-          return res.status(401).json({ error: 'Kata sandi salah.' });
+          // PENTING: jangan 401. Pembungkus fetch di frontend (installAuthFetch) menganggap SETIAP 401 sebagai
+          // "sesi berakhir" lalu otomatis logout. Kata sandi salah bukan sesi berakhir, jadi pakai 403.
+          return res.status(403).json({ error: 'Kata sandi salah.' });
         }
       }
       const saved = await scheduleDeletion(pool, user.id, 'self');
