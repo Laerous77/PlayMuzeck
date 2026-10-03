@@ -63,6 +63,14 @@ interface Player {
   lastAnswerStatus?: 'correct' | 'wrong';
   lastPointsAwarded?: number;
   hasAnsweredThisRound: boolean;
+  /** Host pengawas: memantau & mengatur, tidak ikut menjawab, tidak masuk papan skor, tidak kirim emoji. */
+  observer: boolean;
+  /** Bergabung setelah permainan utama selesai (atau saat sesi susulan berjalan): bukan dari sesi yang sama. */
+  late: boolean;
+  /** Sudah menjalani sesi susulan. */
+  madeUp: boolean;
+  /** Boleh menjawab di sesi yang sedang berjalan (di sesi susulan hanya peserta susulan). */
+  participating: boolean;
   /** Pilihan jawaban per indeks soal (dipakai untuk riwayat & pemulihan setelah reconnect). */
   answers: Record<number, number>;
 }
@@ -98,6 +106,29 @@ interface Room {
   emptySince: number | null;
   /** ID publik pemain non-host yang meminta main lagi (layar akhir). */
   rematchRequests: Set<string>;
+  /** Sedang menjalankan sesi susulan (hanya pemain susulan yang menjawab). */
+  makeupActive: boolean;
+  /** Snapshot pemain yang keluar/terputus lama saat permainan berjalan, supaya skornya tidak hilang. */
+  departed: Map<string, DepartedSnapshot>;
+}
+
+interface DepartedSnapshot {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  frameId?: string;
+  joinedAt: number;
+  score: number;
+  streak: number;
+  answers: Record<number, number>;
+  lastAnswerStatus?: 'correct' | 'wrong';
+  lastPointsAwarded?: number;
+  /** 'manual' = menekan Keluar (tidak ditarik balik otomatis), 'timeout' = terputus > batas waktu. */
+  reason: 'manual' | 'timeout';
+  observer: boolean;
+  late: boolean;
+  madeUp: boolean;
+  participating: boolean;
 }
 
 const rooms = new Map<string, Room>();
@@ -188,6 +219,16 @@ function penaltyForWrong(room: Room, basePoints: number): number {
   return -Math.round(basePoints * (room.wrongPenaltyPercent / 100));
 }
 
+/** Pemain susulan yang belum main: tidak boleh melihat kunci jawaban. */
+const isPendingLate = (room: Room, p: Player) => p.late && !p.madeUp && !p.observer && !(room.makeupActive && p.participating);
+
+/** Kirim event berisi kunci jawaban ke semua pemain KECUALI pemain susulan yang belum main. */
+function emitReveal(io: Server, room: Room, event: string, payload: unknown) {
+  for (const p of room.players.values()) {
+    if (p.socketId && !isPendingLate(room, p)) io.to(p.socketId).emit(event, payload);
+  }
+}
+
 function publicRoomState(room: Room) {
   return {
     code: room.code,
@@ -213,6 +254,8 @@ function publicRoomState(room: Room) {
     rematchRequestIds: Array.from(room.rematchRequests).filter(
       (id) => id !== room.hostId && Array.from(room.players.values()).some((p) => p.id === id)
     ),
+    makeupActive: room.makeupActive,
+    makeupPending: Array.from(room.players.values()).filter((p) => p.late && !p.madeUp && !p.observer).length,
     currentQuestionBasePoints: isRunning(room) ? basePointsForQuestion(room, room.currentQIndex) : null,
     players: Array.from(room.players.values()).map((p) => ({
       id: p.id,
@@ -221,6 +264,11 @@ function publicRoomState(room: Room) {
       frameId: p.frameId || 'none',
       isHost: p.isHost,
       isReady: p.isReady,
+      observer: p.observer,
+      late: p.late,
+      madeUp: p.madeUp,
+      participating: room.makeupActive || isRunning(room) ? p.participating : !p.observer,
+      answered: room.status === 'in-game' && p.hasAnsweredThisRound,
       connected: p.connected,
       score: p.score,
       streak: p.streak,
@@ -232,6 +280,17 @@ function publicRoomState(room: Room) {
 
 /** Data untuk memulihkan layar pemain yang baru tersambung kembali. */
 function syncPayloadFor(room: Room, p: Player) {
+  if (isPendingLate(room, p) && room.status !== 'lobby') {
+    return {
+      questions: isRunning(room) ? publicQuestions(room) : [],
+      currentQIndex: room.currentQIndex,
+      roundEndsAt: room.roundEndsAt,
+      myAnswers: {},
+      revealed: {},
+      myResult: null,
+      roundResult: null,
+    };
+  }
   const q = room.questions[room.currentQIndex];
   // Hanya soal yang sudah selesai (atau seluruhnya bila permainan sudah berakhir) yang dibuka.
   const lastOpen = room.status === 'podium' ? room.questions.length - 1 : room.status === 'round-result' ? room.currentQIndex : room.currentQIndex - 1;
@@ -302,8 +361,38 @@ function newPlayer(key: string, socketId: string, isHost: boolean, d: { name?: s
     score: 0,
     streak: 0,
     hasAnsweredThisRound: false,
+    observer: false,
+    late: false,
+    madeUp: false,
+    participating: true,
     answers: {},
   };
+}
+
+/** Pulihkan pemain dari snapshot (skor, streak, jawaban) dan keluarkan dari daftar `departed`. */
+function reviveDeparted(room: Room, key: string, socketId: string, ident?: { name?: string; avatarUrl?: string; frameId?: string }): Player | null {
+  const snap = room.departed.get(key);
+  if (!snap) return null;
+  room.departed.delete(key);
+  const p = newPlayer(key, socketId, false, ident ?? snap);
+  p.id = snap.id;
+  p.joinedAt = snap.joinedAt;
+  p.score = snap.score;
+  p.streak = snap.streak;
+  p.answers = { ...snap.answers };
+  p.lastAnswerStatus = snap.lastAnswerStatus;
+  p.lastPointsAwarded = snap.lastPointsAwarded;
+  p.observer = snap.observer;
+  p.late = snap.late;
+  p.madeUp = snap.madeUp;
+  p.participating = snap.participating;
+  p.hasAnsweredThisRound = room.status === 'in-game' && snap.answers[room.currentQIndex] !== undefined;
+  if (room.status === 'in-game' && !p.hasAnsweredThisRound) {
+    p.lastAnswerStatus = undefined;
+    p.lastPointsAwarded = undefined;
+  }
+  room.players.set(key, p);
+  return p;
 }
 
 function findRoomOf(clientKey: string): Room | undefined {
@@ -336,12 +425,43 @@ function endGameNow(io: Server, room: Room, notice: string) {
   room.pausedRemainingMs = null;
   room.endNotice = notice;
   room.rematchRequests.clear();
+  // Pemain yang terputus/keluar saat permainan tetap tampil di papan akhir (ditandai offline).
+  for (const key of Array.from(room.departed.keys())) {
+    const g = reviveDeparted(room, key, '');
+    if (g) {
+      g.socketId = null;
+      g.connected = false;
+      g.disconnectedAt = null;
+    }
+  }
+  room.departed.clear();
+  if (room.makeupActive) {
+    for (const p of room.players.values()) if (p.participating && !p.observer) p.madeUp = true;
+    room.makeupActive = false;
+  }
   const revealed: Record<number, { correctIndex: number; explanation: string }> = {};
   room.questions.forEach((_, i) => {
     const r = revealOf(room, i);
     if (r) revealed[i] = r;
   });
-  io.to(room.code).emit('game:ended', { state: publicRoomState(room), revealed });
+  const state = publicRoomState(room);
+  for (const p of room.players.values()) {
+    if (p.socketId) io.to(p.socketId).emit('game:ended', { state, revealed: isPendingLate(room, p) ? {} : revealed });
+  }
+}
+
+function emitStarted(io: Server, room: Room, makeup: boolean) {
+  const questions = publicQuestions(room);
+  for (const p of room.players.values()) {
+    if (!p.socketId) continue;
+    io.to(p.socketId).emit('game:started', {
+      questions,
+      roundEndsAt: room.roundEndsAt,
+      currentQIndex: 0,
+      makeup,
+      participating: p.participating,
+    });
+  }
 }
 
 function closeRoom(io: Server, room: Room, reason: string) {
@@ -350,8 +470,27 @@ function closeRoom(io: Server, room: Room, reason: string) {
 }
 
 /** Hapus pemain dari ruangan dengan menerapkan aturan host keluar. */
-function removePlayer(io: Server, room: Room, p: Player, successorId?: string) {
+function removePlayer(io: Server, room: Room, p: Player, successorId?: string, reason: 'manual' | 'timeout' = 'manual') {
   if (!room.players.has(p.key)) return;
+  if (isRunning(room)) {
+    room.departed.set(p.key, {
+      id: p.id,
+      name: p.name,
+      avatarUrl: p.avatarUrl,
+      frameId: p.frameId,
+      joinedAt: p.joinedAt,
+      score: p.score,
+      streak: p.streak,
+      answers: { ...p.answers },
+      lastAnswerStatus: p.lastAnswerStatus,
+      lastPointsAwarded: p.lastPointsAwarded,
+      reason,
+      observer: p.observer,
+      late: p.late,
+      madeUp: p.madeUp,
+      participating: p.participating,
+    });
+  }
   const wasHost = room.hostId === p.id;
   if (p.socketId) io.sockets.sockets.get(p.socketId)?.leave(room.code);
 
@@ -443,7 +582,15 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       const key = cleanClientId(payload?.clientId);
       if (!key) return;
       const room = findRoomOf(key);
-      if (!room) return socket.emit('room:resumeFailed');
+      if (!room) {
+        for (const r of rooms.values()) {
+          if (r.departed.get(key)?.reason === 'timeout' && isRunning(r) && r.players.size < MAX_PLAYERS) {
+            const back = reviveDeparted(r, key, socket.id);
+            if (back) return attach(r, back, 'room:resumed');
+          }
+        }
+        return socket.emit('room:resumeFailed');
+      }
       attach(room, room.players.get(key)!, 'room:resumed');
     });
 
@@ -464,6 +611,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         password?: string;
         lockPlayers?: boolean;
         hostLeavePolicy?: LeavePolicy;
+        hostObserver?: boolean;
       }) => {
         if (!allow() || !allowJoin()) return socket.emit('room:error', 'Terlalu banyak permintaan. Coba lagi sebentar.');
         const key = cleanClientId(payload?.clientId);
@@ -484,6 +632,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         const password =
           visibility === 'global' && payload.password ? cleanText(payload.password, 32) : undefined;
         const host = newPlayer(key, socket.id, true, payload);
+        host.observer = Boolean(payload.hostObserver);
+        host.participating = !host.observer;
         const room: Room = {
           code,
           deckId: cleanText(payload.deckId, 100),
@@ -511,6 +661,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
           endNotice: null,
           emptySince: null,
           rematchRequests: new Set<string>(),
+          departed: new Map<string, DepartedSnapshot>(),
+          makeupActive: false,
         };
         room.players.set(key, host);
         rooms.set(code, room);
@@ -540,8 +692,19 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         const room = rooms.get(wantedCode);
         if (!room) return socket.emit('room:error', 'Kode ruangan tidak ditemukan.');
         // Boleh bergabung di lobby, atau di masa jeda antar soal (termasuk saat dijeda host). Tidak boleh saat soal sedang dijawab.
+        if (isRunning(room) && room.departed.has(key) && room.players.size < MAX_PLAYERS) {
+          const back = reviveDeparted(room, key, socket.id, payload);
+          if (back) {
+            const taken = new Set(Array.from(room.players.values()).filter((x) => x !== back).map((x) => x.name.toLowerCase()));
+            if (taken.has(back.name.toLowerCase())) back.name = `${back.name.slice(0, 36)} (2)`;
+            socket.join(room.code);
+            ctx = { code: room.code, clientKey: key };
+            socket.emit('room:joined', { state: publicRoomState(room), sync: syncPayloadFor(room, back), you: back.id });
+            broadcastRoom(io, room);
+            return;
+          }
+        }
         if (room.status === 'in-game') return socket.emit('room:error', 'Soal sedang berjalan. Kamu bisa bergabung saat jeda antar soal.');
-        if (room.status === 'podium') return socket.emit('room:error', 'Pertandingan ini sudah selesai.');
         if (room.players.size >= MAX_PLAYERS) return socket.emit('room:error', 'Ruangan sudah penuh.');
         if (room.visibility === 'global' && room.password) {
           if (cleanText(payload.password, 32) !== room.password) {
@@ -557,9 +720,14 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
           while (taken.has(`${base} (${n})`.toLowerCase())) n++;
           p.name = `${base} (${n})`;
         }
+        if (room.status === 'podium' || room.makeupActive) {
+          p.late = true;
+          p.participating = false;
+        }
         room.players.set(key, p);
         socket.join(room.code);
         ctx = { code: room.code, clientKey: key };
+        if (p.late) io.to(room.code).emit('room:notice', `${p.name} bergabung belakangan (sesi susulan).`);
         socket.emit('room:joined', { state: publicRoomState(room), sync: syncPayloadFor(room, p), you: p.id });
         broadcastRoom(io, room);
       }
@@ -568,7 +736,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
     socket.on('room:listGlobal', () => {
       if (!allow()) return;
       const list = Array.from(rooms.values())
-        .filter((r) => r.visibility === 'global' && (r.status === 'lobby' || r.status === 'round-result'))
+        .filter((r) => r.visibility === 'global' && (r.status === 'lobby' || r.status === 'round-result' || r.status === 'podium'))
         .map((r) => ({
           code: r.code,
           deckTitle: r.deckTitle,
@@ -578,14 +746,21 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       socket.emit('room:globalList', list);
     });
 
-    // Host mengubah aturan selama masih di lobby (sebelum mulai).
-    socket.on('room:settings', (payload: { lockPlayers?: boolean; hostLeavePolicy?: LeavePolicy }) => {
+    // Host mengubah aturan. Aturan ruangan hanya di lobby; peran host (ikut/pantau) juga boleh di layar akhir.
+    socket.on('room:settings', (payload: { lockPlayers?: boolean; hostLeavePolicy?: LeavePolicy; hostObserver?: boolean }) => {
       if (!allow()) return;
       const c = getCtx();
-      if (!c || c.room.hostId !== c.me.id || c.room.status !== 'lobby') return;
-      if (typeof payload?.lockPlayers === 'boolean') c.room.lockPlayers = payload.lockPlayers;
-      if (payload?.hostLeavePolicy) c.room.hostLeavePolicy = cleanPolicy(payload.hostLeavePolicy);
-      broadcastRoom(io, c.room);
+      if (!c || c.room.hostId !== c.me.id) return;
+      const { room, me } = c;
+      if (typeof payload?.hostObserver === 'boolean' && (room.status === 'lobby' || room.status === 'podium')) {
+        me.observer = payload.hostObserver;
+        me.participating = !me.observer;
+      }
+      if (room.status === 'lobby') {
+        if (typeof payload?.lockPlayers === 'boolean') room.lockPlayers = payload.lockPlayers;
+        if (payload?.hostLeavePolicy) room.hostLeavePolicy = cleanPolicy(payload.hostLeavePolicy);
+      }
+      broadcastRoom(io, room);
     });
 
     socket.on(
@@ -597,7 +772,11 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         const room = c.room;
         if (room.status !== 'lobby' && room.status !== 'podium') return;
 
-        if (room.players.size < 2) return socket.emit('room:error', 'Butuh minimal 2 pemain untuk memulai.');
+        const fromPodium = room.status === 'podium';
+        const eligible = Array.from(room.players.values()).filter((x) => !x.observer && (!fromPodium || x.connected));
+        if (c.me.observer ? eligible.length < 1 : eligible.length < 2) {
+          return socket.emit('room:error', c.me.observer ? 'Butuh minimal 1 peserta untuk memulai.' : 'Butuh minimal 2 pemain untuk memulai.');
+        }
         const questions = sanitizeQuestions(payload?.questions);
         if (!questions.length) return socket.emit('room:error', 'Tidak ada soal valid untuk dimainkan.');
 
@@ -618,7 +797,16 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         room.pausedRemainingMs = null;
         room.endNotice = null;
         room.rematchRequests.clear();
+        room.departed.clear();
+        room.makeupActive = false;
+        // Main lagi: pemain yang masih offline di layar akhir dilepas; semua yang tersisa jadi satu sesi.
+        if (fromPodium) {
+          for (const x of Array.from(room.players.values())) if (!x.connected && !x.isHost) room.players.delete(x.key);
+        }
         for (const p of room.players.values()) {
+          p.late = false;
+          p.madeUp = false;
+          p.participating = !p.observer;
           p.score = 0;
           p.streak = 0;
           p.hasAnsweredThisRound = false;
@@ -627,11 +815,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
           p.answers = {};
         }
         // Soal dikirim TANPA kunci jawaban & penjelasan.
-        io.to(room.code).emit('game:started', {
-          questions: publicQuestions(room),
-          roundEndsAt: room.roundEndsAt,
-          currentQIndex: 0,
-        });
+        emitStarted(io, room, false);
         broadcastRoom(io, room);
       }
     );
@@ -644,6 +828,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       if (room.status !== 'in-game' || !room.roundStartedAt || !room.roundEndsAt) return;
       if (Date.now() >= room.roundEndsAt) return;
       if (p.hasAnsweredThisRound) return;
+      if (p.observer || !p.participating) return;
 
       const q = room.questions[room.currentQIndex];
       const opt = Number(payload?.optionIndex);
@@ -714,6 +899,49 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       advanceRound(io, room);
     });
 
+    // Host mengakhiri permainan sekarang juga (saat soal berjalan atau jeda antar soal).
+    socket.on('game:end', () => {
+      if (!allow()) return;
+      const c = getCtx();
+      if (!c || c.room.hostId !== c.me.id || !isRunning(c.room)) return;
+      endGameNow(io, c.room, c.room.makeupActive ? 'Sesi susulan diakhiri host.' : 'Permainan diakhiri host.');
+      broadcastRoom(io, c.room);
+    });
+
+    // Host menjalankan sesi susulan: hanya untuk pemain yang bergabung belakangan.
+    socket.on('room:startMakeup', () => {
+      if (!allow()) return;
+      const c = getCtx();
+      if (!c || c.room.hostId !== c.me.id || c.room.status !== 'podium') return;
+      const room = c.room;
+      if (!room.questions.length) return;
+      const cands = Array.from(room.players.values()).filter((x) => x.late && !x.madeUp && !x.observer && x.connected);
+      if (!cands.length) return socket.emit('room:error', 'Belum ada pemain susulan yang siap (online).');
+      room.makeupActive = true;
+      room.rematchRequests.clear();
+      room.endNotice = null;
+      room.status = 'in-game';
+      room.currentQIndex = 0;
+      room.roundStartedAt = Date.now();
+      room.roundEndsAt = Date.now() + roundSecForQuestion(room, 0) * 1000;
+      room.roundResultEndsAt = null;
+      room.paused = false;
+      room.pausedRemainingMs = null;
+      for (const x of room.players.values()) {
+        x.participating = cands.includes(x);
+        x.hasAnsweredThisRound = false;
+        x.lastAnswerStatus = undefined;
+        x.lastPointsAwarded = undefined;
+        if (x.participating) {
+          x.score = 0;
+          x.streak = 0;
+          x.answers = {};
+        }
+      }
+      emitStarted(io, room, true);
+      broadcastRoom(io, room);
+    });
+
     // Pemain non-host meminta host mengulang permainan (layar akhir).
     socket.on('room:requestRematch', () => {
       if (!allow()) return;
@@ -727,7 +955,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
     socket.on('room:reaction', (payload: { emoji: string }) => {
       if (!allow() || !allowReact()) return;
       const c = getCtx();
-      if (!c) return;
+      if (!c || c.me.observer) return;
       const emoji = String(payload?.emoji ?? '');
       if (!ALLOWED_EMOJIS.has(emoji)) return;
       io.to(c.room.code).emit('room:reactionReceived', { playerId: c.me.id, playerName: c.me.name, emoji });
@@ -780,7 +1008,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       for (const p of Array.from(room.players.values())) {
         if (p.connected || p.disconnectedAt === null) continue;
         const held = room.lockPlayers && isRunning(room) && !p.isHost;
-        if (!held && now - p.disconnectedAt > GRACE_MS) removePlayer(io, room, p);
+        if (!held && (room.status !== 'podium' || p.isHost) && now - p.disconnectedAt > GRACE_MS) removePlayer(io, room, p, undefined, 'timeout');
         if (!rooms.has(room.code)) break;
       }
     }
@@ -792,7 +1020,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
     room.pausedRemainingMs = null;
     room.roundResultEndsAt = Date.now() + room.roundGapSec * 1000;
     const q = room.questions[room.currentQIndex];
-    ioRef.to(room.code).emit('game:roundEnded', {
+    emitReveal(ioRef, room, 'game:roundEnded', {
       currentQIndex: room.currentQIndex,
       correctIndex: q?.correctIndex,
       explanation: q?.explanation || '',

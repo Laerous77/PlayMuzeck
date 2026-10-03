@@ -73,6 +73,15 @@ interface RoomPlayer {
   streak: number;
   lastAnswerStatus?: 'correct' | 'wrong';
   lastPointsAwarded?: number;
+  /** Host pengawas: tidak ikut menjawab & tidak masuk papan skor. */
+  observer?: boolean;
+  /** Bergabung setelah sesi utama selesai (sesi susulan). */
+  late?: boolean;
+  madeUp?: boolean;
+  /** Boleh menjawab di sesi yang sedang berjalan. */
+  participating?: boolean;
+  /** Sudah menjawab soal yang sedang berjalan. */
+  answered?: boolean;
 }
 
 interface RoomState {
@@ -105,6 +114,9 @@ interface RoomState {
   endNotice: string | null;
   /** ID pemain yang meminta host mengulang permainan. */
   rematchRequestIds?: string[];
+  makeupActive?: boolean;
+  /** Jumlah pemain susulan yang menunggu sesi susulan. */
+  makeupPending?: number;
   players: RoomPlayer[];
 }
 
@@ -210,6 +222,7 @@ const Leaderboard: React.FC<{
               <span className="text-sm font-bold text-white truncate">
                 {p.name}
                 {p.id === myId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
+                {p.late && <span className="text-[9px] font-bold text-sky-300 ml-1.5 px-1.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">Sesi susulan</span>}
                 {p.connected === false && <span className="text-[10px] text-amber-300/80 ml-1">(offline)</span>}
               </span>
             </div>
@@ -247,6 +260,33 @@ const POLICY_OPTIONS: { id: LeavePolicy; title: string; desc: string }[] = [
   { id: 'choose', title: 'Host menunjuk pengganti', desc: 'Saat keluar, host memilih sendiri siapa host barunya.' },
   { id: 'end', title: 'Akhiri permainan', desc: 'Host keluar = permainan langsung selesai untuk semua pemain.' },
 ];
+
+/** Peran host: ikut bermain atau hanya memantau (guru + pengawas). */
+const HostRoleToggle: React.FC<{ observer: boolean; onChange: (v: boolean) => void }> = ({ observer, onChange }) => (
+  <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-2.5 text-left">
+    <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+      <Eye className="w-3.5 h-3.5" /> Peran Host
+    </span>
+    <div className="grid grid-cols-2 gap-2">
+      {[
+        { v: false, t: 'Ikut Bermain', d: 'Kamu menjawab dan masuk papan skor.' },
+        { v: true, t: 'Pantau Saja', d: 'Tidak menjawab, tidak masuk papan skor, tidak kirim emoji. Kontrol host tetap aktif.' },
+      ].map((o) => (
+        <button
+          key={String(o.v)}
+          type="button"
+          onClick={() => onChange(o.v)}
+          className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+            observer === o.v ? 'bg-accent2/20 border-accent2/60' : 'bg-black/40 border-white/10 hover:border-white/30'
+          }`}
+        >
+          <span className="text-[11px] font-bold text-white block">{o.t}</span>
+          <span className="text-[10px] text-gray-500 block">{o.d}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 /** Aturan ruangan yang diatur host sebelum mulai: tahan pemain keluar + apa yang terjadi bila host keluar. */
 const RoomRulesSetting: React.FC<{
@@ -371,6 +411,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   // Identitas di permainan: nama & foto bisa disamarkan tanpa mengubah akun asli.
   const [displayName, setDisplayName] = useState<string>(userNickname || '');
   const [showAvatar, setShowAvatar] = useState<boolean>(true);
+  // Peran host: ikut bermain, atau hanya memantau (guru/pengawas).
+  const [hostObserver, setHostObserver] = useState<boolean>(false);
 
   // Untuk menyusun riwayat permainan (sama seperti mode lain) begitu game selesai.
   // Pilihan jawaban pemain per indeks soal (sumber riwayat; tidak bergantung urutan event socket).
@@ -415,6 +457,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setHostNotice('');
     setDisplayName(userNickname || '');
     setShowAvatar(true);
+    setHostObserver(false);
   }, [isOpen]);
 
   // ---- Koneksi socket: dibuat setiap modal dibuka; otomatis menyambung ke permainan yang masih berlangsung ----
@@ -499,7 +542,13 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setIsLoadingGlobalRooms(false);
     });
 
-    socket.on('game:started', (payload: { questions: QuizQuestion[]; roundEndsAt: number; currentQIndex: number }) => {
+    socket.on('game:started', (payload: { questions: QuizQuestion[]; roundEndsAt: number; currentQIndex: number; makeup?: boolean; participating?: boolean }) => {
+      // Sesi susulan untuk pemain lain: jangan hapus jawaban & hasil sesi utamaku (masih bisa disimpan).
+      if (payload.makeup && payload.participating === false) {
+        setQuestionsSnapshot((prev) => (prev.length ? prev : payload.questions));
+        setShowAnswer(false);
+        return;
+      }
       setQuestionsSnapshot(payload.questions);
       setUserSelectedOption(null);
       setAnswerResult(null);
@@ -594,7 +643,17 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const me = room?.players.find((p) => p.id === mySocketId);
   const isHost = Boolean(me?.isHost);
   const hasAnswered = userSelectedOption !== null;
-  const sortedPlayers = room ? [...room.players].sort((a, b) => b.score - a.score) : [];
+  // Pengawas tidak masuk papan skor.
+  const sortedPlayers = room ? [...room.players].filter((p) => !p.observer).sort((a, b) => b.score - a.score) : [];
+  const isObserver = Boolean(me?.observer);
+  /** Menonton saja: host pengawas, atau sesi susulan milik pemain lain. */
+  const spectating = Boolean(me && (me.observer || (room?.makeupActive && !me.participating)));
+  const pendingLateMe = Boolean(me?.late && !me?.madeUp);
+  const activeCount = room ? room.players.filter((p) => !p.observer && (room.status !== 'podium' || p.connected !== false)).length : 0;
+  const minToStart = isObserver ? 1 : 2;
+  const canStart = activeCount >= minToStart;
+  const answeredCount = room ? room.players.filter((p) => p.participating && !p.observer && p.answered).length : 0;
+  const participantCount = room ? room.players.filter((p) => p.participating && !p.observer).length : 0;
   const running = room?.status === 'in-game' || room?.status === 'round-result';
   // Host menahan pemain: non-host tidak bisa keluar selama permainan berjalan.
   const leaveLocked = Boolean(room?.lockPlayers && running && !isHost);
@@ -623,6 +682,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socketRef.current?.emit('room:create', {
       clientId,
       ...identity('Host'),
+      hostObserver,
       lockPlayers,
       hostLeavePolicy,
       deckId: activeDeck.id,
@@ -716,7 +776,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   };
 
   const handleSelectOption = (idx: number) => {
-    if (hasAnswered || !currentQ) return;
+    if (hasAnswered || !currentQ || spectating) return;
     setUserSelectedOption(idx);
     answersByIndexRef.current[room?.currentQIndex ?? 0] = idx;
     audioEngine.playClickSound(); // bunyi benar/salah diputar saat server membalas hasil jawaban
@@ -752,8 +812,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       deckTitle: room.deckTitle,
       mode: 'multiplayer',
       totalQuestions: answers.length,
-      summary: `${final ? 'Skor akhir' : `Skor sementara (setelah soal ${upTo + 1}/${questionsSnapshot.length})`}: ${mine?.score ?? 0} poin di antara ${room.players.length} pemain.`,
-      data: { finalRank: [...room.players].sort((a, b) => b.score - a.score).map((p) => ({ name: p.name, score: p.score })) },
+      summary: isObserver
+        ? `Dipantau sebagai pengawas (${final ? 'permainan selesai' : `sampai soal ${upTo + 1}/${questionsSnapshot.length}`}), ${room.players.filter((p) => !p.observer).length} peserta.`
+        : `${final ? 'Skor akhir' : `Skor sementara (setelah soal ${upTo + 1}/${questionsSnapshot.length})`}: ${mine?.score ?? 0} poin di antara ${room.players.filter((p) => !p.observer).length} pemain.`,
+      data: { finalRank: [...room.players].filter((p) => !p.observer).sort((a, b) => b.score - a.score).map((p) => ({ name: p.late ? `${p.name} (sesi susulan)` : p.name, score: p.score })) },
       answers,
     };
     if (addSavedResult(entry)) setSavedUpTo(upTo);
@@ -767,6 +829,20 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const handleSkipGap = () => {
     audioEngine.playClickSound();
     socketRef.current?.emit('game:skipGap');
+  };
+  /** Host: akhiri permainan sekarang untuk semua pemain. */
+  const handleEndGame = () => {
+    if (window.confirm('Akhiri permainan sekarang untuk semua pemain?')) socketRef.current?.emit('game:end');
+  };
+  /** Host: jalankan sesi susulan khusus pemain yang bergabung belakangan. */
+  const handleStartMakeup = () => {
+    audioEngine.playClickSound();
+    socketRef.current?.emit('room:startMakeup');
+  };
+  /** Host: ganti peran (ikut bermain / pantau saja) di lobby atau layar akhir. */
+  const handleObserverChange = (v: boolean) => {
+    setHostObserver(v);
+    if (room && isHost) socketRef.current?.emit('room:settings', { hostObserver: v });
   };
   /** Non-host: minta host mengulang permainan. */
   const handleRequestRematch = () => {
@@ -972,6 +1048,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                       tutup jendela ini dan ubah di layar konfigurasi.
                     </p>
                   </div>
+
+                  <HostRoleToggle observer={hostObserver} onChange={setHostObserver} />
 
                   <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
                     <span className="text-xs font-bold text-gray-300 block">Visibilitas Ruangan</span>
@@ -1285,10 +1363,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 {isHost ? (
                   <button
                     onClick={handleStartGame}
-                    disabled={room.players.length < 2}
+                    disabled={!canStart}
                     className="px-6 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-lg shadow-accent2/25 transition-all cursor-pointer disabled:opacity-40"
                   >
-                    {room.players.length < 2 ? 'Menunggu Pemain Lain...' : 'Mulai Kuis'}
+                    {!canStart ? (isObserver ? 'Menunggu Peserta...' : 'Menunggu Pemain Lain...') : 'Mulai Kuis'}
                   </button>
                 ) : (
                   <span className="text-xs text-gray-400 flex items-center gap-2">
@@ -1297,6 +1375,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   </span>
                 )}
               </div>
+
+              {isHost && <HostRoleToggle observer={isObserver} onChange={handleObserverChange} />}
 
               {isHost ? (
                 <RoomRulesSetting
@@ -1327,6 +1407,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
                       </span>
                       {p.isHost && <Crown className="w-3.5 h-3.5 text-accent" />}
+                      {p.observer && <span className="text-[10px] font-bold text-sky-300 px-1.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">Pengawas</span>}
                       {p.connected === false && <span className="text-[10px] text-amber-300/80">offline</span>}
                     </div>
                   </div>
@@ -1352,6 +1433,27 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 <span className="font-mono font-bold text-white">{timeLeft}s</span>
               </div>
 
+              {(spectating || isHost) && (
+                <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-sky-500/10 border border-sky-500/30 text-[11px] text-sky-200">
+                  <span>
+                    {isObserver
+                      ? 'Mode pantau: kamu tidak ikut menjawab.'
+                      : spectating
+                      ? 'Sesi susulan untuk pemain lain sedang berlangsung. Kamu menonton.'
+                      : 'Kamu host.'}
+                    {participantCount > 0 && ` ${answeredCount}/${participantCount} sudah menjawab.`}
+                  </span>
+                  {isHost && (
+                    <button
+                      onClick={handleEndGame}
+                      className="px-3 py-1.5 rounded-lg bg-red-600/80 hover:bg-red-600 text-white font-bold shrink-0 cursor-pointer"
+                    >
+                      Akhiri Permainan
+                    </button>
+                  )}
+                </div>
+              )}
+
               <h4 className="text-base sm:text-lg font-bold text-white leading-relaxed">{currentQ.question}</h4>
 
               {(currentQ as any).mediaUrl && (currentQ as any).mediaType && (currentQ as any).mediaType !== 'none' && (
@@ -1375,7 +1477,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   return (
                     <button
                       key={oIdx}
-                      disabled={hasAnswered}
+                      disabled={hasAnswered || spectating}
                       onClick={() => handleSelectOption(oIdx)}
                       className={`w-full text-left p-3.5 rounded-xl border text-xs transition-all ${optStyle}`}
                     >
@@ -1450,6 +1552,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
               <Leaderboard players={sortedPlayers} myId={mySocketId} page={lbPage} pageSize={LB_PAGE_SIZE} onPage={setLbPage} />
 
+              {!isObserver && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 {REACTION_EMOJIS.map((emoji) => (
                   <button
@@ -1461,6 +1564,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   </button>
                 ))}
               </div>
+              )}
 
               {showAnswer && currentQ && (
                 <div className="max-w-md mx-auto text-left space-y-2.5 p-4 rounded-xl bg-black/40 border border-white/[0.08]">
@@ -1541,6 +1645,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <span>Lewati Jeda</span>
                   </button>
                 )}
+                {isHost && (
+                  <button
+                    onClick={handleEndGame}
+                    className="px-5 py-2.5 rounded-xl bg-red-600/80 hover:bg-red-600 text-white text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Akhiri Permainan</span>
+                  </button>
+                )}
                 <button
                   onClick={openLeaveDialog}
                   disabled={leaveLocked}
@@ -1569,7 +1682,18 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               <p className="text-[11px] text-gray-500">Simpan hasil ini kalau mau dilihat lagi di riwayat permainanmu.</p>
 
               <Leaderboard players={sortedPlayers} myId={mySocketId} />
+              {sortedPlayers.some((p) => p.late) && (
+                <p className="text-[10px] text-sky-300/80">
+                  "Sesi susulan" = bergabung setelah permainan utama selesai, jadi skornya dari sesi terpisah.
+                </p>
+              )}
+              {pendingLateMe && (
+                <p className="text-xs font-bold text-sky-200 px-3 py-2 rounded-lg bg-sky-500/10 border border-sky-500/30 inline-block">
+                  Kamu bergabung setelah permainan selesai. Tunggu host memulai sesi susulan untukmu.
+                </p>
+              )}
 
+              {!isObserver && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 {REACTION_EMOJIS.map((emoji) => (
                   <button
@@ -1581,20 +1705,32 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   </button>
                 ))}
               </div>
+              )}
 
               <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                <button
-                  onClick={handleSaveResult}
-                  disabled={isResultSaved}
-                  className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer border transition-all ${
-                    isResultSaved
-                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
-                      : 'bg-black/60 hover:bg-black/90 border-white/[0.08] text-gray-200'
-                  }`}
-                >
-                  {isResultSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
-                  <span>{isResultSaved ? 'Hasil Tersimpan' : 'Simpan Hasil'}</span>
-                </button>
+                {questionsSnapshot.length > 0 && (
+                  <button
+                    onClick={handleSaveResult}
+                    disabled={isResultSaved}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer border transition-all ${
+                      isResultSaved
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                        : 'bg-black/60 hover:bg-black/90 border-white/[0.08] text-gray-200'
+                    }`}
+                  >
+                    {isResultSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                    <span>{isResultSaved ? 'Hasil Tersimpan' : 'Simpan Hasil'}</span>
+                  </button>
+                )}
+                {isHost && (room.makeupPending ?? 0) > 0 && (
+                  <button
+                    onClick={handleStartMakeup}
+                    className="px-5 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    <span>Mulai Sesi Susulan ({room.makeupPending})</span>
+                  </button>
+                )}
                 {isHost && (room.rematchRequestIds?.length ?? 0) > 0 && (
                   <p className="w-full text-[11px] text-accent2 font-bold">
                     {room.players
@@ -1607,13 +1743,13 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 {isHost ? (
                   <button
                     onClick={handleStartGame}
-                    disabled={room.players.length < 2}
+                    disabled={!canStart}
                     className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>{room.players.length < 2 ? 'Main Lagi (butuh 2 pemain)' : 'Main Lagi'}</span>
+                    <span>{!canStart ? `Main Lagi (butuh ${minToStart} ${isObserver ? 'peserta' : 'pemain'})` : 'Main Lagi'}</span>
                   </button>
-                ) : (
+                ) : pendingLateMe ? null : (
                   room.rematchRequestIds?.includes(mySocketId) ? (
                     <span className="px-5 py-2.5 rounded-xl bg-black/40 border border-white/[0.08] text-gray-400 text-xs font-bold flex items-center gap-2">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
