@@ -31,3 +31,5 @@ yarn-error.log*
 
 *.sf2
 public/*.sf2
+
+repomix-output.xml
