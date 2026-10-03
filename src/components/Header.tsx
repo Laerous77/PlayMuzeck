@@ -17,6 +17,7 @@ import {
 import { AppMode, CartItem, UserSession, AudioEntitlements } from '../types';
 import { PROFILE_FRAMES, FrameOrnament } from './Modals/ProfileDashboardModal';
 import { audioEngine } from '../services/audioEngine';
+import { NotificationBell } from './NotificationBell';
 
 export type QuizSegment = 'pwa' | 'play' | 'all' | 'leaderboard';
 
@@ -395,14 +396,11 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
             title="Tentang Platform PlayMuzeck"
           >
-            <Sparkles
-              className={`w-3.5 h-3.5 shrink-0 stroke-[2.5] ${
-                currentMode === 'index' ? 'text-on-accent fill-on-accent' : 'text-accent'
-              }`}
-            />
-            <span className="hidden md:inline font-black">Tentang PlayMuzeck</span>
-            <span className="md:hidden font-black">Tentang</span>
+            <span className="font-black">Tentang Kami</span>
           </button>
+
+          {/* Lonceng notifikasi: hapus akun, tema dari admin, dst. */}
+          <NotificationBell isLoggedIn={Boolean(userSession?.isLoggedIn)} userKey={userSession?.email || ''} />
 
           <button
             type="button"

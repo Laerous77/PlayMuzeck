@@ -8,6 +8,7 @@ import { Router, RequestHandler } from 'express';
 import type { Pool } from 'pg';
 import { SUPER_ADMIN_EMAIL } from './db';
 import { verifyPassword, sendMailStrict } from './auth/authRoutes';
+import { notifyUser } from './notifications';
 
 export const DELETION_GRACE_DAYS = 3;
 
@@ -34,10 +35,30 @@ async function scheduleDeletion(pool: Pool, userId: string, by: string) {
         deletion_scheduled_at = COALESCE(deletion_scheduled_at, now() + make_interval(days => $2)),
         deletion_requested_by = COALESCE(deletion_requested_by, $3)
       WHERE id = $1
-      RETURNING email, name, deletion_scheduled_at`,
+      RETURNING email, name, deletion_scheduled_at, (deletion_requested_at = now()) AS fresh`,
     [userId, DELETION_GRACE_DAYS, by]
   );
-  return rows[0] as { email: string; name: string | null; deletion_scheduled_at: Date } | undefined;
+  const row = rows[0] as { email: string; name: string | null; deletion_scheduled_at: Date; fresh: boolean } | undefined;
+  // `fresh` = jadwal BARU dibuat sekarang (bukan permintaan ulang yang jamnya sudah berjalan).
+  if (row?.fresh) {
+    const when = fmtWib(new Date(row.deletion_scheduled_at));
+    if (by === 'self') {
+      await notifyUser(
+        pool, row.email, 'account_deletion', 'Akunmu dijadwalkan untuk dihapus',
+        `Kamu meminta penghapusan akun. Akun akan dihapus permanen pada ${when} (${DELETION_GRACE_DAYS} hari). Akun masih bisa dipakai sampai waktu itu. Tekan "Batalkan Penghapusan Akun" kalau berubah pikiran.`
+      );
+      await notifyUser(
+        pool, SUPER_ADMIN_EMAIL, 'account_deletion_admin', 'Pengguna meminta hapus akun',
+        `${row.name || row.email} <${row.email}> meminta akunnya dihapus. Dihapus permanen pada ${when} kecuali dibatalkan.`
+      );
+    } else {
+      await notifyUser(
+        pool, row.email, 'account_deletion', 'Admin menjadwalkan penghapusan akunmu',
+        `Akunmu akan dihapus permanen pada ${when}. Akun masih bisa dipakai sampai waktu itu. Kalau keberatan, tekan "Batalkan Penghapusan Akun".`
+      );
+    }
+  }
+  return row;
 }
 
 async function cancelDeletion(pool: Pool, userId: string) {
@@ -47,7 +68,11 @@ async function cancelDeletion(pool: Pool, userId: string) {
       RETURNING email, name`,
     [userId]
   );
-  return rows[0] as { email: string; name: string | null } | undefined;
+  const row = rows[0] as { email: string; name: string | null } | undefined;
+  if (row) {
+    await notifyUser(pool, row.email, 'account_deletion_cancelled', 'Penghapusan akun dibatalkan', 'Akunmu aman dan tetap aktif seperti biasa.');
+  }
+  return row;
 }
 
 export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }: Deps) {
@@ -180,6 +205,7 @@ export async function purgeDueAccounts(pool: Pool) {
       // Kuis kustom milik pengguna tidak terhubung lewat FOREIGN KEY, jadi dibersihkan manual.
       await client.query('DELETE FROM decks WHERE is_custom IS TRUE AND lower(owner_email) = lower($1)', [u.email]);
       await client.query('DELETE FROM admin_emails WHERE lower(email) = lower($1)', [u.email]);
+      await client.query('DELETE FROM user_notifications WHERE lower(user_email) = lower($1)', [u.email]);
       // sessions, koleksi, donasi, token ikut terhapus lewat ON DELETE CASCADE. Riwayat pesanan sengaja dipertahankan.
       await client.query('DELETE FROM users WHERE id = $1', [u.id]);
       console.log(`[account] dihapus permanen: ${u.email}`);

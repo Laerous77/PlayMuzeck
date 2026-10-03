@@ -257,7 +257,7 @@ export const OpsPage: React.FC = () => {
   const [inqForm, setInqForm] = useState<InquiryForm | null>(null);
   // pengguna
   const [userSearch, setUserSearch] = useState('');
-  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'suspended'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'suspended' | 'deleting'>('all');
   const [userForm, setUserForm] = useState<UserForm | null>(null);
   const [emailForm, setEmailForm] = useState<{ user: UserRow; subject: string; message: string } | null>(null);
 
@@ -502,11 +502,13 @@ export const OpsPage: React.FC = () => {
     const q = userSearch.trim().toLowerCase();
     return users.filter(
       (u) =>
-        (userFilter === 'all' || (userFilter === 'suspended' ? !!u.suspended_at : !u.suspended_at)) &&
+        (userFilter === 'all' ||
+          (userFilter === 'suspended' ? !!u.suspended_at : userFilter === 'deleting' ? !!u.deletion_scheduled_at : !u.suspended_at)) &&
         (!q || u.email.toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q))
     );
   }, [users, userSearch, userFilter]);
   const suspendedCount = users.filter((u) => u.suspended_at).length;
+  const deletingCount = users.filter((u) => u.deletion_scheduled_at).length;
 
   const suspendUser = async (u: UserRow) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
@@ -1169,6 +1171,7 @@ export const OpsPage: React.FC = () => {
                 ['all', `Semua (${users.length})`],
                 ['active', `Aktif (${users.length - suspendedCount})`],
                 ['suspended', `Ditangguhkan (${suspendedCount})`],
+                ['deleting', `Akan dihapus (${deletingCount})`],
               ] as const
             ).map(([id, label]) => (
               <button

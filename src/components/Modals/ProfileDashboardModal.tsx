@@ -436,6 +436,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Gagal menjadwalkan penghapusan akun.');
       setDeletion({ scheduledAt: data.scheduledAt, requestedBy: 'self' });
+      window.dispatchEvent(new Event('muzeck:notifications-refresh')); // lonceng di Header langsung diperbarui
       setShowDeleteForm(false);
       setDeleteConfirm('');
       setDeletePassword('');
@@ -454,6 +455,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Gagal membatalkan penghapusan akun.');
       setDeletion(null);
+      window.dispatchEvent(new Event('muzeck:notifications-refresh'));
       onSuccessToast('Penghapusan akun dibatalkan. Akunmu aman.');
     } catch (err: any) {
       onSuccessToast(err?.message || 'Gagal membatalkan penghapusan akun.');
@@ -1107,7 +1109,8 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
           )}
 
           {showDeleteForm && !deletion && userSession.isLoggedIn && (
-            <form onSubmit={handleRequestDeletion} className="p-4 rounded-2xl bg-red-900/20 border border-red-500/40 space-y-3">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto" onClick={() => !deleteBusy && setShowDeleteForm(false)}>
+            <form onSubmit={handleRequestDeletion} onClick={(e) => e.stopPropagation()} className="w-full max-w-md my-auto p-5 rounded-2xl bg-surface border border-red-500/50 shadow-2xl space-y-3">
               <h4 className="text-sm font-black text-red-300 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Hapus Akun Permanen</h4>
               <p className="text-xs text-gray-300 leading-relaxed">
                 Akunmu akan dihapus permanen <b className="text-white">3 hari</b> setelah kamu menekan tombol ini. Selama 3 hari itu kamu masih bisa login dan memakai
@@ -1142,6 +1145,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                 </button>
               </div>
             </form>
+            </div>
           )}
 
           {isDbLoading ? (

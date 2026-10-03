@@ -17,6 +17,7 @@ import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict }
 import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
 import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
+import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -144,6 +145,7 @@ app.use('/api/user', requireUser);
 Promise.resolve(initDatabase())
   .then(() => ensurePaymentTables())
   .then(() => ensureThemeSchema(pool)) // tabel themes & user_theme_prefs
+  .then(() => ensureNotificationSchema(pool)) // tabel user_notifications (lonceng notifikasi)
   .catch((err) => console.error('[DB] init gagal:', err));
 
 // 1. Folder penyimpanan file fisik (Audio MP3/WAV/M4A/FLAC & PDF)
@@ -237,6 +239,8 @@ app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUs
 // ---- Hapus akun permanen (masa tunggu 3 hari): /api/user/account/*, /api/admin/users/:id/schedule-deletion|cancel-deletion ----
 app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
 startDeletionSweeper(pool);
+// ---- Pusat notifikasi pengguna: GET/DELETE /api/user/notifications, POST /api/user/notifications/read-all ----
+app.use(createNotificationsRouter({ pool }));
 
 // ---- Kepemilikan: admin biasa hanya boleh mengubah audio/kuis BUATANNYA SENDIRI ----
 // Super Admin boleh semuanya. Baris lama tanpa owner_email, deck bawaan, dan deck buatan
