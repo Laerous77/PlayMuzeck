@@ -56,7 +56,8 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
             <button
               type="button"
               onClick={() => {
-                if (canInstallPwa && onInstallPwa) {
+                if (onInstallPwa) {
+                  // Handler di App menangani semua kasus (prompt native / sudah terinstal / panduan manual).
                   onInstallPwa();
                 } else {
                   alert('Gunakan menu browser Anda (titik tiga atau tombol bagikan) lalu pilih "Tambahkan ke Layar Utama / Install App".');

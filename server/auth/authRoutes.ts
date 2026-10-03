@@ -167,7 +167,7 @@ async function startSession(req: Request, res: Response, userId: string) {
 
 async function publicUser(userId: string) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.name, u.role, u.avatar_url, u.bio, u.greeting, u.active_frame_id,
+    `SELECT u.id, u.email, u.name, u.role, left(md5(u.avatar_url), 8) AS avatar_v, u.bio, u.greeting, u.active_frame_id,
             (u.role = 'admin'
              OR lower(u.email) = $2
              OR EXISTS (SELECT 1 FROM admin_emails a WHERE lower(a.email) = lower(u.email))) AS is_admin
@@ -177,7 +177,7 @@ async function publicUser(userId: string) {
   const u = rows[0];
   return {
     id: u.id, email: u.email, name: u.name, isAdmin: Boolean(u.is_admin),
-    avatarUrl: u.avatar_url || '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none',
+    avatarUrl: u.avatar_v ? `/api/avatar/${u.id}?v=${u.avatar_v}` : '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none',
   };
 }
 

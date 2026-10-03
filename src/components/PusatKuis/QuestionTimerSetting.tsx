@@ -13,7 +13,7 @@ import {
 type Accent = 'red' | 'amber' | 'purple';
 
 const ACCENT: Record<Accent, { active: string; focus: string }> = {
-  red: { active: 'bg-[#FC1212] border-[#FC1212] text-white', focus: 'focus:border-[#FC1212]' },
+  red: { active: 'bg-accent2 border-accent2 text-on-accent2', focus: 'focus:border-accent2' },
   amber: { active: 'bg-amber-500 border-amber-400 text-black', focus: 'focus:border-amber-400' },
   purple: { active: 'bg-purple-600 border-purple-500 text-white', focus: 'focus:border-purple-400' },
 };

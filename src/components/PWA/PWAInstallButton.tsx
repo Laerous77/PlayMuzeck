@@ -18,7 +18,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     return null;
   }
 
-  const activeColor = isQuizArena ? '#FC1212' : accentColor;
+  const activeColor = isQuizArena ? 'var(--t-accent2)' : (accentColor === '#FCA311' ? 'var(--t-accent)' : accentColor);
 
   return (
     <>
@@ -27,7 +27,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         <button
           id="btn-pwa-install"
           onClick={install}
-          style={{ borderColor: `${activeColor}40` }}
+          style={{ borderColor: `color-mix(in srgb, ${activeColor} 25%, transparent)` }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/90 text-xs font-bold text-white border transition-all cursor-pointer shadow-sm hover:scale-105"
         >
           <Download className="w-3.5 h-3.5" style={{ color: activeColor }} />
@@ -40,7 +40,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         <button
           id="btn-pwa-install-ios"
           onClick={() => setShowIOSGuide(true)}
-          style={{ borderColor: `${activeColor}40` }}
+          style={{ borderColor: `color-mix(in srgb, ${activeColor} 25%, transparent)` }}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/60 hover:bg-black/90 text-xs font-bold text-white border transition-all cursor-pointer shadow-sm"
         >
           <Share2 className="w-3.5 h-3.5" style={{ color: activeColor }} />
@@ -51,7 +51,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
       {/* iOS Safari Guide Modal */}
       {showIOSGuide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="w-full max-w-sm max-h-[92vh] overflow-y-auto my-auto rounded-2xl bg-[#14213D] border border-white/[0.12] p-6 shadow-2xl relative">
+          <div className="w-full max-w-sm max-h-[92vh] overflow-y-auto my-auto rounded-2xl bg-surface border border-white/[0.12] p-6 shadow-2xl relative">
             <button
               onClick={() => setShowIOSGuide(false)}
               className="absolute top-4 right-4 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/50 transition-colors"
@@ -62,7 +62,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
             <div className="flex items-center gap-3 mb-4">
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: `${activeColor}20`, color: activeColor }}
+                style={{ backgroundColor: `color-mix(in srgb, ${activeColor} 13%, transparent)`, color: activeColor }}
               >
                 <Smartphone className="w-5 h-5" />
               </div>

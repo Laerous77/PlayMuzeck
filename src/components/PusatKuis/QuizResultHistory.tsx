@@ -110,7 +110,7 @@ export const AnswerReviewList: React.FC<{ answers: AnswerLogEntry[] }> = ({ answ
                 <div key={oi} className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-xs ${cls}`}>
                   <span
                     className={`w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                      isCorrect ? 'bg-emerald-500 text-black' : isChosen ? 'bg-red-500 text-white' : 'bg-[#14213D] text-gray-300'
+                      isCorrect ? 'bg-emerald-500 text-black' : isChosen ? 'bg-red-500 text-white' : 'bg-surface text-gray-300'
                     }`}
                   >
                     {LETTERS[oi] || oi + 1}
@@ -168,10 +168,10 @@ export const AnswerReviewModal: React.FC<{ title: string; answers: AnswerLogEntr
   onClose,
 }) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-    <div className="w-full max-w-lg max-h-[85vh] bg-[#14213D] border border-white/15 rounded-3xl p-5 shadow-2xl flex flex-col space-y-3">
+    <div className="w-full max-w-lg max-h-[85vh] bg-surface border border-white/15 rounded-3xl p-5 shadow-2xl flex flex-col space-y-3">
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <ListChecks className="w-5 h-5 text-[#FC1212] shrink-0" />
+          <ListChecks className="w-5 h-5 text-accent2 shrink-0" />
           <h3 className="text-base font-black text-white truncate">Tinjau Jawaban — {title}</h3>
         </div>
         <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-white cursor-pointer">
@@ -209,7 +209,7 @@ export const QuizResultHistory: React.FC<{ onClose: () => void }> = ({ onClose }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[85vh] bg-[#14213D] border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col space-y-4">
+      <div className="w-full max-w-lg max-h-[85vh] bg-surface border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col space-y-4">
         <div className="flex items-center justify-between border-b border-white/10 pb-3 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {selected ? (
@@ -221,7 +221,7 @@ export const QuizResultHistory: React.FC<{ onClose: () => void }> = ({ onClose }
                 <ChevronLeft className="w-5 h-5" />
               </button>
             ) : (
-              <History className="w-5 h-5 text-[#FC1212] shrink-0" />
+              <History className="w-5 h-5 text-accent2 shrink-0" />
             )}
             <div className="min-w-0">
               <h3 className="text-base font-black text-white truncate">
@@ -253,7 +253,7 @@ export const QuizResultHistory: React.FC<{ onClose: () => void }> = ({ onClose }
                         key={p}
                         onClick={() => setPlayerFilter(p)}
                         className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer ${
-                          playerFilter === p ? 'bg-[#FC1212] text-white' : 'bg-black/40 text-gray-400 hover:text-white'
+                          playerFilter === p ? 'bg-accent2 text-on-accent2' : 'bg-black/40 text-gray-400 hover:text-white'
                         }`}
                       >
                         {p === 'all' ? 'Semua pemain' : p}
@@ -300,7 +300,7 @@ export const QuizResultHistory: React.FC<{ onClose: () => void }> = ({ onClose }
                           {new Date(r.savedAt).toLocaleString('id-ID')}
                           {s && s.total > 0 ? ` • ${s.correct} benar / ${s.total} jawaban` : ''}
                         </p>
-                        <span className="text-[10px] font-bold text-[#FC1212]">
+                        <span className="text-[10px] font-bold text-accent2">
                           {r.answers?.length ? 'Lihat jawaban →' : 'Lihat ringkasan →'}
                         </span>
                       </button>

@@ -36,6 +36,8 @@ interface QuizIndexProps {
   userChoiceClaimed: boolean;
   isOnline: boolean;
   userNickname: string;
+  userAvatarUrl?: string;
+  userFrameId?: string;
   activeSection?: QuizSegment;
   onSectionChange?: (sec: QuizSegment) => void;
   onClaimFreeChoice: (deckId: string) => void;
@@ -60,6 +62,8 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   userChoiceClaimed,
   isOnline,
   userNickname,
+  userAvatarUrl,
+  userFrameId,
   activeSection = 'all',
   onSectionChange,
   onClaimFreeChoice,
@@ -611,6 +615,8 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
         unlockedDeckIds={allUnlockedIds}
         isOnline={isOnline}
         userNickname={userNickname}
+        userAvatarUrl={userAvatarUrl}
+        userFrameId={userFrameId}
         initialDeckId={currentLoadedDeck?.id}
         questionLimit={questionCount}
         shuffleQuestions={shuffleOn}

@@ -236,6 +236,15 @@ function MainApp() {
     typeof navigator !== 'undefined' ? navigator.onLine : true
   );
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  // Status PWA: sedang berjalan sebagai aplikasi (standalone) atau sudah pernah terinstal di perangkat ini.
+  const [isStandalone] = useState<boolean>(() => {
+    try {
+      return window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
+    } catch { return false; }
+  });
+  const [isPwaInstalled, setIsPwaInstalled] = useState<boolean>(() => {
+    try { return localStorage.getItem('muzeck_pwa_installed') === '1'; } catch { return false; }
+  });
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileDashboardOpen, setIsProfileDashboardOpen] = useState(false);
@@ -414,7 +423,28 @@ function MainApp() {
     };
   }, []);
 
+  // Deteksi PWA yang sudah terinstal (event appinstalled + getInstalledRelatedApps bila didukung).
+  useEffect(() => {
+    const markInstalled = () => {
+      setIsPwaInstalled(true);
+      setDeferredPrompt(null);
+      try { localStorage.setItem('muzeck_pwa_installed', '1'); } catch {}
+    };
+    window.addEventListener('appinstalled', markInstalled);
+    if (isStandalone) markInstalled();
+    try {
+      (navigator as any).getInstalledRelatedApps?.()
+        .then((apps: any[]) => { if (apps?.length) markInstalled(); })
+        .catch(() => {});
+    } catch {}
+    return () => window.removeEventListener('appinstalled', markInstalled);
+  }, [isStandalone]);
+
   const handleInstallPwa = async () => {
+    if (isStandalone) {
+      showToast('Kamu sudah memakai PlayMuzeck sebagai aplikasi.');
+      return;
+    }
     if (deferredPrompt) {
       deferredPrompt.prompt();
       const { outcome } = await deferredPrompt.userChoice;
@@ -422,6 +452,9 @@ function MainApp() {
         showToast('PlayMuzeck berhasil diinstal sebagai aplikasi PWA!');
       }
       setDeferredPrompt(null);
+    } else if (isPwaInstalled) {
+      // Browser tidak mengizinkan web membuka PWA yang sudah terinstal secara paksa.
+      showToast('PlayMuzeck sudah terinstal. Buka lewat ikon aplikasi, atau tombol "Open in app" di address bar browser.');
     } else {
       showToast('Gunakan opsi browser Anda untuk "Tambahkan ke Layar Utama".');
     }
@@ -994,6 +1027,8 @@ function MainApp() {
                 userChoiceClaimed={userChoiceClaimed}
                 isOnline={isOnline}
                 userNickname={userSession?.name}
+                userAvatarUrl={userSession?.avatarUrl}
+                userFrameId={userSession?.frameId}
                 activeSection={activeQuizSection}
                 onSectionChange={setActiveQuizSection}
                 onClaimFreeChoice={handleClaimFreeChoice}
@@ -1004,7 +1039,7 @@ function MainApp() {
                 onDeckDeleted={handleDeckDeleted}
                 onTopicDeleted={handleTopicDeleted}
                 onSuccessToast={showToast}
-                canInstallPwa={Boolean(deferredPrompt)}
+                canInstallPwa={Boolean(deferredPrompt) || isPwaInstalled || isStandalone}
                 onInstallPwa={handleInstallPwa}
               />
             </motion.div>

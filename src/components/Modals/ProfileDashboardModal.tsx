@@ -608,7 +608,13 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         method: 'PUT',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName, avatarUrl: editAvatar, bio: editBio, greeting: editGreeting }),
+        body: JSON.stringify({
+          name: editName,
+          bio: editBio,
+          greeting: editGreeting,
+          // Foto yang tersimpan berupa URL (/api/avatar/...); kirim hanya bila diganti (data URL) atau dihapus ('').
+          ...(editAvatar !== sessAvatar ? { avatarUrl: editAvatar } : {}),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Gagal menyimpan profil.');
@@ -934,17 +940,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
               </div>
             </div>
 
-            <div className="flex items-center gap-2 text-xs">
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-gray-200 font-bold cursor-pointer flex items-center gap-1.5">
-                <Camera className="w-3.5 h-3.5" /> {editAvatar ? 'Ganti Foto' : 'Unggah Foto'}
-              </button>
-              {editAvatar && (
-                <button type="button" onClick={() => setEditAvatar('')} className="px-3 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-300 font-bold cursor-pointer flex items-center gap-1.5">
-                  <Trash2 className="w-3.5 h-3.5" /> Hapus Foto
-                </button>
-              )}
-              <span className="text-gray-500">Tanpa foto, avatar kembali ke inisial nama.</span>
-            </div>
+            <p className="text-[11px] text-gray-500">Klik ikon kamera pada foto untuk mengganti, atau ikon tempat sampah untuk menghapus (kembali ke inisial nama).</p>
 
             <div className="space-y-1 text-xs">
               <label className="text-gray-300 font-bold flex justify-between">

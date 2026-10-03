@@ -97,6 +97,25 @@ app.use(cors({ origin: (origin, cb) => cb(null, isAllowedOrigin(origin)), creden
 app.use(cookieParser());
 app.use(express.json({ limit: '10mb' })); // kuis dengan media base64 bisa > 100kb (default)
 app.use(originGuard);
+// Foto profil disajikan sebagai gambar biasa (bukan data URL di JSON) supaya ringan dan bisa
+// dipakai pemain lain (mis. Multiplayer menolak data URL & hanya menerima URL http/relatif ≤500 karakter).
+// Publik tanpa login: id akun acak (usr_<uuid>) tidak bisa ditebak, dan ?v=<hash> memecah cache saat foto diganti.
+app.get('/api/avatar/:id', async (req, res) => {
+  try {
+    const id = String(req.params.id || '');
+    if (!/^[\w-]{1,100}$/.test(id)) return res.status(404).end();
+    const { rows } = await pool.query(`SELECT avatar_url FROM users WHERE id = $1 AND suspended_at IS NULL`, [id]);
+    const m = /^data:(image\/(?:png|jpe?g|webp));base64,([A-Za-z0-9+/=]+)$/.exec(rows[0]?.avatar_url || '');
+    if (!m) return res.status(404).end();
+    res.set('Content-Type', m[1]);
+    res.set('Cache-Control', 'public, max-age=31536000, immutable');
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.send(Buffer.from(m[2], 'base64'));
+  } catch {
+    res.status(500).end();
+  }
+});
+
 app.use('/api/auth', authRouter); // login/daftar/verifikasi/reset/google/me/logout (sesi cookie httpOnly)
 
 // ==========================================
@@ -1589,11 +1608,11 @@ app.put('/api/user/profile', async (req, res) => {
 
     const { rows } = await pool.query(
       `UPDATE users SET ${sets.join(', ')}, last_seen = NOW() WHERE id = $1
-       RETURNING name, email, avatar_url, bio, greeting, active_frame_id`,
+       RETURNING id, name, email, left(md5(avatar_url), 8) AS avatar_v, bio, greeting, active_frame_id`,
       vals
     );
     const u = rows[0];
-    res.json({ success: true, profile: { name: u.name, email: u.email, avatarUrl: u.avatar_url || '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none' } });
+    res.json({ success: true, profile: { name: u.name, email: u.email, avatarUrl: u.avatar_v ? `/api/avatar/${u.id}?v=${u.avatar_v}` : '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none' } });
   } catch (err) {
     console.error('Error menyimpan profil:', err);
     res.status(500).json({ error: 'Gagal menyimpan profil.' });
