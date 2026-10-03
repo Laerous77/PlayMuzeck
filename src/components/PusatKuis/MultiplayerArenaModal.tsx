@@ -34,6 +34,7 @@ import {
   LogOut,
   Eye,
   EyeOff,
+  UserX,
   ShieldAlert,
   SkipForward,
   UserRound,
@@ -196,7 +197,9 @@ const Leaderboard: React.FC<{
   page?: number;
   pageSize?: number;
   onPage?: (n: number) => void;
-}> = ({ players, myId, page = 0, pageSize, onPage }) => {
+  canKick?: (p: RoomPlayer) => boolean;
+  onKick?: (p: RoomPlayer) => void;
+}> = ({ players, myId, page = 0, pageSize, onPage, canKick, onKick }) => {
   const pageCount = pageSize ? Math.max(1, Math.ceil(players.length / pageSize)) : 1;
   const cur = Math.min(page, pageCount - 1);
   const slice = pageSize ? players.slice(cur * pageSize, cur * pageSize + pageSize) : players;
@@ -226,7 +229,18 @@ const Leaderboard: React.FC<{
                 {p.connected === false && <span className="text-[10px] text-amber-300/80 ml-1">(offline)</span>}
               </span>
             </div>
-            <span className="text-sm font-mono font-black text-accent2 shrink-0">{p.score} Poin</span>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-sm font-mono font-black text-accent2">{p.score} Poin</span>
+              {canKick?.(p) && onKick && (
+                <button
+                  onClick={() => onKick(p)}
+                  title="Keluarkan pemain"
+                  className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 cursor-pointer"
+                >
+                  <UserX className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
@@ -413,6 +427,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [showAvatar, setShowAvatar] = useState<boolean>(true);
   // Peran host: ikut bermain, atau hanya memantau (guru/pengawas).
   const [hostObserver, setHostObserver] = useState<boolean>(false);
+  // Pengawas boleh mencoba semua opsi untuk melihat jawaban benar & penjelasan (tanpa poin).
+  const [peek, setPeek] = useState<{ qIndex: number; selected: number; correctIndex: number; explanation: string } | null>(null);
+  // Host: pemain yang akan dikeluarkan (dialog konfirmasi).
+  const [kickTarget, setKickTarget] = useState<RoomPlayer | null>(null);
 
   // Untuk menyusun riwayat permainan (sama seperti mode lain) begitu game selesai.
   // Pilihan jawaban pemain per indeks soal (sumber riwayat; tidak bergantung urutan event socket).
@@ -458,6 +476,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setDisplayName(userNickname || '');
     setShowAvatar(true);
     setHostObserver(false);
+    setPeek(null);
+    setKickTarget(null);
   }, [isOpen]);
 
   // ---- Koneksi socket: dibuat setiap modal dibuka; otomatis menyambung ke permainan yang masih berlangsung ----
@@ -527,6 +547,18 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setRoom(null);
       resetLocal();
       setRoomNotice(reason);
+    });
+    socket.on('room:kicked', (p: { banned: boolean }) => {
+      setRoom(null);
+      resetLocal();
+      setRoomNotice(
+        p?.banned
+          ? 'Kamu dikeluarkan oleh host dan diblokir dari ruangan ini.'
+          : 'Kamu dikeluarkan oleh host. Skor dari ruangan itu tidak disimpan.'
+      );
+    });
+    socket.on('game:peekResult', (r: { currentQIndex: number; optionIndex: number; correctIndex: number; explanation: string }) => {
+      setPeek({ qIndex: r.currentQIndex, selected: r.optionIndex, correctIndex: r.correctIndex, explanation: r.explanation });
     });
     socket.on('room:notice', (msg: string) => {
       setHostNotice(msg);
@@ -635,6 +667,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   // Papan skor jeda selalu mulai dari halaman 1 di tiap jeda baru.
   useEffect(() => {
     setLbPage(0);
+    setPeek(null);
   }, [room?.currentQIndex, room?.status]);
 
   if (!isOpen) return null;
@@ -646,6 +679,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   // Pengawas tidak masuk papan skor.
   const sortedPlayers = room ? [...room.players].filter((p) => !p.observer).sort((a, b) => b.score - a.score) : [];
   const isObserver = Boolean(me?.observer);
+  /** Selama sesi susulan, pemain lain (bukan host) tetap di layar akhir; hanya host & peserta susulan yang melihat soal. */
+  const viewPodium = Boolean(room && (room.status === 'podium' || (room.makeupActive && me && !me.isHost && !me.participating)));
+  const makeupRunningForOthers = Boolean(room?.makeupActive && room.status !== 'podium' && viewPodium);
   /** Menonton saja: host pengawas, atau sesi susulan milik pemain lain. */
   const spectating = Boolean(me && (me.observer || (room?.makeupActive && !me.participating)));
   const pendingLateMe = Boolean(me?.late && !me?.madeUp);
@@ -656,10 +692,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const participantCount = room ? room.players.filter((p) => p.participating && !p.observer).length : 0;
   const running = room?.status === 'in-game' || room?.status === 'round-result';
   // Host menahan pemain: non-host tidak bisa keluar selama permainan berjalan.
-  const leaveLocked = Boolean(room?.lockPlayers && running && !isHost);
+  const leaveLocked = Boolean(room?.lockPlayers && running && !isHost && !viewPodium);
   const needsSuccessor = Boolean(isHost && room?.hostLeavePolicy === 'choose' && (room?.players.length ?? 0) > 1 && room?.status !== 'podium');
   // Soal terakhir yang sudah selesai dikerjakan (untuk Simpan Hasil sebagian di tengah permainan).
-  const saveUpTo = room?.status === 'podium' ? questionsSnapshot.length - 1 : room?.currentQIndex ?? 0;
+  const saveUpTo = viewPodium ? questionsSnapshot.length - 1 : room?.currentQIndex ?? 0;
   const isResultSaved = savedUpTo === saveUpTo;
   /** Calon host otomatis (kebijakan 'next'): pemain online tepat setelah host, atau yang pertama. */
   const autoNextHost = (() => {
@@ -776,6 +812,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   };
 
   const handleSelectOption = (idx: number) => {
+    if (isObserver && currentQ) {
+      socketRef.current?.emit('game:peek', { optionIndex: idx });
+      return;
+    }
     if (hasAnswered || !currentQ || spectating) return;
     setUserSelectedOption(idx);
     answersByIndexRef.current[room?.currentQIndex ?? 0] = idx;
@@ -787,7 +827,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const handleSaveResult = () => {
     if (!room || isResultSaved || !questionsSnapshot.length) return;
     const upTo = Math.min(saveUpTo, questionsSnapshot.length - 1);
-    const final = room.status === 'podium';
+    const final = viewPodium;
     const answers: AnswerLogEntry[] = questionsSnapshot.slice(0, upTo + 1).map((q, i) => {
       const sel = answersByIndexRef.current[i] ?? null;
       const rv = revealedRef.current[i];
@@ -829,6 +869,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const handleSkipGap = () => {
     audioEngine.playClickSound();
     socketRef.current?.emit('game:skipGap');
+  };
+  /** Host: tombol kick tampil di lobby, jeda antar soal, dan (hanya pemain susulan) di layar akhir. */
+  const canKick = (p: RoomPlayer) =>
+    Boolean(room && isHost && !p.isHost && p.id !== mySocketId && (room.status === 'lobby' || room.status === 'round-result' || (room.status === 'podium' && p.late)));
+  const confirmKick = (ban: boolean) => {
+    if (!kickTarget) return;
+    socketRef.current?.emit('room:kick', { playerId: kickTarget.id, ban });
+    setKickTarget(null);
   };
   /** Host: akhiri permainan sekarang untuk semua pemain. */
   const handleEndGame = () => {
@@ -883,6 +931,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     ? 'lobby-menu'
     : room.status === 'lobby'
     ? 'waiting-room'
+    : viewPodium
+    ? 'podium'
     : room.status === 'in-game'
     ? 'in-game'
     : room.status === 'round-result'
@@ -1410,6 +1460,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                       {p.observer && <span className="text-[10px] font-bold text-sky-300 px-1.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">Pengawas</span>}
                       {p.connected === false && <span className="text-[10px] text-amber-300/80">offline</span>}
                     </div>
+                    {canKick(p) && (
+                      <button
+                        onClick={() => setKickTarget(p)}
+                        title="Keluarkan pemain"
+                        className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 cursor-pointer"
+                      >
+                        <UserX className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1466,10 +1525,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
               <div className="space-y-2.5">
                 {(currentQ.options || []).map((opt, oIdx) => {
-                  const isSelected = userSelectedOption === oIdx;
-                  const isCorrectOption = answerResult !== null && oIdx === answerResult.correctIndex;
+                  const peekHere = isObserver && peek && peek.qIndex === room.currentQIndex ? peek : null;
+                  const isSelected = peekHere ? peekHere.selected === oIdx : userSelectedOption === oIdx;
+                  const isCorrectOption = peekHere ? peekHere.selected === oIdx && oIdx === peekHere.correctIndex : answerResult !== null && oIdx === answerResult.correctIndex;
                   let optStyle = 'border-white/10 bg-black/40 text-gray-200 hover:border-white/30';
-                  if (hasAnswered) {
+                  if (peekHere) {
+                    if (peekHere.selected === oIdx) optStyle = isCorrectOption ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold' : 'border-red-500/60 bg-red-950/30 text-red-100 font-semibold';
+                    else if (oIdx === peekHere.correctIndex) optStyle = 'border-emerald-500/50 bg-emerald-950/20 text-emerald-200';
+                  } else if (hasAnswered) {
                     if (isCorrectOption) optStyle = 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold';
                     else if (isSelected) optStyle = 'border-accent2 bg-accent2/40 text-white font-semibold';
                     else optStyle = 'border-white/[0.04] bg-black/20 opacity-40 text-gray-400';
@@ -1477,7 +1540,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   return (
                     <button
                       key={oIdx}
-                      disabled={hasAnswered || spectating}
+                      disabled={isObserver ? false : hasAnswered || spectating}
                       onClick={() => handleSelectOption(oIdx)}
                       className={`w-full text-left p-3.5 rounded-xl border text-xs transition-all ${optStyle}`}
                     >
@@ -1486,6 +1549,28 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   );
                 })}
               </div>
+
+              {isObserver && (
+                <div className="p-3.5 rounded-xl bg-black/40 border border-white/[0.08] text-xs space-y-1.5">
+                  {peek && peek.qIndex === room.currentQIndex ? (
+                    <>
+                      <span className={`font-bold block ${peek.selected === peek.correctIndex ? 'text-emerald-300' : 'text-red-300'}`}>
+                        {peek.selected === peek.correctIndex
+                          ? 'Opsi ini benar.'
+                          : `Opsi ini salah. Jawaban benar: ${String.fromCharCode(65 + peek.correctIndex)}.`}
+                      </span>
+                      {peek.explanation && (
+                        <div className="flex items-start gap-2 text-gray-300 pt-1 border-t border-white/[0.06]">
+                          <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                          <p className="leading-relaxed">{peek.explanation}</p>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-gray-400">Klik opsi mana pun untuk memeriksa benar/salahnya beserta penjelasan. Tidak memengaruhi poin.</span>
+                  )}
+                </div>
+              )}
 
               {hasAnswered && answerResult && (
                 <div
@@ -1515,7 +1600,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-[11px] text-gray-400">Menunggu pemain lain ({timeLeft}s)...</span>
                   <div className="flex -space-x-2">
-                    {room.players.map((p) => (
+                    {room.players.filter((p) => !p.observer && p.participating).map((p) => (
                       <span key={p.id} title={p.name} className="inline-block">
                         <PlayerAvatar player={p} size="sm" />
                       </span>
@@ -1550,7 +1635,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   : 'Skor setelah soal ini. Soal berikutnya mulai otomatis.'}
               </p>
 
-              <Leaderboard players={sortedPlayers} myId={mySocketId} page={lbPage} pageSize={LB_PAGE_SIZE} onPage={setLbPage} />
+              <Leaderboard players={sortedPlayers} myId={mySocketId} page={lbPage} pageSize={LB_PAGE_SIZE} onPage={setLbPage} canKick={canKick} onKick={setKickTarget} />
 
               {!isObserver && (
               <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
@@ -1674,6 +1759,11 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 <Award className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-black text-white">Pertandingan Selesai</h3>
+              {makeupRunningForOthers && (
+                <p className="text-[11px] font-bold text-sky-200 px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/30 inline-block">
+                  Sesi susulan sedang berlangsung untuk pemain yang bergabung belakangan. Skor mereka diperbarui di bawah.
+                </p>
+              )}
               {room.endNotice && (
                 <p className="text-[11px] font-bold text-amber-300 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 inline-block">
                   {room.endNotice}
@@ -1681,7 +1771,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               )}
               <p className="text-[11px] text-gray-500">Simpan hasil ini kalau mau dilihat lagi di riwayat permainanmu.</p>
 
-              <Leaderboard players={sortedPlayers} myId={mySocketId} />
+              <Leaderboard players={sortedPlayers} myId={mySocketId} canKick={canKick} onKick={setKickTarget} />
               {sortedPlayers.some((p) => p.late) && (
                 <p className="text-[10px] text-sky-300/80">
                   "Sesi susulan" = bergabung setelah permainan utama selesai, jadi skornya dari sesi terpisah.
@@ -1749,7 +1839,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>{!canStart ? `Main Lagi (butuh ${minToStart} ${isObserver ? 'peserta' : 'pemain'})` : 'Main Lagi'}</span>
                   </button>
-                ) : pendingLateMe ? null : (
+                ) : pendingLateMe || makeupRunningForOthers ? null : (
                   room.rematchRequestIds?.includes(mySocketId) ? (
                     <span className="px-5 py-2.5 rounded-xl bg-black/40 border border-white/[0.08] text-gray-400 text-xs font-bold flex items-center gap-2">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1775,6 +1865,38 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
             </div>
           ) : null}
         </div>
+
+        {/* Dialog keluarkan pemain */}
+        {kickTarget && room && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-[#0b1512] border border-white/10 p-5 space-y-3 text-left">
+              <h4 className="text-sm font-black text-white flex items-center gap-2">
+                <UserX className="w-4 h-4 text-red-300" />
+                Keluarkan {kickTarget.name}?
+              </h4>
+              <p className="text-[11px] text-gray-400 leading-relaxed">
+                Skornya di ruangan ini ({kickTarget.score} poin) dibuang dan tidak bisa dipulihkan. Pilih apakah dia boleh gabung lagi.
+              </p>
+              <button
+                onClick={() => confirmKick(false)}
+                className="w-full p-2.5 rounded-lg bg-black/60 hover:bg-black/90 border border-white/10 text-left cursor-pointer"
+              >
+                <span className="text-xs font-bold text-white block">Keluarkan saja</span>
+                <span className="text-[10px] text-gray-500 block">Boleh gabung lagi lewat kode/Room Global, dihitung pemain baru (skor 0).</span>
+              </button>
+              <button
+                onClick={() => confirmKick(true)}
+                className="w-full p-2.5 rounded-lg bg-red-600/20 hover:bg-red-600/30 border border-red-500/40 text-left cursor-pointer"
+              >
+                <span className="text-xs font-bold text-red-200 block">Keluarkan &amp; blokir</span>
+                <span className="text-[10px] text-red-200/60 block">Tidak bisa gabung lagi ke ruangan ini sampai ruangan dihapus.</span>
+              </button>
+              <button onClick={() => setKickTarget(null)} className="w-full py-2 text-xs font-bold text-gray-400 hover:text-white cursor-pointer">
+                Batal
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Dialog konfirmasi keluar */}
         {leaveDialogOpen && room && (

@@ -71,6 +71,8 @@ interface Player {
   madeUp: boolean;
   /** Boleh menjawab di sesi yang sedang berjalan (di sesi susulan hanya peserta susulan). */
   participating: boolean;
+  /** ID akun (dari sesi login) kalau pemain sedang login. RAHASIA: tidak pernah disiarkan. */
+  userId?: string;
   /** Pilihan jawaban per indeks soal (dipakai untuk riwayat & pemulihan setelah reconnect). */
   answers: Record<number, number>;
 }
@@ -108,6 +110,10 @@ interface Room {
   rematchRequests: Set<string>;
   /** Sedang menjalankan sesi susulan (hanya pemain susulan yang menjawab). */
   makeupActive: boolean;
+  /** clientId pemain yang dikeluarkan + diblokir host; tidak bisa gabung lagi ke ruangan ini. */
+  banned: Set<string>;
+  /** ID akun yang diblokir dari ruangan ini (berlaku walau ganti browser/hapus data). */
+  bannedUsers: Set<string>;
   /** Snapshot pemain yang keluar/terputus lama saat permainan berjalan, supaya skornya tidak hilang. */
   departed: Map<string, DepartedSnapshot>;
 }
@@ -193,6 +199,9 @@ function makeLimiter(max: number, windowMs: number) {
     return true;
   };
 }
+
+const isHeldIn = (room: Room, p: Player) =>
+  room.lockPlayers && isRunning(room) && !p.isHost && !(room.makeupActive && !p.participating);
 
 const isRunning = (room: Room) => room.status === 'in-game' || room.status === 'round-result';
 
@@ -470,9 +479,9 @@ function closeRoom(io: Server, room: Room, reason: string) {
 }
 
 /** Hapus pemain dari ruangan dengan menerapkan aturan host keluar. */
-function removePlayer(io: Server, room: Room, p: Player, successorId?: string, reason: 'manual' | 'timeout' = 'manual') {
+function removePlayer(io: Server, room: Room, p: Player, successorId?: string, reason: 'manual' | 'timeout' | 'kicked' = 'manual') {
   if (!room.players.has(p.key)) return;
-  if (isRunning(room)) {
+  if (isRunning(room) && reason !== 'kicked') {
     room.departed.set(p.key, {
       id: p.id,
       name: p.name,
@@ -539,10 +548,24 @@ function resumeRoom(room: Room) {
   room.roundResultEndsAt = Date.now() + remain;
 }
 
-export function attachMultiplayerSocket(httpServer: HttpServer) {
+/** Mengubah cookie sesi pada handshake socket menjadi ID akun (null = tamu / sesi tidak valid). */
+export type ResolveUserId = (cookieHeader: string | undefined, handshake: any) => Promise<string | null>;
+
+export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: ResolveUserId) {
   const io = new Server(httpServer, {
     cors: { origin: '*' },
     path: '/socket.io',
+  });
+
+  // Kenali akun login pemain (kalau ada). Tidak pernah menolak koneksi: gagal = dianggap tamu.
+  io.use((socket, next) => {
+    if (!resolveUserId) return next();
+    resolveUserId(socket.handshake.headers.cookie, socket.handshake)
+      .then((id) => {
+        if (id) socket.data.userId = id;
+      })
+      .catch(() => {})
+      .finally(() => next());
   });
 
   io.on('connection', (socket: Socket) => {
@@ -557,6 +580,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       const room = rooms.get(ctx.code);
       const me = room?.players.get(ctx.clientKey);
       if (!room || !me) return null;
+      if (!me.userId && socket.data.userId) me.userId = socket.data.userId;
       return { room, me };
     };
 
@@ -632,6 +656,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         const password =
           visibility === 'global' && payload.password ? cleanText(payload.password, 32) : undefined;
         const host = newPlayer(key, socket.id, true, payload);
+        host.userId = socket.data.userId;
         host.observer = Boolean(payload.hostObserver);
         host.participating = !host.observer;
         const room: Room = {
@@ -663,6 +688,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
           rematchRequests: new Set<string>(),
           departed: new Map<string, DepartedSnapshot>(),
           makeupActive: false,
+          banned: new Set<string>(),
+          bannedUsers: new Set<string>(),
         };
         room.players.set(key, host);
         rooms.set(code, room);
@@ -691,6 +718,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
 
         const room = rooms.get(wantedCode);
         if (!room) return socket.emit('room:error', 'Kode ruangan tidak ditemukan.');
+        if (room.banned.has(key) || (socket.data.userId && room.bannedUsers.has(socket.data.userId))) return socket.emit('room:error', 'Kamu dikeluarkan dari ruangan ini oleh host dan tidak bisa bergabung lagi.');
         // Boleh bergabung di lobby, atau di masa jeda antar soal (termasuk saat dijeda host). Tidak boleh saat soal sedang dijawab.
         if (isRunning(room) && room.departed.has(key) && room.players.size < MAX_PLAYERS) {
           const back = reviveDeparted(room, key, socket.id, payload);
@@ -713,6 +741,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         }
 
         const p = newPlayer(key, socket.id, false, payload);
+        p.userId = socket.data.userId;
         const taken = new Set(Array.from(room.players.values()).map((x) => x.name.toLowerCase()));
         if (taken.has(p.name.toLowerCase())) {
           const base = p.name.slice(0, 36);
@@ -899,6 +928,46 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       advanceRound(io, room);
     });
 
+    // Host mengeluarkan pemain: di lobby, di jeda antar soal, atau (pemain susulan saja) di layar akhir.
+    socket.on('room:kick', (payload: { playerId: string; ban?: boolean }) => {
+      if (!allow()) return;
+      const c = getCtx();
+      if (!c || c.room.hostId !== c.me.id) return;
+      const { room } = c;
+      const target = Array.from(room.players.values()).find((x) => x.id === String(payload?.playerId ?? ''));
+      if (!target || target.id === c.me.id) return;
+      const okPhase = room.status === 'lobby' || room.status === 'round-result' || (room.status === 'podium' && target.late);
+      if (!okPhase) {
+        return socket.emit('room:error', 'Pemain hanya bisa dikeluarkan di lobby atau jeda antar soal. Di layar akhir hanya pemain susulan.');
+      }
+      const ban = Boolean(payload?.ban);
+      if (ban) {
+        room.banned.add(target.key);
+        if (target.userId) room.bannedUsers.add(target.userId);
+      }
+      const sid = target.socketId;
+      removePlayer(io, room, target, undefined, 'kicked');
+      if (sid) io.sockets.sockets.get(sid)?.emit('room:kicked', { banned: ban });
+      room.rematchRequests.delete(target.id);
+      if (rooms.has(room.code)) broadcastRoom(io, room);
+    });
+
+    // Host pengawas boleh mencoba semua opsi untuk melihat jawaban benar + penjelasan (tanpa poin).
+    socket.on('game:peek', (payload: { optionIndex: number }) => {
+      if (!allow()) return;
+      const c = getCtx();
+      if (!c || !c.me.observer || c.room.hostId !== c.me.id || !isRunning(c.room)) return;
+      const q = c.room.questions[c.room.currentQIndex];
+      const opt = Number(payload?.optionIndex);
+      if (!q || !Number.isInteger(opt) || opt < 0 || opt >= q.options.length) return;
+      socket.emit('game:peekResult', {
+        currentQIndex: c.room.currentQIndex,
+        optionIndex: opt,
+        correctIndex: q.correctIndex,
+        explanation: q.explanation || '',
+      });
+    });
+
     // Host mengakhiri permainan sekarang juga (saat soal berjalan atau jeda antar soal).
     socket.on('game:end', () => {
       if (!allow()) return;
@@ -967,7 +1036,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       const c = getCtx();
       if (!c) return socket.emit('room:left');
       const { room, me } = c;
-      const held = room.lockPlayers && isRunning(room) && room.hostId !== me.id;
+      const held = isHeldIn(room, me);
       if (held) return socket.emit('room:error', 'Host menahan pemain: kamu tidak bisa keluar sampai permainan selesai.');
       ctx = null;
       socket.emit('room:left');
@@ -1007,7 +1076,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       }
       for (const p of Array.from(room.players.values())) {
         if (p.connected || p.disconnectedAt === null) continue;
-        const held = room.lockPlayers && isRunning(room) && !p.isHost;
+        const held = isHeldIn(room, p);
         if (!held && (room.status !== 'podium' || p.isHost) && now - p.disconnectedAt > GRACE_MS) removePlayer(io, room, p, undefined, 'timeout');
         if (!rooms.has(room.code)) break;
       }

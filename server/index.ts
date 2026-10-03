@@ -2750,4 +2750,47 @@ const httpServer = app.listen(PORT, '0.0.0.0', () => {
       : '✘ Pembayaran BELUM siap: isi MIDTRANS_SERVER_KEY & MIDTRANS_CLIENT_KEY di .env'
   );
 });
-attachMultiplayerSocket(httpServer);
+// Multiplayer: kenali akun login dari cookie sesi saat socket tersambung, supaya blokir host
+// berlaku per AKUN (bukan hanya per browser). Memakai requireAuth yang sama dengan route lain.
+attachMultiplayerSocket(httpServer, (cookieHeader, handshake) =>
+  new Promise<string | null>((resolve) => {
+    if (!cookieHeader) return resolve(null);
+    const timer = setTimeout(() => resolve(null), 3000);
+    const done = (id: string | null) => {
+      clearTimeout(timer);
+      resolve(id);
+    };
+    const fakeReq: any = {
+      headers: { ...handshake.headers, cookie: cookieHeader },
+      query: {},
+      body: {},
+      method: 'GET',
+      ip: handshake.address,
+      socket: { remoteAddress: handshake.address },
+      get(name: string) {
+        return this.headers[String(name).toLowerCase()];
+      },
+      header(name: string) {
+        return this.headers[String(name).toLowerCase()];
+      },
+    };
+    const fakeRes: any = {
+      locals: {},
+      status() { return fakeRes; },
+      json() { done(null); return fakeRes; },
+      send() { done(null); return fakeRes; },
+      end() { done(null); return fakeRes; },
+      set() { return fakeRes; },
+      setHeader() { return fakeRes; },
+      cookie() { return fakeRes; },
+      clearCookie() { return fakeRes; },
+    };
+    cookieParser()(fakeReq, fakeRes, () => {
+      try {
+        requireAuth(fakeReq, fakeRes, (err?: unknown) => done(!err && fakeReq.user?.id ? String(fakeReq.user.id) : null));
+      } catch {
+        done(null);
+      }
+    });
+  })
+);
