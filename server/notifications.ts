@@ -167,6 +167,25 @@ export function createNotificationsRouter({ pool }: { pool: Pool }) {
     }
   });
 
+  // Hapus SATU notifikasi milik pengguna yang sedang login.
+  r.delete('/api/user/notifications/:id', async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id)) {
+        res.status(400).json({ error: 'ID notifikasi tidak valid.' });
+        return;
+      }
+      await pool.query(
+        `DELETE FROM notification_inbox WHERE id = $1 AND lower(user_email) = lower($2)`,
+        [id, req.user!.email]
+      );
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[notif] delete one:', err);
+      res.status(500).json({ error: 'Gagal menghapus notifikasi.' });
+    }
+  });
+
   r.delete('/api/user/notifications', async (req, res) => {
     try {
       await pool.query(`DELETE FROM notification_inbox WHERE lower(user_email) = lower($1)`, [req.user!.email]);

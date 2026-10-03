@@ -2,7 +2,7 @@
 // Tombol lonceng + panel notifikasi. Taruh di Header, di antara "Tentang Kami" dan tombol keranjang:
 //   <NotificationBell isLoggedIn={userSession.isLoggedIn} userKey={userSession.email} />
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Bell, Trash2, CheckCircle2, Palette, Loader2, AlertTriangle } from 'lucide-react';
+import { Bell, Trash2, CheckCircle2, Palette, Loader2, AlertTriangle, X } from 'lucide-react';
 
 interface NotifItem {
   id: number;
@@ -80,7 +80,11 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
   // Pesan error nyata dari server, supaya "Belum ada notifikasi" tidak menyembunyikan kegagalan memuat.
   const [loadError, setLoadError] = useState<string | null>(null);
   const [, setTick] = useState(0);
+  // Notifikasi yang sedang dibuka di popup detail.
+  const [selected, setSelected] = useState<NotifItem | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const selectedRef = useRef<NotifItem | null>(null);
+  selectedRef.current = selected;
 
   const load = useCallback(async (): Promise<{ items: NotifItem[]; unread: number } | null> => {
     if (!isLoggedIn) return null;
@@ -141,7 +145,12 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      // Escape menutup popup detail dulu; panel lonceng tetap terbuka.
+      if (selectedRef.current) setSelected(null);
+      else setOpen(false);
+    };
     document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
@@ -173,6 +182,23 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
       }
     } finally {
       setBusy(false);
+    }
+  };
+
+  const removeOne = async (id: number) => {
+    // Hilangkan dulu dari tampilan; kalau server gagal, muat ulang supaya sinkron.
+    setItems((prev) => prev.filter((i) => i.id !== id));
+    setHighlight((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    setSelected((cur) => (cur && cur.id === id ? null : cur));
+    try {
+      const res = await fetch(`/api/user/notifications/${id}`, { method: 'DELETE', credentials: 'include' });
+      if (!res.ok) await load();
+    } catch {
+      await load();
     }
   };
 
@@ -258,16 +284,88 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
             {items.map((n) => (
               <div
                 key={n.id}
-                className={`p-3 rounded-xl border flex gap-3 ${highlight.has(n.id) ? 'bg-accent/10 border-accent/40' : 'bg-black/30 border-white/[0.06]'}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelected(n)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelected(n); } }}
+                title="Tekan untuk melihat detail"
+                className={`p-3 rounded-xl border flex gap-3 cursor-pointer transition-colors hover:border-accent/60 ${highlight.has(n.id) ? 'bg-accent/10 border-accent/40' : 'bg-black/30 border-white/[0.06]'}`}
               >
                 <div className="w-8 h-8 rounded-lg bg-black/40 flex items-center justify-center shrink-0">{iconFor(n.type)}</div>
-                <div className="min-w-0 space-y-0.5">
+                <div className="min-w-0 flex-1 space-y-0.5">
                   <div className="text-xs font-bold text-white leading-snug">{n.title}</div>
-                  {n.body && <p className="text-[11px] text-gray-300 leading-relaxed whitespace-pre-wrap break-words">{n.body}</p>}
+                  {n.body && <p className="text-[11px] text-gray-300 leading-relaxed line-clamp-2 break-words">{n.body}</p>}
                   <div className="text-[10px] text-gray-500">{agoLabel(n.created_at)}</div>
                 </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeOne(n.id); }}
+                  aria-label="Hapus notifikasi ini"
+                  title="Hapus notifikasi ini"
+                  className="self-start p-1 rounded-md text-gray-500 hover:text-white hover:bg-black/50 transition-colors cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Popup detail notifikasi */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => setSelected(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={selected.title}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl bg-surface border border-white/[0.15] shadow-2xl overflow-hidden"
+          >
+            <div className="flex items-start gap-3 px-5 py-4 border-b border-white/[0.08] bg-black/40">
+              <div className="w-9 h-9 rounded-xl bg-black/40 flex items-center justify-center shrink-0">{iconFor(selected.type)}</div>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-sm font-black text-white leading-snug break-words">{selected.title}</h4>
+                <div className="text-[11px] text-gray-400 mt-0.5">
+                  {new Date(selected.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'short' })} WIB
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                aria-label="Tutup"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/50 cursor-pointer shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto">
+              <p className="text-xs sm:text-sm text-gray-200 leading-relaxed whitespace-pre-wrap break-words">
+                {selected.body || 'Tidak ada isi tambahan untuk notifikasi ini.'}
+              </p>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-white/[0.08] bg-black/30">
+              <button
+                type="button"
+                onClick={() => removeOne(selected.id)}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-bold text-orange-300 hover:text-orange-200 hover:bg-black/40 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                Hapus notifikasi ini
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="px-4 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-black cursor-pointer"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
