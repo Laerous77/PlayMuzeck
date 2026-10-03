@@ -1062,15 +1062,16 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   Identitas di Permainan
                 </span>
                 <div className="flex items-center gap-3">
-                  <div className="relative w-10 h-10 shrink-0">
-                    {showAvatar && userAvatarUrl ? (
-                      <img src={userAvatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-white/20" />
-                    ) : (
-                      <div className={`w-10 h-10 rounded-full ${fallbackColorFor(displayName || 'x')} border-2 border-white/20 flex items-center justify-center text-white font-bold text-sm`}>
-                        {(displayName.trim() || userNickname || '?').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+                  {/* Pratinjau identik dengan yang dilihat pemain lain: foto + bingkai profil asli */}
+                  <PlayerAvatar
+                    size="md"
+                    player={{
+                      id: displayName || 'x',
+                      name: displayName.trim() || userNickname || '?',
+                      avatarUrl: showAvatar ? userAvatarUrl || '' : '',
+                      frameId: showAvatar ? userFrameId || 'none' : 'none',
+                    } as any}
+                  />
                   <input
                     type="text"
                     value={displayName}

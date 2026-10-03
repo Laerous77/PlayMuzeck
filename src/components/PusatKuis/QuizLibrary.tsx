@@ -283,7 +283,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
         id: `quiz-creator-suite-${Date.now()}`,
         title: 'Kreator Kuis & Topik Suite (Akses Penuh)',
         category: 'topic',
-        price: 25000,
+        price: 10000,
         description: 'Akses penuh penyusunan kuis mandiri dengan 12 tema admin baku, kustom topik, multimedia, dan variasi penilaian.',
         itemTypeKey: 'quizCreatorSuite',
       } as any,
@@ -701,7 +701,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             </div>
             <div className="p-3.5 rounded-2xl bg-black/50 border border-white/10 flex justify-between items-center text-xs">
               <span className="text-gray-400">Lisensi Pembuat Kuis Mandiri:</span>
-              <span className="text-sm font-black text-accent2 font-mono">Rp 25.000</span>
+              <span className="text-sm font-black text-accent2 font-mono">Rp 10.000</span>
             </div>
             <div className="flex gap-2">
               <button

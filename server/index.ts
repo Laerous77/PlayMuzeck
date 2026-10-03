@@ -2415,7 +2415,7 @@ async function audioOwnership(email: string, trackId: string): Promise<AudioOwn>
   return own;
 }
 
-const CREATOR_SUITE_PRICE = 25000;
+const CREATOR_SUITE_PRICE = 10000; // harga otoritatif Kreator Kuis & Topik Suite (server yang menentukan, bukan klien)
 const DEFAULT_DECK_PRICE = 3000;
 
 /** Harga otoritatif satu item keranjang. Melempar CheckoutError bila item tidak dikenali. */
