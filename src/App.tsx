@@ -88,6 +88,20 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
+// Posisi terakhir pengguna (mode + sub-halaman) disimpan supaya refresh tidak melempar balik ke awal.
+const NAV_KEY = 'muzeck_last_nav';
+const AUDIO_SECTIONS = ['assets', 'pad', 'tools', 'pricing'] as const;
+type SavedNav = { mode?: string; audio?: string; quiz?: string };
+function readSavedNav(): SavedNav {
+  try {
+    const raw = localStorage.getItem(NAV_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    return v && typeof v === 'object' ? v : {};
+  } catch {
+    return {};
+  }
+}
+
 function MainApp() {
   const [userSession, setUserSession] = useState<UserSession>(() => {
     try {
@@ -104,14 +118,32 @@ function MainApp() {
   const [currentMode, setCurrentMode] = useState<AppMode | 'index'>(() => {
     try {
       const s = storage.getUserSession();
-      return s?.isLoggedIn && String(s.email || '').trim() ? 'audio' : 'index';
+      if (!(s?.isLoggedIn && String(s.email || '').trim())) return 'index';
+      const m = readSavedNav().mode;
+      return m === 'audio' || m === 'quiz' || m === 'index' ? m : 'audio';
     } catch {
       return 'index';
     }
   });
 
-  const [activeAudioSection, setActiveAudioSection] = useState<'assets' | 'pad' | 'tools' | 'pricing'>('assets');
-  const [activeQuizSection, setActiveQuizSection] = useState<QuizSegment>('all');
+  const [activeAudioSection, setActiveAudioSection] = useState<'assets' | 'pad' | 'tools' | 'pricing'>(() => {
+    const a = readSavedNav().audio;
+    return (AUDIO_SECTIONS as readonly string[]).includes(a || '') ? (a as 'assets' | 'pad' | 'tools' | 'pricing') : 'assets';
+  });
+  const [activeQuizSection, setActiveQuizSection] = useState<QuizSegment>(() => {
+    const q = readSavedNav().quiz;
+    return typeof q === 'string' && /^[a-z-]{1,20}$/.test(q) ? (q as QuizSegment) : 'all';
+  });
+
+  // Simpan posisi terakhir setiap kali berpindah.
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        NAV_KEY,
+        JSON.stringify({ mode: currentMode, audio: activeAudioSection, quiz: activeQuizSection })
+      );
+    } catch {}
+  }, [currentMode, activeAudioSection, activeQuizSection]);
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
       return storage.getCart() || [];

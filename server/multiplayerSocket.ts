@@ -551,6 +551,9 @@ function resumeRoom(room: Room) {
 /** Mengubah cookie sesi pada handshake socket menjadi ID akun (null = tamu / sesi tidak valid). */
 export type ResolveUserId = (cookieHeader: string | undefined, handshake: any) => Promise<string | null>;
 
+/** Jeda singkat setelah semua peserta menjawab, sebelum masuk ke layar jeda. */
+const ALL_ANSWERED_GRACE_MS = 3000;
+
 export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: ResolveUserId) {
   const io = new Server(httpServer, {
     cors: { origin: '*' },
@@ -891,8 +894,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
         explanation: q.explanation || '',
       });
       broadcastRoom(io, room);
-      // Semua peserta sudah menjawab: waktu jawab hanyalah batas maksimal, langsung masuk jeda.
-      if (allParticipantsAnswered(room)) enterRoundResult(io, room);
+      // Semua peserta sudah menjawab: waktu jawab hanyalah batas maksimal, sisa waktu dipangkas jadi 3 detik.
+      trimRoundIfAllAnswered(io, room);
     });
 
     // Jeda & lanjutkan: hanya host, hanya di layar jeda antar soal.
@@ -1061,8 +1064,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
   setInterval(() => {
     const now = Date.now();
     for (const room of Array.from(rooms.values())) {
-      if (room.status === 'in-game' && room.roundEndsAt && (now >= room.roundEndsAt || allParticipantsAnswered(room))) {
-        // (juga menangkap kasus pemain yang belum menjawab keluar/diputus/dikeluarkan di tengah ronde)
+      if (room.status === 'in-game') trimRoundIfAllAnswered(io, room);
+      if (room.status === 'in-game' && room.roundEndsAt && now >= room.roundEndsAt) {
         enterRoundResult(io, room);
       } else if (room.status === 'round-result' && !room.paused && room.roundResultEndsAt && now >= room.roundResultEndsAt) {
         advanceRound(io, room);
@@ -1092,6 +1095,15 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
     if (room.status !== 'in-game') return false;
     const active = Array.from(room.players.values()).filter((p) => p.participating && !p.observer && p.connected);
     return active.length > 0 && active.every((p) => p.hasAnsweredThisRound);
+  }
+
+  /** Semua peserta sudah menjawab: percepat akhir ronde jadi 3 detik dari sekarang (jangan memperpanjang). */
+  function trimRoundIfAllAnswered(ioRef: Server, room: Room) {
+    if (!room.roundEndsAt || !allParticipantsAnswered(room)) return;
+    const target = Date.now() + ALL_ANSWERED_GRACE_MS;
+    if (room.roundEndsAt <= target) return;
+    room.roundEndsAt = target;
+    broadcastRoom(ioRef, room);
   }
 
   function enterRoundResult(ioRef: Server, room: Room) {
