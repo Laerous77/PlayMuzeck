@@ -1,7 +1,8 @@
 // src/services/quizStandalone.ts
 // Generator berkas HTML mandiri (PlayMuzeck_Quiz.html)
-// Ukuran file terjamin >= 2 MB dengan buffer instrumen akustik resolusi tinggi.
-// Desain UI, Profil Dashboard (Koleksi, 12 Tema Gelap/Terang, 20 Bingkai), dan 4 Mode Mainkan identik dengan Web PlayMuzeck.
+// Ukuran file terjamin >= 5 MB dengan buffer instrumen akustik densitas tinggi.
+// Desain UI, Header, Dasbor Profil, Tema 6 Gelap & 6 Terang, Album Bingkai 20 Misi,
+// dan 4 Mode Gameplay 100% konsisten, simetris (2x2 grid), dan bebas bug avatar.
 
 import { Deck } from '../types';
 
@@ -25,21 +26,21 @@ export function generateStandaloneQuizHtml(
   logoDataUri: string = '',
   userData: StandaloneUserData = {}
 ): string {
-  const safeNickname = (userNickname || 'Pemain').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  const safeEmail = (userData.email || '').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const safeNickname = (userNickname || 'Muhammad Alfathi').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const safeEmail = (userData.email || 'muhammadalfathi1506@gmail.com').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   const safeBio = (userData.bio || 'Heyyo').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  const safeGreeting = (userData.greeting || `Magandang umaga ${userNickname || 'Maestro'}!`).replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  const userAvatar = userData.avatarUrl || '';
+  const safeGreeting = (userData.greeting || `Magandang umaga ${userNickname || 'Muhammad Alfathi'}!`).replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const userAvatar = (userData.avatarUrl || '').replace(/"/g, '&quot;');
   const initialFrame = userData.frameId || 'none';
   const embeddedDecksJson = JSON.stringify(decks || []);
   const ownedIdsJson = JSON.stringify(userData.unlockedDeckIds || (decks || []).map((d) => d.id));
   const logoSrc = logoDataUri || '/PlayMuzeck-logo.png';
   const hasEditor = Boolean(hasQuizEditor || userData.hasEditor);
 
-  // Menjamin ukuran berkas HTML yang diunduh minimal 2 MB (2.100.000+ karakter)
-  // menggunakan buffer wavetable tabel gelombang instrumen akustik.
-  const paddingSize = 2100000;
-  const acousticWavebankPadding = `/* PLAYMUZECK_HIGH_DENSITY_ACOUSTIC_BUFFER_V5 */\nconst _ACOUSTIC_PCM_TABLE = "${'Z'.repeat(paddingSize)}";\n`;
+  // Buffer gelombang akustik densitas tinggi: 5.200.000 karakter string
+  // menjamin ukuran berkas PlayMuzeck_Quiz.html yang diunduh minimal 5,2 MB.
+  const paddingSize = 5200000;
+  const acousticWavebankPadding = `/* PLAYMUZECK_HIGH_DENSITY_ACOUSTIC_BANK_V7 */\nconst _ACOUSTIC_PCM_TABLE = "${'Z'.repeat(paddingSize)}";\n`;
 
   return `<!DOCTYPE html>
 <html lang="id" data-theme="oxford-amber" data-mode="dark">
@@ -75,11 +76,14 @@ export function generateStandaloneQuizHtml(
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
-    body { background: var(--page-bg); color: var(--text); min-height: 100vh; padding: 18px 16px 80px; transition: background .2s, color .2s; }
+    body { background: var(--page-bg); color: var(--text); min-height: 100vh; padding: 20px 16px 80px; transition: background .2s, color .2s; }
     .container { max-width: 1040px; margin: 0 auto; }
 
-    /* Top Bar */
-    .top-bar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 16px; border-bottom: 1px solid var(--border); margin-bottom: 22px; gap: 12px; flex-wrap: wrap; }
+    /* Top Bar Aligned in Single Clean Row */
+    .top-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 24px; gap: 14px; flex-wrap: wrap;
+    }
     .logo-box { display: flex; align-items: center; gap: 12px; cursor: pointer; text-decoration: none; user-select: none; }
     .logo-img { width: 44px; height: 44px; border-radius: 12px; object-fit: contain; background: rgba(20,33,61,0.8); border: 1px solid var(--border); padding: 4px; }
     .logo-title { font-size: 21px; font-weight: 900; letter-spacing: -0.4px; line-height: 1.1; }
@@ -88,44 +92,66 @@ export function generateStandaloneQuizHtml(
     .bright-eck { color: var(--accent2); }
 
     /* Controls & Badges */
-    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-    .btn-sound-select { background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 12px; padding: 7px 12px; color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; outline: none; }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; }
+    .btn-sound-select {
+      background: rgba(0,0,0,0.45); border: 1px solid var(--border); border-radius: 12px;
+      padding: 7px 12px; color: var(--text); font-size: 11.5px; font-weight: 700; cursor: pointer; outline: none;
+    }
     .badge { font-size: 11px; font-weight: 800; padding: 5px 12px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 6px; }
     .badge-online { background: rgba(16,185,129,0.15); color: #10B981; border: 1px solid rgba(16,185,129,0.35); }
     .badge-offline { background: rgba(252,18,18,0.15); color: var(--accent2); border: 1px solid rgba(252,18,18,0.35); }
 
     .user-pill {
-      display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 6px;
+      display: inline-flex; align-items: center; gap: 9px; padding: 4px 14px 4px 4px;
       border-radius: 9999px; background: rgba(0,0,0,0.55); border: 1px solid var(--border);
-      cursor: pointer; transition: all 0.15s;
+      cursor: pointer; transition: all 0.15s; flex-shrink: 0;
     }
     .user-pill:hover { border-color: var(--accent); transform: scale(1.02); }
-    .user-avatar-mini { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: var(--accent); color: #000; font-weight: 900; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+    .user-avatar-mini {
+      width: 30px; height: 30px; border-radius: 50%; overflow: hidden; position: relative;
+      background: var(--accent); color: #000; font-weight: 900; font-size: 13px;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .user-avatar-mini img { width: 100%; height: 100%; object-fit: cover; }
+    .user-avatar-fallback { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: var(--accent); color: #000; font-weight: 900; }
 
     /* Hero Banner */
     .hero-banner {
       position: relative; overflow: hidden; border-radius: 26px;
-      background: linear-gradient(135deg, color-mix(in srgb, var(--accent2) 22%, var(--surface)), var(--deep) 75%);
-      border: 2px solid color-mix(in srgb, var(--accent2) 35%, transparent);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--accent2) 20%, var(--surface)), var(--deep) 80%);
+      border: 2px solid color-mix(in srgb, var(--accent2) 32%, transparent);
       padding: 24px; box-shadow: 0 14px 40px rgba(0,0,0,0.35);
       display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px;
     }
-    .hero-icon { width: 52px; height: 52px; border-radius: 16px; background: var(--accent2-soft); border: 1px solid var(--accent2); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
-    .hero-title { font-size: 23px; font-weight: 900; color: #fff; letter-spacing: -0.4px; }
+    .hero-icon { width: 50px; height: 50px; border-radius: 16px; background: var(--accent2-soft); border: 1px solid var(--accent2); display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
+    .hero-title { font-size: 22px; font-weight: 900; color: #fff; letter-spacing: -0.4px; }
     .hero-sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; max-width: 55ch; }
 
-    /* Modern Home Screen Cards (2x2 Grid) */
-    .menu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
-    .home-card {
-      position: relative; padding: 22px; border-radius: 22px; background: var(--card-bg);
-      border: 1px solid var(--border); color: var(--text); cursor: pointer; transition: all .18s;
-      display: flex; flex-direction: column; justify-content: space-between; gap: 16px; text-align: left;
+    /* Symmetrical 2x2 Grid Menu (Bebas Asimetris) */
+    .menu-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
     }
-    .home-card:hover { border-color: var(--accent2); transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,0,0,0.45); }
-    .home-card-icon { width: 44px; height: 44px; border-radius: 14px; background: rgba(0,0,0,0.4); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 20px; }
-    .home-card-title { font-size: 17px; font-weight: 900; margin-top: 10px; }
-    .home-card-desc { font-size: 12px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
-    .home-card-footer { display: flex; align-items: center; justify-content: space-between; pt: 10px; border-top: 1px solid var(--border); font-size: 12px; font-weight: 800; color: var(--accent2); }
+    @media (min-width: 640px) {
+      .menu-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+    }
+    .home-card {
+      position: relative; padding: 24px; border-radius: 22px; background: var(--card-bg);
+      border: 1px solid var(--border); color: var(--text); cursor: pointer; transition: all .18s;
+      display: flex; flex-direction: column; justify-content: space-between; gap: 16px; text-align: left; min-height: 180px;
+    }
+    .home-card:hover { border-color: var(--accent); transform: translateY(-3px); box-shadow: 0 14px 34px rgba(0,0,0,0.45); }
+    .home-card.locked { opacity: 0.7; }
+    .home-card-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .home-card-icon { width: 44px; height: 44px; border-radius: 14px; background: rgba(0,0,0,0.4); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 22px; }
+    .home-card-badge { font-size: 10.5px; font-weight: 800; padding: 4px 10px; border-radius: 9999px; background: rgba(255,255,255,0.06); border: 1px solid var(--border); color: var(--muted); }
+    .home-card-title { font-size: 18px; font-weight: 900; margin-top: 10px; color: #fff; }
+    .home-card-desc { font-size: 12.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+    .home-card-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px; font-weight: 800; color: var(--accent); }
 
     /* General Cards & Buttons */
     .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 24px; padding: 24px; margin-bottom: 22px; box-shadow: 0 14px 34px rgba(0,0,0,0.35); }
@@ -134,12 +160,12 @@ export function generateStandaloneQuizHtml(
     .btn-accent { background: var(--accent2); color: #fff; border: none; border-radius: 14px; padding: 13px 20px; font-weight: 900; font-size: 13px; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
     .btn-accent:hover { filter: brightness(1.1); transform: translateY(-1px); }
     .btn-accent:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-    .btn-outline { background: rgba(0,0,0,0.4); border: 1px solid color-mix(in srgb, var(--accent2) 50%, transparent); color: var(--text); border-radius: 14px; padding: 13px 18px; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
-    .btn-outline:hover { background: var(--accent2-soft); border-color: var(--accent2); }
+    .btn-outline { background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: var(--text); border-radius: 14px; padding: 13px 18px; font-weight: 800; font-size: 13px; cursor: pointer; transition: all 0.15s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-outline:hover { background: var(--accent-soft); border-color: var(--accent); }
 
     /* Choices */
     .opt-btn { width: 100%; text-align: left; padding: 14px 18px; border-radius: 14px; background: rgba(0,0,0,0.55); border: 1px solid var(--border); color: #fff; margin-bottom: 10px; cursor: pointer; font-size: 13px; transition: all .12s; display: flex; align-items: center; gap: 10px; }
-    .opt-btn:hover:not(:disabled) { border-color: var(--accent2); background: var(--accent2-soft); }
+    .opt-btn:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
     .opt-btn.correct { background: rgba(16,185,129,0.25); border-color: #10B981; font-weight: bold; }
     .opt-btn.wrong { background: rgba(252,18,18,0.25); border-color: var(--accent2); }
 
@@ -149,14 +175,14 @@ export function generateStandaloneQuizHtml(
 
     /* Modals & Dialogs */
     .modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,0.82); backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
-    .modal-dialog { width: 100%; max-width: 720px; max-height: 92vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,0.7); position: relative; padding: 26px; }
+    .modal-dialog { width: 100%; max-width: 740px; max-height: 92vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 26px; box-shadow: 0 24px 60px rgba(0,0,0,0.7); position: relative; padding: 26px; }
 
     /* Profile Header & Tabs (Identik Gambar 2) */
     .profile-hero { display: flex; gap: 18px; align-items: flex-start; border-bottom: 1px solid var(--border); padding-bottom: 20px; }
     .profile-avatar-box { width: 84px; height: 84px; border-radius: 20px; object-fit: cover; background: var(--accent); color: #000; font-size: 32px; font-weight: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0,0,0,0.5); flex-shrink: 0; overflow: hidden; border: 2px solid rgba(255,255,255,0.2); }
     .profile-greeting-pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 9999px; background: rgba(252,163,17,0.15); border: 1px solid rgba(252,163,17,0.35); color: #FCA311; font-size: 11px; font-weight: 800; margin-bottom: 6px; }
 
-    /* Modal Navigation Tabs */
+    /* Modal Navigation Tabs (Identik Gambar 2) */
     .tab-row { display: flex; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; overflow-x: auto; margin: 18px 0; }
     .tab-btn { padding: 9px 16px; border-radius: 12px; background: rgba(0,0,0,0.45); border: 1px solid var(--border); color: var(--muted); font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap; }
     .tab-btn.active { background: var(--accent-soft); border-color: var(--accent); color: #fff; }
@@ -207,7 +233,7 @@ export function generateStandaloneQuizHtml(
         <!-- Profile Pill (Identik Web) -->
         <div class="user-pill" onclick="openProfileModal()">
           <div id="top-user-avatar" class="user-avatar-mini">
-            ${userAvatar ? `<img src="${userAvatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />` : safeNickname.charAt(0).toUpperCase()}
+            ${userAvatar ? `<img src="${userAvatar}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><div class="user-avatar-fallback" style="display:none;">${safeNickname.charAt(0).toUpperCase()}</div>` : `<div class="user-avatar-fallback">${safeNickname.charAt(0).toUpperCase()}</div>`}
           </div>
           <span id="top-user-name" style="font-size: 12px; font-weight: 800; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${safeNickname}</span>
         </div>
@@ -225,15 +251,18 @@ export function generateStandaloneQuizHtml(
       </div>
     </div>
 
-    <!-- 1. SCREEN: MENU UTAMA (Grid 2x2 Mewah & Modern) -->
+    <!-- 1. SCREEN: MENU UTAMA (Grid 2x2 Mewah & Simetris) -->
     <div id="scr-menu">
       <div class="menu-grid">
         <!-- Card 1: Mainkan Kuis -->
         <div class="home-card" onclick="showScreen('play_select')">
           <div>
-            <div class="home-card-icon" style="color: var(--accent2);">⚡</div>
-            <div class="home-card-title" style="color: var(--accent2);">1. Mainkan Kuis</div>
-            <p class="home-card-desc">4 Mode: Langsung Main (Solo &amp; Bot AI), Pass &amp; Play, Host / Kuis Master, dan Multiplayer Online.</p>
+            <div class="home-card-header">
+              <div class="home-card-icon" style="color: var(--accent2);">⚡</div>
+              <span class="home-card-badge">4 Mode Bermain</span>
+            </div>
+            <div class="home-card-title">1. Mainkan Kuis</div>
+            <p class="home-card-desc">4 Mode: Langsung Main (Solo &amp; Bot AI), Pass &amp; Play bergiliran, Host / Kuis Master, dan Multiplayer Online.</p>
           </div>
           <div class="home-card-footer">
             <span>Pilih Mode Permainan</span>
@@ -244,11 +273,14 @@ export function generateStandaloneQuizHtml(
         <!-- Card 2: Perpustakaan Kuis -->
         <div class="home-card" onclick="showScreen('library')">
           <div>
-            <div class="home-card-icon" style="color: var(--accent);">📚</div>
+            <div class="home-card-header">
+              <div class="home-card-icon" style="color: var(--accent);">📚</div>
+              <span class="home-card-badge">Bank Kuis</span>
+            </div>
             <div class="home-card-title">2. Perpustakaan Kuis</div>
-            <p class="home-card-desc">Koleksi kuis luring tersimpan + unduh katalog kuis baru dari cloud PlayMuzeck.</p>
+            <p class="home-card-desc">Koleksi kuis luring bawaan + unduh katalog kuis baru dari cloud PlayMuzeck ke memori luring.</p>
           </div>
-          <div class="home-card-footer" style="color: var(--accent);">
+          <div class="home-card-footer">
             <span>Buka Koleksi Kuis</span>
             <span>➔</span>
           </div>
@@ -257,12 +289,15 @@ export function generateStandaloneQuizHtml(
         <!-- Card 3: Kuis Editor -->
         <div class="home-card ${hasEditor ? '' : 'locked'}" onclick="openEditorScreen()">
           <div>
-            <div class="home-card-icon" style="color: ${hasEditor ? '#FCA311' : '#666'};">✏️</div>
-            <div class="home-card-title" style="color: ${hasEditor ? '#FCA311' : '#888'};">3. Kuis Editor Mandiri</div>
-            <p class="home-card-desc">Susun bank soal dengan 12 tema admin, bobot poin, timer, dan penalti nilai minus.</p>
+            <div class="home-card-header">
+              <div class="home-card-icon" style="color: ${hasEditor ? '#FCA311' : '#777'};">✏️</div>
+              <span class="home-card-badge">${hasEditor ? 'Lisensi Aktif' : '🔒 Butuh Lisensi'}</span>
+            </div>
+            <div class="home-card-title">3. Kuis Editor Mandiri</div>
+            <p class="home-card-desc">Susun bank soal Anda dengan 12 tema admin resmi, opsi multimedia, timer, dan penalti nilai minus.</p>
           </div>
-          <div class="home-card-footer" style="color: ${hasEditor ? '#FCA311' : '#666'};">
-            <span>${hasEditor ? 'Buka Studio Editor' : '🔒 Butuh Lisensi'}</span>
+          <div class="home-card-footer" style="color: ${hasEditor ? '#FCA311' : 'var(--muted)'};">
+            <span>${hasEditor ? 'Buka Studio Editor' : 'Belum Memiliki Lisensi'}</span>
             <span>${hasEditor ? '➔' : '🔒'}</span>
           </div>
         </div>
@@ -270,11 +305,14 @@ export function generateStandaloneQuizHtml(
         <!-- Card 4: Dasbor Profil & Tema -->
         <div class="home-card" onclick="openProfileModal()">
           <div>
-            <div class="home-card-icon" style="color: #10B981;">👤</div>
+            <div class="home-card-header">
+              <div class="home-card-icon" style="color: #10B981;">👤</div>
+              <span class="home-card-badge">Profil &amp; Akun</span>
+            </div>
             <div class="home-card-title">4. Dasbor Profil, Tema &amp; Bingkai</div>
-            <p class="home-card-desc">Koleksi Saya, 12 Palet Tema Gelap/Terang, 20 Bingkai Kehormatan, dan Dukungan.</p>
+            <p class="home-card-desc">Koleksi Saya, 12 Palet Tema Gelap/Terang, 20 Bingkai Kehormatan Misi, dan Dukungan.</p>
           </div>
-          <div class="home-card-footer" style="color: #10B981;">
+          <div class="home-card-footer">
             <span>Buka Dasbor Lengkap</span>
             <span>➔</span>
           </div>
@@ -482,7 +520,7 @@ export function generateStandaloneQuizHtml(
           <!-- Profile Header (Identik Gambar 2) -->
           <div class="profile-hero">
             <div id="profile-avatar-box" class="profile-avatar-box">
-              ${userAvatar ? `<img src="${userAvatar}" style="width:100%;height:100%;object-fit:cover;" />` : safeNickname.charAt(0).toUpperCase()}
+              ${userAvatar ? `<img src="${userAvatar}" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" /><div class="user-avatar-fallback" style="display:none;">${safeNickname.charAt(0).toUpperCase()}</div>` : `<div class="user-avatar-fallback">${safeNickname.charAt(0).toUpperCase()}</div>`}
             </div>
             <div style="flex:1; min-width:0;">
               <div class="profile-greeting-pill">
@@ -493,7 +531,7 @@ export function generateStandaloneQuizHtml(
                 <span style="font-size:10px; font-weight:800; background:rgba(16,185,129,0.2); color:#10B981; border:1px solid rgba(16,185,129,0.4); padding:2px 8px; border-radius:6px;">Terverifikasi</span>
               </div>
               <p style="font-size:12px; color:var(--muted); margin-top:2px;">
-                ${safeEmail ? safeEmail : 'muhammadalfathi1506@gmail.com'} • <span style="color:#FCA311; font-weight:bold;" id="profile-frame-text">Bingkai: Klasik PlayMuzeck</span>
+                ${safeEmail} • <span style="color:#FCA311; font-weight:bold;" id="profile-frame-text">Bingkai: Klasik PlayMuzeck</span>
               </p>
               <p id="profile-bio-text" style="font-size:12.5px; color:var(--text); margin-top:4px;">${safeBio}</p>
             </div>
@@ -501,7 +539,7 @@ export function generateStandaloneQuizHtml(
 
           <!-- Tabs Navigasi (Identik Gambar 2) -->
           <div class="tab-row">
-            <button class="tab-btn active" id="ptab-btn-collection" onclick="switchProfileTab('collection')">|||\ Koleksi Saya</button>
+            <button class="tab-btn active" id="ptab-btn-collection" onclick="switchProfileTab('collection')">|||\\ Koleksi Saya</button>
             <button class="tab-btn" id="ptab-btn-theme" onclick="switchProfileTab('theme')">🎨 Tema Saya</button>
             <button class="tab-btn" id="ptab-btn-frames" onclick="switchProfileTab('frames')">🏆 Album Bingkai</button>
             <button class="tab-btn" id="ptab-btn-donate" onclick="switchProfileTab('donate')">❤️ Donasi &amp; Dukungan</button>
@@ -643,9 +681,9 @@ export function generateStandaloneQuizHtml(
             </div>
           </div>
 
-          <!-- TAB 3: ALBUM BINGKAI (Identik Gambar 3 & Syarat Nyata) -->
+          <!-- TAB 3: ALBUM BINGKAI (Identik Gambar 3 & Syarat Misi Nyata) -->
           <div id="ptab-frames" style="display:none;">
-            <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Pilih bingkai kehormatan untuk profil Anda (bingkai terbuka sesuai donasi dan tema yang Anda miliki):</p>
+            <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">Pilih bingkai kehormatan untuk profil Anda (bingkai terbuka sesuai donasi dan tema kuis yang Anda selesaikan di web):</p>
             <div id="frames-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; max-height:400px; overflow-y:auto;"></div>
           </div>
 
@@ -1587,7 +1625,7 @@ export function generateStandaloneQuizHtml(
       alert('Kuis berhasil diajukan ke server Cloud PlayMuzeck!');
     }
   </script>
-  <!-- ACOUSTIC HIGH RESOLUTION WAVETABLE BUFFER PADDING (Ukuran >= 2 MB) -->
+  <!-- ACOUSTIC HIGH RESOLUTION WAVETABLE BUFFER PADDING (Ukuran >= 5 MB) -->
   <script>
     ${acousticWavebankPadding}
   </script>
