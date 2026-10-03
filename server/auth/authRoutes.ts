@@ -86,7 +86,8 @@ async function sendMail(to: string, subject: string, text: string) {
     return;
   }
   try {
-    await mailer.sendMail({ from: process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text }); // teks polos: tidak ada celah injeksi HTML
+    const info = await mailer.sendMail({ from: process.env.MAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER, to, subject, text }); // teks polos: tidak ada celah injeksi HTML
+    console.log(`[mail] terkirim ke ${to} (${subject}) | diterima SMTP: ${(info.accepted || []).join(',') || '-'} | ditolak: ${(info.rejected || []).join(',') || '-'}`);
   } catch (e) {
     console.error('[mail] gagal kirim:', e);
   }
@@ -329,8 +330,10 @@ r.post('/forgot-password', mailLimit, wrap(async (req, res) => {
   const e = emailSchema.safeParse(req.body?.email);
   if (e.success) {
     const u = (await pool.query(`SELECT id FROM users WHERE lower(email)=$1`, [e.data])).rows[0];
+    if (!u) console.log(`[forgot] email tidak terdaftar: ${e.data}`);
     if (u) {
       const token = await issueToken(u.id, 'reset_password', 30);
+      if (!token) console.log(`[forgot] DITAHAN: ${e.data} sudah minta reset 5x dalam 1 jam, tidak ada email dikirim. Tunggu 1 jam.`);
       if (token) void sendMail(e.data, 'Reset password PlayMuzeck',
         `Klik untuk membuat password baru (berlaku 30 menit, sekali pakai):\n${APP_URL}/reset-password?token=${token}\n\nBukan kamu? Abaikan email ini, passwordmu tetap aman.`);
     }
