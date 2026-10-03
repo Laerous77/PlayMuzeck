@@ -891,6 +891,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
         explanation: q.explanation || '',
       });
       broadcastRoom(io, room);
+      // Semua peserta sudah menjawab: waktu jawab hanyalah batas maksimal, langsung masuk jeda.
+      if (allParticipantsAnswered(room)) enterRoundResult(io, room);
     });
 
     // Jeda & lanjutkan: hanya host, hanya di layar jeda antar soal.
@@ -1059,7 +1061,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
   setInterval(() => {
     const now = Date.now();
     for (const room of Array.from(rooms.values())) {
-      if (room.status === 'in-game' && room.roundEndsAt && now >= room.roundEndsAt) {
+      if (room.status === 'in-game' && room.roundEndsAt && (now >= room.roundEndsAt || allParticipantsAnswered(room))) {
+        // (juga menangkap kasus pemain yang belum menjawab keluar/diputus/dikeluarkan di tengah ronde)
         enterRoundResult(io, room);
       } else if (room.status === 'round-result' && !room.paused && room.roundResultEndsAt && now >= room.roundResultEndsAt) {
         advanceRound(io, room);
@@ -1083,6 +1086,13 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
       }
     }
   }, 250);
+
+  /** True bila semua peserta yang masih tersambung sudah menjawab soal ini (minimal 1 peserta). */
+  function allParticipantsAnswered(room: Room): boolean {
+    if (room.status !== 'in-game') return false;
+    const active = Array.from(room.players.values()).filter((p) => p.participating && !p.observer && p.connected);
+    return active.length > 0 && active.every((p) => p.hasAnsweredThisRound);
+  }
 
   function enterRoundResult(ioRef: Server, room: Room) {
     room.status = 'round-result';
