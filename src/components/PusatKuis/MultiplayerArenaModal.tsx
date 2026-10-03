@@ -35,6 +35,8 @@ import {
   Eye,
   EyeOff,
   ShieldAlert,
+  SkipForward,
+  UserRound,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -101,6 +103,8 @@ interface RoomState {
   /** Dijeda oleh host (hanya di layar jeda antar soal). */
   paused: boolean;
   endNotice: string | null;
+  /** ID pemain yang meminta host mengulang permainan. */
+  rematchRequestIds?: string[];
   players: RoomPlayer[];
 }
 
@@ -364,6 +368,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [roomNotice, setRoomNotice] = useState('');
   // Info singkat di dalam ruangan (mis. pergantian host); hilang sendiri.
   const [hostNotice, setHostNotice] = useState('');
+  // Identitas di permainan: nama & foto bisa disamarkan tanpa mengubah akun asli.
+  const [displayName, setDisplayName] = useState<string>(userNickname || '');
+  const [showAvatar, setShowAvatar] = useState<boolean>(true);
 
   // Untuk menyusun riwayat permainan (sama seperti mode lain) begitu game selesai.
   // Pilihan jawaban pemain per indeks soal (sumber riwayat; tidak bergantung urutan event socket).
@@ -406,6 +413,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setShowAnswer(false);
     setRoomNotice('');
     setHostNotice('');
+    setDisplayName(userNickname || '');
+    setShowAvatar(true);
   }, [isOpen]);
 
   // ---- Koneksi socket: dibuat setiap modal dibuka; otomatis menyambung ke permainan yang masih berlangsung ----
@@ -601,16 +610,21 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     return room.players.slice(hostIdx + 1).find((p) => others.includes(p)) || others[0];
   })();
 
+  /** Identitas yang dikirim ke server: nama pilihan sendiri, foto/bingkai hanya bila ditampilkan. */
+  const identity = (fallback: string) => ({
+    name: displayName.trim().slice(0, 40) || userNickname || fallback,
+    avatarUrl: showAvatar ? userAvatarUrl || '' : '',
+    frameId: showAvatar ? userFrameId || 'none' : 'none',
+  });
+
   const handleCreateRoom = () => {
     if (!activeDeck) return;
     audioEngine.playClickSound();
     socketRef.current?.emit('room:create', {
       clientId,
-      name: userNickname || 'Host',
+      ...identity('Host'),
       lockPlayers,
       hostLeavePolicy,
-      avatarUrl: userAvatarUrl || '',
-      frameId: userFrameId || 'none',
       deckId: activeDeck.id,
       deckTitle: activeDeck.title,
       roundTimeSec: getPlayTime(activeDeck, activeDeck.questions?.[0], roundTimeChoice),
@@ -633,9 +647,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socketRef.current?.emit('room:join', {
       code,
       clientId,
-      name: userNickname || 'Pemain',
-      avatarUrl: userAvatarUrl || '',
-      frameId: userFrameId || 'none',
+      ...identity('Pemain'),
     });
   };
 
@@ -655,9 +667,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socketRef.current?.emit('room:join', {
       code: r.code,
       clientId,
-      name: userNickname || 'Pemain',
-      avatarUrl: userAvatarUrl || '',
-      frameId: userFrameId || 'none',
+      ...identity('Pemain'),
     });
   };
 
@@ -668,9 +678,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socketRef.current?.emit('room:join', {
       code: pendingGlobalCode,
       clientId,
-      name: userNickname || 'Pemain',
-      avatarUrl: userAvatarUrl || '',
-      frameId: userFrameId || 'none',
+      ...identity('Pemain'),
       password: globalPasswordInput.trim(),
     });
   };
@@ -755,6 +763,16 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   /** Host: dijeda / lanjutkan hitung mundur antar soal. */
   const handlePause = () => socketRef.current?.emit('game:pause');
   const handleResume = () => socketRef.current?.emit('game:resume');
+  /** Host: lewati sisa jeda dan langsung ke soal berikutnya. */
+  const handleSkipGap = () => {
+    audioEngine.playClickSound();
+    socketRef.current?.emit('game:skipGap');
+  };
+  /** Non-host: minta host mengulang permainan. */
+  const handleRequestRematch = () => {
+    audioEngine.playClickSound();
+    socketRef.current?.emit('room:requestRematch');
+  };
 
   /** Host mengubah aturan selama masih di lobby. */
   const handleLockChange = (v: boolean) => {
@@ -882,6 +900,45 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   </button>
                 </div>
               )}
+              <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
+                <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                  <UserRound className="w-3.5 h-3.5" />
+                  Identitas di Permainan
+                </span>
+                <div className="flex items-center gap-3">
+                  <div className="relative w-10 h-10 shrink-0">
+                    {showAvatar && userAvatarUrl ? (
+                      <img src={userAvatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 border-white/20" />
+                    ) : (
+                      <div className={`w-10 h-10 rounded-full ${fallbackColorFor(displayName || 'x')} border-2 border-white/20 flex items-center justify-center text-white font-bold text-sm`}>
+                        {(displayName.trim() || userNickname || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={displayName}
+                    maxLength={40}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    placeholder={userNickname || 'Nama kamu di permainan'}
+                    className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-black/60 border border-white/10 text-white text-sm outline-none focus:border-accent2"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAvatar((v) => !v)}
+                  className={`w-full px-3 py-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                    showAvatar ? 'bg-accent2/15 border-accent2/40 text-accent2' : 'bg-black/40 border-white/10 text-gray-400'
+                  }`}
+                >
+                  {showAvatar ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  <span>{showAvatar ? 'Foto profil ditampilkan' : 'Foto profil disembunyikan'}</span>
+                </button>
+                <p className="text-[10px] text-gray-500">
+                  Nama dan foto ini hanya berlaku di ruangan ini, akun aslimu tidak berubah. Kosongkan nama untuk memakai nama akun.
+                </p>
+              </div>
+
               <div className="flex rounded-xl bg-black/40 p-1 border border-white/[0.08]">
                 <button
                   onClick={() => setActiveTab('create')}
@@ -1475,6 +1532,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <span>{room.paused ? 'Lanjutkan' : 'Jeda Permainan'}</span>
                   </button>
                 )}
+                {isHost && (
+                  <button
+                    onClick={handleSkipGap}
+                    className="px-5 py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-accent2/40 text-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                    <span>Lewati Jeda</span>
+                  </button>
+                )}
                 <button
                   onClick={openLeaveDialog}
                   disabled={leaveLocked}
@@ -1529,6 +1595,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   {isResultSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
                   <span>{isResultSaved ? 'Hasil Tersimpan' : 'Simpan Hasil'}</span>
                 </button>
+                {isHost && (room.rematchRequestIds?.length ?? 0) > 0 && (
+                  <p className="w-full text-[11px] text-accent2 font-bold">
+                    {room.players
+                      .filter((p) => room.rematchRequestIds!.includes(p.id))
+                      .map((p) => p.name)
+                      .join(', ')}{' '}
+                    minta main lagi
+                  </p>
+                )}
                 {isHost ? (
                   <button
                     onClick={handleStartGame}
@@ -1539,10 +1614,20 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <span>{room.players.length < 2 ? 'Main Lagi (butuh 2 pemain)' : 'Main Lagi'}</span>
                   </button>
                 ) : (
-                  <span className="px-5 py-2.5 rounded-xl bg-black/40 border border-white/[0.08] text-gray-400 text-xs font-bold flex items-center gap-2">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Menunggu host menekan Main Lagi</span>
-                  </span>
+                  room.rematchRequestIds?.includes(mySocketId) ? (
+                    <span className="px-5 py-2.5 rounded-xl bg-black/40 border border-white/[0.08] text-gray-400 text-xs font-bold flex items-center gap-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Permintaan terkirim, menunggu host</span>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleRequestRematch}
+                      className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Minta Main Lagi</span>
+                    </button>
+                  )
                 )}
                 <button
                   onClick={handleClosePodium}

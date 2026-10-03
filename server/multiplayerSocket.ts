@@ -96,6 +96,8 @@ interface Room {
   /** Pesan untuk semua pemain, mis. "Host keluar, permainan diakhiri." */
   endNotice: string | null;
   emptySince: number | null;
+  /** ID publik pemain non-host yang meminta main lagi (layar akhir). */
+  rematchRequests: Set<string>;
 }
 
 const rooms = new Map<string, Room>();
@@ -208,6 +210,9 @@ function publicRoomState(room: Room) {
     hostLeavePolicy: room.hostLeavePolicy,
     paused: room.paused,
     endNotice: room.endNotice,
+    rematchRequestIds: Array.from(room.rematchRequests).filter(
+      (id) => id !== room.hostId && Array.from(room.players.values()).some((p) => p.id === id)
+    ),
     currentQuestionBasePoints: isRunning(room) ? basePointsForQuestion(room, room.currentQIndex) : null,
     players: Array.from(room.players.values()).map((p) => ({
       id: p.id,
@@ -330,6 +335,7 @@ function endGameNow(io: Server, room: Room, notice: string) {
   room.paused = false;
   room.pausedRemainingMs = null;
   room.endNotice = notice;
+  room.rematchRequests.clear();
   const revealed: Record<number, { correctIndex: number; explanation: string }> = {};
   room.questions.forEach((_, i) => {
     const r = revealOf(room, i);
@@ -504,6 +510,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
           pausedRemainingMs: null,
           endNotice: null,
           emptySince: null,
+          rematchRequests: new Set<string>(),
         };
         room.players.set(key, host);
         rooms.set(code, room);
@@ -543,6 +550,13 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         }
 
         const p = newPlayer(key, socket.id, false, payload);
+        const taken = new Set(Array.from(room.players.values()).map((x) => x.name.toLowerCase()));
+        if (taken.has(p.name.toLowerCase())) {
+          const base = p.name.slice(0, 36);
+          let n = 2;
+          while (taken.has(`${base} (${n})`.toLowerCase())) n++;
+          p.name = `${base} (${n})`;
+        }
         room.players.set(key, p);
         socket.join(room.code);
         ctx = { code: room.code, clientKey: key };
@@ -603,6 +617,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         room.paused = false;
         room.pausedRemainingMs = null;
         room.endNotice = null;
+        room.rematchRequests.clear();
         for (const p of room.players.values()) {
           p.score = 0;
           p.streak = 0;
@@ -685,6 +700,28 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       if (room.status !== 'round-result' || !room.paused) return;
       resumeRoom(room);
       broadcastRoom(io, room);
+    });
+
+    // Host melewati sisa jeda antar soal (juga berlaku saat sedang dijeda).
+    socket.on('game:skipGap', () => {
+      if (!allow()) return;
+      const c = getCtx();
+      if (!c || c.room.hostId !== c.me.id) return;
+      const room = c.room;
+      if (room.status !== 'round-result') return;
+      room.paused = false;
+      room.pausedRemainingMs = null;
+      advanceRound(io, room);
+    });
+
+    // Pemain non-host meminta host mengulang permainan (layar akhir).
+    socket.on('room:requestRematch', () => {
+      if (!allow()) return;
+      const c = getCtx();
+      if (!c || c.room.status !== 'podium' || c.room.hostId === c.me.id) return;
+      if (c.room.rematchRequests.has(c.me.id)) return;
+      c.room.rematchRequests.add(c.me.id);
+      broadcastRoom(io, c.room);
     });
 
     socket.on('room:reaction', (payload: { emoji: string }) => {
