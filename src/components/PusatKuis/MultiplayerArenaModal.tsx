@@ -146,7 +146,8 @@ const MIN_GAP_SEC = 3;
 const MAX_GAP_SEC = 60;
 const LB_PAGE_SIZE = 5;
 
-const REACTION_EMOJIS = ['🔥', '👏', '😂', '😮', '💀', '❤️'];
+// Urutan: api, tepuk tangan, ketawa, menangis, terkejut, kecewa, marah, skull, hati.
+const REACTION_EMOJIS = ['🔥', '👏', '😂', '😭', '😮', '😞', '😡', '💀', '❤️'];
 
 /** Avatar bulat + bingkai profil asli pemain (fallback: inisial warna kalau tidak ada foto). */
 const PlayerAvatar: React.FC<{ player: RoomPlayer; size?: 'sm' | 'md' }> = ({ player, size = 'sm' }) => {
@@ -262,7 +263,7 @@ const RoomRulesSetting: React.FC<{
         </span>
       </span>
       <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${lockPlayers ? 'bg-accent2' : 'bg-white/15'}`}>
-        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${lockPlayers ? 'translate-x-4' : 'translate-x-0.5'}`} />
+        <span className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${lockPlayers ? 'translate-x-4' : 'translate-x-0.5'}`} />
       </span>
     </button>
     <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
@@ -361,6 +362,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [successorId, setSuccessorId] = useState<string>('');
   const [roomNotice, setRoomNotice] = useState('');
+  // Info singkat di dalam ruangan (mis. pergantian host); hilang sendiri.
+  const [hostNotice, setHostNotice] = useState('');
 
   // Untuk menyusun riwayat permainan (sama seperti mode lain) begitu game selesai.
   // Pilihan jawaban pemain per indeks soal (sumber riwayat; tidak bergantung urutan event socket).
@@ -402,6 +405,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setLeaveDialogOpen(false);
     setShowAnswer(false);
     setRoomNotice('');
+    setHostNotice('');
   }, [isOpen]);
 
   // ---- Koneksi socket: dibuat setiap modal dibuka; otomatis menyambung ke permainan yang masih berlangsung ----
@@ -471,6 +475,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setRoom(null);
       resetLocal();
       setRoomNotice(reason);
+    });
+    socket.on('room:notice', (msg: string) => {
+      setHostNotice(msg);
+      setTimeout(() => setHostNotice((cur) => (cur === msg ? '' : cur)), 6000);
     });
     socket.on('room:replaced', () => {
       setRoom(null);
@@ -855,6 +863,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
           </div>
         )}
 
+        {hostNotice && room && (
+          <div className="bg-accent2/15 border-b border-accent2/30 px-5 py-2 text-xs text-accent2 font-bold">{hostNotice}</div>
+        )}
+
         {errorMsg && connectionState === 'connected' && (
           <div className="bg-red-900/30 border-b border-red-500/20 px-5 py-2 text-xs text-red-200">{errorMsg}</div>
         )}
@@ -983,7 +995,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                       >
                         <span className={`w-9 h-5 rounded-full relative transition-colors ${decayEnabled ? 'bg-accent2' : 'bg-white/15'}`}>
                           <span
-                            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${decayEnabled ? 'translate-x-4' : 'translate-x-0.5'}`}
+                            className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${decayEnabled ? 'translate-x-4' : 'translate-x-0.5'}`}
                           />
                         </span>
                         <span className="text-[11px] text-gray-400">{decayEnabled ? 'Aktif' : 'Nonaktif'}</span>
@@ -1381,7 +1393,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
               <Leaderboard players={sortedPlayers} myId={mySocketId} page={lbPage} pageSize={LB_PAGE_SIZE} onPage={setLbPage} />
 
-              <div className="flex items-center justify-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 {REACTION_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
@@ -1492,7 +1504,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
               <Leaderboard players={sortedPlayers} myId={mySocketId} />
 
-              <div className="flex items-center justify-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
                 {REACTION_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
@@ -1520,10 +1532,11 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 {isHost ? (
                   <button
                     onClick={handleStartGame}
-                    className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                    disabled={room.players.length < 2}
+                    className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Main Lagi</span>
+                    <span>{room.players.length < 2 ? 'Main Lagi (butuh 2 pemain)' : 'Main Lagi'}</span>
                   </button>
                 ) : (
                   <span className="px-5 py-2.5 rounded-xl bg-black/40 border border-white/[0.08] text-gray-400 text-xs font-bold flex items-center gap-2">

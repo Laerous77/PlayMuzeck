@@ -35,6 +35,8 @@ const DEFAULT_BASE_POINTS = 100;
 /** Pemain offline dibiarkan segini lama sebelum dihapus (kecuali ditahan host saat permainan berjalan). */
 const GRACE_MS = 60_000;
 const MAX_ROOMS = 500;
+/** Reaksi yang diizinkan (urutan sama dengan tombol di klien). Selain ini ditolak. */
+const ALLOWED_EMOJIS = new Set(['🔥', '👏', '😂', '😭', '😮', '😞', '😡', '💀', '❤️']);
 const MAX_PLAYERS = 50;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // tanpa 0/O/1/I agar tidak membingungkan
 /** Ruangan tanpa satu pun pemain online selama ini akan dihapus. */
@@ -359,6 +361,7 @@ function removePlayer(io: Server, room: Room, p: Player, successorId?: string) {
     }
     assignHost(room, p); // supaya ruangan tidak yatim; permainan tetap diakhiri
     endGameNow(io, room, 'Host keluar, permainan diakhiri.');
+    announceHost(io, room);
     return;
   }
 
@@ -369,12 +372,18 @@ function removePlayer(io: Server, room: Room, p: Player, successorId?: string) {
   }
   if (wasHost) {
     assignHost(room, p, room.hostLeavePolicy === 'choose' ? successorId : undefined);
+    announceHost(io, room);
     if (room.paused) {
       // jeda yang dipegang host lama tidak boleh menggantung tanpa pemegang
       resumeRoom(room);
     }
   }
   broadcastRoom(io, room);
+}
+
+function announceHost(io: Server, room: Room) {
+  const h = Array.from(room.players.values()).find((x) => x.isHost);
+  if (h) io.to(room.code).emit('room:notice', `${h.name} sekarang jadi host. Aturan ruangan tetap sama.`);
 }
 
 function resumeRoom(room: Room) {
@@ -523,7 +532,9 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
 
         const room = rooms.get(wantedCode);
         if (!room) return socket.emit('room:error', 'Kode ruangan tidak ditemukan.');
-        if (room.status !== 'lobby') return socket.emit('room:error', 'Pertandingan sudah dimulai, tidak bisa join.');
+        // Boleh bergabung di lobby, atau di masa jeda antar soal (termasuk saat dijeda host). Tidak boleh saat soal sedang dijawab.
+        if (room.status === 'in-game') return socket.emit('room:error', 'Soal sedang berjalan. Kamu bisa bergabung saat jeda antar soal.');
+        if (room.status === 'podium') return socket.emit('room:error', 'Pertandingan ini sudah selesai.');
         if (room.players.size >= MAX_PLAYERS) return socket.emit('room:error', 'Ruangan sudah penuh.');
         if (room.visibility === 'global' && room.password) {
           if (cleanText(payload.password, 32) !== room.password) {
@@ -543,7 +554,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
     socket.on('room:listGlobal', () => {
       if (!allow()) return;
       const list = Array.from(rooms.values())
-        .filter((r) => r.visibility === 'global' && r.status === 'lobby')
+        .filter((r) => r.visibility === 'global' && (r.status === 'lobby' || r.status === 'round-result'))
         .map((r) => ({
           code: r.code,
           deckTitle: r.deckTitle,
@@ -572,6 +583,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
         const room = c.room;
         if (room.status !== 'lobby' && room.status !== 'podium') return;
 
+        if (room.players.size < 2) return socket.emit('room:error', 'Butuh minimal 2 pemain untuk memulai.');
         const questions = sanitizeQuestions(payload?.questions);
         if (!questions.length) return socket.emit('room:error', 'Tidak ada soal valid untuk dimainkan.');
 
@@ -679,8 +691,8 @@ export function attachMultiplayerSocket(httpServer: HttpServer) {
       if (!allow() || !allowReact()) return;
       const c = getCtx();
       if (!c) return;
-      const emoji = cleanText(payload?.emoji, 8);
-      if (!emoji) return;
+      const emoji = String(payload?.emoji ?? '');
+      if (!ALLOWED_EMOJIS.has(emoji)) return;
       io.to(c.room.code).emit('room:reactionReceived', { playerId: c.me.id, playerName: c.me.name, emoji });
     });
 
