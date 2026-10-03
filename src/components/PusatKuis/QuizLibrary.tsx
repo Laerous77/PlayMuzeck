@@ -486,7 +486,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-accent2/20 text-accent2 border border-accent2/30">
                           {themeName}
                         </span>
-                        <span className="text-[11px] font-medium text-gray-400 truncate max-w-[90px] sm:max-w-[140px]">
+                        <span className="text-[11px] font-medium text-gray-400 truncate max-w-22.5 sm:max-w-35">
                           {parentTopic?.title || deck.topicId}
                         </span>
                       </div>

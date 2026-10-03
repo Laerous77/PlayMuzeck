@@ -21,7 +21,7 @@ import type { QuizPlayMode } from './QuizPlayer';
 import { MAX_TEAMS } from './QuizPlayer';
 import { QuizResultHistory } from './QuizResultHistory';
 import { MultiplayerArenaModal } from './MultiplayerArenaModal';
-import { generateStandaloneQuizHtml } from '../../services/generateStandaloneQuizHtml';
+import { generateStandaloneQuizHtml } from '../../services/quizStandalone';
 import { Deck, Topic, CartItem } from '../../types';
 import type { QuizSegment } from '../Header';
 import { STARTER_DECKS, BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '../../data/quiz';
@@ -111,12 +111,6 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // PENTING: Gabungkan starter decks + kuis custom, JANGAN saling menggantikan.
-  // Sebelumnya "decks.length > 0 ? decks : starterDecks" membuat 3 starter deck
-  // hilang total begitu user punya 1 kuis custom saja. Sekarang digabung pakai
-  // Map (key = id) supaya tidak duplikat kalau starter deck sudah ada di `decks`.
-  // Urutan: 3 starter + 3 deck bawaan tambahan (JSON) -> kuis kustom dari props.
-  // Deck bawaan tidak bisa ditimpa oleh props (id bawaan selalu dipakai dari JSON).
   const decksForDisplay = React.useMemo(() => {
     const map = new Map<string, Deck>();
     BUILTIN_DECKS.forEach((d) => map.set(d.id, d));
@@ -140,7 +134,6 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
 
   const [selectedDeckToLoad, setSelectedDeckToLoad] = useState<string>(accessibleDecks[0]?.id || 'deck-starter-1');
 
-  // Di dalam komponen QuizIndex:
   React.useEffect(() => {
     const handleNavigate = (e: any) => {
       const targetId = e.detail?.deckId;
@@ -153,6 +146,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     window.addEventListener('muzeck:navigate-quiz-play', handleNavigate);
     return () => window.removeEventListener('muzeck:navigate-quiz-play', handleNavigate);
   }, [onSectionChange]);
+
   const currentLoadedDeck = accessibleDecks.find((d) => d.id === selectedDeckToLoad) || accessibleDecks[0];
   const totalQuestionsInDeck = currentLoadedDeck?.questions?.length || 0;
 
@@ -162,7 +156,6 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   const [passPlayCount, setPassPlayCount] = useState<number>(2);
   const [hostTeamCount, setHostTeamCount] = useState<number>(2);
 
-  // Saat deck yang dimuat berganti, sesuaikan batas jumlah soal ke total soal deck baru
   React.useEffect(() => {
     setQuestionCount((prev) => {
       if (!totalQuestionsInDeck) return 1;
@@ -182,9 +175,6 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     });
   };
 
-  // Ubah gambar logo (yang sama dipakai di top-bar web app) menjadi data URI base64,
-  // supaya berkas standalone benar-benar mandiri (offline) dan logonya tampil tanpa
-  // bergantung pada path relatif "/PlayMuzeck-logo.png" yang tidak ada saat dibuka lokal.
   const fetchLogoAsDataUri = async (): Promise<string> => {
     try {
       const res = await fetch('/PlayMuzeck-logo.png');
@@ -202,12 +192,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   };
 
   const handleDownloadStandalone = async () => {
-    // Sama seperti decksForDisplay: gabungkan, jangan gantikan, supaya
-    // berkas standalone yang diunduh tetap membawa 3 starter deck + kuis custom.
     const logoDataUri = await fetchLogoAsDataUri();
-    // Pakai origin nyata yang sedang berjalan (bukan localhost) supaya tombol
-    // "Beli di Web App", "Ajukan ke Cloud", "Donasi", dan "Hubungi Kami" di
-    // berkas standalone benar-benar tersambung ke server & web app produksi.
     const currentOrigin = window.location.origin;
     const htmlString = generateStandaloneQuizHtml(
       accessibleDecks,
@@ -221,21 +206,21 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'PlayMuzeck-Quiz-Standalone.html';
+    link.download = 'PlayMuzeck_Quiz.html';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
     if (onSuccessToast) {
-      onSuccessToast('Berkas aplikasi mandiri PlayMuzeck (zeck) berhasil diunduh!');
+      onSuccessToast('Berkas aplikasi mandiri PlayMuzeck_Quiz.html berhasil diunduh!');
     }
   };
 
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-7 pb-20">
       {/* BANNER SEGMEN KUIS DINAMIS */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-accent2/15 via-surface to-accent2/10 border-2 border-accent2/40 p-5 sm:p-6 shadow-[0_10px_35px_color-mix(in_srgb,var(--t-accent2)_15%,transparent)] flex flex-col md:flex-row md:items-center justify-between gap-5">
+      <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-accent2/15 via-surface to-accent2/10 border-2 border-accent2/40 p-5 sm:p-6 shadow-[0_10px_35px_color-mix(in_srgb,var(--t-accent2)_15%,transparent)] flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-center gap-3.5 z-10">
           <div className="w-13 h-13 rounded-2xl bg-accent2/15 border border-accent2/40 flex items-center justify-center text-accent2 shadow-lg shadow-accent2/20 shrink-0">
             {activeSection === 'pwa' && <Download className="w-6 h-6 stroke-[2.5]" />}
@@ -286,7 +271,6 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               </div>
             </div>
           )}
-
         </div>
       </div>
 
@@ -462,7 +446,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                         }}
                         className="w-6 h-6 rounded-md bg-black/70 hover:bg-black text-white flex items-center justify-center cursor-pointer"
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3.5 h-3.5" />
                       </button>
                       <span className="text-xs font-mono font-bold text-white w-5 text-center">{passPlayCount}</span>
                       <button
@@ -473,7 +457,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                         }}
                         className="w-6 h-6 rounded-md bg-black/70 hover:bg-black text-white flex items-center justify-center cursor-pointer"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                       <span className="text-[10px] text-gray-400">Pemain</span>
                     </div>
@@ -522,7 +506,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                         }}
                         className="w-6 h-6 rounded-md bg-black/70 hover:bg-black text-white flex items-center justify-center cursor-pointer"
                       >
-                        <Minus className="w-3 h-3" />
+                        <Minus className="w-3.5 h-3.5" />
                       </button>
                       <span className="text-xs font-mono font-bold text-white w-5 text-center">{hostTeamCount}</span>
                       <button
@@ -533,7 +517,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                         }}
                         className="w-6 h-6 rounded-md bg-black/70 hover:bg-black text-white flex items-center justify-center cursor-pointer"
                       >
-                        <Plus className="w-3 h-3" />
+                        <Plus className="w-3.5 h-3.5" />
                       </button>
                       <span className="text-[10px] text-gray-400">Regu</span>
                     </div>
@@ -597,7 +581,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
 
       {/* NOTIFIKASI DIKELUARKAN HOST */}
       {kickNotice && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] px-4 py-3 rounded-xl bg-red-900/90 border border-red-500/40 text-xs sm:text-sm text-red-100 font-bold shadow-2xl flex items-center gap-3">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-60 max-w-[92vw] px-4 py-3 rounded-xl bg-red-900/90 border border-red-500/40 text-xs sm:text-sm text-red-100 font-bold shadow-2xl flex items-center gap-3">
           <span>{kickNotice}</span>
           <button type="button" onClick={() => setKickNotice('')} className="text-red-200/70 hover:text-white cursor-pointer">✕</button>
         </div>
