@@ -43,6 +43,9 @@ import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
 import { io, Socket } from 'socket.io-client';
 
+/** Semua pemberitahuan di modal hilang sendiri setelah 5 detik. */
+const NOTICE_AUTO_HIDE_MS = 5000;
+
 interface MultiplayerArenaModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -57,6 +60,8 @@ interface MultiplayerArenaModalProps {
   initialDeckId?: string;
   questionLimit?: number;
   shuffleQuestions?: boolean;
+  /** Dipanggil saat pemain dikeluarkan host. Modal langsung ditutup, pesan ditampilkan oleh halaman induk. */
+  onKicked?: (message: string) => void;
 }
 
 type LeavePolicy = 'next' | 'end' | 'choose';
@@ -358,8 +363,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   initialDeckId,
   questionLimit,
   shuffleQuestions,
+  onKicked,
 }) => {
   const socketRef = useRef<Socket | null>(null);
+  // Ref supaya handler socket (dibuat sekali per pembukaan modal) selalu memanggil callback terbaru.
+  const onCloseRef = useRef(onClose);
+  const onKickedRef = useRef(onKicked);
+  onCloseRef.current = onClose;
+  onKickedRef.current = onKicked;
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -549,20 +560,26 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setRoomNotice(reason);
     });
     socket.on('room:kicked', (p: { banned: boolean }) => {
-      setRoom(null);
-      resetLocal();
-      setRoomNotice(
-        p?.banned
-          ? 'Kamu dikeluarkan oleh host dan diblokir dari ruangan ini.'
-          : 'Kamu dikeluarkan oleh host. Skor dari ruangan itu tidak disimpan.'
-      );
+      const msg = p?.banned
+        ? 'Kamu dikeluarkan oleh host dan diblokir dari ruangan ini.'
+        : 'Kamu dikeluarkan oleh host. Skor dari ruangan itu tidak disimpan.';
+      // Langsung keluar dari modal ke halaman Mainkan Kuis (tanpa tertahan di layar jeda/lobby),
+      // pesannya ditampilkan oleh halaman induk lewat onKicked.
+      if (onKickedRef.current) {
+        onKickedRef.current(msg);
+        onCloseRef.current();
+      } else {
+        setRoom(null);
+        resetLocal();
+        setRoomNotice(msg);
+      }
     });
     socket.on('game:peekResult', (r: { currentQIndex: number; optionIndex: number; correctIndex: number; explanation: string }) => {
       setPeek({ qIndex: r.currentQIndex, selected: r.optionIndex, correctIndex: r.correctIndex, explanation: r.explanation });
     });
     socket.on('room:notice', (msg: string) => {
       setHostNotice(msg);
-      setTimeout(() => setHostNotice((cur) => (cur === msg ? '' : cur)), 6000);
+      setTimeout(() => setHostNotice((cur) => (cur === msg ? '' : cur)), NOTICE_AUTO_HIDE_MS);
     });
     socket.on('room:replaced', () => {
       setRoom(null);
@@ -636,6 +653,19 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isOnline]);
+
+  // ---- Pemberitahuan (merah/kuning) hilang sendiri setelah 5 detik ----
+  useEffect(() => {
+    if (!roomNotice) return;
+    const t = setTimeout(() => setRoomNotice(''), NOTICE_AUTO_HIDE_MS);
+    return () => clearTimeout(t);
+  }, [roomNotice]);
+
+  useEffect(() => {
+    if (!errorMsg || connectionState !== 'connected') return;
+    const t = setTimeout(() => setErrorMsg(''), NOTICE_AUTO_HIDE_MS);
+    return () => clearTimeout(t);
+  }, [errorMsg, connectionState]);
 
   // ---- Muat daftar Room Global begitu tab "Room Global" dibuka ----
   useEffect(() => {

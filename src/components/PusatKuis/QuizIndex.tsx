@@ -83,6 +83,13 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     shuffleQuestions: boolean;
   } | null>(null);
   const [isMultiplayerOpen, setIsMultiplayerOpen] = useState(false);
+  // Pesan saat dikeluarkan host dari ruangan multiplayer; hilang sendiri setelah 5 detik.
+  const [kickNotice, setKickNotice] = useState('');
+  React.useEffect(() => {
+    if (!kickNotice) return;
+    const t = setTimeout(() => setKickNotice(''), 5000);
+    return () => clearTimeout(t);
+  }, [kickNotice]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // 3 deck gratis permanen selalu berasal dari berkas JSON (src/data/quiz/decks/deck-starter-*.json)
@@ -584,10 +591,22 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
       {/* MODAL RIWAYAT HASIL (rincian jawaban per soal) */}
       {isHistoryOpen && <QuizResultHistory onClose={() => setIsHistoryOpen(false)} />}
 
+      {/* NOTIFIKASI DIKELUARKAN HOST */}
+      {kickNotice && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] max-w-[92vw] px-4 py-3 rounded-xl bg-red-900/90 border border-red-500/40 text-xs sm:text-sm text-red-100 font-bold shadow-2xl flex items-center gap-3">
+          <span>{kickNotice}</span>
+          <button type="button" onClick={() => setKickNotice('')} className="text-red-200/70 hover:text-white cursor-pointer">✕</button>
+        </div>
+      )}
+
       {/* MODAL MULTIPLAYER */}
       <MultiplayerArenaModal
         isOpen={isMultiplayerOpen}
         onClose={() => setIsMultiplayerOpen(false)}
+        onKicked={(msg) => {
+          onSectionChange?.('play');
+          setKickNotice(msg);
+        }}
         decks={accessibleDecks}
         unlockedDeckIds={allUnlockedIds}
         isOnline={isOnline}

@@ -946,8 +946,9 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
         if (target.userId) room.bannedUsers.add(target.userId);
       }
       const sid = target.socketId;
-      removePlayer(io, room, target, undefined, 'kicked');
+      // Kirim sinyal ke pemain dulu supaya layarnya langsung berpindah, baru dihapus dari ruangan.
       if (sid) io.sockets.sockets.get(sid)?.emit('room:kicked', { banned: ban });
+      removePlayer(io, room, target, undefined, 'kicked');
       room.rematchRequests.delete(target.id);
       if (rooms.has(room.code)) broadcastRoom(io, room);
     });
