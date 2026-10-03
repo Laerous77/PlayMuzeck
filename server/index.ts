@@ -142,11 +142,16 @@ const requireUser: express.RequestHandler = (req, res, next) => {
 };
 app.use('/api/user', requireUser);
 
+// Tiap langkah dibuat INDEPENDEN: kalau satu gagal, langkah berikutnya tetap jalan
+// (dulu satu error membuat tabel user_notifications tidak pernah dibuat -> lonceng kosong).
 Promise.resolve(initDatabase())
+  .catch((err) => console.error('[DB] initDatabase gagal:', err))
   .then(() => ensurePaymentTables())
+  .catch((err) => console.error('[DB] ensurePaymentTables gagal:', err))
   .then(() => ensureThemeSchema(pool)) // tabel themes & user_theme_prefs
+  .catch((err) => console.error('[DB] ensureThemeSchema gagal:', err))
   .then(() => ensureNotificationSchema(pool)) // tabel user_notifications (lonceng notifikasi)
-  .catch((err) => console.error('[DB] init gagal:', err));
+  .catch((err) => console.error('[DB] ensureNotificationSchema gagal:', err));
 
 // 1. Folder penyimpanan file fisik (Audio MP3/WAV/M4A/FLAC & PDF)
 const uploadsDir = path.resolve(process.cwd(), 'uploads');

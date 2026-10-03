@@ -22,12 +22,27 @@ export async function ensureNotificationSchema(pool: Pool) {
   `);
 }
 
+// Pastikan tabel ada SEBELUM dipakai (aman dipanggil berkali-kali; hanya jalan sekali).
+// Dulu tabel hanya dibuat lewat rantai .then() di index.ts, sehingga kalau langkah sebelumnya
+// error, tabel tidak pernah dibuat dan SEMUA notifikasi diam-diam gagal.
+let schemaReady: Promise<void> | null = null;
+export function ensureNotificationSchemaOnce(pool: Pool): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = ensureNotificationSchema(pool).catch((err) => {
+      schemaReady = null; // coba lagi di pemanggilan berikutnya
+      throw err;
+    });
+  }
+  return schemaReady;
+}
+
 /**
  * Kirim notifikasi ke satu pengguna. Tidak pernah melempar error (gagal notifikasi tidak boleh menggagalkan aksi utama).
  * type contoh: 'account_deletion', 'account_deletion_cancelled', 'theme_applied', 'theme_reset'.
  */
 export async function notifyUser(pool: Pool, email: string, type: string, title: string, body = '') {
   try {
+    await ensureNotificationSchemaOnce(pool);
     await pool.query(
       `INSERT INTO user_notifications (user_email, type, title, body) VALUES ($1, $2, $3, $4)`,
       [String(email).toLowerCase(), type.slice(0, 40), title.slice(0, 200), body.slice(0, 5000)]
@@ -40,11 +55,26 @@ export async function notifyUser(pool: Pool, email: string, type: string, title:
 export function createNotificationsRouter({ pool }: { pool: Pool }) {
   const r = Router();
 
+  // Setiap request ke /api/user/notifications* memastikan tabelnya ada dulu.
+  r.use('/api/user/notifications', async (_req, _res, next) => {
+    try {
+      await ensureNotificationSchemaOnce(pool);
+    } catch (err) {
+      console.error('[notif] schema:', err);
+    }
+    next();
+  });
+
   // Semua route di bawah /api/user sudah dilindungi requireUser (index.ts), jadi req.user pasti ada.
   r.get('/api/user/notifications', async (req, res) => {
+    const user = req.user!;
+    let items: any[] = [];
+    let unread = 0;
+    let deletion: { scheduledAt: string; requestedBy: 'self' | 'admin' } | null = null;
+
+    // Daftar notifikasi. Kalau gagal, banner hapus akun di bawah tetap dikirim.
     try {
-      const user = req.user!;
-      const [list, unread, del] = await Promise.all([
+      const [list, count] = await Promise.all([
         pool.query(
           `SELECT id, type, title, body, created_at, read_at FROM user_notifications
             WHERE lower(user_email) = lower($1) ORDER BY created_at DESC, id DESC LIMIT 50`,
@@ -54,24 +84,32 @@ export function createNotificationsRouter({ pool }: { pool: Pool }) {
           `SELECT COUNT(*)::int AS n FROM user_notifications WHERE lower(user_email) = lower($1) AND read_at IS NULL`,
           [user.email]
         ),
-        pool.query(`SELECT deletion_scheduled_at, deletion_requested_by FROM users WHERE id = $1`, [user.id]),
       ]);
-      const d = del.rows[0];
-      res.json({
-        items: list.rows,
-        unread: unread.rows[0].n,
-        // Status penghapusan akun dihitung langsung dari tabel users, jadi hitung mundurnya selalu akurat.
-        deletion: d?.deletion_scheduled_at
-          ? {
-              scheduledAt: new Date(d.deletion_scheduled_at).toISOString(),
-              requestedBy: d.deletion_requested_by === 'self' ? 'self' : 'admin',
-            }
-          : null,
-      });
+      items = list.rows;
+      unread = count.rows[0].n;
     } catch (err) {
       console.error('[notif] list:', err);
-      res.status(500).json({ error: 'Gagal memuat notifikasi.' });
     }
+
+    // Status penghapusan akun dihitung langsung dari tabel users, jadi hitung mundurnya selalu akurat
+    // dan tidak bergantung pada tabel notifikasi.
+    try {
+      const del = await pool.query(
+        `SELECT deletion_scheduled_at, deletion_requested_by FROM users WHERE id = $1`,
+        [user.id]
+      );
+      const d = del.rows[0];
+      if (d?.deletion_scheduled_at) {
+        deletion = {
+          scheduledAt: new Date(d.deletion_scheduled_at).toISOString(),
+          requestedBy: d.deletion_requested_by === 'self' ? 'self' : 'admin',
+        };
+      }
+    } catch (err) {
+      console.error('[notif] deletion status:', err);
+    }
+
+    res.json({ items, unread, deletion });
   });
 
   // Jembatan ke sistem notifikasi tema lama (/api/me/notifications): lonceng memindahkan notifikasi dari admin

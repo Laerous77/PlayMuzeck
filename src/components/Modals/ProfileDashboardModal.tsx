@@ -437,6 +437,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       if (!res.ok) throw new Error(data?.error || 'Gagal menjadwalkan penghapusan akun.');
       setDeletion({ scheduledAt: data.scheduledAt, requestedBy: 'self' });
       window.dispatchEvent(new Event('muzeck:notifications-refresh')); // lonceng di Header langsung diperbarui
+      window.dispatchEvent(new Event('muzeck:account-deletion'));
       setShowDeleteForm(false);
       setDeleteConfirm('');
       setDeletePassword('');
@@ -1508,8 +1509,12 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
           <div className="flex items-center gap-2">
             {userSession.isLoggedIn ? (
               <div className="flex items-center gap-4 flex-wrap">
-                <button type="button" onClick={() => { onLogout(); onClose(); setTimeout(() => window.location.reload(), 300); }} className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 font-bold transition-colors cursor-pointer"><LogOut className="w-3.5 h-3.5" /> <span>Keluar & Hapus Sesi Klien</span></button>
-                {!deletion && (
+                <button type="button" onClick={() => { onLogout(); onClose(); setTimeout(() => window.location.reload(), 300); }} className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 font-bold transition-colors cursor-pointer"><LogOut className="w-3.5 h-3.5" /> <span>Keluar</span></button>
+                {deletion ? (
+                  <button type="button" disabled={deleteBusy} onClick={handleCancelDeletion} className="flex items-center gap-1.5 text-orange-300 hover:text-orange-200 font-bold transition-colors cursor-pointer disabled:opacity-50">
+                    {deleteBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />} <span>Batalkan Penghapusan Akun</span>
+                  </button>
+                ) : (
                   <button type="button" onClick={() => { setShowDeleteForm((v) => !v); setDeleteError(null); }} className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 font-bold transition-colors cursor-pointer"><Trash2 className="w-3.5 h-3.5" /> <span>Hapus Akun</span></button>
                 )}
               </div>
