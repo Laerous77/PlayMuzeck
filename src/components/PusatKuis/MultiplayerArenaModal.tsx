@@ -29,8 +29,12 @@ import {
   Save,
   ChevronLeft,
   ChevronRight,
-  Minus,
-  Plus,
+  Pause,
+  Play,
+  LogOut,
+  Eye,
+  EyeOff,
+  ShieldAlert,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -52,6 +56,8 @@ interface MultiplayerArenaModalProps {
   shuffleQuestions?: boolean;
 }
 
+type LeavePolicy = 'next' | 'end' | 'choose';
+
 interface RoomPlayer {
   id: string;
   name: string;
@@ -59,6 +65,8 @@ interface RoomPlayer {
   frameId?: string;
   isHost: boolean;
   isReady: boolean;
+  /** false = pemain sedang offline (ditahan di ruangan, bisa kembali). */
+  connected?: boolean;
   score: number;
   streak: number;
   lastAnswerStatus?: 'correct' | 'wrong';
@@ -84,6 +92,15 @@ interface RoomState {
   visibility: 'invite' | 'global';
   /** Room global dengan password wajib mengisi password saat join. Password asli tidak pernah dikirim ke client. */
   hasPassword: boolean;
+  hostId: string;
+  totalQuestions: number;
+  /** Host menahan pemain agar tidak bisa keluar saat permainan berjalan. */
+  lockPlayers: boolean;
+  /** Apa yang terjadi saat host keluar. */
+  hostLeavePolicy: LeavePolicy;
+  /** Dijeda oleh host (hanya di layar jeda antar soal). */
+  paused: boolean;
+  endNotice: string | null;
   players: RoomPlayer[];
 }
 
@@ -104,6 +121,26 @@ const fallbackColorFor = (id: string) => {
   return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
 };
 
+/** ID stabil per browser: server memakainya untuk mengenali pemain yang kembali setelah refresh / tutup tab. */
+const CLIENT_ID_KEY = 'muzeck_mp_client_id';
+const getClientId = (): string => {
+  try {
+    let id = localStorage.getItem(CLIENT_ID_KEY);
+    if (!id || !/^[A-Za-z0-9_-]{8,64}$/.test(id)) {
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      id = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+      localStorage.setItem(CLIENT_ID_KEY, id);
+    }
+    return id;
+  } catch {
+    // localStorage tidak tersedia: ID sementara (tidak bisa dipulihkan setelah refresh).
+    const bytes = new Uint8Array(24);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+};
+
 /** Batas jeda antar soal (detik). */
 const MIN_GAP_SEC = 3;
 const MAX_GAP_SEC = 60;
@@ -116,7 +153,7 @@ const PlayerAvatar: React.FC<{ player: RoomPlayer; size?: 'sm' | 'md' }> = ({ pl
   const frame = PROFILE_FRAMES.find((f) => f.id === player.frameId) || PROFILE_FRAMES[0];
   const dim = size === 'md' ? 'w-9 h-9' : 'w-6 h-6';
   return (
-    <div className={`relative ${dim} shrink-0`}>
+    <div className={`relative ${dim} shrink-0 ${player.connected === false ? 'opacity-40' : ''}`}>
       {player.avatarUrl ? (
         <img
           src={player.avatarUrl}
@@ -134,6 +171,121 @@ const PlayerAvatar: React.FC<{ player: RoomPlayer; size?: 'sm' | 'md' }> = ({ pl
     </div>
   );
 };
+
+/** Papan skor yang SAMA dipakai di layar jeda & layar akhir (pageSize = paginasi, kosong = tampil semua). */
+const Leaderboard: React.FC<{
+  players: RoomPlayer[];
+  myId: string;
+  page?: number;
+  pageSize?: number;
+  onPage?: (n: number) => void;
+}> = ({ players, myId, page = 0, pageSize, onPage }) => {
+  const pageCount = pageSize ? Math.max(1, Math.ceil(players.length / pageSize)) : 1;
+  const cur = Math.min(page, pageCount - 1);
+  const slice = pageSize ? players.slice(cur * pageSize, cur * pageSize + pageSize) : players;
+  const offset = pageSize ? cur * pageSize : 0;
+  return (
+    <div className="max-w-sm mx-auto space-y-2 text-left">
+      {slice.map((p, i) => {
+        const rank = offset + i;
+        return (
+          <div
+            key={p.id}
+            className={`flex items-center justify-between p-3 rounded-xl border ${
+              rank === 0 ? 'bg-accent/10 border-accent/40' : p.id === myId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {rank === 0 ? (
+                <Crown className="w-4 h-4 text-accent shrink-0" />
+              ) : (
+                <span className="text-xs font-mono font-bold text-gray-400 w-4 text-center shrink-0">{rank + 1}</span>
+              )}
+              <PlayerAvatar player={p} size="md" />
+              <span className="text-sm font-bold text-white truncate">
+                {p.name}
+                {p.id === myId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
+                {p.connected === false && <span className="text-[10px] text-amber-300/80 ml-1">(offline)</span>}
+              </span>
+            </div>
+            <span className="text-sm font-mono font-black text-accent2 shrink-0">{p.score} Poin</span>
+          </div>
+        );
+      })}
+      {pageSize && pageCount > 1 && onPage && (
+        <div className="flex items-center justify-center gap-2 pt-1">
+          <button
+            onClick={() => onPage(Math.max(0, cur - 1))}
+            disabled={cur === 0}
+            className="p-1 rounded-lg bg-black/40 border border-white/10 text-gray-300 disabled:opacity-30 cursor-pointer"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <span className="text-[11px] font-mono text-gray-400">
+            {cur + 1}/{pageCount}
+          </span>
+          <button
+            onClick={() => onPage(Math.min(pageCount - 1, cur + 1))}
+            disabled={cur >= pageCount - 1}
+            className="p-1 rounded-lg bg-black/40 border border-white/10 text-gray-300 disabled:opacity-30 cursor-pointer"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const POLICY_OPTIONS: { id: LeavePolicy; title: string; desc: string }[] = [
+  { id: 'next', title: 'Pindah ke pemain berikutnya', desc: 'Pemain yang bergabung tepat setelah host otomatis jadi host baru.' },
+  { id: 'choose', title: 'Host menunjuk pengganti', desc: 'Saat keluar, host memilih sendiri siapa host barunya.' },
+  { id: 'end', title: 'Akhiri permainan', desc: 'Host keluar = permainan langsung selesai untuk semua pemain.' },
+];
+
+/** Aturan ruangan yang diatur host sebelum mulai: tahan pemain keluar + apa yang terjadi bila host keluar. */
+const RoomRulesSetting: React.FC<{
+  lockPlayers: boolean;
+  onLockChange: (v: boolean) => void;
+  policy: LeavePolicy;
+  onPolicyChange: (v: LeavePolicy) => void;
+}> = ({ lockPlayers, onLockChange, policy, onPolicyChange }) => (
+  <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3 text-left">
+    <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+      <ShieldAlert className="w-3.5 h-3.5" /> Aturan Ruangan
+    </span>
+    <button type="button" onClick={() => onLockChange(!lockPlayers)} className="w-full flex items-center justify-between gap-3 cursor-pointer text-left">
+      <span className="min-w-0">
+        <span className="text-xs font-bold text-white block">Tahan pemain keluar</span>
+        <span className="text-[10px] text-gray-500 block">
+          Setelah mulai, pemain tidak bisa keluar sampai selesai. Kalau menutup web, mereka tetap kembali ke permainan yang sama.
+        </span>
+      </span>
+      <span className={`w-9 h-5 rounded-full relative transition-colors shrink-0 ${lockPlayers ? 'bg-accent2' : 'bg-white/15'}`}>
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${lockPlayers ? 'translate-x-4' : 'translate-x-0.5'}`} />
+      </span>
+    </button>
+    <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+      <span className="text-[11px] font-bold text-gray-300 block">Kalau host keluar</span>
+      {POLICY_OPTIONS.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onPolicyChange(o.id)}
+          className={`w-full p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+            policy === o.id ? 'bg-accent2/20 border-accent2/60' : 'bg-black/40 border-white/10 hover:border-white/30'
+          }`}
+        >
+          <span className="text-[11px] font-bold text-white block">
+            {o.title}
+            {o.id === 'next' && <span className="ml-1.5 text-[9px] font-bold text-accent2">BAWAAN</span>}
+          </span>
+          <span className="text-[10px] text-gray-500 block">{o.desc}</span>
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   isOpen,
@@ -157,9 +309,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     () => decks.filter((d) => d.isFree || unlockedDeckIds.includes(d.id)),
     [decks, unlockedDeckIds]
   );
-  const [selectedDeckId, setSelectedDeckId] = useState<string>(
-    playableDecks.find((d) => d.id === initialDeckId)?.id || playableDecks[0]?.id || 'deck-starter-1'
-  );
+  // Paket kuis, jumlah soal & acak urutan SELALU mengikuti layar Konfigurasi Sesi (sama seperti mode lain).
+  const selectedDeckId = playableDecks.find((d) => d.id === initialDeckId)?.id || playableDecks[0]?.id || '';
   const [roundTimeChoice, setRoundTimeChoice] = useState<number>(DEFAULT_QUESTION_TIME);
   // Skema poin berbasis waktu: SATU pengaturan saja. Poin penuh soal (dari Quiz Editor)
   // turun linear dari 100% (jawab seketika) menuju `minPointsPercent` (jawab di detik
@@ -188,15 +339,28 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [globalPasswordInput, setGlobalPasswordInput] = useState<string>('');
 
   const [room, setRoom] = useState<RoomState | null>(null);
+  // ID stabil per browser (bukan socket.id) supaya bisa kembali ke permainan yang sama.
+  const [clientId] = useState<string>(getClientId);
+  // ID PUBLIK milik kita di ruangan (dari server). `clientId` tetap rahasia dan tidak ditampilkan.
   const [mySocketId, setMySocketId] = useState<string>('');
   const [userSelectedOption, setUserSelectedOption] = useState<number | null>(null);
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number; correctIndex: number; explanation: string } | null>(null);
+  // Jawaban benar + penjelasan per soal. Server baru mengirimnya SETELAH soal dijawab / waktu habis,
+  // jadi soal yang dimuat di browser tidak membawa kunci jawaban.
+  const revealedRef = useRef<Record<number, { correctIndex: number; explanation: string }>>({});
   const [timeLeft, setTimeLeft] = useState(0);
   const [questionsSnapshot, setQuestionsSnapshot] = useState<QuizQuestion[]>([]);
-  const [isResultSaved, setIsResultSaved] = useState(false);
+  // Indeks soal terakhir yang sudah tersimpan ke riwayat (null = belum pernah disimpan).
+  const [savedUpTo, setSavedUpTo] = useState<number | null>(null);
   const [lbPage, setLbPage] = useState(0);
   const [gapLeft, setGapLeft] = useState(0);
   const [floatingReactions, setFloatingReactions] = useState<{ id: string; emoji: string; name: string }[]>([]);
+  const [lockPlayers, setLockPlayers] = useState(false);
+  const [hostLeavePolicy, setHostLeavePolicy] = useState<LeavePolicy>('next');
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [successorId, setSuccessorId] = useState<string>('');
+  const [roomNotice, setRoomNotice] = useState('');
 
   // Untuk menyusun riwayat permainan (sama seperti mode lain) begitu game selesai.
   // Pilihan jawaban pemain per indeks soal (sumber riwayat; tidak bergantung urutan event socket).
@@ -209,29 +373,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     100,
     Math.max(0, Number((activeDeck as any)?.penaltyPercent ?? (activeDeck as any)?.settings?.penaltyPercent) || 0)
   );
-  const [questionCount, setQuestionCount] = useState<number>(
-    Math.max(1, Math.min(questionLimit ?? deckTotal, deckTotal || 1))
-  );
-  const [shuffleOn, setShuffleOn] = useState<boolean>(Boolean(shuffleQuestions));
-
-  // Sinkronkan dengan pengaturan dari layar setup tiap modal dibuka.
-  useEffect(() => {
-    if (!isOpen) return;
-    const id = playableDecks.find((d) => d.id === initialDeckId)?.id;
-    if (id) setSelectedDeckId(id);
-    setShuffleOn(Boolean(shuffleQuestions));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
-
-  // Jumlah soal selalu dalam rentang 1..total soal deck terpilih.
-  useEffect(() => {
-    setQuestionCount((prev) => {
-      if (!deckTotal) return 1;
-      const base = isOpen && questionLimit && prev === deckTotal ? questionLimit : prev;
-      return Math.min(Math.max(base, 1), deckTotal);
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDeckId, deckTotal, isOpen]);
+  const questionCount = Math.max(1, Math.min(questionLimit ?? deckTotal, deckTotal || 1));
+  const shuffleOn = Boolean(shuffleQuestions);
 
   // ---- Reset total setiap kali modal ditutup, supaya dibuka lagi selalu bersih (tidak ada podium nyangkut) ----
   useEffect(() => {
@@ -246,7 +389,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setQuestionsSnapshot([]);
     setFloatingReactions([]);
     answersByIndexRef.current = {};
-    setIsResultSaved(false);
+    revealedRef.current = {};
+    setMySocketId('');
+    setSavedUpTo(null);
     setLbPage(0);
     setJoinMode('code');
     setGlobalRooms([]);
@@ -254,28 +399,84 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setGlobalPasswordInput('');
     setRoomVisibility('invite');
     setRoomPassword('');
+    setLeaveDialogOpen(false);
+    setShowAnswer(false);
+    setRoomNotice('');
   }, [isOpen]);
 
-  // ---- Koneksi socket: dibuat setiap modal dibuka ----
+  // ---- Koneksi socket: dibuat setiap modal dibuka; otomatis menyambung ke permainan yang masih berlangsung ----
   useEffect(() => {
     if (!isOpen || !isOnline) return;
 
     const socket = io(SOCKET_URL, { path: '/socket.io', transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
+    const resetLocal = () => {
+      setQuestionsSnapshot([]);
+      setUserSelectedOption(null);
+      setAnswerResult(null);
+      setShowAnswer(false);
+      setLeaveDialogOpen(false);
+      setSavedUpTo(null);
+      answersByIndexRef.current = {};
+      revealedRef.current = {};
+    };
+
+    // Pulihkan layar pemain dari data server (soal, jawaban sendiri, hasil ronde).
+    const applySync = (sync: any) => {
+      if (!sync) return;
+      setQuestionsSnapshot(Array.isArray(sync.questions) ? sync.questions : []);
+      answersByIndexRef.current = { ...(sync.myAnswers || {}) };
+      revealedRef.current = { ...(sync.revealed || {}) };
+      const sel = answersByIndexRef.current[sync.currentQIndex ?? 0];
+      setUserSelectedOption(sel === undefined ? null : sel);
+      if (sync.myResult) setAnswerResult(sync.myResult);
+      else if (sync.roundResult) setAnswerResult({ isCorrect: false, pointsAwarded: 0, ...sync.roundResult });
+      else setAnswerResult(null);
+    };
+
     socket.on('connect', () => {
       setConnectionState('connected');
-      setMySocketId(socket.id || '');
+      socket.emit('room:rejoin', { clientId });
     });
     socket.on('connect_error', () => {
       setConnectionState('error');
       setErrorMsg('Gagal terhubung ke server multiplayer. Coba lagi beberapa saat.');
     });
 
-    socket.on('room:created', (state: RoomState) => setRoom(state));
-    socket.on('room:joined', (state: RoomState) => setRoom(state));
+    socket.on('room:created', (p: { state: RoomState; you: string }) => {
+      setRoom(p.state);
+      setMySocketId(p.you);
+      setErrorMsg('');
+    });
+    socket.on('room:joined', (p: { state: RoomState; sync: any; you: string }) => {
+      setRoom(p.state);
+      setMySocketId(p.you);
+      applySync(p.sync);
+      setErrorMsg('');
+    });
+    socket.on('room:resumed', (p: { state: RoomState; sync: any; you: string }) => {
+      setRoom(p.state);
+      setMySocketId(p.you);
+      applySync(p.sync);
+      setErrorMsg('');
+    });
     socket.on('room:update', (state: RoomState) => setRoom(state));
     socket.on('room:error', (msg: string) => setErrorMsg(msg));
+    socket.on('room:left', () => {
+      setRoom(null);
+      resetLocal();
+    });
+    socket.on('room:closed', (reason: string) => {
+      setRoom(null);
+      resetLocal();
+      setRoomNotice(reason);
+    });
+    socket.on('room:replaced', () => {
+      setRoom(null);
+      resetLocal();
+      setRoomNotice('Sesi ini dilanjutkan di tab/perangkat lain.');
+    });
     socket.on('room:globalList', (list: GlobalRoomListing[]) => {
       setGlobalRooms(list);
       setIsLoadingGlobalRooms(false);
@@ -285,26 +486,30 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setQuestionsSnapshot(payload.questions);
       setUserSelectedOption(null);
       setAnswerResult(null);
+      setShowAnswer(false);
       answersByIndexRef.current = {};
-      setIsResultSaved(false);
+      revealedRef.current = {};
+      setSavedUpTo(null);
       audioEngine.playClickSound();
     });
 
-    socket.on('game:answerResult', (result: { isCorrect: boolean; pointsAwarded: number; correctIndex: number; explanation: string }) => {
-      setAnswerResult(result);
-    });
+    socket.on(
+      'game:answerResult',
+      (result: { currentQIndex: number; isCorrect: boolean; pointsAwarded: number; correctIndex: number; explanation: string }) => {
+        revealedRef.current[result.currentQIndex] = { correctIndex: result.correctIndex, explanation: result.explanation };
+        setAnswerResult(result);
+        if (result.isCorrect) audioEngine.playCorrectSound();
+        else if (typeof (audioEngine as any).playIncorrectSound === 'function') (audioEngine as any).playIncorrectSound();
+      }
+    );
 
-    // Waktu jawab habis: server masuk status 'round-result' selama roundGapSec
-    // detik. `answerResult` dari jawaban sendiri tetap tampil kalau sudah
-    // menjawab; kalau belum menjawab sama sekali, tampilkan juga jawaban
-    // benarnya di sini supaya semua pemain lihat hasil, bukan cuma yang jawab.
+    // Waktu jawab habis: server masuk 'round-result'. Yang belum menjawab tetap dapat info jawaban benar.
     socket.on(
       'game:roundEnded',
       (payload: { currentQIndex: number; correctIndex: number; explanation: string; roundResultEndsAt: number; isLastQuestion: boolean }) => {
+        revealedRef.current[payload.currentQIndex] = { correctIndex: payload.correctIndex, explanation: payload.explanation };
         setAnswerResult((prev) =>
-          prev
-            ? prev
-            : { isCorrect: false, pointsAwarded: 0, correctIndex: payload.correctIndex, explanation: payload.explanation }
+          prev ? prev : { isCorrect: false, pointsAwarded: 0, correctIndex: payload.correctIndex, explanation: payload.explanation }
         );
       }
     );
@@ -312,9 +517,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socket.on('game:nextRound', (_payload: { currentQIndex: number; roundEndsAt: number }) => {
       setUserSelectedOption(null);
       setAnswerResult(null);
+      setShowAnswer(false);
     });
 
-    socket.on('game:ended', (state: RoomState) => setRoom(state));
+    socket.on('game:ended', (p: { state: RoomState; revealed: Record<number, { correctIndex: number; explanation: string }> }) => {
+      revealedRef.current = { ...revealedRef.current, ...(p.revealed || {}) };
+      setRoom(p.state);
+      setLeaveDialogOpen(false);
+    });
 
     socket.on('room:reactionReceived', (payload: { playerId: string; playerName: string; emoji: string }) => {
       const id = `${Date.now()}-${Math.random()}`;
@@ -368,12 +578,29 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const isHost = Boolean(me?.isHost);
   const hasAnswered = userSelectedOption !== null;
   const sortedPlayers = room ? [...room.players].sort((a, b) => b.score - a.score) : [];
+  const running = room?.status === 'in-game' || room?.status === 'round-result';
+  // Host menahan pemain: non-host tidak bisa keluar selama permainan berjalan.
+  const leaveLocked = Boolean(room?.lockPlayers && running && !isHost);
+  const needsSuccessor = Boolean(isHost && room?.hostLeavePolicy === 'choose' && (room?.players.length ?? 0) > 1 && room?.status !== 'podium');
+  // Soal terakhir yang sudah selesai dikerjakan (untuk Simpan Hasil sebagian di tengah permainan).
+  const saveUpTo = room?.status === 'podium' ? questionsSnapshot.length - 1 : room?.currentQIndex ?? 0;
+  const isResultSaved = savedUpTo === saveUpTo;
+  /** Calon host otomatis (kebijakan 'next'): pemain online tepat setelah host, atau yang pertama. */
+  const autoNextHost = (() => {
+    if (!room) return undefined;
+    const others = room.players.filter((p) => !p.isHost && p.connected !== false);
+    const hostIdx = room.players.findIndex((p) => p.isHost);
+    return room.players.slice(hostIdx + 1).find((p) => others.includes(p)) || others[0];
+  })();
 
   const handleCreateRoom = () => {
     if (!activeDeck) return;
     audioEngine.playClickSound();
     socketRef.current?.emit('room:create', {
+      clientId,
       name: userNickname || 'Host',
+      lockPlayers,
+      hostLeavePolicy,
       avatarUrl: userAvatarUrl || '',
       frameId: userFrameId || 'none',
       deckId: activeDeck.id,
@@ -397,6 +624,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setErrorMsg('');
     socketRef.current?.emit('room:join', {
       code,
+      clientId,
       name: userNickname || 'Pemain',
       avatarUrl: userAvatarUrl || '',
       frameId: userFrameId || 'none',
@@ -418,6 +646,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     }
     socketRef.current?.emit('room:join', {
       code: r.code,
+      clientId,
       name: userNickname || 'Pemain',
       avatarUrl: userAvatarUrl || '',
       frameId: userFrameId || 'none',
@@ -430,6 +659,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setErrorMsg('');
     socketRef.current?.emit('room:join', {
       code: pendingGlobalCode,
+      clientId,
       name: userNickname || 'Pemain',
       avatarUrl: userAvatarUrl || '',
       frameId: userFrameId || 'none',
@@ -473,29 +703,29 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     if (hasAnswered || !currentQ) return;
     setUserSelectedOption(idx);
     answersByIndexRef.current[room?.currentQIndex ?? 0] = idx;
-    const isCorrect = idx === currentQ.correctIndex;
-    if (isCorrect) audioEngine.playCorrectSound();
-    else if (typeof (audioEngine as any).playIncorrectSound === 'function') (audioEngine as any).playIncorrectSound();
-    else audioEngine.playClickSound();
+    audioEngine.playClickSound(); // bunyi benar/salah diputar saat server membalas hasil jawaban
     socketRef.current?.emit('game:answer', { optionIndex: idx });
   };
 
-  /** Simpan riwayat (manual, seperti tombol "Simpan Hasil" di mode Langsung Main). */
+  /** Simpan riwayat (manual). Bisa dipakai di tengah permainan (disimpan sampai soal terakhir yang selesai) maupun di akhir. */
   const handleSaveResult = () => {
-    if (!room || isResultSaved) return;
-    const answers: AnswerLogEntry[] = questionsSnapshot.map((q, i) => {
+    if (!room || isResultSaved || !questionsSnapshot.length) return;
+    const upTo = Math.min(saveUpTo, questionsSnapshot.length - 1);
+    const final = room.status === 'podium';
+    const answers: AnswerLogEntry[] = questionsSnapshot.slice(0, upTo + 1).map((q, i) => {
       const sel = answersByIndexRef.current[i] ?? null;
+      const rv = revealedRef.current[i];
       return {
         questionId: (q as any).id || `mp-q-${i}`,
         number: i + 1,
         question: q.question,
         options: q.options,
-        correctIndex: q.correctIndex,
+        correctIndex: rv?.correctIndex ?? -1,
         // Tidak menjawab = -1 (waktu habis). null akan salah terbaca sebagai "Dinilai host" di riwayat.
         selectedIndex: sel === null ? -1 : sel,
-        isCorrect: sel !== null && sel === q.correctIndex,
+        isCorrect: sel !== null && rv !== undefined && sel === rv.correctIndex,
         category: q.category,
-        explanation: q.explanation,
+        explanation: rv?.explanation || undefined,
       };
     });
     const mine = room.players.find((p) => p.id === mySocketId);
@@ -505,13 +735,42 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       deckId: room.deckId,
       deckTitle: room.deckTitle,
       mode: 'multiplayer',
-      totalQuestions: questionsSnapshot.length,
-      summary: `Skor akhir: ${mine?.score ?? 0} poin di antara ${room.players.length} pemain.`,
+      totalQuestions: answers.length,
+      summary: `${final ? 'Skor akhir' : `Skor sementara (setelah soal ${upTo + 1}/${questionsSnapshot.length})`}: ${mine?.score ?? 0} poin di antara ${room.players.length} pemain.`,
       data: { finalRank: [...room.players].sort((a, b) => b.score - a.score).map((p) => ({ name: p.name, score: p.score })) },
       answers,
     };
-    if (addSavedResult(entry)) setIsResultSaved(true);
+    if (addSavedResult(entry)) setSavedUpTo(upTo);
     else alert('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
+  };
+
+  /** Host: dijeda / lanjutkan hitung mundur antar soal. */
+  const handlePause = () => socketRef.current?.emit('game:pause');
+  const handleResume = () => socketRef.current?.emit('game:resume');
+
+  /** Host mengubah aturan selama masih di lobby. */
+  const handleLockChange = (v: boolean) => {
+    setLockPlayers(v);
+    if (room && isHost) socketRef.current?.emit('room:settings', { lockPlayers: v });
+  };
+  const handlePolicyChange = (v: LeavePolicy) => {
+    setHostLeavePolicy(v);
+    if (room && isHost) socketRef.current?.emit('room:settings', { hostLeavePolicy: v });
+  };
+
+  /** Keluar dari permainan lewat dialog konfirmasi. */
+  const handleLeave = () => {
+    socketRef.current?.emit('room:leave', needsSuccessor && successorId ? { successorId } : undefined);
+    setLeaveDialogOpen(false);
+  };
+  const openLeaveDialog = () => {
+    setSuccessorId('');
+    setLeaveDialogOpen(true);
+  };
+  /** Dari layar akhir: keluar dari ruangan dulu supaya tidak jadi pemain "hantu", lalu tutup modal. */
+  const handleClosePodium = () => {
+    socketRef.current?.emit('room:leave');
+    setTimeout(onClose, 150);
   };
 
   const handleSendReaction = (emoji: string) => {
@@ -603,6 +862,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
         <div className="p-5 sm:p-6 overflow-y-auto flex-1 space-y-6">
           {screen === 'lobby-menu' ? (
             <div className="space-y-6">
+              {roomNotice && (
+                <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 flex items-start justify-between gap-3">
+                  <span>{roomNotice}</span>
+                  <button onClick={() => setRoomNotice('')} className="text-amber-200/70 hover:text-white cursor-pointer">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
               <div className="flex rounded-xl bg-black/40 p-1 border border-white/[0.08]">
                 <button
                   onClick={() => setActiveTab('create')}
@@ -620,69 +887,21 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
               {activeTab === 'create' ? (
                 <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-300 mb-1">Pilih Deck Kuis Pertandingan</label>
-                    <select
-                      value={selectedDeckId}
-                      onChange={(e) => setSelectedDeckId(e.target.value)}
-                      className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs focus:border-accent2 focus:outline-none"
-                    >
-                      {playableDecks.map((d) => (
-                        <option key={d.id} value={d.id} className="bg-surface text-white">
-                          {d.title} ({d.cardCount} Soal • {d.difficulty})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-2">
-                      <span className="text-xs font-bold text-gray-300 block">Jumlah Soal Dimainkan</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setQuestionCount((c) => Math.max(1, c - 1))}
-                          className="p-2 rounded-lg bg-black/50 border border-white/10 text-white cursor-pointer"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <input
-                          type="number"
-                          min={1}
-                          max={deckTotal || 1}
-                          value={questionCount}
-                          onChange={(e) =>
-                            setQuestionCount(Math.min(Math.max(Number(e.target.value) || 1, 1), deckTotal || 1))
-                          }
-                          className="flex-1 min-w-0 p-1.5 rounded-lg bg-black/60 border border-white/10 text-white text-xs font-mono font-bold text-center outline-none focus:border-accent2"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setQuestionCount((c) => Math.min(deckTotal || 1, c + 1))}
-                          className="p-2 rounded-lg bg-black/50 border border-white/10 text-white cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                        <span className="text-[11px] text-gray-400 font-mono shrink-0">/ {deckTotal} Soal</span>
-                      </div>
-                    </div>
-                    <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-2">
-                      <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-                        <Shuffle className="w-3.5 h-3.5" /> Acak Urutan Soal
+                  <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-2">
+                    <span className="text-xs font-bold text-gray-300 block">Kuis yang Dimainkan</span>
+                    <p className="text-sm font-bold text-white">{activeDeck?.title || 'Belum ada kuis yang bisa dimainkan'}</p>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-gray-300">
+                      <span className="px-2.5 py-1 rounded-full bg-black/40 border border-white/10 font-mono">
+                        {questionCount} dari {deckTotal} soal
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setShuffleOn((v) => !v)}
-                        className="flex items-center gap-2 cursor-pointer"
-                      >
-                        <span className={`w-9 h-5 rounded-full relative transition-colors ${shuffleOn ? 'bg-accent2' : 'bg-white/15'}`}>
-                          <span
-                            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${shuffleOn ? 'translate-x-4' : 'translate-x-0.5'}`}
-                          />
-                        </span>
-                        <span className="text-[11px] text-gray-400">{shuffleOn ? 'Aktif' : 'Nonaktif'}</span>
-                      </button>
+                      <span className="px-2.5 py-1 rounded-full bg-black/40 border border-white/10 flex items-center gap-1">
+                        <Shuffle className="w-3 h-3" /> {shuffleOn ? 'Urutan diacak' : 'Urutan berurutan'}
+                      </span>
                     </div>
+                    <p className="text-[10px] text-gray-500">
+                      Mengikuti Konfigurasi Sesi (sama seperti mode lain). Untuk mengubah paket, jumlah soal, atau acak urutan,
+                      tutup jendela ini dan ubah di layar konfigurasi.
+                    </p>
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
@@ -829,9 +1048,16 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     </p>
                   </div>
 
+                  <RoomRulesSetting
+                    lockPlayers={lockPlayers}
+                    onLockChange={handleLockChange}
+                    policy={hostLeavePolicy}
+                    onPolicyChange={handlePolicyChange}
+                  />
+
                   <button
                     onClick={handleCreateRoom}
-                    disabled={!isOnline || connectionState !== 'connected'}
+                    disabled={!isOnline || connectionState !== 'connected' || !activeDeck}
                     className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-lg shadow-accent2/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
                   >
                     <Sparkles className="w-4 h-4" />
@@ -869,7 +1095,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                           type="text"
                           value={joinCodeInput}
                           onChange={(e) => setJoinCodeInput(e.target.value)}
-                          placeholder="Misal: MZK-842"
+                          placeholder="Misal: MZK-7K2P"
                           className="w-full p-3 rounded-xl bg-black/50 border border-white/[0.08] text-white text-xs font-mono uppercase tracking-widest focus:border-accent2 focus:outline-none"
                         />
                       </div>
@@ -1003,6 +1229,24 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 )}
               </div>
 
+              {isHost ? (
+                <RoomRulesSetting
+                  lockPlayers={room.lockPlayers}
+                  onLockChange={handleLockChange}
+                  policy={room.hostLeavePolicy}
+                  onPolicyChange={handlePolicyChange}
+                />
+              ) : (
+                <div className="flex flex-wrap gap-2 text-[10px] text-gray-400">
+                  <span className="px-2.5 py-1 rounded-full bg-black/40 border border-white/10">
+                    {room.lockPlayers ? 'Pemain ditahan: tidak bisa keluar saat permainan berjalan' : 'Pemain bebas keluar'}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-full bg-black/40 border border-white/10">
+                    Host keluar: {POLICY_OPTIONS.find((o) => o.id === room.hostLeavePolicy)?.title}
+                  </span>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Pemain di Ruangan ({room.players.length})</span>
                 {room.players.map((p) => (
@@ -1014,9 +1258,20 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
                       </span>
                       {p.isHost && <Crown className="w-3.5 h-3.5 text-accent" />}
+                      {p.connected === false && <span className="text-[10px] text-amber-300/80">offline</span>}
                     </div>
                   </div>
                 ))}
+              </div>
+
+              <div className="flex justify-center">
+                <button
+                  onClick={openLeaveDialog}
+                  className="px-4 py-2 rounded-xl bg-black/60 hover:bg-black/90 border border-white/[0.08] text-gray-300 text-xs font-bold flex items-center gap-2 cursor-pointer"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Keluar dari Ruangan</span>
+                </button>
               </div>
             </div>
           ) : screen === 'in-game' && currentQ && room ? (
@@ -1041,7 +1296,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               <div className="space-y-2.5">
                 {(currentQ.options || []).map((opt, oIdx) => {
                   const isSelected = userSelectedOption === oIdx;
-                  const isCorrectOption = oIdx === currentQ.correctIndex;
+                  const isCorrectOption = answerResult !== null && oIdx === answerResult.correctIndex;
                   let optStyle = 'border-white/10 bg-black/40 text-gray-200 hover:border-white/30';
                   if (hasAnswered) {
                     if (isCorrectOption) optStyle = 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold';
@@ -1076,10 +1331,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                         : 'Kurang tepat, 0 poin.'}
                     </span>
                   </div>
-                  {currentQ.explanation && (
+                  {answerResult.explanation && (
                     <div className="flex items-start gap-2 text-gray-300 pt-1 border-t border-white/[0.06]">
                       <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                      <p className="leading-relaxed">{currentQ.explanation}</p>
+                      <p className="leading-relaxed">{answerResult.explanation}</p>
                     </div>
                   )}
                 </div>
@@ -1099,61 +1354,34 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
               )}
 
             </div>
-          ) : screen === 'round-result' && currentQ && room ? (
-            <div className="space-y-5">
+          ) : screen === 'round-result' && room ? (
+            <div className="text-center space-y-5 py-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="px-3 py-1 rounded-full bg-black/40 text-gray-300 font-bold border border-white/[0.08]">
-                  Soal {room.currentQIndex + 1} / {questionsSnapshot.length}
+                  Soal {room.currentQIndex + 1} / {questionsSnapshot.length || room.totalQuestions}
                 </span>
                 <span className="font-mono font-bold text-white">
-                  {room.currentQIndex + 1 >= questionsSnapshot.length ? 'Hasil akhir' : 'Soal berikutnya'} dalam {gapLeft}s
+                  {room.paused
+                    ? 'Dijeda host'
+                    : `${room.currentQIndex + 1 >= (questionsSnapshot.length || room.totalQuestions) ? 'Hasil akhir' : 'Soal berikutnya'} dalam ${gapLeft}s`}
                 </span>
               </div>
 
-              <h4 className="text-base font-bold text-white leading-relaxed">{currentQ.question}</h4>
-
-              <div className="space-y-2">
-                {(currentQ.options || []).map((opt, oIdx) => {
-                  const isCorrectOption = oIdx === currentQ.correctIndex;
-                  const isSelected = userSelectedOption === oIdx;
-                  const style = isCorrectOption
-                    ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold'
-                    : isSelected
-                    ? 'border-accent2 bg-accent2/40 text-white font-semibold'
-                    : 'border-white/[0.04] bg-black/20 opacity-40 text-gray-400';
-                  return (
-                    <div key={oIdx} className={`w-full p-3 rounded-xl border text-xs ${style}`}>
-                      <strong>{String.fromCharCode(65 + oIdx)}.</strong> {opt}
-                    </div>
-                  );
-                })}
+              <div className="w-14 h-14 rounded-full bg-accent2/20 border border-accent2 text-accent2 mx-auto flex items-center justify-center">
+                {room.paused ? <Pause className="w-7 h-7" /> : <Award className="w-7 h-7" />}
               </div>
+              <h3 className="text-xl font-black text-white">{room.paused ? 'Permainan Dijeda' : 'Papan Skor Sementara'}</h3>
+              <p className="text-[11px] text-gray-500">
+                {room.paused
+                  ? isHost
+                    ? 'Tekan Lanjutkan kalau semua sudah siap.'
+                    : 'Menunggu host melanjutkan permainan.'
+                  : 'Skor setelah soal ini. Soal berikutnya mulai otomatis.'}
+              </p>
 
-              {answerResult && (
-                <div
-                  className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
-                    answerResult.isCorrect ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-accent2/25 border-red-500/30'
-                  }`}
-                >
-                  <span className={`font-bold ${answerResult.isCorrect ? 'text-emerald-300' : 'text-red-300'}`}>
-                    {answerResult.isCorrect
-                      ? `Benar! +${answerResult.pointsAwarded} poin`
-                      : !hasAnswered
-                      ? 'Tidak menjawab, 0 poin.'
-                      : answerResult.pointsAwarded < 0
-                      ? `Kurang tepat, ${answerResult.pointsAwarded} poin.`
-                      : 'Kurang tepat, 0 poin.'}
-                  </span>
-                  {currentQ.explanation && (
-                    <div className="flex items-start gap-2 text-gray-300 pt-1 border-t border-white/[0.06]">
-                      <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
-                      <p className="leading-relaxed">{currentQ.explanation}</p>
-                    </div>
-                  )}
-                </div>
-              )}
+              <Leaderboard players={sortedPlayers} myId={mySocketId} page={lbPage} pageSize={LB_PAGE_SIZE} onPage={setLbPage} />
 
-              <div className="flex items-center justify-center gap-2">
+              <div className="flex items-center justify-center gap-2 pt-1">
                 {REACTION_EMOJIS.map((emoji) => (
                   <button
                     key={emoji}
@@ -1165,58 +1393,89 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 ))}
               </div>
 
-              {(() => {
-                const pageCount = Math.max(1, Math.ceil(sortedPlayers.length / LB_PAGE_SIZE));
-                const page = Math.min(lbPage, pageCount - 1);
-                const slice = sortedPlayers.slice(page * LB_PAGE_SIZE, page * LB_PAGE_SIZE + LB_PAGE_SIZE);
-                return (
-                  <div className="space-y-2 pt-3 border-t border-white/[0.06]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Papan Skor</span>
-                      {pageCount > 1 && (
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => setLbPage(Math.max(0, page - 1))}
-                            disabled={page === 0}
-                            className="p-1 rounded-lg bg-black/40 border border-white/10 text-gray-300 disabled:opacity-30 cursor-pointer"
-                          >
-                            <ChevronLeft className="w-4 h-4" />
-                          </button>
-                          <span className="text-[11px] font-mono text-gray-400">
-                            {page + 1}/{pageCount}
-                          </span>
-                          <button
-                            onClick={() => setLbPage(Math.min(pageCount - 1, page + 1))}
-                            disabled={page >= pageCount - 1}
-                            className="p-1 rounded-lg bg-black/40 border border-white/10 text-gray-300 disabled:opacity-30 cursor-pointer"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {slice.map((p, i) => {
-                      const rank = page * LB_PAGE_SIZE + i;
+              {showAnswer && currentQ && (
+                <div className="max-w-md mx-auto text-left space-y-2.5 p-4 rounded-xl bg-black/40 border border-white/[0.08]">
+                  <h4 className="text-sm font-bold text-white leading-relaxed">{currentQ.question}</h4>
+                  <div className="space-y-1.5">
+                    {(currentQ.options || []).map((opt, oIdx) => {
+                      const isCorrectOption = answerResult !== null && oIdx === answerResult.correctIndex;
+                      const isSelected = userSelectedOption === oIdx;
+                      const style = isCorrectOption
+                        ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold'
+                        : isSelected
+                        ? 'border-accent2 bg-accent2/40 text-white font-semibold'
+                        : 'border-white/[0.04] bg-black/20 opacity-40 text-gray-400';
                       return (
-                        <div
-                          key={p.id}
-                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs ${
-                            p.id === mySocketId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'
-                          }`}
-                        >
-                          <span className="flex items-center gap-2 text-gray-200 min-w-0">
-                            <span className="text-gray-500 font-mono w-4 text-center shrink-0">{rank + 1}</span>
-                            <PlayerAvatar player={p} size="sm" />
-                            <span className="truncate font-bold text-white">{p.name}</span>
-                            {p.id === mySocketId && <span className="text-[10px] text-gray-500">(Kamu)</span>}
-                          </span>
-                          <span className="font-mono font-bold text-accent2 shrink-0">{p.score}</span>
+                        <div key={oIdx} className={`w-full p-2.5 rounded-lg border text-xs ${style}`}>
+                          <strong>{String.fromCharCode(65 + oIdx)}.</strong> {opt}
                         </div>
                       );
                     })}
                   </div>
-                );
-              })()}
+                  {answerResult && (
+                    <p className={`text-xs font-bold ${answerResult.isCorrect ? 'text-emerald-300' : 'text-red-300'}`}>
+                      {answerResult.isCorrect
+                        ? `Benar! +${answerResult.pointsAwarded} poin`
+                        : !hasAnswered
+                        ? 'Tidak menjawab, 0 poin.'
+                        : answerResult.pointsAwarded < 0
+                        ? `Kurang tepat, ${answerResult.pointsAwarded} poin.`
+                        : 'Kurang tepat, 0 poin.'}
+                    </p>
+                  )}
+                  {answerResult?.explanation ? (
+                    <div className="flex items-start gap-2 text-xs text-gray-300 pt-1 border-t border-white/[0.06]">
+                      <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                      <p className="leading-relaxed">{answerResult.explanation}</p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-500">Soal ini tidak punya penjelasan.</p>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={() => setShowAnswer((v) => !v)}
+                  className="px-5 py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/[0.08] text-gray-200 text-xs font-bold flex items-center gap-2 cursor-pointer"
+                >
+                  {showAnswer ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  <span>{showAnswer ? 'Sembunyikan Jawaban' : 'Tampilkan Jawaban & Penjelasan'}</span>
+                </button>
+                <button
+                  onClick={handleSaveResult}
+                  disabled={isResultSaved}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer border transition-all ${
+                    isResultSaved
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                      : 'bg-black/60 hover:bg-black/90 border-white/[0.08] text-gray-200'
+                  }`}
+                >
+                  {isResultSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{isResultSaved ? 'Hasil Tersimpan' : 'Simpan Hasil'}</span>
+                </button>
+                {isHost && (
+                  <button
+                    onClick={room.paused ? handleResume : handlePause}
+                    className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
+                  >
+                    {room.paused ? <Play className="w-3.5 h-3.5" /> : <Pause className="w-3.5 h-3.5" />}
+                    <span>{room.paused ? 'Lanjutkan' : 'Jeda Permainan'}</span>
+                  </button>
+                )}
+                <button
+                  onClick={openLeaveDialog}
+                  disabled={leaveLocked}
+                  title={leaveLocked ? 'Host menahan pemain sampai permainan selesai' : undefined}
+                  className="px-5 py-2.5 rounded-xl bg-black/60 hover:bg-black/90 border border-white/[0.08] text-gray-300 text-xs font-bold flex items-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Keluar dari Permainan</span>
+                </button>
+              </div>
+              {leaveLocked && (
+                <p className="text-[10px] text-amber-300/80">Host menahan pemain: kamu baru bisa keluar setelah permainan selesai.</p>
+              )}
             </div>
           ) : screen === 'podium' && room ? (
             <div className="text-center space-y-5 py-2">
@@ -1224,28 +1483,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 <Award className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-black text-white">Pertandingan Selesai</h3>
+              {room.endNotice && (
+                <p className="text-[11px] font-bold text-amber-300 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 inline-block">
+                  {room.endNotice}
+                </p>
+              )}
               <p className="text-[11px] text-gray-500">Simpan hasil ini kalau mau dilihat lagi di riwayat permainanmu.</p>
 
-              <div className="max-w-sm mx-auto space-y-2 text-left">
-                {sortedPlayers.map((p, rank) => (
-                  <div
-                    key={p.id}
-                    className={`flex items-center justify-between p-3 rounded-xl border ${
-                      rank === 0 ? 'bg-accent/10 border-accent/40' : p.id === mySocketId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      {rank === 0 ? <Crown className="w-4 h-4 text-accent shrink-0" /> : <span className="text-xs font-mono font-bold text-gray-400 w-4 text-center shrink-0">{rank + 1}</span>}
-                      <PlayerAvatar player={p} size="md" />
-                      <span className="text-sm font-bold text-white truncate">
-                        {p.name}
-                        {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
-                      </span>
-                    </div>
-                    <span className="text-sm font-mono font-black text-accent2 shrink-0">{p.score} Poin</span>
-                  </div>
-                ))}
-              </div>
+              <Leaderboard players={sortedPlayers} myId={mySocketId} />
 
               <div className="flex items-center justify-center gap-2 pt-1">
                 {REACTION_EMOJIS.map((emoji) => (
@@ -1272,7 +1517,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   {isResultSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
                   <span>{isResultSaved ? 'Hasil Tersimpan' : 'Simpan Hasil'}</span>
                 </button>
-                {isHost && (
+                {isHost ? (
                   <button
                     onClick={handleStartGame}
                     className="px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold flex items-center gap-2 cursor-pointer active:scale-95 transition-all"
@@ -1280,14 +1525,90 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Main Lagi</span>
                   </button>
+                ) : (
+                  <span className="px-5 py-2.5 rounded-xl bg-black/40 border border-white/[0.08] text-gray-400 text-xs font-bold flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Menunggu host menekan Main Lagi</span>
+                  </span>
                 )}
-                <button onClick={onClose} className="px-5 py-2.5 rounded-xl bg-black/60 hover:bg-black/90 text-gray-300 text-xs font-bold cursor-pointer border border-white/[0.08]">
+                <button
+                  onClick={handleClosePodium}
+                  className="px-5 py-2.5 rounded-xl bg-black/60 hover:bg-black/90 text-gray-300 text-xs font-bold cursor-pointer border border-white/[0.08]"
+                >
                   Tutup Multiplayer
                 </button>
               </div>
             </div>
           ) : null}
         </div>
+
+        {/* Dialog konfirmasi keluar */}
+        {leaveDialogOpen && room && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/75 p-4">
+            <div className="w-full max-w-sm rounded-2xl bg-surface border border-white/10 p-5 space-y-3 shadow-2xl">
+              <h4 className="text-base font-black text-white flex items-center gap-2">
+                <LogOut className="w-4 h-4 text-accent2" /> Keluar dari permainan?
+              </h4>
+              {isHost ? (
+                room.status === 'podium' || room.hostLeavePolicy === 'next' ? (
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    Kamu host.{' '}
+                    {room.players.length > 1
+                      ? `Host akan berpindah ke ${autoNextHost?.name || 'pemain lain'} dan permainan berlanjut.`
+                      : 'Karena tidak ada pemain lain, ruangan akan ditutup.'}
+                  </p>
+                ) : room.hostLeavePolicy === 'end' ? (
+                  <p className="text-xs text-gray-300 leading-relaxed">
+                    Kamu host. Kalau kamu keluar, permainan langsung diakhiri untuk semua pemain
+                    {room.status === 'lobby' ? ' dan ruangan ditutup.' : '.'}
+                  </p>
+                ) : needsSuccessor ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-gray-300">Kamu host. Pilih siapa yang jadi host berikutnya:</p>
+                    <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                      {room.players
+                        .filter((p) => !p.isHost)
+                        .map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => setSuccessorId(p.id)}
+                            className={`w-full flex items-center gap-2 p-2 rounded-lg border text-left cursor-pointer ${
+                              successorId === p.id ? 'bg-accent2/20 border-accent2/60' : 'bg-black/40 border-white/10'
+                            }`}
+                          >
+                            <PlayerAvatar player={p} size="sm" />
+                            <span className="text-xs font-bold text-white truncate">{p.name}</span>
+                            {p.connected === false && <span className="text-[10px] text-amber-300/80">offline</span>}
+                          </button>
+                        ))}
+                    </div>
+                    <p className="text-[10px] text-gray-500">Kalau tidak memilih, host berpindah ke pemain yang bergabung setelahmu.</p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-300">Karena tidak ada pemain lain, ruangan akan ditutup.</p>
+                )
+              ) : (
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  {running ? 'Kamu akan keluar dan skormu hilang dari papan skor. ' : ''}Simpan hasil dulu kalau perlu.
+                </p>
+              )}
+              <div className="flex justify-end gap-2 pt-1">
+                <button
+                  onClick={() => setLeaveDialogOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-black/60 border border-white/10 text-gray-300 text-xs font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleLeave}
+                  className="px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-extrabold cursor-pointer"
+                >
+                  Ya, Keluar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );
