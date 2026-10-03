@@ -35,7 +35,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
     <section className="space-y-6 animate-in fade-in duration-200">
       
       {/* BANNER INSTALASI LENGKAP DENGAN AKSES UNDUH NYATA */}
-      <div className="rounded-3xl bg-gradient-to-r from-accent2/15 via-surface to-surface/80 border-2 border-accent2/40 p-6 sm:p-8 shadow-2xl space-y-6">
+      <div className="rounded-3xl bg-linear-to-r from-accent2/15 via-surface to-surface/80 border-2 border-accent2/40 p-6 sm:p-8 shadow-2xl space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="space-y-2.5 max-w-2xl">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent2/20 text-accent2 border border-accent2/30 text-xs font-bold">

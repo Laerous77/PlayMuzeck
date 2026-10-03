@@ -27,6 +27,7 @@ import type { QuizSegment } from '../Header';
 import { STARTER_DECKS, BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '../../data/quiz';
 import { loadCustomQuizJson } from '../../services/quizJsonStore';
 import { usePurchasedDeckIds } from '../../services/quizPurchases';
+import { storage } from '../../services/storage';
 
 interface QuizIndexProps {
   decks: Deck[];
@@ -194,13 +195,24 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   const handleDownloadStandalone = async () => {
     const logoDataUri = await fetchLogoAsDataUri();
     const currentOrigin = window.location.origin;
+    const session = storage.getUserSession();
+    
     const htmlString = generateStandaloneQuizHtml(
       accessibleDecks,
       userNickname,
       hasQuizEditor,
       currentOrigin,
       currentOrigin,
-      logoDataUri
+      logoDataUri,
+      {
+        email: session?.email,
+        avatarUrl: (session as any)?.avatarUrl || userAvatarUrl,
+        frameId: (session as any)?.frameId || userFrameId || 'none',
+        bio: (session as any)?.bio || 'Heyyo',
+        greeting: (session as any)?.greeting || `Magandang umaga ${userNickname || 'Muhammad Alfathi'}!`,
+        unlockedDeckIds: allUnlockedIds,
+        hasEditor: hasQuizEditor,
+      }
     );
     const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -213,7 +225,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     URL.revokeObjectURL(url);
 
     if (onSuccessToast) {
-      onSuccessToast('Berkas aplikasi mandiri PlayMuzeck_Quiz.html berhasil diunduh!');
+      onSuccessToast('Berkas aplikasi mandiri PlayMuzeck_Quiz.html (>= 2 MB) berhasil diunduh!');
     }
   };
 
