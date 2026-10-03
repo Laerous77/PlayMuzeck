@@ -77,6 +77,8 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
   const [deletion, setDeletion] = useState<DeletionInfo | null>(null);
   const [highlight, setHighlight] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
+  // Pesan error nyata dari server, supaya "Belum ada notifikasi" tidak menyembunyikan kegagalan memuat.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
@@ -85,13 +87,22 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
     await pullThemeNotices();
     try {
       const res = await fetch('/api/user/notifications', { credentials: 'include' });
-      if (!res.ok) return null;
+      if (!res.ok) {
+        setLoadError(`Gagal memuat notifikasi dari server (HTTP ${res.status}).`);
+        return null;
+      }
+      if (!(res.headers.get('content-type') || '').includes('json')) {
+        setLoadError('Server tidak membalas data notifikasi (endpoint /api/user/notifications belum aktif di server).');
+        return null;
+      }
       const d = await res.json();
+      setLoadError(null);
       setItems(d.items || []);
       setUnread(d.unread || 0);
       setDeletion(d.deletion || null);
       return { items: d.items || [], unread: d.unread || 0 };
     } catch {
+      setLoadError('Tidak bisa menghubungi server.');
       return null;
     }
   }, [isLoggedIn]);
@@ -101,6 +112,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
     setItems([]);
     setUnread(0);
     setDeletion(null);
+    setLoadError(null);
     setOpen(false);
     if (!isLoggedIn) return;
     load();
@@ -230,7 +242,13 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
               </div>
             )}
 
-            {items.length === 0 && !deletion && (
+            {loadError && (
+              <div className="p-3 rounded-xl bg-red-500/10 border border-red-400/50 text-[11px] text-red-200 leading-relaxed">
+                {loadError}
+              </div>
+            )}
+
+            {items.length === 0 && !deletion && !loadError && (
               <div className="py-10 text-center text-xs text-gray-400">
                 <Bell className="w-8 h-8 mx-auto mb-2 text-gray-600" />
                 Belum ada notifikasi.

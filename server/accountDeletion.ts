@@ -8,9 +8,27 @@ import { Router, RequestHandler } from 'express';
 import type { Pool } from 'pg';
 import { SUPER_ADMIN_EMAIL } from './db';
 import { verifyPassword, sendMailStrict } from './auth/authRoutes';
-import { notifyUser } from './notifications';
+import { notifyUser, ensureNotificationSchemaOnce } from './notifications';
 
 export const DELETION_GRACE_DAYS = 3;
+
+// Pastikan kolom penghapusan akun ada SEBELUM dipakai. Dulu kolom hanya dibuat di initDatabase();
+// kalau initDatabase berhenti di tengah (errornya ditelan), kolom tidak ada dan semua route di bawah gagal 500.
+let schemaReady: Promise<void> | null = null;
+function ensureDeletionSchema(pool: Pool): Promise<void> {
+  if (!schemaReady) {
+    schemaReady = pool
+      .query(`
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_scheduled_at TIMESTAMPTZ;
+        ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested_by VARCHAR(255);
+        CREATE INDEX IF NOT EXISTS users_deletion_due_idx ON users (deletion_scheduled_at) WHERE deletion_scheduled_at IS NOT NULL;
+      `)
+      .then(() => undefined)
+      .catch((err) => { schemaReady = null; throw err; });
+  }
+  return schemaReady;
+}
 
 interface Deps {
   pool: Pool;
@@ -78,6 +96,11 @@ async function cancelDeletion(pool: Pool, userId: string) {
 export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }: Deps) {
   const r = Router();
 
+  r.use(['/api/user/account', '/api/admin/users'], async (_req, _res, next) => {
+    try { await ensureDeletionSchema(pool); } catch (err) { console.error('[account] schema:', err); }
+    next();
+  });
+
   // ---------- SISI PENGGUNA ----------
   r.get('/api/user/account/deletion', requireUser, async (req, res) => {
     try {
@@ -98,7 +121,7 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
       });
     } catch (err) {
       console.error('[account] status:', err);
-      res.status(500).json({ error: 'Gagal memuat status penghapusan akun.' });
+      res.status(500).json({ error: `Gagal memuat status penghapusan akun. (${String((err as any)?.message || err).slice(0, 160)})` });
     }
   });
 
@@ -123,6 +146,7 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
       }
       const saved = await scheduleDeletion(pool, user.id, 'self');
       if (!saved) return res.status(404).json({ error: 'Akun tidak ditemukan.' });
+      console.log(`[account] penghapusan dijadwalkan: ${saved.email} -> ${new Date(saved.deletion_scheduled_at).toISOString()}`);
       const at = new Date(saved.deletion_scheduled_at);
       notify(
         saved.email,
@@ -134,7 +158,7 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
       res.json({ success: true, scheduledAt: at.toISOString(), msLeft: Math.max(0, at.getTime() - Date.now()) });
     } catch (err) {
       console.error('[account] delete:', err);
-      res.status(500).json({ error: 'Gagal menjadwalkan penghapusan akun.' });
+      res.status(500).json({ error: `Gagal menjadwalkan penghapusan akun. (${String((err as any)?.message || err).slice(0, 160)})` });
     }
   });
 
@@ -192,6 +216,12 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
 
 /** Hapus permanen akun yang masa tunggunya habis. Dipanggil berkala. */
 export async function purgeDueAccounts(pool: Pool) {
+  // Pastikan tabel inbox ada & cek tabel notifikasi tema lama (dibuat themeBulkRoutes) sebelum transaksi dimulai.
+  await ensureNotificationSchemaOnce(pool).catch(() => {});
+  const legacy = await pool
+    .query(`SELECT to_regclass('public.user_notifications') AS t`)
+    .then((r) => Boolean(r.rows[0]?.t))
+    .catch(() => false);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -205,7 +235,8 @@ export async function purgeDueAccounts(pool: Pool) {
       // Kuis kustom milik pengguna tidak terhubung lewat FOREIGN KEY, jadi dibersihkan manual.
       await client.query('DELETE FROM decks WHERE is_custom IS TRUE AND lower(owner_email) = lower($1)', [u.email]);
       await client.query('DELETE FROM admin_emails WHERE lower(email) = lower($1)', [u.email]);
-      await client.query('DELETE FROM user_notifications WHERE lower(user_email) = lower($1)', [u.email]);
+      await client.query('DELETE FROM notification_inbox WHERE lower(user_email) = lower($1)', [u.email]);
+      if (legacy) await client.query('DELETE FROM user_notifications WHERE lower(user_email) = lower($1)', [u.email]);
       // sessions, koleksi, donasi, token ikut terhapus lewat ON DELETE CASCADE. Riwayat pesanan sengaja dipertahankan.
       await client.query('DELETE FROM users WHERE id = $1', [u.id]);
       console.log(`[account] dihapus permanen: ${u.email}`);

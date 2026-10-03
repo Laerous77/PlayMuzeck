@@ -385,14 +385,21 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [, setDeletionTick] = useState(0);
+  const [deletionStatusError, setDeletionStatusError] = useState<string | null>(null);
 
   const loadDeletionStatus = async () => {
     try {
       const res = await fetch('/api/user/account/deletion', { credentials: 'include' });
-      if (!res.ok) return;
+      if (!res.ok || !(res.headers.get('content-type') || '').includes('json')) {
+        setDeletionStatusError(`Status penghapusan akun gagal dimuat dari server (HTTP ${res.status}).`);
+        return;
+      }
       const d = await res.json();
+      setDeletionStatusError(null);
       setDeletion(d.scheduled ? { scheduledAt: d.scheduledAt, requestedBy: d.requestedBy } : null);
-    } catch {}
+    } catch {
+      setDeletionStatusError('Status penghapusan akun gagal dimuat: server tidak bisa dihubungi.');
+    }
   };
 
   useEffect(() => {
@@ -436,6 +443,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || 'Gagal menjadwalkan penghapusan akun.');
       setDeletion({ scheduledAt: data.scheduledAt, requestedBy: 'self' });
+      void loadDeletionStatus(); // konfirmasi ulang ke server: pastikan jadwal benar-benar tersimpan
       window.dispatchEvent(new Event('muzeck:notifications-refresh')); // lonceng di Header langsung diperbarui
       window.dispatchEvent(new Event('muzeck:account-deletion'));
       setShowDeleteForm(false);
@@ -1517,6 +1525,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                 ) : (
                   <button type="button" onClick={() => { setShowDeleteForm((v) => !v); setDeleteError(null); }} className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 font-bold transition-colors cursor-pointer"><Trash2 className="w-3.5 h-3.5" /> <span>Hapus Akun</span></button>
                 )}
+                {deletionStatusError && <span className="basis-full text-[11px] text-amber-300 font-medium">{deletionStatusError}</span>}
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">

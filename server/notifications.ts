@@ -5,8 +5,24 @@ import { Router } from 'express';
 import type { Pool } from 'pg';
 
 export async function ensureNotificationSchema(pool: Pool) {
+  // PENYEBAB UTAMA "notifikasi tidak masuk": themeBulkRoutes.ts SUDAH membuat tabel bernama `user_notifications`
+  // dengan kolom berbeda (kind, message). Karena CREATE TABLE IF NOT EXISTS tidak mengubah tabel yang sudah ada,
+  // semua query kita (kolom type, body) gagal. Karena itu inbox pengguna memakai tabel TERPISAH: notification_inbox.
+  // Tabel lama `user_notifications` tetap milik sistem tema (admin menulis, lonceng menariknya lewat /api/me/notifications).
+  //
+  // Penyembuhan: kalau tabel lama ternyata sempat dibuat dengan bentuk milik kita (ada kolom `type`), sesuaikan agar
+  // INSERT dari sistem tema (kolom kind/message) tidak gagal.
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS user_notifications (
+    DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_notifications' AND column_name = 'type') THEN
+        ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'theme';
+        ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS message TEXT NOT NULL DEFAULT '';
+        ALTER TABLE user_notifications ALTER COLUMN type DROP NOT NULL;
+      END IF;
+    END $$;
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notification_inbox (
       id SERIAL PRIMARY KEY,
       user_email VARCHAR(255) NOT NULL,
       type VARCHAR(40) NOT NULL,
@@ -15,10 +31,10 @@ export async function ensureNotificationSchema(pool: Pool) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       read_at TIMESTAMPTZ
     );
-    CREATE INDEX IF NOT EXISTS user_notifications_user_idx ON user_notifications (lower(user_email), created_at DESC);
+    CREATE INDEX IF NOT EXISTS notification_inbox_user_idx ON notification_inbox (lower(user_email), created_at DESC);
     -- ref_key mencegah notifikasi yang sama (mis. dari sistem tema) tersimpan dua kali.
-    ALTER TABLE user_notifications ADD COLUMN IF NOT EXISTS ref_key VARCHAR(80);
-    CREATE UNIQUE INDEX IF NOT EXISTS user_notifications_ref_uniq ON user_notifications (lower(user_email), ref_key) WHERE ref_key IS NOT NULL;
+    ALTER TABLE notification_inbox ADD COLUMN IF NOT EXISTS ref_key VARCHAR(80);
+    CREATE UNIQUE INDEX IF NOT EXISTS notification_inbox_ref_uniq ON notification_inbox (lower(user_email), ref_key) WHERE ref_key IS NOT NULL;
   `);
 }
 
@@ -44,7 +60,7 @@ export async function notifyUser(pool: Pool, email: string, type: string, title:
   try {
     await ensureNotificationSchemaOnce(pool);
     await pool.query(
-      `INSERT INTO user_notifications (user_email, type, title, body) VALUES ($1, $2, $3, $4)`,
+      `INSERT INTO notification_inbox (user_email, type, title, body) VALUES ($1, $2, $3, $4)`,
       [String(email).toLowerCase(), type.slice(0, 40), title.slice(0, 200), body.slice(0, 5000)]
     );
   } catch (err) {
@@ -76,12 +92,12 @@ export function createNotificationsRouter({ pool }: { pool: Pool }) {
     try {
       const [list, count] = await Promise.all([
         pool.query(
-          `SELECT id, type, title, body, created_at, read_at FROM user_notifications
+          `SELECT id, type, title, body, created_at, read_at FROM notification_inbox
             WHERE lower(user_email) = lower($1) ORDER BY created_at DESC, id DESC LIMIT 50`,
           [user.email]
         ),
         pool.query(
-          `SELECT COUNT(*)::int AS n FROM user_notifications WHERE lower(user_email) = lower($1) AND read_at IS NULL`,
+          `SELECT COUNT(*)::int AS n FROM notification_inbox WHERE lower(user_email) = lower($1) AND read_at IS NULL`,
           [user.email]
         ),
       ]);
@@ -126,7 +142,7 @@ export function createNotificationsRouter({ pool }: { pool: Pool }) {
         const t = new Date(String(it?.createdAt || ''));
         const createdAt = Number.isNaN(t.getTime()) || t.getTime() > Date.now() ? new Date() : t;
         await pool.query(
-          `INSERT INTO user_notifications (user_email, type, title, body, created_at, ref_key)
+          `INSERT INTO notification_inbox (user_email, type, title, body, created_at, ref_key)
            VALUES ($1, 'theme_notice', $2, $3, $4, $5) ON CONFLICT DO NOTHING`,
           [email.toLowerCase(), title, body, createdAt, `theme:${id}`]
         );
@@ -141,7 +157,7 @@ export function createNotificationsRouter({ pool }: { pool: Pool }) {
   r.post('/api/user/notifications/read-all', async (req, res) => {
     try {
       await pool.query(
-        `UPDATE user_notifications SET read_at = now() WHERE lower(user_email) = lower($1) AND read_at IS NULL`,
+        `UPDATE notification_inbox SET read_at = now() WHERE lower(user_email) = lower($1) AND read_at IS NULL`,
         [req.user!.email]
       );
       res.json({ success: true });
@@ -153,7 +169,7 @@ export function createNotificationsRouter({ pool }: { pool: Pool }) {
 
   r.delete('/api/user/notifications', async (req, res) => {
     try {
-      await pool.query(`DELETE FROM user_notifications WHERE lower(user_email) = lower($1)`, [req.user!.email]);
+      await pool.query(`DELETE FROM notification_inbox WHERE lower(user_email) = lower($1)`, [req.user!.email]);
       res.json({ success: true });
     } catch (err) {
       console.error('[notif] clear:', err);
