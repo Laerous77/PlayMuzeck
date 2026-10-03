@@ -167,7 +167,7 @@ async function startSession(req: Request, res: Response, userId: string) {
 
 async function publicUser(userId: string) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.email, u.name, u.role,
+    `SELECT u.id, u.email, u.name, u.role, u.avatar_url, u.bio, u.greeting, u.active_frame_id,
             (u.role = 'admin'
              OR lower(u.email) = $2
              OR EXISTS (SELECT 1 FROM admin_emails a WHERE lower(a.email) = lower(u.email))) AS is_admin
@@ -175,7 +175,10 @@ async function publicUser(userId: string) {
     [userId, SUPER_ADMIN_EMAIL.toLowerCase()]
   );
   const u = rows[0];
-  return { id: u.id, email: u.email, name: u.name, isAdmin: Boolean(u.is_admin) };
+  return {
+    id: u.id, email: u.email, name: u.name, isAdmin: Boolean(u.is_admin),
+    avatarUrl: u.avatar_url || '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none',
+  };
 }
 
 // ---------- middleware (pakai di route lain juga) ----------

@@ -710,6 +710,16 @@ function MainApp() {
     try {
       storage.setUserSession(session);
     } catch {}
+    // Ambil foto/bio/sapaan/bingkai dari server supaya langsung tampil setelah login.
+    authApi.me().then((mr) => {
+      const u = mr.ok ? mr.data?.user : null;
+      if (!u?.email) return;
+      setUserSession((prev) => {
+        const next = { ...prev, avatarUrl: u.avatarUrl || '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.frameId || 'none' };
+        try { storage.setUserSession(next); } catch {}
+        return next;
+      });
+    });
     audioEngine.playCorrectSound();
     submitUser({ email, name }).then((ok) => {
       if (!ok) {
@@ -802,6 +812,11 @@ function MainApp() {
             isLoggedIn: true,
             email: u.email,
             name: u.name || u.email.split('@')[0],
+            // Server = sumber kebenaran untuk profil (foto, bio, sapaan, bingkai).
+            avatarUrl: u.avatarUrl || '',
+            bio: u.bio || '',
+            greeting: u.greeting || '',
+            frameId: u.frameId || 'none',
           };
           (session as any).isAdmin = u.isAdmin;
           setUserSession((prev) => ({ ...prev, ...session }));
@@ -1085,7 +1100,7 @@ function MainApp() {
           try {
             storage.setUserSession(newSession);
           } catch {}
-          showToast('Profil Anda berhasil diperbarui!');
+          // Toast ditampilkan oleh ProfileDashboardModal (setelah server benar-benar menyimpan).
         }}
         onSuccessToast={showToast}
       />

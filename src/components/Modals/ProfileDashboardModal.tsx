@@ -342,7 +342,7 @@ interface ProfileDashboardModalProps {
   onNavigateAudio: () => void;
   onLoginRequest: () => void;
   onLogout: () => void;
-  onUpdateProfile?: (updated: { name: string; email: string; avatarUrl?: string; frameId?: string }) => void;
+  onUpdateProfile?: (updated: { name: string; email: string; avatarUrl?: string; frameId?: string; bio?: string; greeting?: string }) => void;
   onSuccessToast: (msg: string) => void;
 }
 
@@ -368,6 +368,10 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   const [editName, setEditName] = useState(userSession.name || '');
   const [editEmail, setEditEmail] = useState(userSession.email || '');
   const [editAvatar, setEditAvatar] = useState<string>((userSession as any).avatarUrl || '');
+  const [editBio, setEditBio] = useState<string>((userSession as any).bio || '');
+  const [editGreeting, setEditGreeting] = useState<string>((userSession as any).greeting || '');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [activeFrameId, setActiveFrameId] = useState<string>('none');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -380,6 +384,9 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       setEditName(userSession.name || '');
       setEditEmail(userSession.email || '');
       setEditAvatar((userSession as any).avatarUrl || '');
+      setEditBio((userSession as any).bio || '');
+      setEditGreeting((userSession as any).greeting || '');
+      setProfileError(null);
       setIsEditingProfile(false);
 
       const displayName = userSession.name || (userSession.isLoggedIn ? 'Maestro' : 'Tamu');
@@ -389,7 +396,12 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         `Ide brilian apa yang akan kamu ciptakan, ${displayName}?`,
         `Suara dan wawasan terbaik ada di tanganmu, ${displayName}!`
       ];
-      setRandomGreeting(GREETINGS[Math.floor(Math.random() * GREETINGS.length)]);
+      const customGreeting = String((userSession as any).greeting || '').trim();
+      setRandomGreeting(
+        customGreeting
+          ? customGreeting.replace(/\{nama\}/gi, displayName)
+          : GREETINGS[Math.floor(Math.random() * GREETINGS.length)]
+      );
 
       // PROTEKSI TAMU MURNI
       if (!userSession.isLoggedIn || !userSession.email) {
@@ -415,7 +427,19 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         });
     }
     return () => { isMounted = false; };
-  }, [isOpen, userSession.isLoggedIn, userSession.email, userSession.name]);
+  }, [isOpen, userSession.isLoggedIn, userSession.email, userSession.name, (userSession as any).greeting]);
+
+  // Sinkronkan field edit dengan sesi (mis. setelah simpan / login ulang / dari server),
+  // tapi jangan menimpa ketikan pengguna selama form edit sedang terbuka.
+  const sessAvatar = (userSession as any).avatarUrl || '';
+  const sessBio = (userSession as any).bio || '';
+  const sessGreeting = (userSession as any).greeting || '';
+  useEffect(() => {
+    if (isEditingProfile) return;
+    setEditAvatar(sessAvatar);
+    setEditBio(sessBio);
+    setEditGreeting(sessGreeting);
+  }, [sessAvatar, sessBio, sessGreeting, isEditingProfile]);
 
   // Dipakai ulang setelah aksi yang mengubah data di server (donasi, kirim
   // masukan, pasang bingkai) supaya Album Bingkai & Koleksi Saya langsung
@@ -548,28 +572,56 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   const currentActiveFrameId = userSession.isLoggedIn ? activeFrameId : 'none';
   const currentFrameObj = PROFILE_FRAMES.find((f) => f.id === currentActiveFrameId) || PROFILE_FRAMES[0];
 
+  // Foto dikecilkan di browser (maks 256x256, JPEG) supaya ringan disimpan di database.
   const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      alert('Ukuran foto maksimal 3MB.');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') setEditAvatar(reader.result);
+    if (!file.type.startsWith('image/')) { setProfileError('File harus berupa gambar.'); return; }
+    if (file.size > 10 * 1024 * 1024) { setProfileError('Ukuran foto maksimal 10MB.'); return; }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const SIZE = 256;
+      const side = Math.min(img.width, img.height);
+      const canvas = document.createElement('canvas');
+      canvas.width = SIZE; canvas.height = SIZE;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { URL.revokeObjectURL(url); return; }
+      ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, SIZE, SIZE);
+      setEditAvatar(canvas.toDataURL('image/jpeg', 0.85));
+      setProfileError(null);
+      URL.revokeObjectURL(url);
     };
-    reader.readAsDataURL(file);
+    img.onerror = () => { URL.revokeObjectURL(url); setProfileError('Foto tidak bisa dibaca. Coba file lain.'); };
+    img.src = url;
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editName.trim()) return alert('Nama pengguna tidak boleh kosong.');
-    if (onUpdateProfile) {
-      onUpdateProfile({ name: editName.trim(), email: userSession.email, avatarUrl: editAvatar, frameId: activeFrameId }); // email TIDAK boleh diubah dari sini
+    if (!editName.trim()) { setProfileError('Nama pengguna tidak boleh kosong.'); return; }
+    if (!userSession.isLoggedIn) { setProfileError('Silakan masuk ke akun terlebih dahulu.'); return; }
+    setIsSavingProfile(true);
+    setProfileError(null);
+    try {
+      const res = await fetch('/api/user/profile', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editName, avatarUrl: editAvatar, bio: editBio, greeting: editGreeting }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Gagal menyimpan profil.');
+      const p = data.profile;
+      // Perbarui state aplikasi HANYA setelah server benar-benar menyimpan.
+      onUpdateProfile?.({ name: p.name, email: p.email, avatarUrl: p.avatarUrl, bio: p.bio, greeting: p.greeting, frameId: activeFrameId });
+      setIsEditingProfile(false);
+      onSuccessToast('Profil berhasil disimpan!');
+    } catch (err: any) {
+      setProfileError(err?.message || 'Gagal menyimpan profil.');
+    } finally {
+      setIsSavingProfile(false);
     }
-    setIsEditingProfile(false);
-    onSuccessToast('Informasi akun berhasil disimpan!');
   };
 
   const handleEquipFrame = async (frame: ProfileFrame) => {
@@ -585,7 +637,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
       });
       if (!res.ok) throw new Error('Gagal tersimpan di server');
       if (onUpdateProfile) {
-        onUpdateProfile({ name: editName || userSession.name, email: editEmail || userSession.email, avatarUrl: editAvatar, frameId: frame.id });
+        onUpdateProfile({ name: userSession.name, email: userSession.email, avatarUrl: (userSession as any).avatarUrl, bio: (userSession as any).bio, greeting: (userSession as any).greeting, frameId: frame.id });
       }
       onSuccessToast(`Bingkai "${frame.name}" berhasil dipasang!`);
     } catch {
@@ -821,6 +873,11 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1.5 rounded-lg bg-accent text-on-accent hover:bg-accent/80 transition-colors cursor-pointer" title="Ganti Foto Profil">
                   <Camera className="w-4 h-4" />
                 </button>
+                {editAvatar && (
+                  <button type="button" onClick={() => setEditAvatar('')} className="p-1.5 rounded-lg bg-red-500/90 text-white hover:bg-red-500 transition-colors cursor-pointer" title="Hapus Foto (kembali ke default)">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             )}
 
@@ -841,7 +898,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                 {userSession.isLoggedIn ? 'Terverifikasi' : 'Tamu'}
               </span>
 
-              <button type="button" onClick={() => setIsEditingProfile(!isEditingProfile)} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isEditingProfile ? 'bg-accent text-on-accent' : 'bg-white/10 hover:bg-accent hover:text-on-accent text-gray-300'}`} title="Ubah Foto, Username, dan Email">
+              <button type="button" onClick={() => setIsEditingProfile(!isEditingProfile)} className={`p-1.5 rounded-lg transition-colors cursor-pointer ${isEditingProfile ? 'bg-accent text-on-accent' : 'bg-white/10 hover:bg-accent hover:text-on-accent text-gray-300'}`} title="Ubah Foto, Username, Bio, dan Sapaan">
                 <Edit3 className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -853,6 +910,9 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                 Bingkai: {currentFrameObj.name}
               </span>
             </div>
+            {((userSession as any).bio || '').trim() && (
+              <p className="text-xs text-gray-300 leading-relaxed break-words">{(userSession as any).bio}</p>
+            )}
           </div>
         </div>
 
@@ -874,10 +934,43 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
               </div>
             </div>
 
+            <div className="flex items-center gap-2 text-xs">
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-gray-200 font-bold cursor-pointer flex items-center gap-1.5">
+                <Camera className="w-3.5 h-3.5" /> {editAvatar ? 'Ganti Foto' : 'Unggah Foto'}
+              </button>
+              {editAvatar && (
+                <button type="button" onClick={() => setEditAvatar('')} className="px-3 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-300 font-bold cursor-pointer flex items-center gap-1.5">
+                  <Trash2 className="w-3.5 h-3.5" /> Hapus Foto
+                </button>
+              )}
+              <span className="text-gray-500">Tanpa foto, avatar kembali ke inisial nama.</span>
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <label className="text-gray-300 font-bold flex justify-between">
+                <span>Bio singkat:</span>
+                <span className="font-mono text-gray-500">{editBio.length}/160</span>
+              </label>
+              <textarea value={editBio} maxLength={160} rows={2} placeholder="Ceritakan sedikit tentang dirimu…" onChange={(e) => setEditBio(e.target.value)} className="w-full bg-black/50 border border-white/15 focus:border-accent rounded-lg px-3 py-1.5 text-white outline-none resize-none" />
+            </div>
+
+            <div className="space-y-1 text-xs">
+              <label className="text-gray-300 font-bold flex justify-between">
+                <span>Sapaan kustom:</span>
+                <span className="font-mono text-gray-500">{editGreeting.length}/80</span>
+              </label>
+              <input type="text" value={editGreeting} maxLength={80} placeholder="Contoh: Halo {nama}, ayo bikin lagu!" onChange={(e) => setEditGreeting(e.target.value)} className="w-full bg-black/50 border border-white/15 focus:border-accent rounded-lg px-3 py-1.5 text-white outline-none" />
+              <p className="text-[11px] text-gray-500">Tulis <span className="font-mono text-gray-300">{'{nama}'}</span> untuk menyisipkan namamu. Kosongkan untuk sapaan acak bawaan.</p>
+            </div>
+
+            {profileError && (
+              <div className="p-2.5 rounded-lg bg-red-900/25 border border-red-900 text-red-200 text-xs">{profileError}</div>
+            )}
+
             <div className="flex items-center justify-end gap-2 pt-1">
-              <button type="button" onClick={() => setIsEditingProfile(false)} className="px-3 py-1 rounded-lg bg-white/10 text-gray-300 hover:text-white text-xs font-bold cursor-pointer">Batal</button>
-              <button type="submit" className="px-4 py-1 rounded-lg bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer">
-                <Check className="w-3.5 h-3.5" /> Simpan Perubahan
+              <button type="button" onClick={() => { setEditName(userSession.name || ''); setEditAvatar(sessAvatar); setEditBio(sessBio); setEditGreeting(sessGreeting); setProfileError(null); setIsEditingProfile(false); }} className="px-3 py-1 rounded-lg bg-white/10 text-gray-300 hover:text-white text-xs font-bold cursor-pointer">Batal</button>
+              <button type="submit" disabled={isSavingProfile} className="px-4 py-1 rounded-lg bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                <Check className="w-3.5 h-3.5" /> {isSavingProfile ? 'Menyimpan…' : 'Simpan Perubahan'}
               </button>
             </div>
           </form>

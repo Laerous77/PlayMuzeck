@@ -1558,6 +1558,48 @@ app.post('/api/users', requireUser, async (req, res) => {
   res.json({ success: true });
 });
 
+// Simpan profil (nama, foto, bio, sapaan) ke DATABASE — sebelumnya tombol "Simpan Perubahan"
+// hanya mengubah state React sehingga hilang saat refresh / login ulang.
+// Email sengaja TIDAK bisa diubah di sini (jadi kunci akun, koleksi & sesi).
+// Field yang tidak dikirim tidak diubah; string kosong = hapus (kecuali nama).
+app.put('/api/user/profile', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const clean = (v: unknown, max: number) => String(v ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
+    const sets: string[] = [];
+    const vals: unknown[] = [req.user!.id];
+    const push = (col: string, v: unknown) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+
+    if (b.name !== undefined) {
+      const name = clean(b.name, 60);
+      if (!name) return res.status(400).json({ error: 'Nama tidak boleh kosong.' });
+      push('name', name);
+    }
+    if (b.bio !== undefined) push('bio', clean(b.bio, 160) || null);
+    if (b.greeting !== undefined) push('greeting', clean(b.greeting, 80) || null);
+    if (b.avatarUrl !== undefined) {
+      const a = String(b.avatarUrl || '');
+      if (a && !/^data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$/.test(a)) {
+        return res.status(400).json({ error: 'Format foto tidak valid.' });
+      }
+      if (a.length > 300_000) return res.status(413).json({ error: 'Foto terlalu besar. Pilih foto lain.' });
+      push('avatar_url', a || null);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Tidak ada perubahan.' });
+
+    const { rows } = await pool.query(
+      `UPDATE users SET ${sets.join(', ')}, last_seen = NOW() WHERE id = $1
+       RETURNING name, email, avatar_url, bio, greeting, active_frame_id`,
+      vals
+    );
+    const u = rows[0];
+    res.json({ success: true, profile: { name: u.name, email: u.email, avatarUrl: u.avatar_url || '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none' } });
+  } catch (err) {
+    console.error('Error menyimpan profil:', err);
+    res.status(500).json({ error: 'Gagal menyimpan profil.' });
+  }
+});
+
 app.post('/api/orders', async (req, res) => {
   const { items, customerEmail, customerName } = req.body;
   const email = customerEmail || 'guest@PlayMuzeck.local';

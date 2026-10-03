@@ -238,6 +238,10 @@ export async function initDatabase() {
       ALTER TABLE users ADD COLUMN IF NOT EXISTS google_sub VARCHAR(100);
       ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_at TIMESTAMPTZ;
       ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_reason TEXT;
+      -- Profil publik pengguna: foto (data URL kecil), bio singkat, sapaan kustom.
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS bio VARCHAR(160);
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS greeting VARCHAR(80);
       CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_uniq ON users (google_sub) WHERE google_sub IS NOT NULL;
       CREATE INDEX IF NOT EXISTS users_email_lower_idx ON users (lower(email));
 

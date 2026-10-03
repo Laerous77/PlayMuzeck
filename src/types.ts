@@ -43,6 +43,10 @@ export interface UserSession {
   name: string;
   email: string;
   avatarUrl?: string;
+  bio?: string;
+  greeting?: string;
+  frameId?: string;
+  isAdmin?: boolean;
 }
 
 export interface QuizQuestion {
