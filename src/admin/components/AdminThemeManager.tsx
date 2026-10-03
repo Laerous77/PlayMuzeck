@@ -9,13 +9,13 @@ import { BUILTIN_THEME, LIMITS, NAME_MAX, Palette, ThemeRecord, samePalette } fr
 import { loadAdminPalette, saveAdminPalette } from '../adminTheme';
 import { READONLY_MSG, useAdminRole } from '../useAdminRole';
 import {
-  APPLY_TEMPLATES, CUSTOM_ID, NOTICE_MESSAGE_MAX, NOTICE_TITLE_MAX, NoticeTemplate, RESET_TEMPLATES, fillNotice,
+  APPLY_TEMPLATES, NOTICE_MESSAGE_MAX, NOTICE_TITLE_MAX, NoticeTemplate, RESET_TEMPLATES, fillNotice,
 } from '../themeNotice';
 
 type Sel = number | 'new' | null;
 type TargetMode = 'selected' | 'all';
 
-interface NoticeDraft { tpl: string; title: string; message: string }
+interface NoticeDraft { title: string; message: string }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -40,42 +40,25 @@ const Dots: React.FC<{ p?: Palette }> = ({ p }) => (
 );
 
 const initNotice = (list: NoticeTemplate[]): NoticeDraft => ({
-  tpl: list[0].id,
   title: list[0].title,
   message: list[0].message,
 });
 
 interface NoticeEditorProps {
   label: string;
-  templates: NoticeTemplate[];
   value: NoticeDraft;
   onChange: (v: NoticeDraft) => void;
   disabled: boolean;
 }
 
-const NoticeEditor: React.FC<NoticeEditorProps> = ({ label, templates, value, onChange, disabled }) => {
-  const pickTemplate = (id: string) => {
-    if (id === CUSTOM_ID) { onChange({ ...value, tpl: CUSTOM_ID }); return; }
-    const t = templates.find((x) => x.id === id);
-    if (t) onChange({ tpl: t.id, title: t.title, message: t.message });
-  };
+const NoticeEditor: React.FC<NoticeEditorProps> = ({ label, value, onChange, disabled }) => {
   return (
     <div className={`space-y-2 rounded-xl border border-white/10 p-3 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <p className="text-xs font-semibold text-white">{label}</p>
-      <select
-        value={value.tpl}
-        onChange={(e) => pickTemplate(e.target.value)}
-        className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white"
-      >
-        {templates.map((t) => (
-          <option key={t.id} value={t.id}>{t.label}</option>
-        ))}
-        <option value={CUSTOM_ID}>Tulis sendiri</option>
-      </select>
       <input
         value={value.title}
         maxLength={NOTICE_TITLE_MAX}
-        onChange={(e) => onChange({ ...value, tpl: CUSTOM_ID, title: e.target.value })}
+        onChange={(e) => onChange({ ...value, title: e.target.value })}
         placeholder="Judul notifikasi"
         className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white outline-none focus:border-accent"
       />
@@ -83,7 +66,7 @@ const NoticeEditor: React.FC<NoticeEditorProps> = ({ label, templates, value, on
         value={value.message}
         maxLength={NOTICE_MESSAGE_MAX}
         rows={3}
-        onChange={(e) => onChange({ ...value, tpl: CUSTOM_ID, message: e.target.value })}
+        onChange={(e) => onChange({ ...value, message: e.target.value })}
         placeholder="Isi pesan"
         className="w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-xs text-white outline-none focus:border-accent resize-y"
       />
@@ -561,14 +544,12 @@ export const AdminThemeManager: React.FC = () => {
             <div className="grid md:grid-cols-2 gap-3">
               <NoticeEditor
                 label="Pesan saat tema diterapkan"
-                templates={APPLY_TEMPLATES}
                 value={applyNotice}
                 onChange={setApplyNotice}
                 disabled={!notifyOn}
               />
               <NoticeEditor
                 label="Pesan saat tema direset"
-                templates={RESET_TEMPLATES}
                 value={resetNotice}
                 onChange={setResetNotice}
                 disabled={!notifyOn}

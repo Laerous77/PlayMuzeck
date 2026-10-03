@@ -128,13 +128,17 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
   r.post('/api/user/account/delete', requireUser, async (req, res) => {
     try {
       const user = req.user!;
+      console.log(`[account] permintaan hapus akun dari ${user.email}`);
       if (String(req.body?.confirm || '').trim().toUpperCase() !== 'HAPUS') {
+        console.log('[account] ditolak: konfirmasi bukan HAPUS');
         return res.status(400).json({ error: 'Ketik HAPUS untuk mengonfirmasi penghapusan akun.' });
       }
       if (user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+        console.log('[account] ditolak: akun Super Admin');
         return res.status(403).json({ error: 'Akun Super Admin tidak bisa dihapus.' });
       }
       if (await isServerAdminEmail(user.email)) {
+        console.log('[account] ditolak: email terdaftar sebagai admin');
         return res.status(403).json({ error: 'Akun ini terdaftar sebagai admin. Minta Super Admin mencabut akses adminmu dulu.' });
       }
       // Akun berkata sandi wajib memasukkan kata sandi (cegah penghapusan oleh orang yang meminjam perangkat).
@@ -142,7 +146,10 @@ export function createAccountDeletionRouter({ pool, requireUser, requireAdmin, r
       const hash: string | null = rows[0]?.password_hash ?? null;
       if (hash) {
         const check = await verifyPassword(hash, String(req.body?.password || ''));
-        if (!check.ok) return res.status(401).json({ error: 'Kata sandi salah.' });
+        if (!check.ok) {
+          console.log('[account] ditolak: kata sandi salah / kosong (akun ini punya kata sandi)');
+          return res.status(401).json({ error: 'Kata sandi salah.' });
+        }
       }
       const saved = await scheduleDeletion(pool, user.id, 'self');
       if (!saved) return res.status(404).json({ error: 'Akun tidak ditemukan.' });
