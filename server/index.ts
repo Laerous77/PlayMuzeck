@@ -1271,6 +1271,7 @@ app.get('/api/admin/users', requireAdmin, async (_req, res) => {
   try {
     const { rows } = await pool.query(
       `SELECT u.id, u.email, u.name, u.role, u.active_frame_id, u.created_at, u.last_seen,
+              u.bio, u.greeting, left(md5(u.avatar_url), 8) AS avatar_v,
               u.suspended_at, u.suspended_reason, u.email_verified_at,
               (u.password_hash IS NOT NULL) AS has_password,
               (u.google_sub IS NOT NULL) AS has_google,
@@ -1278,7 +1279,14 @@ app.get('/api/admin/users', requireAdmin, async (_req, res) => {
               (SELECT COUNT(*) FROM payment_orders p WHERE p.user_email = u.email AND p.status = 'paid')::int AS paid_orders
        FROM users u ORDER BY u.created_at DESC`
     );
-    res.json(rows.map((u) => ({ ...u, last_seen: u.last_seen || u.created_at, is_super_admin: u.email === SUPER_ADMIN_EMAIL })));
+    res.json(rows.map(({ avatar_v, ...u }) => ({
+      ...u,
+      bio: u.bio || '',
+      greeting: u.greeting || '',
+      avatar_url: avatar_v ? `/api/avatar/${u.id}?v=${avatar_v}` : '',
+      last_seen: u.last_seen || u.created_at,
+      is_super_admin: u.email === SUPER_ADMIN_EMAIL,
+    })));
   } catch (err) {
     console.error('[admin] users:', err);
     res.status(500).json({ error: 'Gagal memuat pengguna.' });
@@ -1309,12 +1317,22 @@ app.post('/api/admin/users', requireAdmin, requireSuperAdmin, async (req, res) =
 
 app.patch('/api/admin/users/:id', requireAdmin, requireSuperAdmin, async (req, res) => {
   try {
-    const { name, role, password } = req.body || {};
+    const { name, role, password, bio, greeting, removeAvatar } = req.body || {};
     if (role !== undefined && !USER_ROLES.includes(role)) return res.status(400).json({ error: 'Role tidak valid.' });
+    // Aturan SAMA dengan PUT /api/user/profile (sisi pengguna): buang < >, rapikan spasi, batasi panjang.
+    const cleanProfileText = (v: unknown, max: number) => String(v ?? '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
     if (password && String(password).length < 4) return res.status(400).json({ error: 'Kata sandi minimal 4 karakter.' });
     const sets: string[] = [];
     const vals: any[] = [];
-    if (name !== undefined) { vals.push(String(name).trim().slice(0, 255)); sets.push(`name = $${vals.length}`); }
+    if (name !== undefined) {
+      const cleanName = cleanProfileText(name, 60);
+      if (!cleanName) return res.status(400).json({ error: 'Nama tidak boleh kosong.' });
+      vals.push(cleanName); sets.push(`name = $${vals.length}`);
+    }
+    if (bio !== undefined) { vals.push(cleanProfileText(bio, 160) || null); sets.push(`bio = $${vals.length}`); }
+    if (greeting !== undefined) { vals.push(cleanProfileText(greeting, 80) || null); sets.push(`greeting = $${vals.length}`); }
+    // Moderasi: admin hanya bisa MENGHAPUS foto (kembali ke inisial), bukan mengunggah atas nama pengguna.
+    if (removeAvatar === true) sets.push('avatar_url = NULL');
     if (role !== undefined) { vals.push(role); sets.push(`role = $${vals.length}`); }
     if (password) { vals.push(await bcrypt.hash(String(password), 10)); sets.push(`password_hash = $${vals.length}`); }
     if (!sets.length) return res.status(400).json({ error: 'Tidak ada perubahan.' });

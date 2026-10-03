@@ -60,6 +60,10 @@ interface UserRow {
   suspended_at: string | null;
   suspended_reason: string | null;
   email_verified_at: string | null;
+  bio?: string;
+  greeting?: string;
+  avatar_url?: string;
+  active_frame_id?: string;
   owned_items: number;
   paid_orders: number;
 }
@@ -207,8 +211,12 @@ interface UserForm {
   name: string;
   role: string;
   password: string;
+  bio: string;
+  greeting: string;
+  avatarUrl: string; // foto saat ini (hanya pratinjau; admin hanya bisa menghapus)
+  removeAvatar: boolean;
 }
-const emptyUserForm: UserForm = { email: '', name: '', role: 'user', password: '' };
+const emptyUserForm: UserForm = { email: '', name: '', role: 'user', password: '', bio: '', greeting: '', avatarUrl: '', removeAvatar: false };
 
 // ---------- Halaman ----------
 export const OpsPage: React.FC = () => {
@@ -546,12 +554,18 @@ export const OpsPage: React.FC = () => {
     setBusy(true);
     try {
       if (userForm.id) {
-        const body: Record<string, string> = { name: userForm.name, role: userForm.role };
+        const body: Record<string, string | boolean> = {
+          name: userForm.name,
+          role: userForm.role,
+          bio: userForm.bio,
+          greeting: userForm.greeting,
+          ...(userForm.removeAvatar ? { removeAvatar: true } : {}),
+        };
         if (userForm.password) body.password = userForm.password;
         await adminFetch(`/api/admin/users/${userForm.id}`, { method: 'PATCH', body: JSON.stringify(body) });
         ok('Pengguna diperbarui.');
       } else {
-        await adminFetch('/api/admin/users', { method: 'POST', body: JSON.stringify(userForm) });
+        await adminFetch('/api/admin/users', { method: 'POST', body: JSON.stringify({ email: userForm.email, name: userForm.name, role: userForm.role, password: userForm.password }) });
         ok('Pengguna ditambahkan.');
       }
       setUserForm(null);
@@ -1177,6 +1191,37 @@ export const OpsPage: React.FC = () => {
                   <input type="password" autoComplete="new-password" className={inputCls} value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} />
                 </label>
               </div>
+              {userForm.id && (
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center gap-3">
+                    {userForm.avatarUrl && !userForm.removeAvatar ? (
+                      <img src={userForm.avatarUrl} alt="" className="w-12 h-12 rounded-xl object-cover border border-white/15" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-xl bg-black/40 border border-white/10 flex items-center justify-center text-white font-black">
+                        {(userForm.name || userForm.email || '?').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-400 space-y-1">
+                      {userForm.avatarUrl && !userForm.removeAvatar ? (
+                        <button type="button" onClick={() => setUserForm({ ...userForm, removeAvatar: true })} className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-500/30 text-red-300 font-bold">
+                          Hapus foto profil
+                        </button>
+                      ) : (
+                        <span>{userForm.removeAvatar ? 'Foto akan dihapus saat disimpan (kembali ke inisial nama).' : 'Pengguna belum punya foto profil.'}</span>
+                      )}
+                      <div className="text-[10px] text-gray-500">Foto hanya bisa diunggah oleh pemilik akun; admin hanya bisa menghapusnya.</div>
+                    </div>
+                  </div>
+                  <label className="text-xs text-gray-400 block">
+                    <span className="flex justify-between"><span>Bio singkat</span><span className="font-mono text-gray-500">{userForm.bio.length}/160</span></span>
+                    <textarea rows={2} maxLength={160} className={`${inputCls} resize-none`} value={userForm.bio} onChange={(e) => setUserForm({ ...userForm, bio: e.target.value })} />
+                  </label>
+                  <label className="text-xs text-gray-400 block">
+                    <span className="flex justify-between"><span>Sapaan kustom (boleh pakai {'{nama}'})</span><span className="font-mono text-gray-500">{userForm.greeting.length}/80</span></span>
+                    <input maxLength={80} className={inputCls} value={userForm.greeting} onChange={(e) => setUserForm({ ...userForm, greeting: e.target.value })} />
+                  </label>
+                </div>
+              )}
               <button disabled={busy} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2 text-sm flex items-center gap-2 disabled:opacity-60">
                 {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Simpan
               </button>
@@ -1240,7 +1285,17 @@ export const OpsPage: React.FC = () => {
                 {visibleUsers.map((u) => (
                   <tr key={u.id} className={`border-t border-white/5 ${u.suspended_at ? 'bg-red-500/5' : ''}`}>
                     <td className="p-3">
-                      {u.name}
+                      <div className="flex items-center gap-2">
+                        {u.avatar_url ? (
+                          <img src={u.avatar_url} alt="" loading="lazy" className="w-7 h-7 rounded-lg object-cover border border-white/10 shrink-0" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-lg bg-black/40 border border-white/10 flex items-center justify-center text-[11px] font-black text-gray-300 shrink-0">
+                            {(u.name || u.email || '?').charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <span>{u.name}</span>
+                      </div>
+                      {u.bio && <div className="text-[10px] text-gray-500 max-w-[220px] truncate" title={u.bio}>{u.bio}</div>}
                       {u.is_super_admin && <span className="ml-2 px-1.5 py-0.5 rounded bg-accent/20 text-accent font-bold text-[10px]">SUPER ADMIN</span>}
                       <div className="text-[10px] text-gray-500">
                         {u.has_google && !u.has_password ? 'login Google' : u.has_password ? 'kata sandi' : 'tanpa kata sandi'}
@@ -1268,7 +1323,7 @@ export const OpsPage: React.FC = () => {
                       <button onClick={() => setEmailForm({ user: u, subject: '', message: '' })} className="p-1.5 rounded-lg text-sky-300 hover:bg-sky-500/10" title="Kirim email">
                         <Mail className="w-4 h-4" />
                       </button>
-                      <button onClick={() => setUserForm({ id: u.id, email: u.email, name: u.name || '', role: u.role || 'user', password: '' })} className="p-1.5 rounded-lg text-gray-300 hover:bg-white/10" title="Edit">
+                      <button onClick={() => setUserForm({ id: u.id, email: u.email, name: u.name || '', role: u.role || 'user', password: '', bio: u.bio || '', greeting: u.greeting || '', avatarUrl: u.avatar_url || '', removeAvatar: false })} className="p-1.5 rounded-lg text-gray-300 hover:bg-white/10" title="Edit">
                         <Pencil className="w-4 h-4" />
                       </button>
                       {!u.is_super_admin &&
