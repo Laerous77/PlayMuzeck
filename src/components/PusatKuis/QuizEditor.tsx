@@ -509,7 +509,9 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
         mediaUrl: q.mediaType && q.mediaType !== 'none' && q.mediaUrl ? q.mediaUrl : undefined,
         // Batas waktu per soal (detik). 0 = tanpa batas waktu.
         timeLimitSec: q.timeLimitSec > 0 ? q.timeLimitSec : 0,
-      };
+        // Poin penuh soal (dipakai Multiplayer untuk skor berbasis waktu)
+        points: q.points,
+      } as QuizQuestion;
     });
 
     const newDeck: Deck = {
@@ -523,7 +525,11 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
       price: 0,
       badge: selectedThemeObj.name,
       questions: formattedQuestions,
-    };
+      // Sistem minus: persen poin soal yang dikurangi bila jawaban salah (0 = nonaktif)
+      penaltyPercent: enablePenaltyMinus ? penaltyPercentage : 0,
+      scoreUnit,
+      settings: { penaltyPercent: enablePenaltyMinus ? penaltyPercentage : 0, scoreUnit },
+    } as Deck;
 
     storage.saveCustomTopic(newTopic);
     storage.saveCustomDeck(newDeck);

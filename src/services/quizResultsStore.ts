@@ -7,7 +7,7 @@ import { scopedKey } from './userScope';
 export const RESULTS_STORAGE_KEY = 'muzeck_quiz_results';
 const MAX_RESULTS = 150;
 
-export type ResultMode = 'solo' | 'pass_play' | 'host';
+export type ResultMode = 'solo' | 'pass_play' | 'host' | 'multiplayer';
 
 export interface AnswerLogEntry {
   questionId: string;

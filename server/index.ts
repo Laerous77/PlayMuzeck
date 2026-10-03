@@ -1725,12 +1725,23 @@ app.post('/api/user/decks', async (req, res) => {
     const deckId = deck.id || `deck-custom-${Date.now()}`;
     const questions = Array.isArray(deck.questions) ? deck.questions : [];
 
+    // Pengaturan skor dari Quiz Editor (dipakai Multiplayer): persen minus saat salah & satuan skor.
+    // Diterima dari deck.settings atau field datar deck.penaltyPercent / deck.scoreUnit.
+    const rawSettings = deck.settings && typeof deck.settings === 'object' ? deck.settings : {};
+    const penaltyRaw = Number(rawSettings.penaltyPercent ?? deck.penaltyPercent);
+    const deckSettings = {
+      ...rawSettings,
+      penaltyPercent: Number.isFinite(penaltyRaw) ? Math.min(100, Math.max(0, Math.round(penaltyRaw))) : 0,
+      scoreUnit: (rawSettings.scoreUnit ?? deck.scoreUnit) === 'percent' ? 'percent' : 'point',
+    };
+
     const { rows } = await client.query(
-      `INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions, is_custom, owner_email)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11)
+      `INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions, is_custom, owner_email, settings)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, TRUE, $11, $12::jsonb)
        ON CONFLICT (id) DO UPDATE SET
          title = EXCLUDED.title, description = EXCLUDED.description,
-         card_count = EXCLUDED.card_count, questions = EXCLUDED.questions
+         card_count = EXCLUDED.card_count, questions = EXCLUDED.questions,
+         settings = EXCLUDED.settings
        -- Hanya pemilik asli yang boleh menimpa. Tanpa ini, user mana pun bisa menimpa
        -- deck kustom orang lain ATAU deck resmi dengan mengirim id yang sama.
        WHERE decks.is_custom IS TRUE AND decks.owner_email = EXCLUDED.owner_email
@@ -1738,7 +1749,7 @@ app.post('/api/user/decks', async (req, res) => {
       [
         deckId, deck.topicId || null, deck.title, deck.description || '',
         questions.length, deck.difficulty || 'Sedang', true, 0,
-        deck.badge || 'Kustom Kamu', JSON.stringify(questions), email,
+        deck.badge || 'Kustom Kamu', JSON.stringify(questions), email, JSON.stringify(deckSettings),
       ]
     );
 
@@ -1758,6 +1769,8 @@ app.post('/api/user/decks', async (req, res) => {
     res.status(201).json({
       ...saved, topicId: saved.topic_id, cardCount: saved.card_count,
       isFree: Boolean(saved.is_free), questions,
+      settings: saved.settings || deckSettings,
+      penaltyPercent: deckSettings.penaltyPercent,
     });
   } catch (error: any) {
     await client.query('ROLLBACK');

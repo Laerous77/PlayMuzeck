@@ -25,6 +25,12 @@ import {
   Globe,
   Lock,
   RefreshCw,
+  Shuffle,
+  Save,
+  ChevronLeft,
+  ChevronRight,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -40,6 +46,10 @@ interface MultiplayerArenaModalProps {
   /** Foto profil & bingkai milik pemain saat ini, supaya pemain lain melihat identitas asli. */
   userAvatarUrl?: string;
   userFrameId?: string;
+  /** Dari layar setup Pusat Kuis: deck terpilih, jumlah soal & acak urutan. */
+  initialDeckId?: string;
+  questionLimit?: number;
+  shuffleQuestions?: boolean;
 }
 
 interface RoomPlayer {
@@ -94,6 +104,11 @@ const fallbackColorFor = (id: string) => {
   return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
 };
 
+/** Batas jeda antar soal (detik). */
+const MIN_GAP_SEC = 3;
+const MAX_GAP_SEC = 60;
+const LB_PAGE_SIZE = 5;
+
 const REACTION_EMOJIS = ['🔥', '👏', '😂', '😮', '💀', '❤️'];
 
 /** Avatar bulat + bingkai profil asli pemain (fallback: inisial warna kalau tidak ada foto). */
@@ -129,6 +144,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   userNickname,
   userAvatarUrl,
   userFrameId,
+  initialDeckId,
+  questionLimit,
+  shuffleQuestions,
 }) => {
   const socketRef = useRef<Socket | null>(null);
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'error'>('connecting');
@@ -139,20 +157,17 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     () => decks.filter((d) => d.isFree || unlockedDeckIds.includes(d.id)),
     [decks, unlockedDeckIds]
   );
-  const [selectedDeckId, setSelectedDeckId] = useState<string>(playableDecks[0]?.id || 'deck-starter-1');
+  const [selectedDeckId, setSelectedDeckId] = useState<string>(
+    playableDecks.find((d) => d.id === initialDeckId)?.id || playableDecks[0]?.id || 'deck-starter-1'
+  );
   const [roundTimeChoice, setRoundTimeChoice] = useState<number>(DEFAULT_QUESTION_TIME);
-  // Skema poin dinamis, diatur host: persen waktu pertama yang masih dapat
-  // poin penuh, dan poin minimal saat mepet waktu habis.
-  // PENTING: poin dasar/penuh tidak diatur di sini lagi — itu sudah jadi
-  // wewenang Quiz Editor (q.points, per soal). Di sini host hanya mengatur
-  // BERAPA PERSEN dari poin soal itu yang tetap didapat kalau jawab mepet
-  // waktu habis, supaya selalu masuk akal berapa pun besar poin soalnya
-  // (poin minimal = persen x poin soal, jadi otomatis selalu < poin penuh).
-  const [fullPointPercent, setFullPointPercent] = useState<number>(40);
-  const [minPointsPercent, setMinPointsPercent] = useState<number>(10); // dalam %, 0-90
-  // Jeda (detik) menampilkan jawaban benar & skor sebelum lanjut ke soal
-  // berikutnya — supaya pemain tidak harus menunggu roundTimeSec penuh
-  // habis dulu baru bisa lihat hasil & pindah soal.
+  // Skema poin berbasis waktu: SATU pengaturan saja. Poin penuh soal (dari Quiz Editor)
+  // turun linear dari 100% (jawab seketika) menuju `minPointsPercent` (jawab di detik
+  // terakhir). Karena rumusnya linear dari 100% ke X%, poin hasil penurunan tidak mungkin
+  // lebih kecil dari poin minimal, dan poin minimal tidak mungkin lebih besar dari poin penuh.
+  const [decayEnabled, setDecayEnabled] = useState<boolean>(true);
+  const [minPointsPercent, setMinPointsPercent] = useState<number>(30); // 0-90 %
+  // Jeda antar soal: 3 detik s/d 1 menit.
   const [roundGapSec, setRoundGapSec] = useState<number>(5);
   // Visibilitas ruangan yang mau dibuat: 'invite' (hanya lewat kode, bawaan)
   // atau 'global' (tampil di daftar "Room Global", bisa digabung tanpa kode).
@@ -178,13 +193,45 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   const [answerResult, setAnswerResult] = useState<{ isCorrect: boolean; pointsAwarded: number; correctIndex: number; explanation: string } | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [questionsSnapshot, setQuestionsSnapshot] = useState<QuizQuestion[]>([]);
+  const [isResultSaved, setIsResultSaved] = useState(false);
+  const [lbPage, setLbPage] = useState(0);
+  const [gapLeft, setGapLeft] = useState(0);
   const [floatingReactions, setFloatingReactions] = useState<{ id: string; emoji: string; name: string }[]>([]);
 
   // Untuk menyusun riwayat permainan (sama seperti mode lain) begitu game selesai.
-  const answerLogRef = useRef<AnswerLogEntry[]>([]);
-  const hasSavedResultRef = useRef(false);
+  // Pilihan jawaban pemain per indeks soal (sumber riwayat; tidak bergantung urutan event socket).
+  const answersByIndexRef = useRef<Record<number, number | null>>({});
 
   const activeDeck = decks.find((d) => d.id === selectedDeckId) || decks[0];
+  const deckTotal = activeDeck?.questions?.length || 0;
+  // Persen minus saat jawaban salah, dari Quiz Editor (disimpan di deck.penaltyPercent atau deck.settings).
+  const deckPenaltyPercent = Math.min(
+    100,
+    Math.max(0, Number((activeDeck as any)?.penaltyPercent ?? (activeDeck as any)?.settings?.penaltyPercent) || 0)
+  );
+  const [questionCount, setQuestionCount] = useState<number>(
+    Math.max(1, Math.min(questionLimit ?? deckTotal, deckTotal || 1))
+  );
+  const [shuffleOn, setShuffleOn] = useState<boolean>(Boolean(shuffleQuestions));
+
+  // Sinkronkan dengan pengaturan dari layar setup tiap modal dibuka.
+  useEffect(() => {
+    if (!isOpen) return;
+    const id = playableDecks.find((d) => d.id === initialDeckId)?.id;
+    if (id) setSelectedDeckId(id);
+    setShuffleOn(Boolean(shuffleQuestions));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Jumlah soal selalu dalam rentang 1..total soal deck terpilih.
+  useEffect(() => {
+    setQuestionCount((prev) => {
+      if (!deckTotal) return 1;
+      const base = isOpen && questionLimit && prev === deckTotal ? questionLimit : prev;
+      return Math.min(Math.max(base, 1), deckTotal);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedDeckId, deckTotal, isOpen]);
 
   // ---- Reset total setiap kali modal ditutup, supaya dibuka lagi selalu bersih (tidak ada podium nyangkut) ----
   useEffect(() => {
@@ -198,8 +245,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setAnswerResult(null);
     setQuestionsSnapshot([]);
     setFloatingReactions([]);
-    answerLogRef.current = [];
-    hasSavedResultRef.current = false;
+    answersByIndexRef.current = {};
+    setIsResultSaved(false);
+    setLbPage(0);
     setJoinMode('code');
     setGlobalRooms([]);
     setPendingGlobalCode(null);
@@ -237,8 +285,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setQuestionsSnapshot(payload.questions);
       setUserSelectedOption(null);
       setAnswerResult(null);
-      answerLogRef.current = [];
-      hasSavedResultRef.current = false;
+      answersByIndexRef.current = {};
+      setIsResultSaved(false);
       audioEngine.playClickSound();
     });
 
@@ -299,63 +347,19 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     return () => clearInterval(interval);
   }, [room?.roundEndsAt, room?.status]);
 
-  // ---- Catat log jawaban tiap kali ronde berpindah (untuk riwayat, sama seperti mode lain) ----
-  const prevQIndexRef = useRef<number>(-1);
+  // ---- Hitung mundur jeda antar soal ----
   useEffect(() => {
-    if (!room || !questionsSnapshot.length) return;
-    if (room.status === 'in-game' && room.currentQIndex !== prevQIndexRef.current) {
-      // Ronde baru dimulai: catat hasil ronde SEBELUMNYA (kalau ada) ke log.
-      const prevIdx = prevQIndexRef.current;
-      if (prevIdx >= 0 && prevIdx < questionsSnapshot.length) {
-        const q = questionsSnapshot[prevIdx];
-        answerLogRef.current.push({
-          questionId: (q as any).id || `mp-q-${prevIdx}`,
-          number: prevIdx + 1,
-          question: q.question,
-          options: q.options,
-          correctIndex: q.correctIndex,
-          selectedIndex: userSelectedOption,
-          isCorrect: userSelectedOption !== null ? userSelectedOption === q.correctIndex : null,
-          category: q.category,
-          explanation: q.explanation,
-        });
-      }
-      prevQIndexRef.current = room.currentQIndex;
-    }
-    if (room.status === 'podium' && !hasSavedResultRef.current) {
-      // Ronde terakhir: catat juga, lalu simpan seluruh riwayat sekali saja.
-      const lastIdx = prevQIndexRef.current;
-      if (lastIdx >= 0 && lastIdx < questionsSnapshot.length) {
-        const q = questionsSnapshot[lastIdx];
-        answerLogRef.current.push({
-          questionId: (q as any).id || `mp-q-${lastIdx}`,
-          number: lastIdx + 1,
-          question: q.question,
-          options: q.options,
-          correctIndex: q.correctIndex,
-          selectedIndex: userSelectedOption,
-          isCorrect: userSelectedOption !== null ? userSelectedOption === q.correctIndex : null,
-          category: q.category,
-          explanation: q.explanation,
-        });
-      }
-      const me = room.players.find((p) => p.id === mySocketId);
-      const entry: SavedQuizResult = {
-        id: `mp-${Date.now()}`,
-        savedAt: Date.now(),
-        deckId: room.deckId,
-        deckTitle: room.deckTitle,
-        mode: 'multiplayer' as any,
-        totalQuestions: questionsSnapshot.length,
-        summary: `Skor akhir: ${me?.score ?? 0} poin di antara ${room.players.length} pemain.`,
-        data: { finalRank: [...room.players].sort((a, b) => b.score - a.score).map((p) => ({ name: p.name, score: p.score })) },
-        answers: answerLogRef.current,
-      };
-      addSavedResult(entry);
-      hasSavedResultRef.current = true;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [room?.status, room?.currentQIndex]);
+    if (!room || room.status !== 'round-result' || !room.roundResultEndsAt) return;
+    const tick = () => setGapLeft(Math.max(0, Math.ceil((room.roundResultEndsAt! - Date.now()) / 1000)));
+    tick();
+    const interval = setInterval(tick, 250);
+    return () => clearInterval(interval);
+  }, [room?.roundResultEndsAt, room?.status]);
+
+  // Papan skor jeda selalu mulai dari halaman 1 di tiap jeda baru.
+  useEffect(() => {
+    setLbPage(0);
+  }, [room?.currentQIndex, room?.status]);
 
   if (!isOpen) return null;
 
@@ -375,9 +379,10 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       deckId: activeDeck.id,
       deckTitle: activeDeck.title,
       roundTimeSec: getPlayTime(activeDeck, activeDeck.questions?.[0], roundTimeChoice),
-      roundGapSec,
-      fullPointRatio: fullPointPercent / 100,
-      minPointsPercent: minPointsPercent / 100,
+      roundGapSec: Math.min(MAX_GAP_SEC, Math.max(MIN_GAP_SEC, Math.round(roundGapSec))),
+      // Satu skema: poin turun linear dari 100% ke minPointsPercent. Bila nonaktif, poin tetap penuh.
+      timeDecay: decayEnabled,
+      minPointsPercent: Math.min(0.9, Math.max(0, minPointsPercent / 100)),
       visibility: roomVisibility,
       password: roomVisibility === 'global' ? roomPassword.trim() : undefined,
     });
@@ -439,15 +444,35 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  /** Susun soal sesuai pengaturan: acak (opsional) lalu ambil sejumlah yang dipilih. */
+  const prepareQuestions = (): QuizQuestion[] => {
+    const all = [...(activeDeck?.questions || [])];
+    if (shuffleOn) {
+      for (let i = all.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [all[i], all[j]] = [all[j], all[i]];
+      }
+    }
+    return all.slice(0, Math.max(1, Math.min(questionCount, all.length)));
+  };
+
   const handleStartGame = () => {
     if (!activeDeck || !isHost) return;
     audioEngine.playClickSound();
-    socketRef.current?.emit('room:start', { questions: activeDeck.questions });
+    const picked = prepareQuestions();
+    socketRef.current?.emit('room:start', {
+      questions: picked,
+      // Batas waktu per soal mengikuti pengaturan soal (Editor) atau pilihan host.
+      questionTimes: picked.map((q) => getPlayTime(activeDeck, q, roundTimeChoice)),
+      // Sistem minus: persen dari poin soal yang dikurangi bila salah (0 = tanpa minus).
+      wrongPenaltyPercent: Math.max(0, Math.min(100, deckPenaltyPercent)),
+    });
   };
 
   const handleSelectOption = (idx: number) => {
     if (hasAnswered || !currentQ) return;
     setUserSelectedOption(idx);
+    answersByIndexRef.current[room?.currentQIndex ?? 0] = idx;
     const isCorrect = idx === currentQ.correctIndex;
     if (isCorrect) audioEngine.playCorrectSound();
     else if (typeof (audioEngine as any).playIncorrectSound === 'function') (audioEngine as any).playIncorrectSound();
@@ -455,16 +480,52 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     socketRef.current?.emit('game:answer', { optionIndex: idx });
   };
 
+  /** Simpan riwayat (manual, seperti tombol "Simpan Hasil" di mode Langsung Main). */
+  const handleSaveResult = () => {
+    if (!room || isResultSaved) return;
+    const answers: AnswerLogEntry[] = questionsSnapshot.map((q, i) => {
+      const sel = answersByIndexRef.current[i] ?? null;
+      return {
+        questionId: (q as any).id || `mp-q-${i}`,
+        number: i + 1,
+        question: q.question,
+        options: q.options,
+        correctIndex: q.correctIndex,
+        // Tidak menjawab = -1 (waktu habis). null akan salah terbaca sebagai "Dinilai host" di riwayat.
+        selectedIndex: sel === null ? -1 : sel,
+        isCorrect: sel !== null && sel === q.correctIndex,
+        category: q.category,
+        explanation: q.explanation,
+      };
+    });
+    const mine = room.players.find((p) => p.id === mySocketId);
+    const entry: SavedQuizResult = {
+      id: `mp-${Date.now()}`,
+      savedAt: Date.now(),
+      deckId: room.deckId,
+      deckTitle: room.deckTitle,
+      mode: 'multiplayer',
+      totalQuestions: questionsSnapshot.length,
+      summary: `Skor akhir: ${mine?.score ?? 0} poin di antara ${room.players.length} pemain.`,
+      data: { finalRank: [...room.players].sort((a, b) => b.score - a.score).map((p) => ({ name: p.name, score: p.score })) },
+      answers,
+    };
+    if (addSavedResult(entry)) setIsResultSaved(true);
+    else alert('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
+  };
+
   const handleSendReaction = (emoji: string) => {
     socketRef.current?.emit('room:reaction', { emoji });
   };
 
-  const screen: 'lobby-menu' | 'waiting-room' | 'in-game' | 'podium' = !room
+  const screen: 'lobby-menu' | 'waiting-room' | 'in-game' | 'round-result' | 'podium' = !room
     ? 'lobby-menu'
     : room.status === 'lobby'
     ? 'waiting-room'
     : room.status === 'in-game'
     ? 'in-game'
+    : room.status === 'round-result'
+    ? 'round-result'
     : 'podium';
 
   return (
@@ -574,6 +635,56 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     </select>
                   </div>
 
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-2">
+                      <span className="text-xs font-bold text-gray-300 block">Jumlah Soal Dimainkan</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setQuestionCount((c) => Math.max(1, c - 1))}
+                          className="p-2 rounded-lg bg-black/50 border border-white/10 text-white cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <input
+                          type="number"
+                          min={1}
+                          max={deckTotal || 1}
+                          value={questionCount}
+                          onChange={(e) =>
+                            setQuestionCount(Math.min(Math.max(Number(e.target.value) || 1, 1), deckTotal || 1))
+                          }
+                          className="flex-1 min-w-0 p-1.5 rounded-lg bg-black/60 border border-white/10 text-white text-xs font-mono font-bold text-center outline-none focus:border-accent2"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setQuestionCount((c) => Math.min(deckTotal || 1, c + 1))}
+                          className="p-2 rounded-lg bg-black/50 border border-white/10 text-white cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="text-[11px] text-gray-400 font-mono shrink-0">/ {deckTotal} Soal</span>
+                      </div>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-2">
+                      <span className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
+                        <Shuffle className="w-3.5 h-3.5" /> Acak Urutan Soal
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShuffleOn((v) => !v)}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className={`w-9 h-5 rounded-full relative transition-colors ${shuffleOn ? 'bg-accent2' : 'bg-white/15'}`}>
+                          <span
+                            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${shuffleOn ? 'translate-x-4' : 'translate-x-0.5'}`}
+                          />
+                        </span>
+                        <span className="text-[11px] text-gray-400">{shuffleOn ? 'Aktif' : 'Nonaktif'}</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
                     <span className="text-xs font-bold text-gray-300 block">Visibilitas Ruangan</span>
                     <div className="grid grid-cols-2 gap-2">
@@ -644,71 +755,77 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                   />
 
                   <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-3">
-                    <span className="text-xs font-bold text-gray-300 block">Skor Berbasis Kecepatan Jawab</span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-300">Poin Turun Seiring Waktu</span>
+                      <button
+                        type="button"
+                        onClick={() => setDecayEnabled((v) => !v)}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <span className={`w-9 h-5 rounded-full relative transition-colors ${decayEnabled ? 'bg-accent2' : 'bg-white/15'}`}>
+                          <span
+                            className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${decayEnabled ? 'translate-x-4' : 'translate-x-0.5'}`}
+                          />
+                        </span>
+                        <span className="text-[11px] text-gray-400">{decayEnabled ? 'Aktif' : 'Nonaktif'}</span>
+                      </button>
+                    </div>
                     <p className="text-[10px] text-gray-500 -mt-1">
-                      Poin penuh tiap soal mengikuti poin yang sudah diatur di Quiz Editor (skema "Poin Sama Rata" atau
-                      "Poin Berbeda"). Di sini host hanya mengatur seberapa cepat poin itu berkurang seiring waktu.
+                      Poin penuh tiap soal mengikuti pengaturan Quiz Editor ("Poin Sama Rata" atau "Poin Berbeda").
                     </p>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] text-gray-400">
-                        <span>Poin penuh jika jawab dalam</span>
-                        <span className="font-mono font-bold text-white">{fullPointPercent}% waktu pertama</span>
+                    {decayEnabled ? (
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px] text-gray-400">
+                          <span>Poin terendah di detik terakhir</span>
+                          <span className="font-mono font-bold text-white">{minPointsPercent}% dari poin soal</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0}
+                          max={90}
+                          step={5}
+                          value={minPointsPercent}
+                          onChange={(e) => setMinPointsPercent(Number(e.target.value))}
+                          className="w-full accent-accent2"
+                        />
+                        <p className="text-[10px] text-gray-500">
+                          Jawab langsung = 100% poin. Makin lama menjawab, poin turun merata hingga {minPointsPercent}% di
+                          detik terakhir. Karena satu skala ini, poin terendah selalu di bawah poin penuh dan tidak
+                          pernah lebih besar dari poin hasil penurunan. Salah atau tidak menjawab tidak mendapat poin
+                          kecuali soal memakai sistem minus.
+                        </p>
                       </div>
-                      <input
-                        type="range"
-                        min={10}
-                        max={90}
-                        step={5}
-                        value={fullPointPercent}
-                        onChange={(e) => setFullPointPercent(Number(e.target.value))}
-                        className="w-full accent-accent2"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between text-[11px] text-gray-400">
-                        <span>Poin minimal saat mepet waktu habis</span>
-                        <span className="font-mono font-bold text-white">{minPointsPercent}% dari poin soal</span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={90}
-                        step={5}
-                        value={minPointsPercent}
-                        onChange={(e) => setMinPointsPercent(Number(e.target.value))}
-                        className="w-full accent-accent2"
-                      />
+                    ) : (
                       <p className="text-[10px] text-gray-500">
-                        Dihitung sebagai persentase dari poin soal itu sendiri (bukan angka tetap), jadi otomatis selalu
-                        lebih kecil dari poin penuhnya — berapa pun besar poin soal itu (2, 10, atau 1000 sekalipun).
+                        Jawaban benar selalu mendapat poin penuh soal, seberapa cepat pun dijawab.
                       </p>
-                    </div>
-
-                    <p className="text-[10px] text-gray-500 pt-1 border-t border-white/[0.06]">
-                      Antara {fullPointPercent}% sampai 100% waktu, poin turun bertahap halus dari poin penuh soal
-                      menuju {minPointsPercent}% -nya. Lewat waktu / tidak menjawab = 0 poin.
-                    </p>
+                    )}
+                    {(deckPenaltyPercent) > 0 && (
+                      <p className="text-[10px] text-amber-300/90 pt-1 border-t border-white/[0.06]">
+                        Kuis ini memakai sistem minus: jawaban salah mengurangi {deckPenaltyPercent}% dari poin soal.
+                      </p>
+                    )}
                   </div>
 
                   <div className="p-3.5 rounded-xl bg-black/30 border border-white/[0.06] space-y-1.5">
                     <div className="flex items-center justify-between text-[11px] text-gray-400">
                       <span className="text-xs font-bold text-gray-300">Jeda Sebelum Soal Berikutnya</span>
-                      <span className="font-mono font-bold text-white">{roundGapSec}s</span>
+                      <span className="font-mono font-bold text-white">
+                        {roundGapSec >= 60 ? '1 mnt' : `${roundGapSec}s`}
+                      </span>
                     </div>
                     <input
                       type="range"
-                      min={0}
-                      max={15}
+                      min={MIN_GAP_SEC}
+                      max={MAX_GAP_SEC}
                       step={1}
                       value={roundGapSec}
-                      onChange={(e) => setRoundGapSec(Number(e.target.value))}
+                      onChange={(e) => setRoundGapSec(Math.min(MAX_GAP_SEC, Math.max(MIN_GAP_SEC, Number(e.target.value))))}
                       className="w-full accent-accent2"
                     />
                     <p className="text-[10px] text-gray-500">
-                      Setelah waktu jawab habis, semua pemain melihat jawaban benar & papan skor selama jeda ini
-                      sebelum otomatis lanjut ke soal berikutnya. Atur ke 0 detik untuk langsung lanjut tanpa jeda.
+                      Setelah waktu jawab habis, semua pemain melihat jawaban benar & 5 besar papan skor selama jeda
+                      ini. Minimal {MIN_GAP_SEC} detik, maksimal 1 menit.
                     </p>
                   </div>
 
@@ -952,7 +1069,11 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 >
                   <div className="flex items-center justify-between font-bold">
                     <span className={answerResult.isCorrect ? 'text-emerald-300' : 'text-red-300'}>
-                      {answerResult.isCorrect ? `Benar! +${answerResult.pointsAwarded} poin` : 'Kurang tepat, 0 poin.'}
+                      {answerResult.isCorrect
+                        ? `Benar! +${answerResult.pointsAwarded} poin`
+                        : answerResult.pointsAwarded < 0
+                        ? `Kurang tepat, ${answerResult.pointsAwarded} poin.`
+                        : 'Kurang tepat, 0 poin.'}
                     </span>
                   </div>
                   {currentQ.explanation && (
@@ -966,7 +1087,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
 
               {hasAnswered && (
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-gray-400">Menunggu ronde berakhir ({timeLeft}s)...</span>
+                  <span className="text-[11px] text-gray-400">Menunggu pemain lain ({timeLeft}s)...</span>
                   <div className="flex -space-x-2">
                     {room.players.map((p) => (
                       <span key={p.id} title={p.name} className="inline-block">
@@ -977,19 +1098,125 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 </div>
               )}
 
-              <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
-                {sortedPlayers.map((p, rank) => (
-                  <div key={p.id} className="flex items-center justify-between text-xs">
-                    <span className="flex items-center gap-1.5 text-gray-300">
-                      <span className="text-gray-500 font-mono w-3">{rank + 1}</span>
-                      <PlayerAvatar player={p} size="sm" />
-                      {p.name}
-                      {p.id === mySocketId && <span className="text-[10px] text-gray-500">(Kamu)</span>}
-                    </span>
-                    <span className="font-mono font-bold text-accent2">{p.score}</span>
-                  </div>
+            </div>
+          ) : screen === 'round-result' && currentQ && room ? (
+            <div className="space-y-5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="px-3 py-1 rounded-full bg-black/40 text-gray-300 font-bold border border-white/[0.08]">
+                  Soal {room.currentQIndex + 1} / {questionsSnapshot.length}
+                </span>
+                <span className="font-mono font-bold text-white">
+                  {room.currentQIndex + 1 >= questionsSnapshot.length ? 'Hasil akhir' : 'Soal berikutnya'} dalam {gapLeft}s
+                </span>
+              </div>
+
+              <h4 className="text-base font-bold text-white leading-relaxed">{currentQ.question}</h4>
+
+              <div className="space-y-2">
+                {(currentQ.options || []).map((opt, oIdx) => {
+                  const isCorrectOption = oIdx === currentQ.correctIndex;
+                  const isSelected = userSelectedOption === oIdx;
+                  const style = isCorrectOption
+                    ? 'border-emerald-500 bg-emerald-950/40 text-emerald-100 font-semibold'
+                    : isSelected
+                    ? 'border-accent2 bg-accent2/40 text-white font-semibold'
+                    : 'border-white/[0.04] bg-black/20 opacity-40 text-gray-400';
+                  return (
+                    <div key={oIdx} className={`w-full p-3 rounded-xl border text-xs ${style}`}>
+                      <strong>{String.fromCharCode(65 + oIdx)}.</strong> {opt}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {answerResult && (
+                <div
+                  className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${
+                    answerResult.isCorrect ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-accent2/25 border-red-500/30'
+                  }`}
+                >
+                  <span className={`font-bold ${answerResult.isCorrect ? 'text-emerald-300' : 'text-red-300'}`}>
+                    {answerResult.isCorrect
+                      ? `Benar! +${answerResult.pointsAwarded} poin`
+                      : !hasAnswered
+                      ? 'Tidak menjawab, 0 poin.'
+                      : answerResult.pointsAwarded < 0
+                      ? `Kurang tepat, ${answerResult.pointsAwarded} poin.`
+                      : 'Kurang tepat, 0 poin.'}
+                  </span>
+                  {currentQ.explanation && (
+                    <div className="flex items-start gap-2 text-gray-300 pt-1 border-t border-white/[0.06]">
+                      <Lightbulb className="w-3.5 h-3.5 text-accent shrink-0 mt-0.5" />
+                      <p className="leading-relaxed">{currentQ.explanation}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex items-center justify-center gap-2">
+                {REACTION_EMOJIS.map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleSendReaction(emoji)}
+                    className="w-9 h-9 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:scale-110 transition-all text-base cursor-pointer"
+                  >
+                    {emoji}
+                  </button>
                 ))}
               </div>
+
+              {(() => {
+                const pageCount = Math.max(1, Math.ceil(sortedPlayers.length / LB_PAGE_SIZE));
+                const page = Math.min(lbPage, pageCount - 1);
+                const slice = sortedPlayers.slice(page * LB_PAGE_SIZE, page * LB_PAGE_SIZE + LB_PAGE_SIZE);
+                return (
+                  <div className="space-y-2 pt-3 border-t border-white/[0.06]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Papan Skor</span>
+                      {pageCount > 1 && (
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => setLbPage(Math.max(0, page - 1))}
+                            disabled={page === 0}
+                            className="p-1 rounded-lg bg-black/40 border border-white/10 text-gray-300 disabled:opacity-30 cursor-pointer"
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                          </button>
+                          <span className="text-[11px] font-mono text-gray-400">
+                            {page + 1}/{pageCount}
+                          </span>
+                          <button
+                            onClick={() => setLbPage(Math.min(pageCount - 1, page + 1))}
+                            disabled={page >= pageCount - 1}
+                            className="p-1 rounded-lg bg-black/40 border border-white/10 text-gray-300 disabled:opacity-30 cursor-pointer"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    {slice.map((p, i) => {
+                      const rank = page * LB_PAGE_SIZE + i;
+                      return (
+                        <div
+                          key={p.id}
+                          className={`flex items-center justify-between p-2.5 rounded-xl border text-xs ${
+                            p.id === mySocketId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 text-gray-200 min-w-0">
+                            <span className="text-gray-500 font-mono w-4 text-center shrink-0">{rank + 1}</span>
+                            <PlayerAvatar player={p} size="sm" />
+                            <span className="truncate font-bold text-white">{p.name}</span>
+                            {p.id === mySocketId && <span className="text-[10px] text-gray-500">(Kamu)</span>}
+                          </span>
+                          <span className="font-mono font-bold text-accent2 shrink-0">{p.score}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           ) : screen === 'podium' && room ? (
             <div className="text-center space-y-5 py-2">
@@ -997,7 +1224,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 <Award className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-black text-white">Pertandingan Selesai</h3>
-              <p className="text-[11px] text-gray-500">Hasil ini otomatis tersimpan di riwayat permainanmu.</p>
+              <p className="text-[11px] text-gray-500">Simpan hasil ini kalau mau dilihat lagi di riwayat permainanmu.</p>
 
               <div className="max-w-sm mx-auto space-y-2 text-left">
                 {sortedPlayers.map((p, rank) => (
@@ -1032,7 +1259,19 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 ))}
               </div>
 
-              <div className="flex items-center justify-center gap-3 pt-2">
+              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                <button
+                  onClick={handleSaveResult}
+                  disabled={isResultSaved}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer border transition-all ${
+                    isResultSaved
+                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300'
+                      : 'bg-black/60 hover:bg-black/90 border-white/[0.08] text-gray-200'
+                  }`}
+                >
+                  {isResultSaved ? <Check className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+                  <span>{isResultSaved ? 'Hasil Tersimpan' : 'Simpan Hasil'}</span>
+                </button>
                 {isHost && (
                   <button
                     onClick={handleStartGame}

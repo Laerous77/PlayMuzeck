@@ -592,6 +592,9 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
         unlockedDeckIds={allUnlockedIds}
         isOnline={isOnline}
         userNickname={userNickname}
+        initialDeckId={currentLoadedDeck?.id}
+        questionLimit={questionCount}
+        shuffleQuestions={shuffleOn}
       />
     </div>
   );

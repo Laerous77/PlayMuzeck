@@ -28,7 +28,7 @@ import {
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
 const modeLabel = (m: SavedQuizResult['mode']) =>
-  m === 'solo' ? 'Solo' : m === 'pass_play' ? 'Pass & Play' : 'Host';
+  m === 'solo' ? 'Solo' : m === 'pass_play' ? 'Pass & Play' : m === 'multiplayer' ? 'Multiplayer' : 'Host';
 
 const MediaPreview: React.FC<{ a: AnswerLogEntry }> = ({ a }) => {
   if (!a.mediaType) return null;
