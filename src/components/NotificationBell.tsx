@@ -2,6 +2,7 @@
 // Tombol lonceng + panel notifikasi. Taruh di Header, di antara "Tentang Kami" dan tombol keranjang:
 //   <NotificationBell isLoggedIn={userSession.isLoggedIn} userKey={userSession.email} />
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, Trash2, CheckCircle2, Palette, Loader2, AlertTriangle, X } from 'lucide-react';
 
 interface NotifItem {
@@ -83,6 +84,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
   // Notifikasi yang sedang dibuka di popup detail.
   const [selected, setSelected] = useState<NotifItem | null>(null);
   const boxRef = useRef<HTMLDivElement | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
   const selectedRef = useRef<NotifItem | null>(null);
   selectedRef.current = selected;
 
@@ -144,7 +146,11 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
   // Tutup saat klik di luar / tekan Escape.
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false); };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (modalRef.current && modalRef.current.contains(t)) return; // klik di dalam popup (portal) bukan "klik di luar"
+      if (boxRef.current && !boxRef.current.contains(t)) setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // Escape menutup popup detail dulu; panel lonceng tetap terbuka.
@@ -313,8 +319,9 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
       )}
 
       {/* Popup detail notifikasi */}
-      {selected && (
+      {selected && createPortal(
         <div
+          ref={modalRef}
           className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={() => setSelected(null)}
         >
@@ -367,7 +374,8 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
