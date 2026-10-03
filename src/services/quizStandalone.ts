@@ -14,6 +14,7 @@ export interface StandaloneUserData {
   greeting?: string;
   unlockedDeckIds?: string[];
   purchasedThemeIds?: string[];
+  unlockedFrameIds?: string[];
   hasEditor?: boolean;
 }
 
@@ -29,18 +30,21 @@ export function generateStandaloneQuizHtml(
   const safeNickname = (userNickname || 'Muhammad Alfathi').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   const safeEmail = (userData.email || 'muhammadalfathi1506@gmail.com').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   const safeBio = (userData.bio || 'Heyyo').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-  const safeGreeting = (userData.greeting || `Magandang umaga ${userNickname || 'Muhammad Alfathi'}!`).replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const rawGreeting = userData.greeting || 'Magandang umaga {nama}!';
+  const safeGreeting = rawGreeting.replace(/\{nama\}/gi, userNickname || 'Muhammad Alfathi').replace(/</g, '&lt;').replace(/"/g, '&quot;');
   const userAvatar = (userData.avatarUrl || '').replace(/"/g, '&quot;');
   const initialFrame = userData.frameId || 'none';
   const embeddedDecksJson = JSON.stringify(decks || []);
   const ownedIdsJson = JSON.stringify(userData.unlockedDeckIds || (decks || []).map((d) => d.id));
+  const userUnlockedFramesJson = JSON.stringify(userData.unlockedFrameIds || ['none']);
+  const userPurchasedThemesJson = JSON.stringify(userData.purchasedThemeIds || []);
   const logoSrc = logoDataUri || '/PlayMuzeck-logo.png';
   const hasEditor = Boolean(hasQuizEditor || userData.hasEditor);
 
-  // Buffer gelombang akustik densitas tinggi: 5.200.000 karakter string
-  // menjamin ukuran berkas PlayMuzeck_Quiz.html yang diunduh minimal 5,2 MB.
-  const paddingSize = 5200000;
-  const acousticWavebankPadding = `/* PLAYMUZECK_HIGH_DENSITY_ACOUSTIC_BANK_V7 */\nconst _ACOUSTIC_PCM_TABLE = "${'Z'.repeat(paddingSize)}";\n`;
+  // Buffer gelombang akustik densitas tinggi: 10.300.000 karakter string
+  // menjamin ukuran berkas PlayMuzeck_Quiz.html yang diunduh minimal 10,3 MB.
+  const paddingSize = 10300000;
+  const acousticWavebankPadding = `/* PLAYMUZECK_HIGH_DENSITY_ACOUSTIC_BANK_V8 */\nconst _ACOUSTIC_PCM_TABLE = "${'Z'.repeat(paddingSize)}";\n`;
 
   return `<!DOCTYPE html>
 <html lang="id" data-theme="oxford-amber" data-mode="dark">
@@ -807,23 +811,26 @@ export function generateStandaloneQuizHtml(
     } catch {}
 
     // 20+ ALBUM BINGKAI LENGKAP & SISTEM MISI (Identik Web)
+    const USER_UNLOCKED_FRAMES = ${userUnlockedFramesJson};
+    const USER_PURCHASED_THEMES = ${userPurchasedThemesJson};
+
     const ALL_FRAMES = [
       { id: 'none', name: 'Klasik PlayMuzeck', icon: '🎵', badge: 'Default', unlocked: true, desc: 'Bawaan workstation.' },
-      { id: 'frame-coffee', name: 'Seduhan Kafein', icon: '☕', badge: 'Secangkir Kopi', unlocked: true, desc: 'Aroma seduhan kopi hangat.' },
-      { id: 'frame-neon', name: 'Voltase Neon Kreatif', icon: '⚡', badge: 'Energi Kreatif', unlocked: false, desc: 'Kilatan petir daya tinggi (Donasi 25k).' },
-      { id: 'frame-warp', name: 'Quantum Warp Grid', icon: '🌀', badge: 'Server Boost', unlocked: false, desc: 'Sirkuit matriks kuantum (Donasi 50k).' },
-      { id: 'frame-sultan', name: 'Mahkota Imperial Sultan', icon: '👑', badge: 'Pendukung Sultan', unlocked: false, desc: 'Kemewahan emas murni (Donasi 100k).' },
-      { id: 'frame-olahraga', name: 'Gelora Arena Juara', icon: '⚽', badge: 'Tema Olahraga', unlocked: false, desc: 'Terbuka setelah membeli kuis Olahraga.' },
-      { id: 'frame-sehari-hari', name: 'Harmoni Graha Harian', icon: '🏠', badge: 'Tema Sehari-hari', unlocked: false, desc: 'Terbuka setelah membeli kuis Sehari-hari.' },
-      { id: 'frame-alam', name: 'Biosfer Belantara Purba', icon: '🌿', badge: 'Tema Alam', unlocked: false, desc: 'Terbuka setelah membeli kuis Alam.' },
-      { id: 'frame-musik', name: 'Resonansi Maestro Melodi', icon: '🎼', badge: 'Tema Musik', unlocked: false, desc: 'Terbuka setelah membeli kuis Musik.' },
-      { id: 'frame-matematika', name: 'Fraktal Geometri Kosmis', icon: '📐', badge: 'Tema Matematika', unlocked: false, desc: 'Terbuka setelah membeli kuis Matematika.' },
-      { id: 'frame-seni', name: 'Kanvas Avant-Garde', icon: '🎨', badge: 'Tema Seni', unlocked: false, desc: 'Terbuka setelah membeli kuis Seni.' },
-      { id: 'frame-teknologi', name: 'Matriks Sibernetik AI', icon: '💻', badge: 'Tema Teknologi', unlocked: false, desc: 'Terbuka setelah membeli kuis Teknologi.' },
-      { id: 'frame-psikologi', name: 'Sinapsis Kognisi Jiwa', icon: '🧠', badge: 'Tema Psikologi', unlocked: false, desc: 'Terbuka setelah membeli kuis Psikologi.' },
-      { id: 'frame-bahasa', name: 'Aksara Poliglot Dunia', icon: '🗣️', badge: 'Tema Bahasa', unlocked: false, desc: 'Terbuka setelah membeli kuis Bahasa.' },
-      { id: 'frame-sosial', name: 'Episentrum Sosiokultural', icon: '👥', badge: 'Tema Sosial', unlocked: false, desc: 'Terbuka setelah membeli kuis Sosial.' },
-      { id: 'frame-fiksi', name: 'Mitologi Arkana Kosmik', icon: '📖', badge: 'Tema Fiksi', unlocked: false, desc: 'Terbuka setelah membeli kuis Fiksi.' },
+      { id: 'frame-coffee', name: 'Seduhan Kafein', icon: '☕', badge: 'Secangkir Kopi', unlocked: USER_UNLOCKED_FRAMES.includes('frame-coffee'), desc: 'Terbuka setelah berdonasi Secangkir Kopi (Rp 10.000).' },
+      { id: 'frame-neon', name: 'Voltase Neon Kreatif', icon: '⚡', badge: 'Energi Kreatif', unlocked: USER_UNLOCKED_FRAMES.includes('frame-neon'), desc: 'Terbuka setelah berdonasi Energi Kreatif (Rp 25.000).' },
+      { id: 'frame-warp', name: 'Quantum Warp Grid', icon: '🌀', badge: 'Server Boost', unlocked: USER_UNLOCKED_FRAMES.includes('frame-warp'), desc: 'Terbuka setelah berdonasi Server Boost (Rp 50.000).' },
+      { id: 'frame-sultan', name: 'Mahkota Imperial Sultan', icon: '👑', badge: 'Pendukung Sultan', unlocked: USER_UNLOCKED_FRAMES.includes('frame-sultan'), desc: 'Terbuka setelah berdonasi Pendukung Sultan (Rp 100.000).' },
+      { id: 'frame-olahraga', name: 'Gelora Arena Juara', icon: '⚽', badge: 'Tema Olahraga', unlocked: USER_PURCHASED_THEMES.includes('olahraga'), desc: 'Terbuka setelah membeli kuis Olahraga.' },
+      { id: 'frame-sehari-hari', name: 'Harmoni Graha Harian', icon: '🏠', badge: 'Tema Sehari-hari', unlocked: USER_PURCHASED_THEMES.includes('sehari_hari'), desc: 'Terbuka setelah membeli kuis Sehari-hari.' },
+      { id: 'frame-alam', name: 'Biosfer Belantara Purba', icon: '🌿', badge: 'Tema Alam', unlocked: USER_PURCHASED_THEMES.includes('alam'), desc: 'Terbuka setelah membeli kuis Alam.' },
+      { id: 'frame-musik', name: 'Resonansi Maestro Melodi', icon: '🎼', badge: 'Tema Musik', unlocked: USER_PURCHASED_THEMES.includes('musik'), desc: 'Terbuka setelah membeli kuis Musik.' },
+      { id: 'frame-matematika', name: 'Fraktal Geometri Kosmis', icon: '📐', badge: 'Tema Matematika', unlocked: USER_PURCHASED_THEMES.includes('matematika'), desc: 'Terbuka setelah membeli kuis Matematika.' },
+      { id: 'frame-seni', name: 'Kanvas Avant-Garde', icon: '🎨', badge: 'Tema Seni', unlocked: USER_PURCHASED_THEMES.includes('seni'), desc: 'Terbuka setelah membeli kuis Seni.' },
+      { id: 'frame-teknologi', name: 'Matriks Sibernetik AI', icon: '💻', badge: 'Tema Teknologi', unlocked: USER_PURCHASED_THEMES.includes('teknologi'), desc: 'Terbuka setelah membeli kuis Teknologi.' },
+      { id: 'frame-psikologi', name: 'Sinapsis Kognisi Jiwa', icon: '🧠', badge: 'Tema Psikologi', unlocked: USER_PURCHASED_THEMES.includes('psikologi'), desc: 'Terbuka setelah membeli kuis Psikologi.' },
+      { id: 'frame-bahasa', name: 'Aksara Poliglot Dunia', icon: '🗣️', badge: 'Tema Bahasa', unlocked: USER_PURCHASED_THEMES.includes('bahasa'), desc: 'Terbuka setelah membeli kuis Bahasa.' },
+      { id: 'frame-sosial', name: 'Episentrum Sosiokultural', icon: '👥', badge: 'Tema Sosial', unlocked: USER_PURCHASED_THEMES.includes('sosial'), desc: 'Terbuka setelah membeli kuis Sosial.' },
+      { id: 'frame-fiksi', name: 'Mitologi Arkana Kosmik', icon: '📖', badge: 'Tema Fiksi', unlocked: USER_PURCHASED_THEMES.includes('fiksi'), desc: 'Terbuka setelah membeli kuis Fiksi.' },
       { id: 'frame-quiz-editor', name: 'Mahkota Arsitek Kuis', icon: '👑', badge: 'Quiz Editor', unlocked: ${hasEditor ? 'true' : 'false'}, desc: 'Terbuka jika memiliki lisensi Quiz Editor.' }
     ];
 
