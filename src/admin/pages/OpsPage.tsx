@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Pencil, X, Check, Loader2, ChevronDown, ChevronRight, Mail, Ban, RotateCcw, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, Pencil, X, Check, Loader2, ChevronDown, ChevronRight, Mail, Ban, RotateCcw, ExternalLink, Timer } from 'lucide-react';
 import { adminFetch } from '../adminApi';
 import { useAdminRole, READONLY_MSG } from '../useAdminRole';
 
@@ -60,6 +60,8 @@ interface UserRow {
   suspended_at: string | null;
   suspended_reason: string | null;
   email_verified_at: string | null;
+  deletion_scheduled_at?: string | null;
+  deletion_requested_by?: string | null;
   bio?: string;
   greeting?: string;
   avatar_url?: string;
@@ -141,6 +143,20 @@ const fmtTime = (s?: string | null) => {
   const d = new Date(s);
   if (Number.isNaN(d.getTime())) return String(s);
   return d.toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+};
+
+// Sisa waktu sebelum akun dihapus permanen, mis. "2 hari 5 jam" / "3 jam 10 menit".
+const deletionLeft = (s?: string | null) => {
+  if (!s) return '';
+  const ms = new Date(s).getTime() - Date.now();
+  if (!Number.isFinite(ms)) return '';
+  if (ms <= 0) return 'segera dihapus';
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if (d > 0) return `${d} hari ${h} jam lagi`;
+  if (h > 0) return `${h} jam ${m} menit lagi`;
+  return `${Math.max(1, m)} menit lagi`;
 };
 
 const itemLabel = (item: any): string => {
@@ -581,16 +597,28 @@ export const OpsPage: React.FC = () => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (
       !confirm(
-        `Hapus pengguna ${u.email}?\n\nKoleksi produk, donasi, dan token reset milik pengguna ini ikut terhapus. Riwayat pesanannya tetap tersimpan.`
+        `Jadwalkan penghapusan permanen akun ${u.email}?\n\nAkun baru dihapus 3 hari lagi. Selama itu pengguna masih bisa login & memakai akunnya, dan akan diberi tahu sisa waktunya setiap login. Pengguna (atau admin) bisa membatalkannya kapan saja sebelum waktunya habis.\n\nSetelah terhapus: koleksi produk, donasi, dan kuis buatannya hilang. Riwayat pesanan tetap tersimpan.`
       )
     )
       return;
     try {
-      await adminFetch(`/api/admin/users/${u.id}`, { method: 'DELETE' });
-      ok('Pengguna dihapus.');
+      await adminFetch(`/api/admin/users/${u.id}/schedule-deletion`, { method: 'POST' });
+      ok(`Akun ${u.email} dijadwalkan dihapus permanen dalam 3 hari.`);
       await load();
     } catch (err) {
-      fail(err, 'Gagal menghapus pengguna.');
+      fail(err, 'Gagal menjadwalkan penghapusan.');
+    }
+  };
+
+  const cancelUserDeletion = async (u: UserRow) => {
+    if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
+    if (!confirm(`Batalkan penghapusan akun ${u.email}?`)) return;
+    try {
+      await adminFetch(`/api/admin/users/${u.id}/cancel-deletion`, { method: 'POST' });
+      ok(`Penghapusan akun ${u.email} dibatalkan.`);
+      await load();
+    } catch (err) {
+      fail(err, 'Gagal membatalkan penghapusan.');
     }
   };
 
@@ -1312,6 +1340,14 @@ export const OpsPage: React.FC = () => {
                       ) : (
                         <Badge cls="bg-emerald-500/20 text-emerald-300">Aktif</Badge>
                       )}
+                      {u.deletion_scheduled_at && (
+                        <div className="mt-1" title={`Dihapus permanen: ${fmtTime(u.deletion_scheduled_at)}`}>
+                          <Badge cls="bg-orange-500/20 text-orange-300">Akan dihapus</Badge>
+                          <div className="text-[10px] text-orange-300/80">
+                            {deletionLeft(u.deletion_scheduled_at)} · diminta {u.deletion_requested_by === 'self' ? 'pengguna' : 'admin'}
+                          </div>
+                        </div>
+                      )}
                     </td>
                     <td className="text-xs text-gray-300">
                       {u.paid_orders} pesanan
@@ -1336,11 +1372,16 @@ export const OpsPage: React.FC = () => {
                             <Ban className="w-4 h-4" />
                           </button>
                         ))}
-                      {!u.is_super_admin && (
-                        <button onClick={() => removeUser(u)} className="p-1.5 rounded-lg text-red-300 hover:bg-red-500/10" title="Hapus">
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+                      {!u.is_super_admin &&
+                        (u.deletion_scheduled_at ? (
+                          <button onClick={() => cancelUserDeletion(u)} className="p-1.5 rounded-lg text-orange-300 hover:bg-orange-500/10" title="Batalkan penghapusan akun">
+                            <Timer className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button onClick={() => removeUser(u)} className="p-1.5 rounded-lg text-red-300 hover:bg-red-500/10" title="Hapus akun (jeda 3 hari)">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ))}
                     </td>
                   </tr>
                 ))}

@@ -16,6 +16,7 @@ import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
 import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
 import { createThemeBulkRoutes } from './themeBulkRoutes';
+import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 
 // Definisikan __filename dan __dirname agar ES Module mengenalnya
 const __filename = fileURLToPath(import.meta.url);
@@ -232,6 +233,10 @@ app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
 // PERBAIKAN: router ini sebelumnya TIDAK PERNAH dipasang, jadi GET /api/admin/theme-bulk/users membalas 404
 // dan daftar pengguna di panel admin selalu kosong ("Belum ada pengguna").
 app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));
+
+// ---- Hapus akun permanen (masa tunggu 3 hari): /api/user/account/*, /api/admin/users/:id/schedule-deletion|cancel-deletion ----
+app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
+startDeletionSweeper(pool);
 
 // ---- Kepemilikan: admin biasa hanya boleh mengubah audio/kuis BUATANNYA SENDIRI ----
 // Super Admin boleh semuanya. Baris lama tanpa owner_email, deck bawaan, dan deck buatan
@@ -1273,6 +1278,7 @@ app.get('/api/admin/users', requireAdmin, async (_req, res) => {
       `SELECT u.id, u.email, u.name, u.role, u.active_frame_id, u.created_at, u.last_seen,
               u.bio, u.greeting, left(md5(u.avatar_url), 8) AS avatar_v,
               u.suspended_at, u.suspended_reason, u.email_verified_at,
+              u.deletion_scheduled_at, u.deletion_requested_by,
               (u.password_hash IS NOT NULL) AS has_password,
               (u.google_sub IS NOT NULL) AS has_google,
               (SELECT COUNT(*) FROM public.user_collections c WHERE c.user_email = u.email AND c.item_category <> 'frame')::int AS owned_items,

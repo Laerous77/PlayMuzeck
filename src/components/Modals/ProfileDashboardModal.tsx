@@ -377,6 +377,91 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
   const [randomGreeting, setRandomGreeting] = useState('');
 
+  // ---- Hapus akun permanen (masa tunggu 3 hari) ----
+  const [deletion, setDeletion] = useState<{ scheduledAt: string; requestedBy: 'self' | 'admin' } | null>(null);
+  const [showDeleteForm, setShowDeleteForm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [, setDeletionTick] = useState(0);
+
+  const loadDeletionStatus = async () => {
+    try {
+      const res = await fetch('/api/user/account/deletion', { credentials: 'include' });
+      if (!res.ok) return;
+      const d = await res.json();
+      setDeletion(d.scheduled ? { scheduledAt: d.scheduledAt, requestedBy: d.requestedBy } : null);
+    } catch {}
+  };
+
+  useEffect(() => {
+    if (!isOpen || !userSession.isLoggedIn) { setDeletion(null); return; }
+    loadDeletionStatus();
+    setShowDeleteForm(false);
+    setDeleteConfirm('');
+    setDeletePassword('');
+    setDeleteError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, userSession.isLoggedIn, userSession.email]);
+
+  // Hitung mundur hidup selama ada jadwal penghapusan.
+  useEffect(() => {
+    if (!isOpen || !deletion) return;
+    const t = setInterval(() => setDeletionTick((n) => n + 1), 30000);
+    return () => clearInterval(t);
+  }, [isOpen, deletion?.scheduledAt]);
+
+  const deletionLeftLabel = () => {
+    if (!deletion) return '';
+    const ms = new Date(deletion.scheduledAt).getTime() - Date.now();
+    if (ms <= 0) return 'sebentar lagi';
+    const d = Math.floor(ms / 86400000);
+    const h = Math.floor((ms % 86400000) / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return d > 0 ? `${d} hari ${h} jam` : h > 0 ? `${h} jam ${m} menit` : `${Math.max(1, m)} menit`;
+  };
+
+  const handleRequestDeletion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch('/api/user/account/delete', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm: deleteConfirm, password: deletePassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Gagal menjadwalkan penghapusan akun.');
+      setDeletion({ scheduledAt: data.scheduledAt, requestedBy: 'self' });
+      setShowDeleteForm(false);
+      setDeleteConfirm('');
+      setDeletePassword('');
+      onSuccessToast('Akun dijadwalkan dihapus dalam 3 hari. Kamu bisa membatalkannya kapan saja sebelum itu.');
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Gagal menjadwalkan penghapusan akun.');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleCancelDeletion = async () => {
+    setDeleteBusy(true);
+    try {
+      const res = await fetch('/api/user/account/cancel-deletion', { method: 'POST', credentials: 'include' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || 'Gagal membatalkan penghapusan akun.');
+      setDeletion(null);
+      onSuccessToast('Penghapusan akun dibatalkan. Akunmu aman.');
+    } catch (err: any) {
+      onSuccessToast(err?.message || 'Gagal membatalkan penghapusan akun.');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
   // SINKRONISASI DATABASE POSTGRESQL SAAT MODAL DIBUKA
   useEffect(() => {
     let isMounted = true;
@@ -995,6 +1080,70 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
         {/* 4. KONTEN TAB UTAMA */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
+          {deletion && (
+            <div className="p-4 rounded-2xl bg-orange-500/10 border border-orange-400/50 space-y-2">
+              <div className="flex items-center gap-2 text-orange-300 font-black text-sm">
+                <Trash2 className="w-4 h-4" />
+                <span>Akunmu akan dihapus permanen dalam {deletionLeftLabel()}</span>
+              </div>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Dihapus pada{' '}
+                <b className="text-white">
+                  {new Date(deletion.scheduledAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'short' })} WIB
+                </b>
+                . {deletion.requestedBy === 'self' ? 'Kamu yang meminta penghapusan ini.' : 'Penghapusan ini dijadwalkan oleh admin.'} Akunmu masih bisa dipakai
+                sampai waktu itu. Tekan tombol di bawah untuk membatalkan; kalau tidak, akun, koleksi, dan kuis buatanmu hilang selamanya.
+              </p>
+              <button
+                type="button"
+                disabled={deleteBusy}
+                onClick={handleCancelDeletion}
+                className="px-4 py-2 rounded-xl bg-orange-400 hover:bg-orange-300 text-black font-black text-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+              >
+                {deleteBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                Batalkan Penghapusan Akun
+              </button>
+            </div>
+          )}
+
+          {showDeleteForm && !deletion && userSession.isLoggedIn && (
+            <form onSubmit={handleRequestDeletion} className="p-4 rounded-2xl bg-red-900/20 border border-red-500/40 space-y-3">
+              <h4 className="text-sm font-black text-red-300 flex items-center gap-2"><Trash2 className="w-4 h-4" /> Hapus Akun Permanen</h4>
+              <p className="text-xs text-gray-300 leading-relaxed">
+                Akunmu akan dihapus permanen <b className="text-white">3 hari</b> setelah kamu menekan tombol ini. Selama 3 hari itu kamu masih bisa login dan memakai
+                akun, dan kamu akan diingatkan setiap login. Kamu bisa membatalkannya kapan saja sebelum waktunya habis. Setelah terhapus, koleksi produk, donasi,
+                dan kuis buatanmu tidak bisa dipulihkan.
+              </p>
+              <input
+                type="password"
+                autoComplete="current-password"
+                placeholder="Kata sandi (kosongkan jika akunmu login via Google)"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="w-full bg-black/60 border border-white/[0.1] focus:border-red-400 rounded-xl px-3 py-2 text-xs text-white outline-none"
+              />
+              <input
+                type="text"
+                required
+                placeholder='Ketik HAPUS untuk konfirmasi'
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                className="w-full bg-black/60 border border-white/[0.1] focus:border-red-400 rounded-xl px-3 py-2 text-xs text-white outline-none"
+              />
+              {deleteError && <div className="p-2.5 rounded-lg bg-red-900/25 border border-red-900 text-red-200 text-xs">{deleteError}</div>}
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => { setShowDeleteForm(false); setDeleteError(null); }} className="px-3 py-1.5 rounded-lg bg-white/10 text-gray-300 hover:text-white text-xs font-bold cursor-pointer">Batal</button>
+                <button
+                  type="submit"
+                  disabled={deleteBusy || deleteConfirm.trim().toUpperCase() !== 'HAPUS'}
+                  className="px-4 py-1.5 rounded-lg bg-red-500 hover:bg-red-400 text-white font-black text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  {deleteBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} Jadwalkan Penghapusan
+                </button>
+              </div>
+            </form>
+          )}
+
           {isDbLoading ? (
             <div className="flex flex-col items-center justify-center py-20 space-y-4">
               <Loader2 className="w-10 h-10 text-accent animate-spin" />
@@ -1354,7 +1503,12 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         <div className="shrink-0 p-4 bg-black/75 border-t border-white/[0.08] flex items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2">
             {userSession.isLoggedIn ? (
-              <button type="button" onClick={() => { onLogout(); onClose(); setTimeout(() => window.location.reload(), 300); }} className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 font-bold transition-colors cursor-pointer"><LogOut className="w-3.5 h-3.5" /> <span>Keluar & Hapus Sesi Klien</span></button>
+              <div className="flex items-center gap-4 flex-wrap">
+                <button type="button" onClick={() => { onLogout(); onClose(); setTimeout(() => window.location.reload(), 300); }} className="flex items-center gap-1.5 text-gray-400 hover:text-red-400 font-bold transition-colors cursor-pointer"><LogOut className="w-3.5 h-3.5" /> <span>Keluar & Hapus Sesi Klien</span></button>
+                {!deletion && (
+                  <button type="button" onClick={() => { setShowDeleteForm((v) => !v); setDeleteError(null); }} className="flex items-center gap-1.5 text-gray-500 hover:text-red-400 font-bold transition-colors cursor-pointer"><Trash2 className="w-3.5 h-3.5" /> <span>Hapus Akun</span></button>
+                )}
+              </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
                 <button type="button" onClick={() => { onClose(); onLoginRequest(); }} className="flex items-center gap-1.5 text-accent hover:underline font-bold cursor-pointer"><LogIn className="w-3.5 h-3.5" /> <span>Masuk Akun</span></button>

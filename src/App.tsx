@@ -7,7 +7,7 @@ import { AudioStudioView } from './components/AudioStudio/AudioStudioView';
 import { QuizIndex } from './components/PusatKuis/QuizIndex';
 import { QuizPlayer } from './components/PusatKuis/QuizPlayer';
 import { CartDrawer } from './components/Modals/CartDrawer';
-import { AuthModal } from './components/Modals/AuthModal';
+import { AuthModal, announceAccountDeletion } from './components/Modals/AuthModal';
 import { CustomAudioModal } from './components/Modals/CustomAudioModal';
 import { ProfileDashboardModal } from './components/Modals/ProfileDashboardModal';
 import { DestinationModal } from './components/Modals/DestinationModal';
@@ -828,6 +828,7 @@ function MainApp() {
         if (r.ok && r.data?.user?.email) {
           showToast('Email terverifikasi!');
           void handleLoginRef.current(r.data.user.email, r.data.user.name);
+          announceAccountDeletion(r.data.user);
         } else {
           showToast(r.data?.message || 'Link verifikasi tidak valid atau sudah kedaluwarsa.');
           setIsAuthOpen(true);
@@ -854,6 +855,16 @@ function MainApp() {
           (session as any).isAdmin = u.isAdmin;
           setUserSession((prev) => ({ ...prev, ...session }));
           try { storage.setUserSession(session); } catch {}
+          // Sesi dipulihkan dari cookie (buka ulang situs tanpa login ulang): ingatkan soal
+          // penghapusan akun sekali per sesi browser, supaya tidak muncul tiap refresh.
+          if (u.deletion?.scheduledAt) {
+            let shown = false;
+            try { shown = sessionStorage.getItem('muzeck_deletion_notice') === u.deletion.scheduledAt; } catch {}
+            if (!shown) {
+              try { sessionStorage.setItem('muzeck_deletion_notice', u.deletion.scheduledAt); } catch {}
+              announceAccountDeletion(u);
+            }
+          }
         } else if (r.status === 401) {
           const guest: UserSession = { isLoggedIn: false, name: 'Tamu PlayMuzeck', email: '' };
           setUserSession(guest);

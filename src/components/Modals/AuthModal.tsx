@@ -7,6 +7,27 @@ import { GoogleSignInButton } from '../GoogleSignInButton';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 
+// Dipanggil SETIAP login berhasil: kalau akun sedang dijadwalkan dihapus, beri tahu sisa waktunya.
+export function announceAccountDeletion(user: any) {
+  const d = user?.deletion;
+  if (!d?.scheduledAt) return;
+  const at = new Date(d.scheduledAt);
+  const ms = Math.max(0, at.getTime() - Date.now());
+  const days = Math.floor(ms / 86400000);
+  const hours = Math.floor((ms % 86400000) / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  const left = days > 0 ? `${days} hari ${hours} jam` : hours > 0 ? `${hours} jam ${mins} menit` : `${Math.max(1, mins)} menit`;
+  const when = at.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'short' });
+  window.dispatchEvent(new CustomEvent('muzeck:account-deletion', { detail: d }));
+  alert(
+    `⚠️ AKUNMU AKAN DIHAPUS PERMANEN\n\n` +
+      `Sisa waktu: ${left}\nDihapus pada: ${when} WIB\n` +
+      `${d.requestedBy === 'self' ? 'Kamu sendiri yang meminta penghapusan ini.' : 'Penghapusan ini dijadwalkan oleh admin.'}\n\n` +
+      `Akunmu masih bisa dipakai sampai waktu itu. Untuk membatalkan, buka Profil lalu tekan "Batalkan Penghapusan Akun". ` +
+      `Kalau tidak dibatalkan, akun, koleksi, dan kuis buatanmu akan hilang selamanya.`
+  );
+}
+
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -72,6 +93,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       onLogin(r.data.user.email, r.data.user.name || r.data.user.email.split('@')[0]);
       onClose();
+      announceAccountDeletion(r.data.user);
     } finally {
       setIsSubmitting(false);
     }
@@ -198,6 +220,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       onLogin(r.data.user.email, r.data.user.name || r.data.user.email.split('@')[0]);
       setPassword('');
       onClose();
+      announceAccountDeletion(r.data.user);
     } finally {
       setIsSubmitting(false);
     }

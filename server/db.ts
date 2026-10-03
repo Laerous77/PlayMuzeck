@@ -214,6 +214,14 @@ export async function initDatabase() {
       [SUPER_ADMIN_EMAIL]
     );
 
+    // Hapus akun permanen dengan masa tunggu 3 hari (lihat server/accountDeletion.ts).
+    await client.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_scheduled_at TIMESTAMPTZ;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_requested_by VARCHAR(255);
+      CREATE INDEX IF NOT EXISTS users_deletion_due_idx ON users (deletion_scheduled_at) WHERE deletion_scheduled_at IS NOT NULL;
+    `);
+
     // 11. Tabel Reset Kata Sandi (lupa password)
     // Token mentah dikirim lewat email, hanya HASH-nya yang disimpan di sini
     // (mirip prinsip password_hash) supaya kalau database bocor, tautan reset

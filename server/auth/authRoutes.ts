@@ -65,7 +65,7 @@ const wrap =
 const DUMMY_HASH = argon2.hash('dummy-password-untuk-timing', { type: argon2.argon2id });
 
 /** Cek password. Mendukung hash argon2 (baru) dan bcrypt ($2...) dari sistem login lama. */
-async function verifyPassword(stored: string | null | undefined, plain: string): Promise<{ ok: boolean; legacy: boolean }> {
+export async function verifyPassword(stored: string | null | undefined, plain: string): Promise<{ ok: boolean; legacy: boolean }> {
   const hash = stored || (await DUMMY_HASH);
   try {
     if (hash.startsWith('$2')) return { ok: !!stored && (await bcrypt.compare(plain, hash)), legacy: true };
@@ -168,6 +168,7 @@ async function startSession(req: Request, res: Response, userId: string) {
 async function publicUser(userId: string) {
   const { rows } = await pool.query(
     `SELECT u.id, u.email, u.name, u.role, left(md5(u.avatar_url), 8) AS avatar_v, u.bio, u.greeting, u.active_frame_id,
+            u.deletion_scheduled_at, u.deletion_requested_by,
             (u.role = 'admin'
              OR lower(u.email) = $2
              OR EXISTS (SELECT 1 FROM admin_emails a WHERE lower(a.email) = lower(u.email))) AS is_admin
@@ -178,6 +179,14 @@ async function publicUser(userId: string) {
   return {
     id: u.id, email: u.email, name: u.name, isAdmin: Boolean(u.is_admin),
     avatarUrl: u.avatar_v ? `/api/avatar/${u.id}?v=${u.avatar_v}` : '', bio: u.bio || '', greeting: u.greeting || '', frameId: u.active_frame_id || 'none',
+    // Dikirim setiap login / verifikasi / Google / me, supaya klien selalu bisa memperingatkan pengguna.
+    deletion: u.deletion_scheduled_at
+      ? {
+          scheduledAt: new Date(u.deletion_scheduled_at).toISOString(),
+          msLeft: Math.max(0, new Date(u.deletion_scheduled_at).getTime() - Date.now()),
+          requestedBy: u.deletion_requested_by === 'self' ? 'self' : 'admin',
+        }
+      : null,
   };
 }
 
