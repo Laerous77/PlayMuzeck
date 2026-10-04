@@ -18,6 +18,7 @@ import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
 import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
+import { createAdminOpsRouter } from './adminOpsRoutes';
 import {
   sendCustomAudioInquiryNotifications,
   sendContactFeedbackNotifications,
@@ -165,6 +166,7 @@ app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUs
 app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
 startDeletionSweeper(pool);
 app.use(createNotificationsRouter({ pool }));
+app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin }));
 
 const OWN_ONLY_MSG = 'Kamu hanya bisa mengubah audio/kuis buatanmu sendiri.';
 const adminEmailOf = (req: express.Request): string | null => (req as any).adminEmail ? String((req as any).adminEmail).toLowerCase() : null;
@@ -578,29 +580,6 @@ app.get('/api/admin/analytics', requireAdmin, async (_req, res) => {
 app.post('/api/admin/clear-analytics', requireAdmin, requireSuperAdmin, async (_req, res) => {
   await pool.query('DELETE FROM analytics_events');
   res.json({ success: true });
-});
-
-// Admin Email Langsung ke Pengguna via Resend
-app.post('/api/admin/users/:id/email', requireAdmin, requireSuperAdmin, async (req, res) => {
-  const subject = String(req.body?.subject || '').trim().slice(0, 200);
-  const message = String(req.body?.message || '').trim().slice(0, 5000);
-  if (!subject || !message) return res.status(400).json({ error: 'Subjek dan isi pesan wajib diisi.' });
-  try {
-    const found = await pool.query('SELECT email, name FROM users WHERE id = $1', [req.params.id]);
-    const user = found.rows[0];
-    if (!user) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
-
-    await sendMailStrict(user.email, subject, message);
-    await pool.query('INSERT INTO analytics_events (id, event_type, payload) VALUES ($1, $2, $3)', [
-      `evt_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-      'admin_email',
-      JSON.stringify({ to: user.email, subject, by: (req as any).adminEmail || 'server-password' }),
-    ]);
-    res.json({ success: true });
-  } catch (err: any) {
-    console.error('[admin] email user:', err);
-    res.status(500).json({ error: err?.message || 'Gagal mengirim email.' });
-  }
 });
 
 // ==========================================

@@ -1,13 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { X, User, Lock, Mail, LogOut, CheckCircle2, Sparkles, ArrowRight, Loader2, KeyRound, ShieldCheck } from 'lucide-react';
+import {
+  X,
+  User,
+  Lock,
+  Mail,
+  LogOut,
+  CheckCircle2,
+  Sparkles,
+  ArrowRight,
+  Loader2,
+  KeyRound,
+  ShieldCheck,
+  Eye,
+  EyeOff,
+  Check,
+} from 'lucide-react';
 import { UserSession } from '../../types';
 import { authApi } from '../../services/authToken';
 import { GoogleSignInButton } from '../GoogleSignInButton';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 
-// Dipanggil SETIAP login berhasil: kalau akun sedang dijadwalkan dihapus, beri tahu sisa waktunya.
 export function announceAccountDeletion(user: any) {
   const d = user?.deletion;
   if (!d?.scheduledAt) return;
@@ -34,7 +48,6 @@ interface AuthModalProps {
   userSession: UserSession;
   onLogin: (email: string, name: string) => void;
   onLogout: () => void;
-  /** Kalau diisi, modal langsung dibuka di form "atur ulang kata sandi" (dipakai saat pengguna klik tautan reset dari email, lihat App.tsx). */
   initialResetToken?: string;
 }
 
@@ -54,11 +67,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [needsVerify, setNeedsVerify] = useState(false); // login ditolak karena email belum diverifikasi
-  const [signupDone, setSignupDone] = useState(false);   // daftar sukses -> tampilkan panel "cek email"
+  const [needsVerify, setNeedsVerify] = useState(false);
+  const [signupDone, setSignupDone] = useState(false);
 
-  // Kalau App.tsx mendeteksi ?resetToken=... di URL setelah modal sudah pernah
-  // dibuat, pastikan kita tetap pindah ke mode reset begitu propnya berubah.
+  // State untuk melihat/menyembunyikan kata sandi (View / Hide password)
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   useEffect(() => {
     if (initialResetToken) {
       setAuthMode('reset');
@@ -67,9 +82,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   }, [initialResetToken]);
 
-  if (!isOpen) return null;
+  // Validasi Kriteria Keamanan Kata Sandi
+  const passwordCriteria = useMemo(() => {
+    return {
+      hasMinLength: password.length >= 8,
+      hasUpperCase: /[A-Z]/.test(password),
+      hasNumber: /[0-9]/.test(password),
+      hasSymbol: /[^A-Za-z0-9]/.test(password),
+    };
+  }, [password]);
 
-  const MIN_PASSWORD = 10; // harus sama dengan passwordSchema di server (authRoutes.ts)
+  const isPasswordStrong =
+    passwordCriteria.hasMinLength &&
+    passwordCriteria.hasUpperCase &&
+    passwordCriteria.hasNumber &&
+    passwordCriteria.hasSymbol;
+
+  if (!isOpen) return null;
 
   const switchMode = (mode: AuthMode) => {
     setAuthMode(mode);
@@ -77,10 +106,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setInfoMsg('');
     setNeedsVerify(false);
     setSignupDone(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
-  // Login Google: TIDAK perlu verifikasi email (Google sudah memverifikasi emailnya,
-  // dan server mengecek ulang `email_verified` dari ID token).
   const handleGoogleCredential = async (credential: string) => {
     setErrorMsg('');
     setInfoMsg('');
@@ -136,8 +165,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Server TIDAK lagi auto-login setelah reset (semua sesi lama dihapus), jadi setelah
-  // berhasil kita arahkan pengguna ke form Masuk.
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -146,8 +173,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMsg('Tautan reset tidak valid. Minta tautan baru lewat "Lupa kata sandi".');
       return;
     }
-    if (password.length < MIN_PASSWORD) {
-      setErrorMsg(`Kata sandi minimal ${MIN_PASSWORD} karakter.`);
+    if (!isPasswordStrong) {
+      setErrorMsg('Kata sandi harus minimal 8 karakter, mengandung huruf kapital, angka, dan simbol unik.');
       return;
     }
     if (password !== confirmPassword) {
@@ -170,9 +197,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
   };
 
-  // Masuk / Daftar dengan email + kata sandi.
-  // - Daftar  -> server kirim link verifikasi ke email. JANGAN login dulu.
-  // - Masuk   -> hanya berhasil kalau email sudah diverifikasi (server balas 403 kalau belum).
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -183,13 +207,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMsg('Masukkan alamat surel (email) yang valid.');
       return;
     }
-    if (password.length < MIN_PASSWORD) {
-      setErrorMsg(`Kata sandi minimal ${MIN_PASSWORD} karakter.`);
-      return;
-    }
-    if (authMode === 'signup' && name.trim().length < 2) {
-      setErrorMsg('Isi nama panggilan (minimal 2 karakter).');
-      return;
+
+    if (authMode === 'signup') {
+      if (name.trim().length < 2) {
+        setErrorMsg('Isi nama panggilan (minimal 2 karakter).');
+        return;
+      }
+      if (!isPasswordStrong) {
+        setErrorMsg('Kata sandi harus minimal 8 karakter, ada huruf kapital, angka, dan simbol.');
+        return;
+      }
+    } else {
+      if (!password) {
+        setErrorMsg('Kata sandi wajib diisi.');
+        return;
+      }
     }
 
     setIsSubmitting(true);
@@ -358,13 +390,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <button
                 type="button"
                 onClick={() => switchMode('signin')}
-                className="w-full text-center text-[11px] text-gray-400 hover:text-white transition-colors"
+                className="w-full text-center text-[11px] text-gray-400 hover:text-white transition-colors cursor-pointer"
               >
                 ← Kembali ke halaman masuk
               </button>
             </div>
           ) : authMode === 'reset' ? (
-            /* Atur Ulang Kata Sandi (dibuka dari tautan di email) */
+            /* Atur Ulang Kata Sandi */
             <div className="space-y-5">
               <div className="flex items-center gap-2 text-white">
                 <ShieldCheck className="w-4 h-4 text-accent" />
@@ -387,35 +419,79 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <div className="relative">
                     <Lock className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
                     <input
-                      type="password"
+                      type={showPassword ? 'text' : 'password'}
                       required
-                      minLength={10}
-                      autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
-                      placeholder="Minimal 10 karakter"
+                      autoComplete="new-password"
+                      placeholder="Masukkan kata sandi baru"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-10 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                      title={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
+
+                {/* Indikator Standar Keamanan Kata Sandi */}
+                {password.length > 0 && (
+                  <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5 text-[11px]">
+                    <span className="font-bold text-gray-400 block text-[10px] uppercase tracking-wider mb-1">
+                      Kriteria Keamanan Sandi:
+                    </span>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <span className={`flex items-center gap-1.5 ${passwordCriteria.hasMinLength ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasMinLength ? 'text-emerald-400' : 'text-gray-600'}`} />
+                        Minimal 8 karakter
+                      </span>
+                      <span className={`flex items-center gap-1.5 ${passwordCriteria.hasUpperCase ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasUpperCase ? 'text-emerald-400' : 'text-gray-600'}`} />
+                        Huruf kapital (A-Z)
+                      </span>
+                      <span className={`flex items-center gap-1.5 ${passwordCriteria.hasNumber ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasNumber ? 'text-emerald-400' : 'text-gray-600'}`} />
+                        Angka (0-9)
+                      </span>
+                      <span className={`flex items-center gap-1.5 ${passwordCriteria.hasSymbol ? 'text-emerald-400' : 'text-gray-500'}`}>
+                        <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasSymbol ? 'text-emerald-400' : 'text-gray-600'}`} />
+                        Simbol unik (!@#$ dll)
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-gray-300">Ulangi Kata Sandi Baru</label>
                   <div className="relative">
                     <Lock className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
                     <input
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       required
-                      placeholder="••••••••"
+                      placeholder="Ketik ulang kata sandi baru"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-10 py-2 text-xs text-white placeholder-gray-500 outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                      title={showConfirmPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                    >
+                      {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
                 </div>
+
                 <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+                  disabled={isSubmitting || !isPasswordStrong || password !== confirmPassword}
+                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? (
                     <>
@@ -431,12 +507,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           ) : (
             /* Login / Register Form */
             <div className="space-y-5">
-              {/* Toggle Mode */}
               <div className="grid grid-cols-2 p-1 bg-black/60 rounded-xl border border-white/[0.08]">
                 <button
                   type="button"
                   onClick={() => switchMode('signin')}
-                  className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                  className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     authMode === 'signin'
                       ? 'bg-accent text-on-accent shadow-sm'
                       : 'text-gray-400 hover:text-white'
@@ -447,7 +522,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="button"
                   onClick={() => switchMode('signup')}
-                  className={`py-2 text-xs font-bold rounded-lg transition-all ${
+                  className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                     authMode === 'signup'
                       ? 'bg-accent text-on-accent shadow-sm'
                       : 'text-gray-400 hover:text-white'
@@ -465,7 +540,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       type="button"
                       onClick={handleResendVerification}
                       disabled={isSubmitting}
-                      className="font-bold text-accent hover:underline disabled:opacity-60"
+                      className="font-bold text-accent hover:underline disabled:opacity-60 cursor-pointer"
                     >
                       Kirim ulang link verifikasi
                     </button>
@@ -495,108 +570,142 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                       type="button"
                       onClick={handleResendVerification}
                       disabled={isSubmitting}
-                      className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all disabled:opacity-60"
+                      className="w-full py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all disabled:opacity-60 cursor-pointer"
                     >
                       {isSubmitting ? 'Mengirim...' : 'Kirim ulang link verifikasi'}
                     </button>
                     <button
                       type="button"
                       onClick={() => switchMode('signin')}
-                      className="text-[11px] text-gray-400 hover:text-white transition-colors"
+                      className="text-[11px] text-gray-400 hover:text-white transition-colors cursor-pointer"
                     >
                       Sudah verifikasi? Masuk di sini
                     </button>
                   </div>
                 </div>
               ) : (
-              <>
-              <GoogleSignInButton onCredential={handleGoogleCredential} onError={setErrorMsg} text="continue_with" />
+                <>
+                  <GoogleSignInButton onCredential={handleGoogleCredential} onError={setErrorMsg} text="continue_with" />
 
-              <div className="relative flex items-center justify-center">
-                <div className="border-t border-white/10 w-full" />
-                <span className="bg-surface px-3 text-[11px] text-gray-500 uppercase font-mono">atau pakai email (perlu verifikasi)</span>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-3.5">
-                {authMode === 'signup' && (
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-gray-300">Nama Panggilan</label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                      <input
-                        type="text"
-                        placeholder="Contoh: Budi Musisi"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
-                      />
-                    </div>
+                  <div className="relative flex items-center justify-center">
+                    <div className="border-t border-white/10 w-full" />
+                    <span className="bg-surface px-3 text-[11px] text-gray-500 uppercase font-mono">atau pakai email</span>
                   </div>
-                )}
 
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-gray-300">Alamat Surel (Email)</label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                    <input
-                      type="email"
-                      required
-                      placeholder="nama@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-gray-300">Kata Sandi</label>
-                    {authMode === 'signin' && (
-                      <button
-                        type="button"
-                        onClick={() => switchMode('forgot')}
-                        className="text-[11px] text-accent hover:underline"
-                      >
-                        Lupa kata sandi?
-                      </button>
+                  <form onSubmit={handleSubmit} className="space-y-3.5">
+                    {authMode === 'signup' && (
+                      <div className="space-y-1">
+                        <label className="text-xs font-semibold text-gray-300">Nama Panggilan</label>
+                        <div className="relative">
+                          <User className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                          <input
+                            type="text"
+                            placeholder="Contoh: Budi Musisi"
+                            value={name}
+                            onChange={(e) => setName(e.target.value)}
+                            className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                          />
+                        </div>
+                      </div>
                     )}
-                  </div>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
-                    <input
-                      type="password"
-                      required
-                      minLength={10}
-                      autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
-                      placeholder="Minimal 10 karakter"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
-                    />
-                  </div>
-                </div>
 
-                <button
-                  type="submit"
-                  id="btn-submit-auth"
-                  disabled={isSubmitting}
-                  className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-60"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Memproses...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>{authMode === 'signin' ? 'Masuk Sekarang' : 'Buat Akun Baru'}</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </>
-                  )}
-                </button>
-              </form>
-              </>
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-gray-300">Alamat Surel (Email)</label>
+                      <div className="relative">
+                        <Mail className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                        <input
+                          type="email"
+                          required
+                          placeholder="nama@email.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-3 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-gray-300">Kata Sandi</label>
+                        {authMode === 'signin' && (
+                          <button
+                            type="button"
+                            onClick={() => switchMode('forgot')}
+                            className="text-[11px] text-accent hover:underline cursor-pointer"
+                          >
+                            Lupa kata sandi?
+                          </button>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <Lock className="w-4 h-4 text-gray-500 absolute left-3 top-2.5" />
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          required
+                          autoComplete={authMode === 'signin' ? 'current-password' : 'new-password'}
+                          placeholder={authMode === 'signup' ? 'Minimal 8 karakter' : '••••••••'}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="w-full bg-black/60 border border-white/[0.08] focus:border-accent rounded-xl pl-9 pr-10 py-2 text-xs text-white placeholder-gray-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-2.5 text-gray-400 hover:text-white transition-colors cursor-pointer"
+                          title={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Standar Keamanan Kata Sandi saat Daftar */}
+                    {authMode === 'signup' && password.length > 0 && (
+                      <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1 text-[11px]">
+                        <span className="font-bold text-gray-400 block text-[10px] uppercase tracking-wider mb-1">
+                          Standar Keamanan Sandi:
+                        </span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <span className={`flex items-center gap-1 ${passwordCriteria.hasMinLength ? 'text-emerald-400' : 'text-gray-500'}`}>
+                            <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasMinLength ? 'text-emerald-400' : 'text-gray-600'}`} />
+                            Min. 8 karakter
+                          </span>
+                          <span className={`flex items-center gap-1 ${passwordCriteria.hasUpperCase ? 'text-emerald-400' : 'text-gray-500'}`}>
+                            <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasUpperCase ? 'text-emerald-400' : 'text-gray-600'}`} />
+                            Huruf kapital (A-Z)
+                          </span>
+                          <span className={`flex items-center gap-1 ${passwordCriteria.hasNumber ? 'text-emerald-400' : 'text-gray-500'}`}>
+                            <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasNumber ? 'text-emerald-400' : 'text-gray-600'}`} />
+                            Angka (0-9)
+                          </span>
+                          <span className={`flex items-center gap-1 ${passwordCriteria.hasSymbol ? 'text-emerald-400' : 'text-gray-500'}`}>
+                            <Check className={`w-3.5 h-3.5 ${passwordCriteria.hasSymbol ? 'text-emerald-400' : 'text-gray-600'}`} />
+                            Simbol unik (!@#$)
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      id="btn-submit-auth"
+                      disabled={isSubmitting || (authMode === 'signup' && !isPasswordStrong)}
+                      className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent font-extrabold text-xs shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Memproses...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>{authMode === 'signin' ? 'Masuk Sekarang' : 'Buat Akun Baru'}</span>
+                          <ArrowRight className="w-3.5 h-3.5" />
+                        </>
+                      )}
+                    </button>
+                  </form>
+                </>
               )}
             </div>
           )}

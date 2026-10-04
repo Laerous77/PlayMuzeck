@@ -62,7 +62,13 @@ export async function verifyPassword(stored: string | null | undefined, plain: s
 }
 
 const emailSchema = z.string().trim().toLowerCase().email().max(254);
-const passwordSchema = z.string().min(10).max(128);
+const passwordSchema = z
+  .string()
+  .min(8, 'Kata sandi minimal 8 karakter.')
+  .max(128, 'Kata sandi maksimal 128 karakter.')
+  .regex(/[A-Z]/, 'Kata sandi harus memiliki minimal 1 huruf kapital (A-Z).')
+  .regex(/[0-9]/, 'Kata sandi harus memiliki minimal 1 angka (0-9).')
+  .regex(/[^A-Za-z0-9]/, 'Kata sandi harus memiliki minimal 1 simbol unik (!@#$%^&* dll).');
 const nameSchema = z.string().trim().min(1).max(60).transform((s) => s.replace(/[<>]/g, ''));
 const tokenSchema = z.string().min(20).max(100);
 
@@ -177,7 +183,10 @@ const GENERIC_SIGNUP = {
 
 r.post('/signup', strict, wrap(async (req, res) => {
   const p = z.object({ name: nameSchema, email: emailSchema, password: passwordSchema }).safeParse(req.body);
-  if (!p.success) return res.status(400).json({ error: 'INVALID_INPUT', message: 'Cek lagi nama, email, dan password (minimal 10 karakter).' });
+  if (!p.success) {
+    const msg = p.error.issues[0]?.message || 'Cek lagi nama, email, dan password Anda.';
+    return res.status(400).json({ error: 'INVALID_INPUT', message: msg });
+  }
   const { name, email, password } = p.data;
 
   const hash = await argon2.hash(password, { type: argon2.argon2id });
@@ -292,7 +301,10 @@ r.post('/forgot-password', mailLimit, wrap(async (req, res) => {
 
 r.post('/reset-password', strict, wrap(async (req, res) => {
   const p = z.object({ token: tokenSchema, password: passwordSchema }).safeParse(req.body);
-  if (!p.success) return res.status(400).json({ error: 'INVALID_INPUT', message: 'Password minimal 10 karakter.' });
+  if (!p.success) {
+    const msg = p.error.issues[0]?.message || 'Kata sandi baru belum memenuhi standar keamanan.';
+    return res.status(400).json({ error: 'INVALID_INPUT', message: msg });
+  }
   const userId = await consumeToken(p.data.token, 'reset_password');
   if (!userId) return res.status(400).json({ error: 'TOKEN_INVALID', message: 'Link tidak valid atau sudah kedaluwarsa.' });
 
