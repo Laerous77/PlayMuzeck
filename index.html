@@ -3,39 +3,91 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>PlayMuzeck - Audio Studio & Pusat Kuis</title>
+    <title>PlayMuzeck - Audio Studio & Pusat Kuis Indonesia</title>
     <meta
       name="description"
-      content="Platform modern perpaduan audio studio interaktif, web stem mixer, dan Pusat Kuis edukatif bernuansa gelap elegan."
+      content="Platform audio interaktif Indonesia dengan web stem mixer, audio tools suite, dan Pusat Kuis edukatif bernuansa gelap elegan."
     />
-    <meta
-      property="og:title"
-      content="PlayMuzeck - Audio Studio & Pusat Kuis"
-    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+
+    <!-- Target Wilayah Indonesia Only (Geo & Language Tags) -->
+    <meta name="geo.region" content="ID" />
+    <meta name="geo.placename" content="Indonesia" />
+    <meta name="geo.position" content="-0.789275;113.921327" />
+    <meta name="ICBM" content="-0.789275, 113.921327" />
+    <meta name="language" content="Indonesian" />
+    <link rel="alternate" hreflang="id-ID" href="https://playmuzeck.my.id/" />
+    <link rel="alternate" hreflang="x-default" href="https://playmuzeck.my.id/" />
+    <link rel="canonical" href="https://playmuzeck.my.id/" />
+
+    <!-- OpenGraph Social Cards -->
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="id_ID" />
+    <meta property="og:site_name" content="PlayMuzeck" />
+    <meta property="og:title" content="PlayMuzeck - Audio Studio & Pusat Kuis Indonesia" />
     <meta
       property="og:description"
-      content="Platform modern perpaduan audio studio interaktif, web stem mixer, dan Pusat Kuis edukatif bernuansa gelap elegan."
+      content="Platform audio interaktif Indonesia dengan web stem mixer, audio tools suite, dan Pusat Kuis edukatif bernuansa gelap elegan."
     />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta property="og:url" content="https://playmuzeck.my.id/" />
+    <meta property="og:image" content="https://playmuzeck.my.id/PlayMuzeck-logo.png" />
+    <meta property="og:image:alt" content="PlayMuzeck Logo Platform Audio dan Kuis" />
 
-    <!-- PWA Primary Meta Tags -->
+    <!-- Twitter / X Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="PlayMuzeck - Audio Studio & Pusat Kuis Indonesia" />
+    <meta
+      name="twitter:description"
+      content="Platform audio interaktif Indonesia dengan web stem mixer, audio tools suite, dan Pusat Kuis edukatif bernuansa gelap elegan."
+    />
+    <meta name="twitter:image" content="https://playmuzeck.my.id/PlayMuzeck-logo.png" />
+
+    <!-- PWA & Mobile Meta Tags -->
     <meta name="theme-color" content="#14213D" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="black-translucent"
-    />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="PlayMuzeck" />
     <link rel="icon" type="image/png" href="/PlayMuzeck-logo.png" />
     <link rel="apple-touch-icon" href="/PlayMuzeck-logo.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
 
-    <!-- Midtrans Snap dimuat otomatis oleh src/services/payment.ts memakai snapUrl & clientKey dari server (/api/payment/status). Jangan tulis snap.js di sini. -->
+    <!-- Schema.org Structured Data (JSON-LD) for Search Engines -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebApplication",
+          "@id": "https://playmuzeck.my.id/#webapp",
+          "name": "PlayMuzeck",
+          "url": "https://playmuzeck.my.id/",
+          "description": "Platform audio interaktif dan Pusat Kuis edukatif berbahasa Indonesia dengan stem mixer, pad sequencer, dan game multiplayer.",
+          "applicationCategory": "MultimediaApplication, EducationalApplication",
+          "operatingSystem": "All",
+          "inLanguage": "id-ID",
+          "browserRequirements": "Requires JavaScript and HTML5 Audio support",
+          "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "IDR",
+            "availability": "https://schema.org/InStock"
+          }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://playmuzeck.my.id/#website",
+          "url": "https://playmuzeck.my.id/",
+          "name": "PlayMuzeck Indonesia",
+          "inLanguage": "id-ID",
+          "description": "Workstation Audio Interaktif & Pusat Kuis Edukatif Indonesia"
+        }
+      ]
+    }
+    </script>
   </head>
   <body class="bg-black text-[#E5E5E5] antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+
