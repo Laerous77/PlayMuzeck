@@ -419,14 +419,13 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenProfileDashboard}
-            className="flex items-center gap-2 bg-black/60 hover:bg-black/90 border border-white/[0.1] hover:border-accent/50 px-2 sm:px-2.5 py-1.5 rounded-xl transition-all cursor-pointer group"
+            className="flex items-center gap-2.5 bg-black/60 hover:bg-black/90 border border-white/[0.1] hover:border-accent/50 rounded-2xl p-1.5 sm:pr-3.5 transition-all cursor-pointer group"
             title={`Buka Dasbor Profil (Bingkai: ${currentFrameObj.name})`}
           >
-            <div className="relative shrink-0">
-              <FrameOrnament iconType={currentFrameObj.iconType} size="sm" />
-
+            {/* Avatar: ukuran tetap & sejajar tengah; padding luar = 6px agar lengkung konsentris dengan avatar */}
+            <div className="relative shrink-0 w-8 h-8 sm:w-9 sm:h-9">
               <div
-                className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-on-accent font-black text-xs overflow-hidden transition-all bg-[#0a1120] ${currentFrameObj.borderClass}`}
+                className={`w-full h-full rounded-xl flex items-center justify-center text-on-accent font-black text-xs overflow-hidden transition-all bg-[#0a1120] ${currentFrameObj.borderClass}`}
               >
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Profil" className="w-full h-full object-cover" />
@@ -436,9 +435,14 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 )}
               </div>
+
+              {/* Ornamen bingkai: lencana kecil di pojok kanan atas, tidak menutupi wajah avatar */}
+              <span className="absolute -top-1.5 -right-1.5 z-10 flex items-center justify-center pointer-events-none">
+                <FrameOrnament iconType={currentFrameObj.iconType} size="sm" />
+              </span>
             </div>
 
-            <span className="text-xs font-bold text-white max-w-[80px] sm:max-w-[120px] truncate hidden sm:inline group-hover:text-accent transition-colors">
+            <span className="text-xs font-bold text-white max-w-[80px] sm:max-w-[140px] truncate leading-none hidden sm:block group-hover:text-accent transition-colors">
               {userSession?.name || 'Profil'}
             </span>
           </button>

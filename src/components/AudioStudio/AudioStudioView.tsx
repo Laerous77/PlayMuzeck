@@ -56,6 +56,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   });
 
   const [targetedPricingKey, setTargetedPricingKey] = useState<string | null>(null);
+  const [pricingNonce, setPricingNonce] = useState(0);
   const [isCarouselPlaying, setIsCarouselPlaying] = useState(false);
 
   const catalog: AudioTrackItem[] = tracks;
@@ -93,10 +94,10 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     handleNavigateToPricing('audioToolsSuite');
     const toolsItem = {
       id: `audio-tools-${Date.now()}`,
-      title: 'Audio Tools Suite (9 Tools Studio & AI)',
+      title: 'Audio Tools Suite (9 Tools Studio)',
       category: 'audio',
       price: 20000,
-      description: 'Akses penuh permanen tanpa batasan kuota harian untuk seluruh 9 utilitas studio audio & AI.',
+      description: 'Akses penuh permanen tanpa batasan kuota harian untuk seluruh 9 utilitas studio audio.',
       itemTypeKey: 'audioToolsSuite',
     } as any;
 
@@ -138,12 +139,14 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
 
   const handleNavigateToPricing = (productKey: string) => {
     setTargetedPricingKey(productKey);
+    setPricingNonce((n) => n + 1);
     onSectionChange?.('pricing');
   };
 
   const handleGoToBundlePricing = () => {
     audioEngine.playClickSound();
     setTargetedPricingKey('bundle');
+    setPricingNonce((n) => n + 1);
     onSectionChange?.('pricing');
   };
 
@@ -171,7 +174,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'assets' && 'Katalog lagu orisinal, stem mixer & lisensi modular.'}
               {activeSection === 'pad' && 'Step sequencer 16-bar, drum kit & 4 track akor mandiri.'}
-              {activeSection === 'tools' && 'Pemisah vokal AI, konversi format & utilitas audio studio.'}
+              {activeSection === 'tools' && 'Pemisah vokal, pengatur nada, konversi format & utilitas audio studio.'}
               {activeSection === 'pricing' && 'Buka modul produksi lengkap dengan kepemilikan permanen.'}
             </p>
           </div>
@@ -353,6 +356,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             onSuccessToast={onSuccessToast}
             cartItems={cartItems}
             highlightKey={targetedPricingKey}
+            highlightNonce={pricingNonce}
           />
         </section>
       )}

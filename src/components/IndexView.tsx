@@ -53,7 +53,7 @@ export const IndexView: React.FC<IndexViewProps> = ({
           </h1>
 
           <p className="text-sm sm:text-base text-gray-300 leading-relaxed font-medium">
-            PlayMuzeck memadukan studio produksi audio profesional bebas latensi dengan arena kuis trivia adaptif.
+            PlayMuzeck memadukan studio produksi audio berbasis browser dengan arena kuis trivia.
             Aransemen not akustik orisinal, mainkan pola ritmis, dan asah kecerdasan Anda dalam satu ekosistem kreatif.
           </p>
         </motion.div>
@@ -100,7 +100,7 @@ export const IndexView: React.FC<IndexViewProps> = ({
               </li>
               <li className="flex items-center gap-2.5">
                 <CheckCircle2 className="w-4 h-4 text-accent shrink-0" />
-                <span><strong>Stem Mixer & 9 Audio Tools:</strong> Pemisah vokal instan, pengatur nada, mastering gain, dan konversi format.</span>
+                <span><strong>Stem Mixer & 9 Audio Tools:</strong> Isolasi vokal (metode center-phase), pengatur nada, mastering gain, dan konversi format.</span>
               </li>
             </ul>
           </div>
@@ -207,7 +207,7 @@ export const IndexView: React.FC<IndexViewProps> = ({
             <Download className="w-5 h-5 text-sky-400" />
             <h4 className="text-sm font-bold text-white">Ekspor Fleksibel</h4>
             <p className="text-xs text-gray-400">
-              Unduh hasil sequencer ke format MIDI multi-track DAW, WAV, MP3, FLAC, atau M4A secara instan.
+              Unduh hasil sequencer ke MIDI multi-track untuk DAW, WAV 24-bit, MP3 320 kbps, FLAC lossless, atau M4A (bergantung dukungan browser).
             </p>
           </div>
 

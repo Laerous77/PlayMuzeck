@@ -24,6 +24,8 @@ interface ModularPurchaseBoxProps {
   onOpenCart: () => void;
   onSuccessToast?: (msg: string) => void;
   highlightKey?: string | null;
+  /** Naik setiap kali navigasi ke sini, supaya klik berulang pada produk yang sama tetap memicu sorotan. */
+  highlightNonce?: number;
   /** Isi keranjang saat ini: tombol beli dinonaktifkan bila produk sudah ada di dalamnya. */
   cartItems?: CartItem[];
 }
@@ -35,9 +37,12 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
   onOpenCart,
   onSuccessToast,
   highlightKey,
+  highlightNonce = 0,
   cartItems = [],
 }) => {
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  // Sorotan hanya kilatan sementara; status "terpilih" murni dari selectedKeys.
+  const [flashKey, setFlashKey] = useState<string | null>(null);
 
   const trackIdStr = String(activeTrack?.id || '');
   // Menggunakan type assertion 'any' agar compiler mengenali audioToolsSuite tanpa error
@@ -59,23 +64,31 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     audioToolsSuite: isToolsOwned,
   } as any);
 
-  // Otomatis scroll dan sorot kartu yang ditargetkan (termasuk 'bundle')
+  // Scroll ke kartu yang ditargetkan, pilih otomatis (bila masih bisa dibeli), lalu
+  // sorot sebentar saja. Sorotan hilang sendiri atau begitu pengguna berinteraksi.
   useEffect(() => {
-    if (highlightKey) {
-      if (highlightKey === 'bundle') {
-        setTimeout(() => {
-          const el = document.getElementById('bundle-card-section');
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 120);
-      } else {
+    if (!highlightKey) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    setFlashKey(highlightKey);
+
+    if (highlightKey !== 'bundle') {
+      const p = products.find((x) => x.key === highlightKey);
+      if (p && !p.isOwned && !productConflict(p)) {
         setSelectedKeys((prev) => (prev.includes(highlightKey) ? prev : [...prev, highlightKey]));
-        setTimeout(() => {
-          const el = document.getElementById(`product-card-${highlightKey}`);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }, 100);
       }
     }
-  }, [highlightKey]);
+
+    timers.push(
+      setTimeout(() => {
+        const id = highlightKey === 'bundle' ? 'bundle-card-section' : `product-card-${highlightKey}`;
+        document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 120)
+    );
+    timers.push(setTimeout(() => setFlashKey(null), 2500));
+
+    return () => timers.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightKey, highlightNonce]);
 
   const products = [
     {
@@ -120,8 +133,8 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     },
     {
       key: 'audioToolsSuite',
-      title: 'Audio Tools Suite (9 Tools Studio & AI)',
-      description: 'Akses tanpa batas harian untuk seluruh 9 utilitas audio studio & model AI.',
+      title: 'Audio Tools Suite (9 Tools Studio)',
+      description: 'Akses tanpa batas harian untuk seluruh 9 utilitas audio studio.',
       price: pricing.products.audioToolsSuite,
       isOwned: isToolsOwned,
       icon: Wrench,
@@ -158,6 +171,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     if (isOwned) return;
     const p = products.find((x) => x.key === key);
     if (p && productConflict(p)) return;
+    setFlashKey(null); // pengguna mengambil alih: hentikan sorotan
     setSelectedKeys((prev) =>
       prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
     );
@@ -183,7 +197,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
   };
 
   const handleBuySelected = () => {
-    const targetKeys = selectedKeys.length > 0 ? selectedKeys : (highlightKey ? [highlightKey] : []);
+    const targetKeys = selectedKeys;
     const itemsToAdd: CartItem[] = products
       .filter((p) => targetKeys.includes(p.key) && !p.isOwned && !productConflict(p))
       .map((p) => makeProductItem(p));
@@ -221,7 +235,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     }
   };
 
-  const isBundleHighlighted = highlightKey === 'bundle';
+  const isBundleHighlighted = flashKey === 'bundle';
 
   return (
     <div className="rounded-3xl bg-surface/40 border border-white/10 p-6 sm:p-8 space-y-6">
@@ -235,7 +249,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
       <div className="space-y-3">
         {products.map((p) => {
           const isSelected = selectedKeys.includes(p.key);
-          const isHighlighted = highlightKey === p.key;
+          const isHighlighted = flashKey === p.key;
           const inCart = !p.isOwned && Boolean(productConflict(p));
 
           return (
@@ -246,10 +260,10 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
               className={`p-4 rounded-2xl border transition-all flex items-center justify-between gap-4 cursor-pointer ${
                 p.isOwned
                   ? 'bg-black/30 border-white/5 opacity-60 cursor-not-allowed'
-                  : isHighlighted
-                  ? 'bg-surface border-accent ring-2 ring-accent shadow-xl shadow-accent/20'
                   : isSelected
-                  ? 'bg-surface border-accent shadow-lg shadow-accent/10'
+                  ? `bg-surface border-accent shadow-lg shadow-accent/10 ${isHighlighted ? 'ring-2 ring-accent shadow-xl shadow-accent/20' : ''}`
+                  : isHighlighted
+                  ? 'bg-black/40 border-accent ring-2 ring-accent shadow-xl shadow-accent/20'
                   : 'bg-black/40 border-white/5 hover:border-white/20'
               }`}
             >
@@ -258,12 +272,12 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                   className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors ${
                     p.isOwned
                       ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400'
-                      : isSelected || isHighlighted
+                      : isSelected
                       ? 'bg-accent border-accent text-on-accent'
                       : 'border-white/20 bg-black/40'
                   }`}
                 >
-                  {(p.isOwned || isSelected || isHighlighted) && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                  {(p.isOwned || isSelected) && <Check className="w-3.5 h-3.5 stroke-[3]" />}
                 </div>
 
                 <div>

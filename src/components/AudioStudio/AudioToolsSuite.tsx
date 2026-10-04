@@ -8,7 +8,8 @@ import {
   RotateCcw,
   RefreshCw,
   Minimize2,
-  Sparkles,
+  Waves,
+  Wrench,
   Mic2,
   Upload,
   Play,
@@ -29,6 +30,7 @@ import {
   exportAudioFile,
   audioBufferToWav,
   encodeCompressedAudio,
+  encodeMp3,
   downloadBlob,
   type CompressedAudioResult,
 } from '../../services/exporters';
@@ -108,8 +110,8 @@ const TOOLS: ToolConfig[] = [
   { id: 'reverse', name: 'Reverse', desc: 'Balikkan urutan sampel audio untuk efek transisi', icon: RotateCcw },
   { id: 'convert', name: 'Convert', desc: 'Konversi Audio-ke-Audio & Ekstrak Video-ke-Audio', icon: RefreshCw },
   { id: 'compress', name: 'Compress', desc: '5 tingkatan kompresi ukuran & bitrate nyata', icon: Minimize2 },
-  { id: 'noise_reduction', name: 'Noise Reduction', desc: 'Peredam desis & dengung latar dengan spectral gate (pemrosesan sinyal, bukan AI)', icon: Sparkles },
-  { id: 'vocal_separator', name: 'Vocal Isolator', desc: 'Pisahkan vokal & musik lewat teknik center-phase (pemrosesan sinyal, bukan AI)', icon: Mic2 },
+  { id: 'noise_reduction', name: 'Noise Reduction', desc: 'Peredam desis & dengung latar dengan spectral gate', icon: Waves },
+  { id: 'vocal_separator', name: 'Vocal Isolator', desc: 'Pisahkan vokal & musik lewat teknik center-phase', icon: Mic2 },
 ];
 
 /** Tool real-time: tanpa tombol "Jalankan", hasil dibuat saat diunduh. */
@@ -277,6 +279,56 @@ function getAdaptiveCompressTiers(
   });
 }
 
+/** Bulatkan ke 2 desimal agar tidak muncul artefak floating point (mis. 0.30000000000000004). */
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
+/** Tampilan angka bertanda: 0 -> "0", 0.3 -> "+0.3", -1.25 -> "-1.25". */
+const formatSigned = (v: number) => {
+  const r = round2(v);
+  return r > 0 ? `+${r}` : `${r}`;
+};
+
+// ---------------------------------------------------------------------------
+// Input angka desimal bebas (boleh titik atau koma: 0.3 / 0,3), di-commit saat blur/Enter
+// ---------------------------------------------------------------------------
+
+const DecimalField: React.FC<{
+  value: number;
+  min: number;
+  max: number;
+  unit: string;
+  disabled?: boolean;
+  onCommit: (v: number) => void;
+}> = ({ value, min, max, unit, disabled, onCommit }) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  const commit = () => {
+    if (draft === null) return;
+    const v = parseFloat(draft.replace(',', '.'));
+    if (Number.isFinite(v)) onCommit(round2(clamp(v, min, max)));
+    setDraft(null);
+  };
+  return (
+    <div className="flex items-center gap-1">
+      <input
+        type="text"
+        inputMode="decimal"
+        disabled={disabled}
+        value={draft ?? String(round2(value))}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+          if (e.key === 'Escape') setDraft(null);
+        }}
+        aria-label={unit}
+        className="w-20 bg-black/80 border border-white/15 rounded px-2 py-1 text-sm font-mono font-bold text-accent text-right focus:outline-none focus:border-accent disabled:opacity-40"
+      />
+      <span className="text-gray-400 font-mono text-xs">{unit}</span>
+    </div>
+  );
+};
+
 // ---------------------------------------------------------------------------
 // Input waktu dengan draft lokal (bisa diketik bebas, di-commit saat blur/Enter)
 // ---------------------------------------------------------------------------
@@ -353,7 +405,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const [dynamicTempoSpeed, setDynamicTempoSpeed] = useState(1.0);
   const [convertSourceMode, setConvertSourceMode] = useState<'audio' | 'video'>('audio');
   const [selectedCompressTier, setSelectedCompressTier] = useState('balanced');
-  const [aiNoiseAggression, setAiNoiseAggression] = useState(75);
+  const [noiseAggression, setNoiseAggression] = useState(75);
   const [vocalExtractTarget, setVocalExtractTarget] = useState<VocalTarget>('both');
   const [vocalPreviewChoice, setVocalPreviewChoice] = useState<'vocal' | 'instrumental'>('vocal');
 
@@ -827,7 +879,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         const out = downsampleForCompress(chs, sr, tier.targetRate, tier.isMono);
         outputBuffer = makeBuffer(ctx, out.channels, out.sampleRate);
       } else if (targetTool === 'noise_reduction') {
-        const out = await spectralNoiseGate(chs, sr, aiNoiseAggression, dspOpts);
+        const out = await spectralNoiseGate(chs, sr, noiseAggression, dspOpts);
         outputBuffer = makeBuffer(ctx, out, sr);
       } else {
         // vocal_separator
@@ -983,8 +1035,17 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         const fileBase = `${baseName}_compressed_${tier.id}`;
 
         if (fmt === 'WAV' || fmt === 'FLAC') {
-          await exportAudioFile(result, fileBase, fmt);
+          // 16-bit: hasil kompresi tidak boleh membengkak jadi lebih besar dari sumbernya.
+          await exportAudioFile(result, fileBase, fmt, { bitDepth: 16, onProgress: (pct) => setExportProgress(Math.round(pct)) });
           onSuccessToast(`Berkas ${fmt} hasil kompresi (${tier.label}, ${Math.round(result.sampleRate / 1000)} kHz) berhasil diunduh.`);
+          return;
+        }
+
+        if (fmt === 'MP3') {
+          // MP3 sungguhan pada bitrate tingkatan terpilih (bukan rekaman Opus berlabel MP3).
+          const mp3 = await encodeMp3(result, tier.bitrate, (pct: number) => setExportProgress(Math.round(pct)));
+          downloadBlob(mp3, `${fileBase}.mp3`);
+          onSuccessToast(`Berkas MP3 dikompresi (${tier.label}) berhasil diunduh.`);
           return;
         }
 
@@ -1050,7 +1111,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (stale()) return;
       if (!buf) return;
 
-      await exportAudioFile(buf, `${baseName}_${suffix}`, fmt);
+      const exported = await exportAudioFile(buf, `${baseName}_${suffix}`, fmt, {
+        onProgress: (pct) => setExportProgress(Math.round(pct)),
+      });
 
       if (isLive && !isToolsOwned && !alreadyCharged) {
         deductQuota(tool);
@@ -1058,7 +1121,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       } else if (isLive && !alreadyCharged) {
         chargedSigRef.current[tool] = sig;
       }
-      onSuccessToast(`Berkas ${fmt} berhasil diunduh.`);
+      onSuccessToast(exported.note ? `Berkas diunduh. ${exported.note}` : `Berkas ${fmt} berhasil diunduh.`);
     } catch (err) {
       if (err instanceof DspError && err.code === 'CANCELLED') return;
       console.error(err);
@@ -1086,7 +1149,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const predictedPeak = sourcePeak * Math.pow(10, dynamicGainDb / 20);
   const clipWarning = selectedTool === 'volume' && dynamicGainDb > 0 && predictedPeak > 1;
-  const safeGainDb = sourcePeak > 0 ? Math.floor(-20 * Math.log10(sourcePeak)) : 0;
+  const safeGainDb = sourcePeak > 0 ? Math.floor(-20 * Math.log10(sourcePeak) * 10) / 10 : 0;
 
   const remainingMin = currentToolState.expiresAt
     ? Math.max(1, Math.ceil((currentToolState.expiresAt - nowTick) / 60000))
@@ -1123,11 +1186,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent" />
+              <Wrench className="w-5 h-5 text-accent" />
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">Audio Processing Tools Suite</h3>
             </div>
             <p className="text-xs text-gray-300">
-              9 utilitas studio untuk pemotongan, manipulasi pitch, mastering gain, serta reduksi noise dan isolasi vokal (pemrosesan sinyal digital, tanpa AI).
+              9 utilitas studio untuk pemotongan, manipulasi pitch, mastering gain, serta reduksi noise dan isolasi vokal.
             </p>
           </div>
 
@@ -1138,10 +1201,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               </span>
             ) : currentToolQuota > 0 ? (
               <span className="text-accent bg-accent/10 px-3 py-1.5 rounded-xl border border-accent/20 text-xs font-bold flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-accent" />
+                <Wrench className="w-3.5 h-3.5 text-accent" />
                 {currentToolQuota === DAILY_FREE_QUOTA
-                  ? `${DAILY_FREE_QUOTA} penggunaan gratis hari ini`
-                  : `${currentToolQuota} penggunaan gratis tersisa`}
+                  ? `${DAILY_FREE_QUOTA} penggunaan gratis hari ini (per alat)`
+                  : `${currentToolQuota} penggunaan gratis tersisa (per alat)`}
               </span>
             ) : (
               <button
@@ -1207,7 +1270,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   stopPlayback();
                   setSelectedTool(tool.id);
                 }}
-                className={`p-2.5 rounded-xl border flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer relative ${
+                className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all cursor-pointer relative min-w-0 ${
                   isSelected
                     ? 'bg-accent text-on-accent border-accent shadow-md font-black'
                     : 'bg-black/40 text-gray-300 border-white/[0.06] hover:border-white/20'
@@ -1218,7 +1281,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-emerald-400" title="Hasil siap" />
                 )}
                 <IconComp className="w-4 h-4 shrink-0" />
-                <span className="text-[11px] leading-tight truncate w-full">{tool.name}</span>
+                <span className="text-[11px] leading-tight w-full break-words">{tool.name}</span>
               </button>
             );
           })}
@@ -1351,21 +1414,33 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {/* 2. VOLUME / GAIN */}
             {selectedTool === 'volume' && (
               <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <label className="text-gray-300 font-bold block">Penyesuaian Gain Dinamis (Real-time):</label>
-                  <span className="text-sm font-mono font-bold text-accent">
-                    {dynamicGainDb > 0 ? `+${dynamicGainDb}` : dynamicGainDb} dB
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {dynamicGainDb !== 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDynamicGainDb(0)}
+                        className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <DecimalField value={dynamicGainDb} min={-24} max={24} unit="dB" onCommit={setDynamicGainDb} />
+                  </div>
                 </div>
                 <input
                   type="range"
                   min="-24"
                   max="24"
-                  step="1"
+                  step="0.01"
                   value={dynamicGainDb}
-                  onChange={(e) => setDynamicGainDb(Number(e.target.value))}
+                  onChange={(e) => setDynamicGainDb(round2(Number(e.target.value)))}
                   className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
+                <p className="text-[11px] text-gray-500">
+                  Geser slider atau ketik langsung, desimal didukung (mis. {formatSigned(0.3)} dB). Rentang -24 sampai +24 dB.
+                </p>
                 {clipWarning && (
                   <p className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
@@ -1381,21 +1456,39 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {/* 3. PITCH / TRANSPOSE */}
             {selectedTool === 'pitch' && (
               <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <label className="text-gray-300 font-bold block">Pergeseran Nada Dinamis:</label>
-                  <span className="text-sm font-mono font-bold text-accent">
-                    {dynamicPitchSemitones > 0 ? `+${dynamicPitchSemitones}` : dynamicPitchSemitones} Semitone
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {dynamicPitchSemitones !== 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setDynamicPitchSemitones(0)}
+                        className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <DecimalField
+                      value={dynamicPitchSemitones}
+                      min={-12}
+                      max={12}
+                      unit="semitone"
+                      onCommit={setDynamicPitchSemitones}
+                    />
+                  </div>
                 </div>
                 <input
                   type="range"
                   min="-12"
                   max="12"
-                  step="1"
+                  step="0.01"
                   value={dynamicPitchSemitones}
-                  onChange={(e) => setDynamicPitchSemitones(Number(e.target.value))}
+                  onChange={(e) => setDynamicPitchSemitones(round2(Number(e.target.value)))}
                   className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
+                <p className="text-[11px] text-gray-500">
+                  Desimal didukung (mis. {formatSigned(0.02)} semitone = geser nada 2 cent). Rentang -12 sampai +12 semitone.
+                </p>
                 <div className="flex items-center gap-2 pt-1 bg-black/40 p-2.5 rounded-lg border border-white/5">
                   <input
                     type="checkbox"
@@ -1514,8 +1607,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   })}
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Memilih tingkatan langsung memproses ulang. Unduhan MP3/M4A di-encode pada bitrate di atas; WAV/FLAC menyimpan hasil
-                  downsample tanpa encoder lossy.
+                  Memilih tingkatan langsung memproses ulang. Unduhan MP3 di-encode pada bitrate di atas; M4A memakai encoder AAC bila
+                  browser mendukung (jika tidak, disimpan sebagai Opus dan Anda diberi tahu). WAV/FLAC menyimpan hasil downsample 16-bit
+                  tanpa encoder lossy.
                 </p>
               </div>
             )}
@@ -1524,18 +1618,18 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {selectedTool === 'noise_reduction' && (
               <div className="space-y-2 text-xs">
                 <div className="flex items-center gap-2 text-accent font-bold">
-                  <Sparkles className="w-4 h-4" />
+                  <Waves className="w-4 h-4" />
                   <span>Spectral Noise Gate</span>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-300 font-bold block">Intensitas Pembersihan: {aiNoiseAggression}%</label>
+                  <label className="text-gray-300 font-bold block">Intensitas Pembersihan: {noiseAggression}%</label>
                   <input
                     type="range"
                     min="10"
                     max="100"
-                    value={aiNoiseAggression}
+                    value={noiseAggression}
                     onChange={(e) => {
-                      setAiNoiseAggression(Number(e.target.value));
+                      setNoiseAggression(Number(e.target.value));
                       if (toolStatesRef.current.noise_reduction.resultBuffer || toolStatesRef.current.noise_reduction.isProcessing) {
                         if (live.current.selectedTool === 'noise_reduction') stopPlayback();
                         clearToolResult('noise_reduction');
@@ -1545,7 +1639,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Profil noise diukur otomatis dari bagian paling senyap pada berkas (algoritma statistik, bukan model AI), lalu diredam per frekuensi. Semakin tinggi,
+                  Profil noise diukur otomatis dari bagian paling senyap pada berkas (algoritma statistik), lalu diredam per frekuensi. Semakin tinggi,
                   semakin kuat peredaman (risiko suara tipis).
                 </p>
               </div>
