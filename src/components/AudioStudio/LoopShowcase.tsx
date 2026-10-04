@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { AudioTrackItem, AudioEntitlements } from '../../types';
 import { exportAudioFile } from '../../services/exporters';
+import { timeStretch } from '../../services/audioToolsDsp';
 
 interface LoopShowcaseProps {
   activeTrack: AudioTrackItem;
@@ -52,7 +53,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
   );
 
   const PREVIEW_LIMIT = 7.0;
-  const loopAudioUrl = (activeTrack as any)?.loopAudioUrl || activeTrack?.audioUrl || '';
+  const loopAudioUrl = (activeTrack as any)?.loopAudioUrl || '';
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -247,7 +248,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
   const togglePlay = () => {
     if (!audioRef.current) return;
     if (!loopAudioUrl) {
-      alert('Berkas loop audio belum diunggah untuk trek ini.');
+      alert('Berkas loop khusus belum tersedia untuk trek ini.');
       return;
     }
 
@@ -316,13 +317,30 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
       const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
       await tempCtx.close();
 
-      const singleLoopDuration = decodedBuffer.duration / speed;
+      // Kunci Nada: bila aktif, ubah tempo lewat time-stretch (nada tetap) lalu render 1x.
+      let srcBuffer = decodedBuffer;
+      let rate = speed;
+      if (speed !== 1 && keepPitch) {
+        const chs: Float32Array[] = [];
+        for (let c = 0; c < decodedBuffer.numberOfChannels; c++) chs.push(decodedBuffer.getChannelData(c));
+        const stretched = await timeStretch(chs, decodedBuffer.sampleRate, speed, {} as any);
+        const len = stretched[0]?.length || 0;
+        if (len > 0) {
+          const tmp = new OfflineAudioContext(stretched.length, len, decodedBuffer.sampleRate);
+          const nb = tmp.createBuffer(stretched.length, len, decodedBuffer.sampleRate);
+          stretched.forEach((ch: Float32Array, i: number) => nb.getChannelData(i).set(ch));
+          srcBuffer = nb;
+          rate = 1;
+        }
+      }
+
+      const singleLoopDuration = srcBuffer.duration / rate;
       const totalLoopDuration = singleLoopDuration * maxLoopCount;
       const tailSec = isReverb || isDelay ? 1.5 : 0.2;
-      const sampleRate = decodedBuffer.sampleRate;
+      const sampleRate = srcBuffer.sampleRate;
       const targetLength = Math.ceil(sampleRate * (totalLoopDuration + tailSec));
 
-      const offlineCtx = new OfflineAudioContext(decodedBuffer.numberOfChannels, targetLength, sampleRate);
+      const offlineCtx = new OfflineAudioContext(srcBuffer.numberOfChannels, targetLength, sampleRate);
 
       const bass = offlineCtx.createBiquadFilter();
       bass.type = 'lowshelf';
@@ -383,15 +401,15 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
 
       for (let i = 0; i < maxLoopCount; i++) {
         const source = offlineCtx.createBufferSource();
-        source.buffer = decodedBuffer;
-        source.playbackRate.value = speed;
+        source.buffer = srcBuffer;
+        source.playbackRate.value = rate;
         source.connect(bass);
         source.start(i * singleLoopDuration);
       }
 
       const renderedBuffer = await offlineCtx.startRendering();
       const cleanTitle = (activeTrack.title || 'Track').replace(/[^a-zA-Z0-9_-]/g, '_');
-      await exportAudioFile(renderedBuffer, `${cleanTitle}_Loop_${maxLoopCount}x`, format as any);
+      await exportAudioFile(renderedBuffer, `${cleanTitle}_Loop_${maxLoopCount}x`, format as any, { bitDepth: 24, mp3Kbps: 320 });
     } catch {
       alert('Gagal mengekspor loop audio.');
     } finally {
@@ -438,7 +456,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
               )}
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
-              Potongan looping presisi tanpa jeda untuk musik latar konten, game, podcast, dan siaran streaming.
+              Versi loop khusus untuk musik latar konten, game, podcast, dan siaran streaming.
             </p>
           </div>
         </div>
@@ -468,7 +486,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                         className="w-full text-left px-2.5 py-1.5 rounded-lg text-white hover:bg-accent hover:text-on-accent font-semibold flex justify-between cursor-pointer"
                       >
                         <span>Loop .{fmt}</span>
-                        <span className="text-[10px] opacity-70">{maxLoopCount}x Loop</span>
+                        <span className="text-[10px] opacity-70">{`${maxLoopCount}x Loop`}</span>
                       </button>
                     ))}
                   </div>

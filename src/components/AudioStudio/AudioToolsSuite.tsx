@@ -53,6 +53,8 @@ interface AudioToolsSuiteProps {
   entitlements: AudioEntitlements;
   onUnlockEditor: () => void;
   onSuccessToast: (msg: string) => void;
+  /** Harga Audio Tools Suite (Rp), diambil dari sumber harga yang sama dengan keranjang. */
+  toolsPrice?: number;
 }
 
 type ToolType =
@@ -108,8 +110,8 @@ const TOOLS: ToolConfig[] = [
   { id: 'pitch', name: 'Pitch / Transpose', desc: 'Ubah nada dinamis dengan opsi Kunci Tempo', icon: Sliders },
   { id: 'tempo', name: 'Tempo / Speed', desc: 'Ubah kecepatan secara dinamis tanpa mengubah nada', icon: FastForward },
   { id: 'reverse', name: 'Reverse', desc: 'Balikkan urutan sampel audio untuk efek transisi', icon: RotateCcw },
-  { id: 'convert', name: 'Convert', desc: 'Konversi Audio-ke-Audio & Ekstrak Video-ke-Audio', icon: RefreshCw },
-  { id: 'compress', name: 'Compress', desc: '5 tingkatan kompresi ukuran & bitrate nyata', icon: Minimize2 },
+  { id: 'convert', name: 'Convert', desc: 'Konversi Audio ke WAV/M4A & Ekstrak Video-ke-Audio', icon: RefreshCw },
+  { id: 'compress', name: 'Compress', desc: '5 tingkatan kompresi dengan estimasi ukuran & bitrate', icon: Minimize2 },
   { id: 'noise_reduction', name: 'Noise Reduction', desc: 'Peredam desis & dengung latar dengan spectral gate', icon: Waves },
   { id: 'vocal_separator', name: 'Vocal Isolator', desc: 'Pisahkan vokal & musik lewat teknik center-phase', icon: Mic2 },
 ];
@@ -373,6 +375,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   entitlements,
   onUnlockEditor,
   onSuccessToast,
+  toolsPrice = 20000,
 }) => {
   // Kepemilikan Audio Tools Suite (langsung, atau lewat salah satu track)
   const isToolsOwned = useMemo(() => {
@@ -1036,19 +1039,29 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
         if (fmt === 'WAV' || fmt === 'FLAC') {
           // 16-bit: hasil kompresi tidak boleh membengkak jadi lebih besar dari sumbernya.
-          await exportAudioFile(result, fileBase, fmt, { bitDepth: 16, onProgress: (pct) => setExportProgress(Math.round(pct)) });
-          onSuccessToast(`Berkas ${fmt} hasil kompresi (${tier.label}, ${Math.round(result.sampleRate / 1000)} kHz) berhasil diunduh.`);
+          // FLAC = lossless sungguhan (lebih kecil dari WAV), WAV = PCM mentah.
+          const res = await exportAudioFile(result, fileBase, fmt, { bitDepth: 16, onProgress: (pct) => setExportProgress(Math.round(pct)) });
+          onSuccessToast(`Berkas ${res.actualFormat} hasil kompresi (${tier.label}, ${Math.round(result.sampleRate / 1000)} kHz) berhasil diunduh.${res.note ? ' ' + res.note : ''}`);
           return;
         }
 
         if (fmt === 'MP3') {
-          // MP3 sungguhan pada bitrate tingkatan terpilih (bukan rekaman Opus berlabel MP3).
-          const mp3 = await encodeMp3(result, tier.bitrate, (pct: number) => setExportProgress(Math.round(pct)));
-          downloadBlob(mp3, `${fileBase}.mp3`);
-          onSuccessToast(`Berkas MP3 dikompresi (${tier.label}) berhasil diunduh.`);
-          return;
+          // MP3 sungguhan (LAME) pada bitrate tingkatan terpilih.
+          try {
+            const mp3 = await encodeMp3(result, tier.bitrate, (pct: number) => setExportProgress(Math.round(pct)));
+            downloadBlob(mp3, `${fileBase}.mp3`);
+            onSuccessToast(`Berkas MP3 dikompresi (${tier.label}) berhasil diunduh.`);
+            return;
+          } catch (mp3Err) {
+            console.error('Encode MP3 gagal:', mp3Err);
+            const res = await exportAudioFile(result, fileBase, 'WAV', { bitDepth: 16 });
+            onSuccessToast(`Encoder MP3 gagal dimuat, berkas disimpan sebagai ${res.actualFormat}.`);
+            return;
+          }
         }
 
+        // M4A: memakai encoder bawaan browser. Ekstensi berkas ditentukan dari
+        // format yang BENAR-BENAR dihasilkan, dan pengguna diberi tahu bila berbeda dari pilihan.
         const enc: CompressedAudioResult = await encodeCompressedAudio(result, tier.bitrate, (pct: number) =>
           setExportProgress(Math.round(pct))
         );
@@ -1066,6 +1079,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             ? 'flac'
             : mime.includes('wav')
             ? 'wav'
+            : mime.includes('webm')
+            ? 'webm'
+            : mime.includes('ogg') || mime.includes('opus')
+            ? 'ogg'
             : fmt.toLowerCase());
         downloadBlob(enc.blob, `${fileBase}.${ext}`);
         onSuccessToast(
@@ -1212,7 +1229,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                 onClick={onUnlockEditor}
                 className="px-3.5 py-1.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
               >
-                <Lock className="w-3.5 h-3.5" /> Beli Audio Tools — Rp20.000
+                <Lock className="w-3.5 h-3.5" /> Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}
               </button>
             )}
 
@@ -1552,7 +1569,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     }`}
                   >
                     <Music className="w-3.5 h-3.5" />
-                    <span>Audio to Audio (WAV, MP3, FLAC, M4A)</span>
+                    <span>Audio to Audio (WAV, M4A)</span>
                   </button>
                   <button
                     type="button"
@@ -1582,7 +1599,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {/* 7. COMPRESS */}
             {selectedTool === 'compress' && (
               <div className="space-y-3 text-xs">
-                <span className="text-gray-300 font-bold block">Pilih Tingkatan Kompresi Bitrate Nyata:</span>
+                <span className="text-gray-300 font-bold block">Pilih Tingkatan Kompresi:</span>
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
                   {compressTiers.map((tier) => {
                     const isSel = selectedCompressTier === tier.id;
@@ -1607,9 +1624,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   })}
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  Memilih tingkatan langsung memproses ulang. Unduhan MP3 di-encode pada bitrate di atas; M4A memakai encoder AAC bila
-                  browser mendukung (jika tidak, disimpan sebagai Opus dan Anda diberi tahu). WAV/FLAC menyimpan hasil downsample 16-bit
-                  tanpa encoder lossy.
+                  Memilih tingkatan langsung memproses ulang. Unduhan MP3 di-encode dengan LAME pada bitrate di atas (disesuaikan ke bitrate
+                  MP3 standar terdekat). M4A memakai encoder bawaan browser; bila hasilnya berbeda dari pilihan, ekstensi berkas disesuaikan
+                  dan Anda diberi tahu. WAV (PCM 16-bit) dan FLAC (lossless 16-bit) menyimpan hasil downsample tanpa kompresi lossy,
+                  sehingga bitrate tidak berlaku.
                 </p>
               </div>
             )}
@@ -1717,6 +1735,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               </div>
             </div>
 
+            <p className="text-[11px] text-gray-500">MP3 di-encode dengan LAME (320 kbps untuk tool selain Compress), FLAC lossless 16-bit, WAV PCM 16-bit. M4A memakai encoder bawaan browser (bisa berupa .webm/.ogg).</p>
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {/* Jalankan (tool statis) */}
@@ -1728,7 +1747,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
                     >
                       <Lock className="w-3.5 h-3.5" />
-                      <span>Beli Audio Tools — Rp20.000</span>
+                      <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
                     </button>
                   ) : (
                     <button
@@ -1808,7 +1827,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                         className="px-4 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
                       >
                         <Lock className="w-3.5 h-3.5" />
-                        <span>Beli Audio Tools — Rp20.000</span>
+                        <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
                       </button>
                     ) : (
                       <button

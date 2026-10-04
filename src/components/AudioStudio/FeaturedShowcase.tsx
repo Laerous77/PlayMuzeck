@@ -16,46 +16,14 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { AudioTrackItem, AudioEntitlements } from '../../types';
+import { exportAudioFile } from '../../services/exporters';
+import { timeStretch } from '../../services/audioToolsDsp';
 
 interface FeaturedShowcaseProps {
   activeTrack: AudioTrackItem;
   entitlements: AudioEntitlements;
   onRequestCustom: () => void;
   onUnlockMaster: () => void;
-}
-
-function audioBufferToWav(buffer: AudioBuffer): Blob {
-  const numOfChan = buffer.numberOfChannels;
-  const length = buffer.length * numOfChan * 2 + 44;
-  const outBuffer = new ArrayBuffer(length);
-  const view = new DataView(outBuffer);
-  const channels: Float32Array[] = [];
-  let offset = 0;
-  let pos = 0;
-
-  function setUint16(data: number) { view.setUint16(pos, data, true); pos += 2; }
-  function setUint32(data: number) { view.setUint32(pos, data, true); pos += 4; }
-
-  setUint32(0x46464952); setUint32(length - 8); setUint32(0x45564157);
-  setUint32(0x20746d66); setUint32(16); setUint16(1); setUint16(numOfChan);
-  setUint32(buffer.sampleRate); setUint32(buffer.sampleRate * 2 * numOfChan);
-  setUint16(numOfChan * 2); setUint16(16); setUint32(0x61746164); setUint32(length - pos - 4);
-
-  for (let i = 0; i < buffer.numberOfChannels; i++) {
-    channels.push(buffer.getChannelData(i));
-  }
-
-  while (offset < buffer.length) {
-    for (let i = 0; i < numOfChan; i++) {
-      let sample = Math.max(-1, Math.min(1, channels[i][offset]));
-      sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0;
-      view.setInt16(pos, sample, true);
-      pos += 2;
-    }
-    offset++;
-  }
-
-  return new Blob([outBuffer], { type: 'audio/wav' });
 }
 
 // Impulse response sintetik untuk reverb (sama seperti punya LoopShowcase),
@@ -131,7 +99,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
   const masterGainRef = useRef<GainNode | null>(null);
 
   const PREVIEW_LIMIT = 7.0;
-  const rawDuration = duration || activeTrack?.durationSec || 168;
+  const rawDuration = duration || activeTrack?.durationSec || 0;
   const effectiveMaxDuration = isMasterUnlocked ? rawDuration : PREVIEW_LIMIT;
 
   useEffect(() => {
@@ -374,19 +342,37 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
       const decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
       await tempCtx.close();
 
+      // Kunci Nada: playbackRate biasa ikut mengubah nada, jadi saat "Keep Pitch" aktif
+      // tempo diubah lebih dulu lewat time-stretch, lalu dirender pada kecepatan 1x.
+      let srcBuffer = decodedBuffer;
+      let rate = speed;
+      if (speed !== 1 && keepPitch) {
+        const chs: Float32Array[] = [];
+        for (let c = 0; c < decodedBuffer.numberOfChannels; c++) chs.push(decodedBuffer.getChannelData(c));
+        const stretched = await timeStretch(chs, decodedBuffer.sampleRate, speed, {} as any);
+        const len = stretched[0]?.length || 0;
+        if (len > 0) {
+          const tmp = new OfflineAudioContext(stretched.length, len, decodedBuffer.sampleRate);
+          const nb = tmp.createBuffer(stretched.length, len, decodedBuffer.sampleRate);
+          stretched.forEach((ch: Float32Array, i: number) => nb.getChannelData(i).set(ch));
+          srcBuffer = nb;
+          rate = 1;
+        }
+      }
+
       const tailSec = isReverb || isDelay ? 1.5 : 0.2;
-      const targetDuration = decodedBuffer.duration / speed + tailSec;
-      const targetLength = Math.floor(decodedBuffer.sampleRate * targetDuration);
+      const targetDuration = srcBuffer.duration / rate + tailSec;
+      const targetLength = Math.floor(srcBuffer.sampleRate * targetDuration);
 
       const offlineCtx = new OfflineAudioContext(
-        decodedBuffer.numberOfChannels,
+        srcBuffer.numberOfChannels,
         targetLength,
-        decodedBuffer.sampleRate
+        srcBuffer.sampleRate
       );
 
       const source = offlineCtx.createBufferSource();
-      source.buffer = decodedBuffer;
-      source.playbackRate.value = speed;
+      source.buffer = srcBuffer;
+      source.playbackRate.value = rate;
 
       const bass = offlineCtx.createBiquadFilter();
       bass.type = 'lowshelf';
@@ -451,17 +437,10 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
       source.start(0);
 
       const renderedBuffer = await offlineCtx.startRendering();
-      const wavBlob = audioBufferToWav(renderedBuffer);
-
       const cleanTitle = (activeTrack.title || 'Master').replace(/[^a-zA-Z0-9_-]/g, '_');
-      const downloadUrl = URL.createObjectURL(wavBlob);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `${cleanTitle}_Master_DSP.${format.toLowerCase()}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(downloadUrl);
+      // exportAudioFile meng-encode sesuai format pilihan, jadi isi berkas cocok dengan
+      // ekstensinya (sebelumnya selalu WAV walau dinamai .mp3/.flac/.m4a).
+      await exportAudioFile(renderedBuffer, `${cleanTitle}_Master_DSP`, format as any, { bitDepth: 24, mp3Kbps: 320 });
     } catch (err) {
       console.error('Gagal render audio:', err);
       alert('Terjadi kendala saat memproses berkas unduhan.');
@@ -569,7 +548,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                           >
                             <span>Master .{fmt}</span>
                             <span className="text-[10px] opacity-70">
-                              {fmt === 'WAV' ? 'Studio 24-bit' : 'HQ Baked'}
+                              {fmt === 'WAV' ? '24-bit PCM' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? '24-bit Lossless' : 'AAC/Opus'}
                             </span>
                           </button>
                         ))}

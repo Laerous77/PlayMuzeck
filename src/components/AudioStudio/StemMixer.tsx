@@ -85,7 +85,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
   );
 
   const PREVIEW_LIMIT = 7.0;
-  const rawDuration = activeTrack?.durationSec || 168;
+  const [leadDuration, setLeadDuration] = useState(0);
+  const rawDuration = leadDuration || activeTrack?.durationSec || 0;
   const effectiveMaxDuration = isStemsUnlocked ? rawDuration : PREVIEW_LIMIT;
 
   const [isPlaying, setIsPlaying] = useState(false);
@@ -106,7 +107,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
   const [isMasterFlanger, setIsMasterFlanger] = useState<boolean>(false);
   const [isMasterPhaser, setIsMasterPhaser] = useState<boolean>(false);
 
-  const stems = activeTrack?.stems || [];
+  // Hanya stem yang punya berkas sendiri; master tidak dipakai sebagai pengganti stem.
+  const stems = (activeTrack?.stems || []).filter((st: any) => Boolean(st.audioUrl));
   const [channelStates, setChannelStates] = useState<Record<string, StemChannelState>>({});
   const [openStemFxId, setOpenStemFxId] = useState<string | null>(null);
 
@@ -170,6 +172,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
     stopAllAudio();
     setCurrentTime(0);
     setOpenStemFxId(null);
+    setLeadDuration(0);
   }, [activeTrack?.id]);
 
   const playbackSpeed = targetBpm > 0 ? targetBpm / baseBpm : 1.0;
@@ -557,7 +560,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
       }
     });
 
-    if (cur >= effectiveMaxDuration) {
+    if (effectiveMaxDuration > 0 && cur >= effectiveMaxDuration) {
       if (isLooping) {
         Object.values(stemAudioRefs.current).forEach((audio) => {
           if (audio) {
@@ -657,7 +660,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
       try {
         for (const stem of stems) {
-          const url = stem.audioUrl || activeTrack?.audioUrl;
+          const url = stem.audioUrl;
           if (!url) continue;
           const res = await fetch(url);
           const ab = await res.arrayBuffer();
@@ -737,8 +740,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
       masterFlangerFeedback.connect(masterFlangerDelay);
       const masterFlangerWet = offlineCtx.createGain();
       masterFlangerWet.gain.value = isMasterFlanger ? 0.55 : 0.0;
-      masterFlangerDelay.connect(masterFlangerFeedback);
-      masterFlangerDelay.connect(masterFlangerDelay);
+      masterFlangerDelay.connect(masterFlangerWet);
 
       const phaserFilters: BiquadFilterNode[] = [];
       const masterPhaserLfo = offlineCtx.createOscillator();
@@ -885,10 +887,10 @@ export const StemMixer: React.FC<StemMixerProps> = ({
       const renderedAudioBuffer = await offlineCtx.startRendering();
 
       setRenderProgress(90);
-      await exportAudioFile(renderedAudioBuffer, exportFileName.trim() || 'PlayMuzeck_Mix', selectedFormat);
+      const exported = await exportAudioFile(renderedAudioBuffer, exportFileName.trim() || 'PlayMuzeck_Mix', selectedFormat, { bitDepth: 24, mp3Kbps: 320 });
       
       setRenderProgress(100);
-      onSuccessToast(`Berkas ${selectedFormat} dengan seluruh efek berhasil diekspor!`);
+      onSuccessToast(exported.note ? `Mix dengan seluruh efek diekspor. ${exported.note}` : `Berkas ${selectedFormat} dengan seluruh efek berhasil diekspor!`);
       setTimeout(() => {
         setIsRendering(false);
         setIsExportModalOpen(false);
@@ -917,11 +919,12 @@ export const StemMixer: React.FC<StemMixerProps> = ({
           ref={(el) => {
             if (el) stemAudioRefs.current[stem.id] = el;
           }}
-          src={stem.audioUrl || activeTrack?.audioUrl || ''}
+          src={stem.audioUrl}
           crossOrigin="anonymous"
           preload="auto"
           loop={isStemsUnlocked ? isLooping : false}
           onEnded={stem.id === leadStemId ? handleAudioEnded : undefined}
+          onLoadedMetadata={stem.id === leadStemId ? (e) => setLeadDuration(e.currentTarget.duration || 0) : undefined}
           onTimeUpdate={stem.id === leadStemId ? handleLeadTimeUpdate : undefined}
         />
       ))}
@@ -1247,7 +1250,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   {fxActive && (
                     <span className="w-2 h-2 rounded-full bg-accent animate-pulse" title="Efek instrumen aktif" />
                   )}
-                  <span className="text-[10px] text-gray-400 uppercase font-mono">{stem.type || 'SYNTH'}</span>
+                  <span className="text-[10px] text-gray-400 uppercase font-mono">{stem.type || 'STEM'}</span>
                 </div>
               </div>
 
@@ -1501,7 +1504,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   >
                     {fmt}
                     <div className="text-[9px] font-normal opacity-80 mt-0.5">
-                      {fmt === 'WAV' ? '24-bit PCM' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? 'Lossless' : 'AAC Audio'}
+                      {fmt === 'WAV' ? '24-bit PCM' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? '24-bit Lossless' : 'AAC/Opus'}
                     </div>
                   </button>
                 ))}

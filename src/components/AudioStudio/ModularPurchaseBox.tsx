@@ -93,8 +93,8 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
   const products = [
     {
       key: 'fullMaster',
-      title: 'Full Audio Master (MP3 / 24-bit WAV)',
-      description: 'Master track kualitas studio 24-bit tanpa batas preview.',
+      title: 'Full Audio Master (24-bit WAV / FLAC / MP3)',
+      description: 'Master track penuh tanpa batas preview: unduh 24-bit WAV, FLAC lossless, MP3 320 kbps, atau M4A.',
       price: pricing.products.fullMaster,
       isOwned: isMasterOwned,
       icon: Music,
@@ -102,7 +102,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     {
       key: 'loopVersion',
       title: 'Separated Loop Version',
-      description: 'Versi potongan loop audio mulus untuk background video & streaming.',
+      description: 'Versi loop khusus untuk background video & streaming.',
       price: pricing.products.loopVersion,
       isOwned: isLoopOwned,
       icon: Repeat,
@@ -118,7 +118,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     {
       key: 'sheetMusic',
       title: 'Lembar Partitur (Sheet Music PDF)',
-      description: 'Notasi balok dan susunan tangga nada resmi beresolusi tinggi.',
+      description: 'Partitur notasi balok dalam format PDF.',
       price: pricing.products.sheetMusic,
       isOwned: isSheetOwned,
       icon: FileText,

@@ -325,9 +325,9 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
         }
 
         const buffer = await offlineCtx.startRendering();
-        await exportAudioFile(buffer, fileName, selectedFormat);
+        const exported = await exportAudioFile(buffer, fileName, selectedFormat, { bitDepth: 24, mp3Kbps: 320 });
         const loopNote = effectiveRepeatCount > 1 ? ` (diulang ${effectiveRepeatCount}x)` : '';
-        onSuccessToast(`Berkas ${selectedFormat} berhasil diekspor${loopNote}!`);
+        onSuccessToast(`Berkas ${exported.actualFormat} berhasil diekspor${loopNote}!${exported.note ? ' ' + exported.note : ''}`);
       }
 
       setIsExporting(false);
@@ -360,7 +360,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             <h3 className="text-base font-bold text-white">Ekspor Pola {scopeLabel(scope)}</h3>
             <p className="text-xs text-gray-400">
               {scope === 'both'
-                ? 'Drum & 4 instrumen digabung dalam satu berkas'
+                ? 'Drum & instrumen akor aktif digabung dalam satu berkas'
                 : 'Pilih format MIDI untuk DAW atau audio langsung'}
             </p>
           </div>
@@ -368,7 +368,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
 
         <div className="mb-4 bg-black/40 border border-white/[0.08] rounded-xl p-3 text-[11px] space-y-2">
           <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">
-            Pengaturan Envelope ADSR:
+            Pengaturan Envelope ADSR (berlaku untuk ekspor audio):
           </span>
 
           {(scope === 'chord' || scope === 'both') && (
@@ -437,8 +437,14 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           </div>
           <p className="text-[11px] text-gray-400 mt-1">
             {selectedFormat === 'MIDI'
-              ? 'MIDI multi-channel kompatibel dengan DAW.'
-              : 'File audio hasil rendering langsung berkualitas penuh.'}
+              ? 'Berkas MIDI standar yang dapat dibuka di DAW.'
+              : selectedFormat === 'WAV'
+              ? 'Audio dirender langsung dari pola dan instrumen Anda, disimpan sebagai WAV PCM 24-bit.'
+              : selectedFormat === 'FLAC'
+              ? 'Audio dirender langsung, disimpan sebagai FLAC lossless 24-bit.'
+              : selectedFormat === 'MP3'
+              ? 'Audio dirender langsung, di-encode ke MP3 320 kbps.'
+              : 'Audio dirender langsung, di-encode dengan encoder AAC/Opus bawaan browser.'}
           </p>
         </div>
 
