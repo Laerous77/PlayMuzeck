@@ -9,7 +9,6 @@ import {
   Lock,
   Download,
   Sliders,
-  Sparkles,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -1093,7 +1092,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
         <div className="p-5 rounded-2xl bg-black/50 border border-white/10 space-y-4 animate-in fade-in duration-200">
           <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-accent" />
+              <Sliders className="w-4 h-4 text-accent" />
               <span className="text-xs font-bold text-accent uppercase tracking-wider">
                 Stem Studio Master FX Rack
               </span>

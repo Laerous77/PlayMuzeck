@@ -7,10 +7,10 @@ import {
   ShieldCheck,
   Cpu,
   FileCode2,
-  Sparkles,
   ArrowRight,
   Wifi,
   WifiOff,
+  Layers,
 } from 'lucide-react';
 import { Deck } from '../../types';
 
@@ -111,7 +111,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
         <div className="flex items-center justify-between">
           <div>
             <h3 className="text-lg font-black text-white flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-accent2" />
+              <Layers className="w-4 h-4 text-accent2" />
               <span>3 Paket Kuis Bawaan (Starter Decks)</span>
             </h3>
             <p className="text-xs text-gray-400">

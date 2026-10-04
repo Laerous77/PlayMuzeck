@@ -7,7 +7,6 @@ import {
   Mail,
   LogOut,
   CheckCircle2,
-  Sparkles,
   ArrowRight,
   Loader2,
   KeyRound,

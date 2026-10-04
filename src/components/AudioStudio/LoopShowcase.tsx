@@ -7,7 +7,6 @@ import {
   Repeat,
   Sliders,
   Volume2,
-  Sparkles,
   Lock,
   CheckCircle2,
   Download,
@@ -511,7 +510,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
               onClick={() => onNavigateToPricing('loopVersion')}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-on-accent font-extrabold text-xs hover:brightness-110 shadow-lg shadow-accent/20 cursor-pointer transition-all duration-300"
             >
-              <Sparkles className="w-3.5 h-3.5" />
+              <Repeat className="w-3.5 h-3.5" />
               <span>Buka Seamless Loop</span>
             </button>
           )}

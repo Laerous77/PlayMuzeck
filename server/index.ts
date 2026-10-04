@@ -394,7 +394,7 @@ app.post('/api/admin/topics', requireAdmin, requireSuperAdmin, async (req, res) 
     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *;
   `;
   const { rows } = await pool.query(query, [
-    topicId, t.title, t.iconName || 'Sparkles', t.description || '',
+    topicId, t.title, t.iconName || 'BookOpen', t.description || '',
     Number(t.price) || 0, Number(t.originalPrice) || 0, t.badge || ''
   ]);
   res.status(201).json(rows[0]);
@@ -476,7 +476,7 @@ app.post('/api/admin/import-content', requireAdmin, requireSuperAdmin, async (re
       INSERT INTO topics (id, title, icon_name, description, price, original_price, badge)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       ON CONFLICT(id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description;
-    `, [t.id, t.title, t.iconName || 'Sparkles', t.description || '', Number(t.price) || 0, Number(t.originalPrice) || 0, t.badge || '']);
+    `, [t.id, t.title, t.iconName || 'BookOpen', t.description || '', Number(t.price) || 0, Number(t.originalPrice) || 0, t.badge || '']);
   }
   for (const d of decks) {
     const q = Array.isArray(d.questions) ? d.questions : [];

@@ -10,6 +10,7 @@ import {
   Minimize2,
   Waves,
   Wrench,
+  Info,
   Mic2,
   Upload,
   Play,
@@ -290,6 +291,82 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 const formatSigned = (v: number) => {
   const r = round2(v);
   return r > 0 ? `+${r}` : `${r}`;
+};
+
+// ---------------------------------------------------------------------------
+// Tombol informasi (popover) agar penjelasan tiap alat tidak memenuhi panel
+// ---------------------------------------------------------------------------
+
+const InfoTip: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <span ref={wrapRef} className="relative inline-flex">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label={label}
+        aria-expanded={open}
+        title={label}
+        className={`w-6 h-6 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
+          open
+            ? 'bg-accent/20 text-accent border-accent/40'
+            : 'bg-black/40 text-gray-400 border-white/10 hover:text-accent hover:border-accent/40'
+        }`}
+      >
+        <Info className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <div
+          role="tooltip"
+          className="absolute left-0 top-full mt-2 z-30 w-72 sm:w-80 max-w-[calc(100vw-3rem)] rounded-xl bg-[#0b130e] border border-white/15 shadow-2xl p-3.5 space-y-2 text-[11px] leading-relaxed text-gray-300 font-normal normal-case tracking-normal"
+        >
+          {children}
+        </div>
+      )}
+    </span>
+  );
+};
+
+const FORMAT_INFO =
+  'MP3 di-encode dengan LAME (320 kbps untuk tool selain Compress), FLAC lossless 16-bit, WAV PCM 16-bit. M4A memakai encoder bawaan browser (bisa berupa .webm/.ogg).';
+
+/** Penjelasan tambahan per alat (di luar deskripsi singkat), ditampilkan di popover info. */
+const TOOL_INFO: Record<ToolType, string[]> = {
+  trim: [],
+  volume: [
+    `Geser slider atau ketik langsung, desimal didukung (mis. ${formatSigned(0.3)} dB). Rentang -24 sampai +24 dB.`,
+  ],
+  pitch: [
+    `Desimal didukung (mis. ${formatSigned(0.02)} semitone = geser nada 2 cent). Rentang -12 sampai +12 semitone.`,
+  ],
+  tempo: ['Geser slider atau ketik langsung, desimal didukung (mis. 1.25x). Rentang 0.5x sampai 2x.'],
+  reverse: [],
+  convert: [],
+  compress: [
+    'Memilih tingkatan langsung memproses ulang. Unduhan MP3 di-encode dengan LAME pada bitrate di atas (disesuaikan ke bitrate MP3 standar terdekat). M4A memakai encoder bawaan browser; bila hasilnya berbeda dari pilihan, ekstensi berkas disesuaikan dan Anda diberi tahu. WAV (PCM 16-bit) dan FLAC (lossless 16-bit) menyimpan hasil downsample tanpa kompresi lossy, sehingga bitrate tidak berlaku.',
+  ],
+  noise_reduction: [],
+  vocal_separator: [
+    'Memisahkan elemen yang berada di tengah stereo. Instrumen yang juga di tengah (bass, kick, snare) bisa ikut terbawa ke hasil vokal; hasil terbaik pada rekaman stereo dengan vokal di tengah.',
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -1315,9 +1392,16 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         {/* Panel Kontrol */}
         <div className="p-4 sm:p-5 rounded-xl bg-black/40 border border-white/[0.06] space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
+            <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-white">{toolMeta.name}</h4>
-              <p className="text-xs text-gray-400">{toolMeta.desc}</p>
+              <InfoTip label={`Info alat ${toolMeta.name}`}>
+                <p>{toolMeta.desc}.</p>
+                {TOOL_INFO[selectedTool].map((line) => (
+                  <p key={line} className="text-gray-400">
+                    {line}
+                  </p>
+                ))}
+              </InfoTip>
             </div>
 
             {audioFile && (
@@ -1463,9 +1547,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   onChange={(e) => setDynamicGainDb(round2(Number(e.target.value)))}
                   className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
-                <p className="text-[11px] text-gray-500">
-                  Geser slider atau ketik langsung, desimal didukung (mis. {formatSigned(0.3)} dB). Rentang -24 sampai +24 dB.
-                </p>
                 {clipWarning && (
                   <p className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
                     <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
@@ -1511,9 +1592,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   onChange={(e) => setDynamicPitchSemitones(round2(Number(e.target.value)))}
                   className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
-                <p className="text-[11px] text-gray-500">
-                  Desimal didukung (mis. {formatSigned(0.02)} semitone = geser nada 2 cent). Rentang -12 sampai +12 semitone.
-                </p>
                 <div className="flex items-center gap-2 pt-1 bg-black/40 p-2.5 rounded-lg border border-white/5">
                   <input
                     type="checkbox"
@@ -1523,14 +1601,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     className="accent-accent w-4 h-4 cursor-pointer"
                   />
                   <label htmlFor="chk-keep-tempo" className="text-gray-300 font-bold cursor-pointer select-none">
-                    Kunci Tempo (Keep Tempo) — Kecepatan tempo tetap stabil saat nada dinaik-turunkan
+                    Kunci Tempo (Keep Tempo)
                   </label>
                 </div>
-                {keepTempoOnPitch && (
-                  <p className="text-[11px] text-gray-400">
-                    Preview memakai pitch-shifter real-time yang ringan; hasil unduhan memakai pemrosesan WSOLA yang lebih bersih.
-                  </p>
-                )}
               </div>
             )}
 
@@ -1561,26 +1634,16 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   onChange={(e) => setDynamicTempoSpeed(round2(Number(e.target.value)))}
                   className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
-                <p className="text-[11px] text-gray-500">
-                  Geser slider atau ketik langsung, desimal didukung (mis. 1.25x). Rentang 0.5x sampai 2x.
-                </p>
                 {decodedBuffer && (
                   <p className="text-[11px] text-gray-400">
                     Durasi hasil: {(decodedBuffer.duration / dynamicTempoSpeed).toFixed(2)}s (asli {decodedBuffer.duration.toFixed(2)}s)
                   </p>
                 )}
-                <p className="text-[11px] text-gray-400">
-                  Preview memakai time-stretch bawaan browser; hasil unduhan memakai pemrosesan WSOLA, sehingga karakter suaranya bisa sedikit berbeda.
-                </p>
               </div>
             )}
 
             {/* 5. REVERSE */}
-            {selectedTool === 'reverse' && (
-              <p className="text-xs text-gray-300">
-                Membalikkan urutan gelombang audio dari ujung akhir ke awal (reverse swell).
-              </p>
-            )}
+            {/* Tidak ada pengaturan tambahan: cukup tekan tombol Jalankan */}
 
             {/* 6. CONVERT */}
             {selectedTool === 'convert' && (
@@ -1648,12 +1711,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     );
                   })}
                 </div>
-                <p className="text-[11px] text-gray-400">
-                  Memilih tingkatan langsung memproses ulang. Unduhan MP3 di-encode dengan LAME pada bitrate di atas (disesuaikan ke bitrate
-                  MP3 standar terdekat). M4A memakai encoder bawaan browser; bila hasilnya berbeda dari pilihan, ekstensi berkas disesuaikan
-                  dan Anda diberi tahu. WAV (PCM 16-bit) dan FLAC (lossless 16-bit) menyimpan hasil downsample tanpa kompresi lossy,
-                  sehingga bitrate tidak berlaku.
-                </p>
               </div>
             )}
 
@@ -1681,10 +1738,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                   />
                 </div>
-                <p className="text-[11px] text-gray-400">
-                  Profil noise diukur otomatis dari bagian paling senyap pada berkas (algoritma statistik), lalu diredam per frekuensi. Semakin tinggi,
-                  semakin kuat peredaman (risiko suara tipis).
-                </p>
               </div>
             )}
 
@@ -1732,10 +1785,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     ))}
                   </div>
                 )}
-                <p className="text-[11px] text-gray-400">
-                  Memisahkan elemen yang berada di tengah stereo. Instrumen yang juga di tengah (bass, kick, snare) bisa ikut terbawa ke
-                  hasil vokal; hasil terbaik pada rekaman stereo dengan vokal di tengah.
-                </p>
               </div>
             )}
           </div>
@@ -1743,7 +1792,12 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           {/* Format Unduhan & Aksi */}
           <div className="pt-3 border-t border-white/[0.06] space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-              <span className="text-gray-300 font-bold">Format Unduhan:</span>
+              <span className="text-gray-300 font-bold flex items-center gap-2">
+                Format Unduhan:
+                <InfoTip label="Info format unduhan">
+                  <p>{FORMAT_INFO}</p>
+                </InfoTip>
+              </span>
               <div className="flex items-center gap-1.5">
                 {(['MP3', 'WAV', 'M4A', 'FLAC'] as const).map((fmt) => (
                   <button
@@ -1760,7 +1814,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               </div>
             </div>
 
-            <p className="text-[11px] text-gray-500">MP3 di-encode dengan LAME (320 kbps untuk tool selain Compress), FLAC lossless 16-bit, WAV PCM 16-bit. M4A memakai encoder bawaan browser (bisa berupa .webm/.ogg).</p>
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <div className="flex items-center gap-2.5 flex-wrap">
                 {/* Jalankan (tool statis) */}

@@ -2,7 +2,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import {
-  Sparkles,
   Headphones,
   Brain,
   Sliders,
@@ -135,7 +134,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
           className="relative z-10 max-w-3xl mx-auto space-y-5"
         >
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold tracking-wide">
-            <Sparkles className="w-3.5 h-3.5" />
+            <Headphones className="w-3.5 h-3.5" />
             <span>Studio audio & arena kuis, langsung di browser</span>
           </div>
 

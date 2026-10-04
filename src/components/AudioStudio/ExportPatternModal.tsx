@@ -1,6 +1,6 @@
 // src/components/AudioStudio/ExportPatternModal.tsx
 import React, { useEffect, useState } from 'react';
-import { X, Download, Loader2, Music, Disc, Sparkles, Repeat } from 'lucide-react';
+import { X, Download, Loader2, Music, Disc, Repeat, Layers } from 'lucide-react';
 import { generateMidiFile, exportAudioFile, downloadBlob } from '../../services/exporters';
 import { audioEngine, EnvelopeADSR } from '../../services/audioEngine';
 
@@ -339,7 +339,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
     }
   };
 
-  const ScopeIcon = scope === 'drum' ? Disc : scope === 'chord' ? Music : Sparkles;
+  const ScopeIcon = scope === 'drum' ? Disc : scope === 'chord' ? Music : Layers;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">

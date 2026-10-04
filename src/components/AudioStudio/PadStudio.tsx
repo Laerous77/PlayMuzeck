@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Lock,
-  Sparkles,
   RotateCcw,
   Repeat,
   Music,
@@ -18,6 +17,8 @@ import {
   Activity,
   ChevronLeft,
   ChevronRight,
+  Drum,
+  Layers,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -574,7 +575,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-white/[0.08]">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-accent" />
+              <Drum className="w-5 h-5 text-accent" />
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">
                 Drum Pad & Chord Pad Studio
               </h3>
@@ -1566,7 +1567,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
-                <Sparkles className="w-4 h-4 text-accent" />
+                <Layers className="w-4 h-4 text-accent" />
                 <span>Drum + Semua Instrumen Akor</span>
               </button>
             </div>

@@ -10,8 +10,8 @@ import {
   Wrench,
   CheckCircle2,
   ShoppingCart,
-  Sparkles,
   Zap,
+  Package,
 } from 'lucide-react';
 import { AudioEntitlements, CartItem, AudioTrackItem } from '../../types';
 import { calculateAudioPricing } from '../../services/pricing';
@@ -349,7 +349,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
         <div className="z-10">
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 rounded-full bg-gradient-to-r from-accent to-accent/70 text-black text-[11px] font-black uppercase tracking-wider flex items-center gap-1 shadow-md animate-bounce">
-              <Sparkles className="w-3 h-3 fill-black" />
+              <Package className="w-3 h-3" />
               <span>Best Value Bundle</span>
             </span>
             <span className="text-sm font-black text-white">Beli Sisa Paket Lengkap</span>

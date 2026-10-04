@@ -36,8 +36,8 @@ import {
   Trash2,
   History,
   Edit3,
-  Sparkles,
   ListChecks,
+  Play,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -688,7 +688,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     disabled={questions.length === 0}
                     className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 disabled:opacity-40 text-on-accent2 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent2/25"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Play className="w-4 h-4" />
                     <span>Mulai Kuis</span>
                   </button>
                 </div>
@@ -744,7 +744,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     disabled={questions.length === 0}
                     className="w-full py-3 rounded-xl bg-accent hover:bg-accent/80 disabled:opacity-40 text-on-accent font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/20"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Users className="w-4 h-4" />
                     <span>Mulai Sesi Pass &amp; Play</span>
                   </button>
                 </div>
@@ -852,7 +852,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     disabled={questions.length === 0}
                     className="w-full py-3 rounded-xl bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-purple-600/25"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <Crown className="w-4 h-4" />
                     <span>Mulai Sesi Host</span>
                   </button>
                 </div>

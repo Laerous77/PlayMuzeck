@@ -491,7 +491,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
       title: cleanTopicTitle,
       description: sanitizeInput(topicDesc) || `Topik ${cleanTopicTitle} dalam tema ${selectedThemeObj.name}.`,
       badge: selectedThemeObj.name,
-      iconName: 'Sparkles',
+      iconName: 'BookOpen',
       price: 0,
       isCustom: true,
     };

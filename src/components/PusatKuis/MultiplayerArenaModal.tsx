@@ -16,7 +16,6 @@ import {
   WifiOff,
   Copy,
   Check,
-  Sparkles,
   Award,
   Crown,
   RotateCcw,
@@ -38,6 +37,7 @@ import {
   ShieldAlert,
   SkipForward,
   UserRound,
+  UserPlus,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -1288,7 +1288,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                     disabled={!isOnline || connectionState !== 'connected' || !activeDeck}
                     className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-extrabold text-xs shadow-lg shadow-accent2/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40"
                   >
-                    <Sparkles className="w-4 h-4" />
+                    <UserPlus className="w-4 h-4" />
                     <span>Buat Ruangan &amp; Undang Teman</span>
                   </button>
                 </div>

@@ -5,7 +5,6 @@ import {
   Layers,
   CheckCircle2,
   Lock,
-  Sparkles,
   Edit3,
   Wifi,
   WifiOff,

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Headphones, Brain, Sparkles, ShieldAlert, ArrowRight, X } from 'lucide-react';
+import { Headphones, Brain, ShieldAlert, ArrowRight, X, CheckCircle2 } from 'lucide-react';
 import { audioEngine } from '../../services/audioEngine';
 
 interface DestinationModalProps {
@@ -31,7 +31,7 @@ export const DestinationModal: React.FC<DestinationModalProps> = ({
 
         <div className="text-center space-y-2">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 text-accent text-xs font-black border border-accent/30">
-            <Sparkles className="w-3.5 h-3.5" />
+            <CheckCircle2 className="w-3.5 h-3.5" />
             <span>Login Berhasil</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">

@@ -7,13 +7,13 @@ import {
   Repeat,
   Sliders,
   Volume2,
-  Sparkles,
   Lock,
   CheckCircle2,
   Download,
   ChevronDown,
   Loader2,
   AlertCircle,
+  Unlock,
 } from 'lucide-react';
 import { AudioTrackItem, AudioEntitlements } from '../../types';
 import { exportAudioFile } from '../../services/exporters';
@@ -573,7 +573,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                   onClick={onUnlockMaster}
                   className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs hover:brightness-110 shadow-lg shadow-accent/10 cursor-pointer"
                 >
-                  <Sparkles className="w-3.5 h-3.5" /> Buka Full Audio Master
+                  <Unlock className="w-3.5 h-3.5" /> Buka Full Audio Master
                 </button>
               )}
             </div>

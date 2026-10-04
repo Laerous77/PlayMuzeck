@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Sparkles, Send, CheckCircle2, Music, Clock, FileText, Mail } from 'lucide-react';
+import { X, Send, CheckCircle2, Music, Clock, FileText, Mail } from 'lucide-react';
 import { CustomAudioInquiry } from '../../types';
 import { storage } from '../../services/storage';
 import { submitInquiry } from '../../services/analytics';
@@ -66,7 +66,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
         <div className="flex items-center justify-between p-5 border-b border-white/[0.08] bg-black/40">
           <div className="flex items-center gap-2.5">
             <div className="p-2 rounded-xl bg-accent text-on-accent">
-              <Sparkles className="w-4 h-4" />
+              <Music className="w-4 h-4" />
             </div>
             <div>
               <h3 className="text-base font-bold text-white">Request Custom Audio</h3>

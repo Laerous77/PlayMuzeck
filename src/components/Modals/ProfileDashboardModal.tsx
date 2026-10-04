@@ -2,7 +2,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
-  Sparkles,
   Library,
   Heart,
   MessageSquare,
@@ -33,6 +32,7 @@ import {
   Lightbulb,
   HelpCircle,
   ChevronLeft,
+  Smile,
 } from 'lucide-react';
 import { UserSession, Deck, AudioTrackItem } from '../../types';
 import { storage } from '../../services/storage';
@@ -988,7 +988,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
           <div className="space-y-1.5 flex-1 min-w-0">
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-accent/15 text-accent text-xs font-black tracking-wide border border-accent/30 animate-pulse">
-              <Sparkles className="w-3.5 h-3.5" />
+              <Smile className="w-3.5 h-3.5" />
               <span>{randomGreeting}</span>
             </div>
 
@@ -1466,7 +1466,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       { key: 'feedback', label: 'Masukan', icon: Lightbulb },
-                      { key: 'custom', label: 'Ide Kustom', icon: Sparkles },
+                      { key: 'custom', label: 'Ide Kustom', icon: Edit3 },
                       { key: 'report', label: 'Laporkan Bug', icon: Flag },
                       { key: 'other', label: 'Lainnya', icon: HelpCircle },
                     ].map((c) => (

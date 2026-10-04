@@ -1,7 +1,6 @@
 // src/components/Header.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Sparkles,
   ShoppingBag,
   Menu,
   ChevronDown,
@@ -13,6 +12,7 @@ import {
   Play,
   Layers,
   Trophy,
+  Compass,
 } from 'lucide-react';
 import { AppMode, CartItem, UserSession, AudioEntitlements } from '../types';
 import { PROFILE_FRAMES, FrameOrnament } from './Modals/ProfileDashboardModal';
@@ -315,7 +315,7 @@ export const Header: React.FC<HeaderProps> = ({
                         }}
                         className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 bg-black/40 text-gray-200 hover:bg-white/10 transition-all cursor-pointer"
                       >
-                        <Sparkles className="w-4 h-4 text-accent shrink-0" />
+                        <Compass className="w-4 h-4 text-accent shrink-0" />
                         <div>
                           <div className="leading-tight">Harmoni & Wawasan</div>
                           <div className="text-[10px] font-normal text-gray-400">Visi & ekosistem PlayMuzeck</div>
