@@ -1249,7 +1249,6 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   {fxActive && (
                     <span className="w-2 h-2 rounded-full bg-accent animate-pulse" title="Efek instrumen aktif" />
                   )}
-                  <span className="text-[10px] text-gray-400 uppercase font-mono">{stem.type || 'STEM'}</span>
                 </div>
               </div>
 

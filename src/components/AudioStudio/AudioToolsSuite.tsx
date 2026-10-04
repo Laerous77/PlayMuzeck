@@ -113,7 +113,7 @@ const TOOLS: ToolConfig[] = [
   { id: 'pitch', name: 'Pitch / Transpose', desc: 'Ubah nada dinamis dengan opsi Kunci Tempo', icon: Sliders },
   { id: 'tempo', name: 'Tempo / Speed', desc: 'Ubah kecepatan secara dinamis tanpa mengubah nada', icon: FastForward },
   { id: 'reverse', name: 'Reverse', desc: 'Balikkan urutan sampel audio untuk efek transisi', icon: RotateCcw },
-  { id: 'convert', name: 'Convert', desc: 'Konversi Audio ke WAV/M4A & Ekstrak Video-ke-Audio', icon: RefreshCw },
+  { id: 'convert', name: 'Convert', desc: 'Konversi audio antar format (MP3, WAV, M4A, FLAC) & ekstrak audio dari video', icon: RefreshCw },
   { id: 'compress', name: 'Compress', desc: '5 tingkatan kompresi dengan estimasi ukuran & bitrate', icon: Minimize2 },
   { id: 'noise_reduction', name: 'Noise Reduction', desc: 'Peredam desis & dengung latar dengan spectral gate', icon: Waves },
   { id: 'vocal_separator', name: 'Vocal Isolator', desc: 'Pisahkan vokal & musik lewat teknik center-phase', icon: Mic2 },
@@ -291,6 +291,19 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 const formatSigned = (v: number) => {
   const r = round2(v);
   return r > 0 ? `+${r}` : `${r}`;
+};
+
+/** Format berkas asal (null bila video / tidak dikenali), dipakai agar Convert tidak mengonversi ke format yang sama. */
+const detectAudioFormat = (file: File | null): ExportAudioFormat | null => {
+  if (!file) return null;
+  const type = (file.type || '').toLowerCase();
+  if (type.startsWith('video/')) return null;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  if (type === 'audio/mpeg' || type === 'audio/mp3' || ext === 'mp3') return 'MP3';
+  if (/wav|wave/.test(type) || ext === 'wav' || ext === 'wave') return 'WAV';
+  if (type === 'audio/flac' || type === 'audio/x-flac' || ext === 'flac') return 'FLAC';
+  if (type === 'audio/mp4' || type === 'audio/x-m4a' || type === 'audio/m4a' || ext === 'm4a') return 'M4A';
+  return null;
 };
 
 // ---------------------------------------------------------------------------
@@ -494,6 +507,16 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const [quotaMap, setQuotaMap] = useState<Record<ToolType, number>>(() => readQuota());
   const currentToolQuota = isToolsOwned ? Infinity : quotaMap[selectedTool] ?? DAILY_FREE_QUOTA;
+
+  // Convert: format tujuan tidak boleh sama dengan format berkas asal.
+  const sourceFormat = useMemo(() => detectAudioFormat(audioFile), [audioFile]);
+  const blockedFormat: ExportAudioFormat | null = selectedTool === 'convert' ? sourceFormat : null;
+  useEffect(() => {
+    if (blockedFormat && selectedExportFormat === blockedFormat) {
+      const next = (['MP3', 'WAV', 'M4A', 'FLAC'] as const).find((f) => f !== blockedFormat);
+      if (next) setSelectedExportFormat(next);
+    }
+  }, [blockedFormat, selectedExportFormat]);
 
   // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1089,6 +1112,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       }
     }
 
+    if (tool === 'convert' && blockedFormat && selectedExportFormat === blockedFormat) {
+      setErrorMsg(`Berkas asal sudah berformat ${blockedFormat}. Pilih format tujuan yang berbeda.`);
+      return;
+    }
+
     const baseName = safeFileBase(audioFile?.name || 'audio');
     const fmt = selectedExportFormat;
     const sr = decodedBuffer.sampleRate;
@@ -1285,8 +1313,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         )}
 
         {/* Header Seksi & Status Kuota */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/[0.08] pb-4">
-          <div className="space-y-1">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
+          <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
               <Wrench className="w-5 h-5 text-accent" />
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">Audio Processing Tools Suite</h3>
@@ -1296,13 +1324,13 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap lg:justify-end shrink-0">
             {isToolsOwned ? (
-              <span className="text-emerald-400 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 text-xs font-bold flex items-center gap-1.5">
+              <span className="text-emerald-400 bg-emerald-500/10 h-9 px-3.5 rounded-xl border border-emerald-500/20 text-xs font-bold flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5" /> Sudah Dimiliki
               </span>
             ) : currentToolQuota > 0 ? (
-              <span className="text-accent bg-accent/10 px-3 py-1.5 rounded-xl border border-accent/20 text-xs font-bold flex items-center gap-1.5">
+              <span className="text-accent bg-accent/10 h-9 px-3.5 rounded-xl border border-accent/20 text-xs font-bold flex items-center gap-1.5">
                 <Wrench className="w-3.5 h-3.5 text-accent" />
                 {currentToolQuota === DAILY_FREE_QUOTA
                   ? `${DAILY_FREE_QUOTA} penggunaan gratis hari ini (per alat)`
@@ -1312,7 +1340,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <button
                 type="button"
                 onClick={onUnlockEditor}
-                className="px-3.5 py-1.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
+                className="h-9 px-3.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md"
               >
                 <Lock className="w-3.5 h-3.5" /> Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}
               </button>
@@ -1322,7 +1350,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={isLoadingFile}
-              className="px-3.5 py-2 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+              className="h-9 px-3.5 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
               {isLoadingFile ? (
                 <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" />
@@ -1657,7 +1685,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     }`}
                   >
                     <Music className="w-3.5 h-3.5" />
-                    <span>Audio to Audio (WAV, M4A)</span>
+                    <span>Audio ke Audio</span>
                   </button>
                   <button
                     type="button"
@@ -1670,9 +1698,15 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     }`}
                   >
                     <Film className="w-3.5 h-3.5" />
-                    <span>Video to Audio (MP4, MKV, WebM, MOV, AVI, dll.)</span>
+                    <span>Video ke Audio (MP4, MKV, WebM, MOV, AVI, dll.)</span>
                   </button>
                 </div>
+
+                {blockedFormat && (
+                  <p className="text-[11px] text-gray-400">
+                    Format asal: <span className="font-bold text-gray-200">{blockedFormat}</span>. Pilih format tujuan yang berbeda.
+                  </p>
+                )}
 
                 {convertSourceMode === 'video' && (
                   <p className="text-[11px] text-accent bg-accent/10 p-3 rounded-xl border border-accent/20 leading-relaxed">
@@ -1803,9 +1837,15 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   <button
                     key={fmt}
                     type="button"
+                    disabled={blockedFormat === fmt}
+                    title={blockedFormat === fmt ? 'Sama dengan format berkas asal' : undefined}
                     onClick={() => setSelectedExportFormat(fmt)}
-                    className={`px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
-                      selectedExportFormat === fmt ? 'bg-accent text-on-accent shadow' : 'bg-black/60 text-gray-400 hover:text-white'
+                    className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                      blockedFormat === fmt
+                        ? 'bg-black/30 text-gray-600 line-through cursor-not-allowed'
+                        : selectedExportFormat === fmt
+                        ? 'bg-accent text-on-accent shadow cursor-pointer'
+                        : 'bg-black/60 text-gray-400 hover:text-white cursor-pointer'
                     }`}
                   >
                     {fmt}

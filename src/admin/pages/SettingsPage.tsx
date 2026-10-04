@@ -55,10 +55,6 @@ export const SettingsPage: React.FC = () => {
           Tagline
           <input className="mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white" value={settings.tagline} onChange={(e) => setSettings({ ...settings, tagline: e.target.value })} />
         </label>
-        <label className="text-xs text-gray-400 block">
-          Catatan footer
-          <input className="mt-1 w-full rounded-lg bg-black/40 border border-white/10 px-3 py-2 text-white" value={settings.footerNote} onChange={(e) => setSettings({ ...settings, footerNote: e.target.value })} />
-        </label>
         <button onClick={save} className="rounded-xl bg-accent text-on-accent font-bold px-4 py-2">
           Simpan identitas
         </button>

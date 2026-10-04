@@ -353,7 +353,7 @@ export const AudioPage: React.FC = () => {
     const newStem = {
       id: `stem-${Date.now()}`,
       name: stemName,
-      type: 'synth',
+      type: 'stem',
       color: '#FCA311',
       defaultVolume: 80,
       duration: form.duration !== '00:00' ? form.duration : '00:00',

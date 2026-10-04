@@ -12,7 +12,9 @@ import {
   Play,
   Layers,
   Trophy,
-  Compass,
+  Brain,
+  ListChecks,
+  HelpCircle,
 } from 'lucide-react';
 import { AppMode, CartItem, UserSession, AudioEntitlements } from '../types';
 import { PROFILE_FRAMES, FrameOrnament } from './Modals/ProfileDashboardModal';
@@ -311,30 +313,14 @@ export const Header: React.FC<HeaderProps> = ({
                         onClick={() => {
                           audioEngine.playClickSound();
                           setIsSectionMenuOpen(false);
-                          scrollToElement('index-hero-section');
-                        }}
-                        className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 bg-black/40 text-gray-200 hover:bg-white/10 transition-all cursor-pointer"
-                      >
-                        <Compass className="w-4 h-4 text-accent shrink-0" />
-                        <div>
-                          <div className="leading-tight">Harmoni & Wawasan</div>
-                          <div className="text-[10px] font-normal text-gray-400">Visi & ekosistem PlayMuzeck</div>
-                        </div>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          audioEngine.playClickSound();
-                          setIsSectionMenuOpen(false);
                           scrollToElement('index-audio-section');
                         }}
                         className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 bg-black/40 text-gray-200 hover:bg-white/10 transition-all cursor-pointer"
                       >
                         <Music className="w-4 h-4 text-accent shrink-0" />
                         <div>
-                          <div className="leading-tight">Keunggulan Studio Audio</div>
-                          <div className="text-[10px] font-normal text-gray-400">128 SoundFont & 4-track akor</div>
+                          <div className="leading-tight">Audio Studio</div>
+                          <div className="text-[10px] font-normal text-gray-400">128 instrumen, 4 track akor & 9 Audio Tools</div>
                         </div>
                       </button>
 
@@ -347,10 +333,42 @@ export const Header: React.FC<HeaderProps> = ({
                         }}
                         className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 bg-black/40 text-gray-200 hover:bg-white/10 transition-all cursor-pointer"
                       >
-                        <Play className="w-4 h-4 text-accent2 shrink-0" />
+                        <Brain className="w-4 h-4 text-accent2 shrink-0" />
                         <div>
-                          <div className="leading-tight">Keunggulan Pusat Kuis</div>
-                          <div className="text-[10px] font-normal text-gray-400">Offline PWA & 3 paket kartu starter</div>
+                          <div className="leading-tight">Pusat Kuis</div>
+                          <div className="text-[10px] font-normal text-gray-400">4 mode main & 3 starter deck</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioEngine.playClickSound();
+                          setIsSectionMenuOpen(false);
+                          scrollToElement('index-steps-section');
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 bg-black/40 text-gray-200 hover:bg-white/10 transition-all cursor-pointer"
+                      >
+                        <ListChecks className="w-4 h-4 text-accent shrink-0" />
+                        <div>
+                          <div className="leading-tight">Cara Mulai</div>
+                          <div className="text-[10px] font-normal text-gray-400">Mulai dalam 3 langkah</div>
+                        </div>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          audioEngine.playClickSound();
+                          setIsSectionMenuOpen(false);
+                          scrollToElement('index-faq-section');
+                        }}
+                        className="w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 bg-black/40 text-gray-200 hover:bg-white/10 transition-all cursor-pointer"
+                      >
+                        <HelpCircle className="w-4 h-4 text-accent shrink-0" />
+                        <div>
+                          <div className="leading-tight">Pertanyaan Umum</div>
+                          <div className="text-[10px] font-normal text-gray-400">Jawaban singkat seputar layanan</div>
                         </div>
                       </button>
                     </>

@@ -26,7 +26,7 @@ import { removeDeckFromJsonStore } from './services/quizJsonStore';
 import { notifyUserScopeChanged } from './services/userScope';
 import { isBuiltinDeckId } from './data/quiz';
 import { installAuthFetch, clearUserToken, authApi, AUTH_EXPIRED_EVENT } from './services/authToken';
-import { RotateCcw, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { RotateCcw, AlertTriangle } from 'lucide-react';
 
 installAuthFetch(); // semua request /api/* otomatis membawa cookie sesi httpOnly
 
@@ -1056,25 +1056,43 @@ function MainApp() {
         </AnimatePresence>
       </main>
 
-      <footer className="w-full bg-surface/40 border-t border-white/[0.08] py-8 px-4 sm:px-8 mt-auto">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
-          <div className="flex items-center gap-2">
-            <span className="font-extrabold text-white text-sm tracking-tight">
-              {siteSettings.siteName}<span className="text-accent">.</span>
-            </span>
-            <span>— {siteSettings.footerNote}</span>
-          </div>
+      <footer className="w-full border-t border-white/[0.08] bg-black/30 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+          <span className="font-extrabold text-white text-sm tracking-tight">
+            {siteSettings.siteName}<span className="text-accent">.</span>
+          </span>
 
-          <div className="flex items-center gap-4 flex-wrap justify-center">
-            <span className="flex items-center gap-1 text-emerald-400">
-              <ShieldCheck className="w-3.5 h-3.5" /> Aman & Tepercaya
-            </span>
+          <nav aria-label="Navigasi footer" className="flex items-center gap-5">
+            {([
+              { label: 'Beranda', mode: 'index' as const },
+              { label: 'Audio Studio', mode: 'audio' as const },
+              { label: 'Pusat Kuis', mode: 'quiz' as const },
+            ]).map((l) => (
+              <button
+                key={l.mode}
+                type="button"
+                onClick={() => {
+                  if (l.mode !== 'index' && !userSession?.isLoggedIn) {
+                    setIsAuthOpen(true);
+                    return;
+                  }
+                  audioEngine.playClickSound();
+                  setCurrentMode(l.mode);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="hover:text-white transition-colors cursor-pointer"
+              >
+                {l.label}
+              </button>
+            ))}
             {isAdmin && (
               <a href="/admin" className="text-accent font-bold hover:underline">
-                Developer Console ⚙️
+                Admin
               </a>
             )}
-          </div>
+          </nav>
+
+          <span>&copy; {new Date().getFullYear()} {siteSettings.siteName}</span>
         </div>
       </footer>
 
