@@ -1095,6 +1095,33 @@ app.post('/api/payment/cancel', requireUser, async (req, res) => {
   res.json({ success: true, cancelled: true });
 });
 
+// Kirim langsung sitemap.xml resmi dalam format XML ke Google
+app.get('/sitemap.xml', (_req, res) => {
+  res.type('application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://playmuzeck.my.id/</loc>
+    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="id-ID" href="https://playmuzeck.my.id/" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://playmuzeck.my.id/" />
+  </url>
+</urlset>`);
+});
+
+// Kirim robots.txt resmi dalam format Plain Text
+app.get('/robots.txt', (_req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+
+Sitemap: https://playmuzeck.my.id/sitemap.xml`);
+});
+
 const distDir = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
