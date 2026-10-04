@@ -646,7 +646,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                     >
                       <Bot className="w-5 h-5 mb-2" />
                       <span className="text-sm font-black block">Lawan Bot</span>
-                      <span className="text-[11px] text-gray-400">Bertanding skor vs bot AI</span>
+                      <span className="text-[11px] text-gray-400">Bertanding skor vs bot</span>
                     </button>
                   </div>
 

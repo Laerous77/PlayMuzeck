@@ -210,7 +210,7 @@ function recordBufferAsCompressed(
   });
 }
 
-// 1c. Penggabung Buffer (dipakai AI Vocal Separator untuk output ke-3:
+// 1c. Penggabung Buffer (dipakai Vocal Isolator untuk output ke-3:
 // "Vokal + Musik" sebagai satu file gabungan yang tetap terpisah dari
 // file vokal-saja dan musik-saja)
 export function mixBuffers(a: AudioBuffer, b: AudioBuffer): AudioBuffer {

@@ -210,7 +210,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
   },
   {
     id: 'frame-teknologi',
-    name: 'Matriks Sibernetik AI',
+    name: 'Matriks Sibernetik',
     badge: 'Tema Teknologi',
     description: 'Kilau sirkuit semikonduktor masa depan, kecerdasan buatan, dan arsitektur kode.',
     requirement: 'Terbuka setelah membeli kuis tema Teknologi.',

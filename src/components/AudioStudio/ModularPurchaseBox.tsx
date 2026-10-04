@@ -93,8 +93,8 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
   const products = [
     {
       key: 'fullMaster',
-      title: 'Full Audio Master (24-bit WAV / FLAC / MP3)',
-      description: 'Master track penuh tanpa batas preview: unduh 24-bit WAV, FLAC lossless, MP3 320 kbps, atau M4A.',
+      title: 'Full Audio Master (WAV / FLAC / MP3 / M4A)',
+      description: 'Master track penuh tanpa batas preview. Unduh sebagai WAV atau FLAC (24-bit), MP3 320 kbps, atau M4A (bergantung browser). Kualitas mengikuti berkas master sumber.',
       price: pricing.products.fullMaster,
       isOwned: isMasterOwned,
       icon: Music,

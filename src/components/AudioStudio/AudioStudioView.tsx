@@ -1,5 +1,5 @@
 // src/components/AudioStudio/AudioStudioView.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AudioCatalogCarousel } from './AudioCatalogCarousel';
 import { FeaturedShowcase } from './FeaturedShowcase';
 import { LoopShowcase } from './LoopShowcase';
@@ -58,6 +58,12 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   const [targetedPricingKey, setTargetedPricingKey] = useState<string | null>(null);
   const [pricingNonce, setPricingNonce] = useState(0);
   const [isCarouselPlaying, setIsCarouselPlaying] = useState(false);
+  // Audio Tools tetap ter-mount (hanya disembunyikan) setelah pernah dibuka, supaya berkas yang
+  // diunggah dan hasil prosesnya tidak hilang saat pengguna pindah seksi (mis. ke Harga & Lisensi).
+  const [toolsMounted, setToolsMounted] = useState(activeSection === 'tools');
+  useEffect(() => {
+    if (activeSection === 'tools') setToolsMounted(true);
+  }, [activeSection]);
 
   const catalog: AudioTrackItem[] = tracks;
   const activeTrack = catalog.find((t) => String(t.id) === String(activeTrackId)) || catalog[0];
@@ -336,12 +342,13 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
         </section>
       )}
 
-      {activeSection === 'tools' && (
-        <section className="space-y-6 animate-in fade-in duration-200">
+      {(toolsMounted || activeSection === 'tools') && (
+        <section className={`space-y-6 animate-in fade-in duration-200 ${activeSection === 'tools' ? '' : 'hidden'}`}>
           <AudioToolsSuite
             entitlements={entitlements}
             onUnlockEditor={handleUnlockAudioTools}
             onSuccessToast={onSuccessToast}
+            isActive={activeSection === 'tools'}
           />
         </section>
       )}

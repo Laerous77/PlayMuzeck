@@ -1504,7 +1504,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                   >
                     {fmt}
                     <div className="text-[9px] font-normal opacity-80 mt-0.5">
-                      {fmt === 'WAV' ? '24-bit PCM' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? '24-bit Lossless' : 'AAC/Opus'}
+                      {fmt === 'WAV' ? 'PCM 24-bit' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? 'FLAC 24-bit' : 'AAC/Opus'}
                     </div>
                   </button>
                 ))}
@@ -1518,6 +1518,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
               </div>
               <p>✓ Seluruh EQ & efek DSP Master maupun per-stem otomatis terbawa.</p>
               <p>✓ Mode <strong>Single-pass</strong> aktif (audio diekspor 1 putaran penuh tanpa pengulangan loop).</p>
+              <p>ⓘ 24-bit dan 320 kbps adalah format berkas keluaran. Kualitas akhir mengikuti berkas stem sumber; bila sumbernya MP3, WAV/FLAC tidak menambah detail. M4A bergantung dukungan browser.</p>
             </div>
 
             {isRendering && (

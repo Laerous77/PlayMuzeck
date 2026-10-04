@@ -548,10 +548,13 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                           >
                             <span>Master .{fmt}</span>
                             <span className="text-[10px] opacity-70">
-                              {fmt === 'WAV' ? '24-bit PCM' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? '24-bit Lossless' : 'AAC/Opus'}
+                              {fmt === 'WAV' ? 'PCM 24-bit' : fmt === 'MP3' ? '320 kbps' : fmt === 'FLAC' ? 'FLAC 24-bit' : 'AAC/Opus'}
                             </span>
                           </button>
                         ))}
+                        <p className="text-[10px] text-gray-400 px-2.5 pt-1.5 pb-1 leading-snug border-t border-white/10 mt-1">
+                          24-bit dan 320 kbps adalah format berkas keluaran. Kualitas akhir mengikuti berkas master sumber; bila sumbernya MP3, WAV/FLAC tidak menambah detail. M4A bergantung dukungan browser.
+                        </p>
                       </div>
                     )}
                   </div>

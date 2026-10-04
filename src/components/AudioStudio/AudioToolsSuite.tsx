@@ -55,6 +55,8 @@ interface AudioToolsSuiteProps {
   onSuccessToast: (msg: string) => void;
   /** Harga Audio Tools Suite (Rp), diambil dari sumber harga yang sama dengan keranjang. */
   toolsPrice?: number;
+  /** false saat seksi Audio Tools disembunyikan (tetap ter-mount agar berkas & hasil proses tidak hilang). */
+  isActive?: boolean;
 }
 
 type ToolType =
@@ -376,6 +378,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   onUnlockEditor,
   onSuccessToast,
   toolsPrice = 20000,
+  isActive = true,
 }) => {
   // Kepemilikan Audio Tools Suite (langsung, atau lewat salah satu track)
   const isToolsOwned = useMemo(() => {
@@ -558,6 +561,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   useEffect(() => {
     stopPlayback();
   }, [activeAudioSrc, selectedTool, keepTempoOnPitch, stopPlayback]);
+
+  // Seksi disembunyikan (pengguna pindah ke Harga dsb.): hentikan suara, tetapi simpan state.
+  useEffect(() => {
+    if (!isActive) stopPlayback();
+  }, [isActive, stopPlayback]);
 
   // Rate & preservesPitch (load() mereset playbackRate, jadi disetel ulang tiap src berubah)
   const desiredRate =
@@ -1207,7 +1215,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">Audio Processing Tools Suite</h3>
             </div>
             <p className="text-xs text-gray-300">
-              9 utilitas studio untuk pemotongan, manipulasi pitch, mastering gain, serta reduksi noise dan isolasi vokal.
+              9 utilitas studio untuk pemotongan, pengaturan volume, nada, dan tempo, konversi format, kompresi, serta reduksi noise dan isolasi vokal.
             </p>
           </div>
 
@@ -1528,25 +1536,42 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
             {/* 4. TEMPO / SPEED */}
             {selectedTool === 'tempo' && (
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between">
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <label className="text-gray-300 font-bold block">Kecepatan Putar Dinamis (Nada Terkunci Normal):</label>
-                  <span className="text-sm font-mono font-bold text-accent">{dynamicTempoSpeed.toFixed(2)}x</span>
+                  <div className="flex items-center gap-2">
+                    {Math.abs(dynamicTempoSpeed - 1) > 0.0001 && (
+                      <button
+                        type="button"
+                        onClick={() => setDynamicTempoSpeed(1)}
+                        className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                      >
+                        Reset
+                      </button>
+                    )}
+                    <DecimalField value={dynamicTempoSpeed} min={0.5} max={2} unit="x" onCommit={setDynamicTempoSpeed} />
+                  </div>
                 </div>
                 <input
                   type="range"
                   min="0.5"
-                  max="2.0"
-                  step="0.05"
+                  max="2"
+                  step="0.01"
                   value={dynamicTempoSpeed}
-                  onChange={(e) => setDynamicTempoSpeed(Number(e.target.value))}
+                  onChange={(e) => setDynamicTempoSpeed(round2(Number(e.target.value)))}
                   className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                 />
+                <p className="text-[11px] text-gray-500">
+                  Geser slider atau ketik langsung, desimal didukung (mis. 1.25x). Rentang 0.5x sampai 2x.
+                </p>
                 {decodedBuffer && (
                   <p className="text-[11px] text-gray-400">
-                    Durasi hasil: {(decodedBuffer.duration / dynamicTempoSpeed).toFixed(1)}s (asli {decodedBuffer.duration.toFixed(1)}s)
+                    Durasi hasil: {(decodedBuffer.duration / dynamicTempoSpeed).toFixed(2)}s (asli {decodedBuffer.duration.toFixed(2)}s)
                   </p>
                 )}
+                <p className="text-[11px] text-gray-400">
+                  Preview memakai time-stretch bawaan browser; hasil unduhan memakai pemrosesan WSOLA, sehingga karakter suaranya bisa sedikit berbeda.
+                </p>
               </div>
             )}
 

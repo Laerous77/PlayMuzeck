@@ -266,7 +266,7 @@ export function generateStandaloneQuizHtml(
               <span class="home-card-badge">4 Mode Bermain</span>
             </div>
             <div class="home-card-title">1. Mainkan Kuis</div>
-            <p class="home-card-desc">4 Mode: Langsung Main (Solo &amp; Bot AI), Pass &amp; Play bergiliran, Host / Kuis Master, dan Multiplayer Online.</p>
+            <p class="home-card-desc">4 Mode: Langsung Main (Solo &amp; Lawan Bot), Pass &amp; Play bergiliran, Host / Kuis Master, dan Multiplayer Online.</p>
           </div>
           <div class="home-card-footer">
             <span>Pilih Mode Permainan</span>
@@ -364,7 +364,7 @@ export function generateStandaloneQuizHtml(
           <span style="font-size: 12px; font-weight: bold; color: var(--muted); display: block; margin-bottom: 10px;">Lawan Bermain:</span>
           <div style="display:flex; gap:10px; margin-bottom: 14px; flex-wrap: wrap;">
             <button id="solo-mode-normal" class="btn-outline active" style="flex:1;" onclick="setVsBot(false)">🙂 Main Sendiri</button>
-            <button id="solo-mode-bot" class="btn-outline" style="flex:1;" onclick="setVsBot(true)">🤖 Lawan Bot AI</button>
+            <button id="solo-mode-bot" class="btn-outline" style="flex:1;" onclick="setVsBot(true)">🤖 Lawan Bot</button>
           </div>
           <div id="bot-difficulty-row" style="display:none; margin-bottom: 14px;">
             <span style="font-size: 11px; font-weight: bold; color: var(--muted); display:block; margin-bottom: 6px;">Tingkat Kepintaran Bot:</span>
@@ -826,7 +826,7 @@ export function generateStandaloneQuizHtml(
       { id: 'frame-musik', name: 'Resonansi Maestro Melodi', icon: '🎼', badge: 'Tema Musik', unlocked: USER_PURCHASED_THEMES.includes('musik'), desc: 'Terbuka setelah membeli kuis Musik.' },
       { id: 'frame-matematika', name: 'Fraktal Geometri Kosmis', icon: '📐', badge: 'Tema Matematika', unlocked: USER_PURCHASED_THEMES.includes('matematika'), desc: 'Terbuka setelah membeli kuis Matematika.' },
       { id: 'frame-seni', name: 'Kanvas Avant-Garde', icon: '🎨', badge: 'Tema Seni', unlocked: USER_PURCHASED_THEMES.includes('seni'), desc: 'Terbuka setelah membeli kuis Seni.' },
-      { id: 'frame-teknologi', name: 'Matriks Sibernetik AI', icon: '💻', badge: 'Tema Teknologi', unlocked: USER_PURCHASED_THEMES.includes('teknologi'), desc: 'Terbuka setelah membeli kuis Teknologi.' },
+      { id: 'frame-teknologi', name: 'Matriks Sibernetik', icon: '💻', badge: 'Tema Teknologi', unlocked: USER_PURCHASED_THEMES.includes('teknologi'), desc: 'Terbuka setelah membeli kuis Teknologi.' },
       { id: 'frame-psikologi', name: 'Sinapsis Kognisi Jiwa', icon: '🧠', badge: 'Tema Psikologi', unlocked: USER_PURCHASED_THEMES.includes('psikologi'), desc: 'Terbuka setelah membeli kuis Psikologi.' },
       { id: 'frame-bahasa', name: 'Aksara Poliglot Dunia', icon: '🗣️', badge: 'Tema Bahasa', unlocked: USER_PURCHASED_THEMES.includes('bahasa'), desc: 'Terbuka setelah membeli kuis Bahasa.' },
       { id: 'frame-sosial', name: 'Episentrum Sosiokultural', icon: '👥', badge: 'Tema Sosial', unlocked: USER_PURCHASED_THEMES.includes('sosial'), desc: 'Terbuka setelah membeli kuis Sosial.' },
