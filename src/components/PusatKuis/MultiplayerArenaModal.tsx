@@ -975,7 +975,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="w-full max-w-3xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh] relative"
+        className="w-full max-w-3xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92dvh] relative"
       >
         {/* Overlay reaction emoji melayang */}
         <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">

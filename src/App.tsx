@@ -47,7 +47,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-black text-white p-6 flex flex-col items-center justify-center text-center">
+        <div className="min-h-dvh bg-black text-white p-4 sm:p-6 flex flex-col items-center justify-center text-center">
           <div className="max-w-xl w-full bg-red-950/40 border border-red-500/30 rounded-3xl p-6 sm:p-8 space-y-4 shadow-2xl">
             <AlertTriangle className="w-12 h-12 text-red-400 mx-auto" />
             <h2 className="text-xl font-black text-white">Terjadi Kendala Komponen Klien</h2>
@@ -57,7 +57,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
             <div className="bg-black/80 p-3.5 rounded-xl border border-white/10 text-left overflow-auto max-h-48 text-xs font-mono text-red-300">
               {this.state.error?.message || 'Unknown render error'}
             </div>
-            <div className="flex gap-2 justify-center pt-2">
+            <div className="flex flex-col min-[400px]:flex-row gap-2 justify-center pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -937,7 +937,7 @@ function MainApp() {
   return (
     <ThemeProvider isLoggedIn={Boolean(userSession?.isLoggedIn)} userKey={userSession?.email || ''}>
     {/* Notifikasi dari admin (tema, hapus akun, dst.) sekarang tampil di lonceng Header (NotificationBell), bukan popup. */}
-    <div className="min-h-screen bg-page text-fg flex flex-col selection:bg-accent selection:text-on-accent">
+    <div className="min-h-dvh w-full overflow-x-clip bg-page text-fg flex flex-col selection:bg-accent selection:text-on-accent">
       <Header
         currentMode={currentMode}
         onModeChange={(mode) => {
@@ -972,7 +972,7 @@ function MainApp() {
         accentQuiz={siteSettings.accentQuiz}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-5 sm:pt-6">
+      <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-3 min-[400px]:px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6">
         <AnimatePresence mode="wait">
           {currentMode === 'index' ? (
             <motion.div
@@ -1057,12 +1057,12 @@ function MainApp() {
       </main>
 
       <footer className="w-full border-t border-white/[0.08] bg-black/30 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-xs text-gray-400 text-center">
           <span className="font-extrabold text-white text-sm tracking-tight">
             {siteSettings.siteName}<span className="text-accent">.</span>
           </span>
 
-          <nav aria-label="Navigasi footer" className="flex items-center gap-5">
+          <nav aria-label="Navigasi footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             {([
               { label: 'Beranda', mode: 'index' as const },
               { label: 'Audio Studio', mode: 'audio' as const },

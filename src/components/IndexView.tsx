@@ -120,13 +120,13 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
   };
 
   return (
-    <div className="w-full space-y-12 pb-16">
+    <div className="w-full min-w-0 space-y-10 sm:space-y-12 pb-16 break-words">
       {/* 1. HERO: mengajak & menawarkan solusi */}
       <section
         id="index-hero-section"
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-surface/40 to-black border border-white/[0.1] p-6 sm:p-12 text-center shadow-2xl scroll-mt-20"
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-surface/40 to-black border border-white/[0.1] px-4 py-8 sm:p-12 text-center shadow-2xl scroll-mt-20"
       >
-        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-accent/15 blur-3xl rounded-full pointer-events-none" />
+        <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 sm:w-96 sm:h-96 bg-accent/15 blur-3xl rounded-full pointer-events-none" />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -138,7 +138,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
             <span>Studio audio & arena kuis, langsung di browser</span>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight">
+          <h1 className="text-[1.75rem] min-[400px]:text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight leading-tight text-balance">
             Punya ide musik atau butuh tantangan baru? <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent to-accent2">Mulai dari sini.</span>
           </h1>
@@ -151,7 +151,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1">
             <button
               onClick={goAudio}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/20 active:scale-95 transition-all"
+              className="pm-shine w-full sm:w-auto px-6 py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/20 active:scale-95 transition-all"
             >
               <Headphones className="w-4 h-4" />
               <span>Coba Audio Studio</span>
@@ -159,7 +159,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
             </button>
             <button
               onClick={goQuiz}
-              className="w-full sm:w-auto px-6 py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent2/20 active:scale-95 transition-all"
+              className="pm-shine w-full sm:w-auto px-6 py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-sm flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent2/20 active:scale-95 transition-all"
             >
               <Brain className="w-4 h-4" />
               <span>Main Pusat Kuis</span>
@@ -197,7 +197,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
       </section>
 
       {/* 1c. CARA MULAI */}
-      <section id="index-steps-section" className="rounded-3xl bg-black/50 border border-white/[0.08] p-6 sm:p-8 space-y-5 scroll-mt-20">
+      <section id="index-steps-section" className="rounded-3xl bg-black/50 border border-white/[0.08] p-4 sm:p-8 space-y-5 scroll-mt-20 transition-colors">
         <h2 className="text-xl sm:text-2xl font-black text-white text-center">Mulai dalam 3 langkah</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {STEPS.map((s, i) => (
@@ -251,8 +251,9 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
                 key={c.id}
                 id={c.id}
                 {...fadeUp}
-                className={`rounded-3xl bg-gradient-to-b from-surface/60 to-black/80 border border-white/[0.1] p-6 sm:p-8 flex flex-col justify-between transition-all shadow-xl group scroll-mt-20 ${
-                  a ? 'hover:border-accent/50' : 'hover:border-accent2/50'
+                style={{ '--pm-spot': a ? 'var(--t-accent)' : 'var(--t-accent2)' } as React.CSSProperties}
+                className={`rounded-3xl bg-gradient-to-b from-surface/60 to-black/80 border border-white/[0.1] p-5 sm:p-8 flex flex-col justify-between transition-all duration-300 shadow-xl group scroll-mt-20 min-w-0 ${
+                  a ? 'hover:border-accent/50 hover:shadow-accent/20' : 'hover:border-accent2/50 hover:shadow-accent2/20'
                 }`}
               >
                 <div className="space-y-4">
@@ -265,7 +266,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
                   </div>
                   <div className="space-y-1">
                     <span className={`text-[11px] font-bold uppercase tracking-wider font-mono ${a ? 'text-accent' : 'text-accent2'}`}>{c.label}</span>
-                    <h3 className="text-2xl font-black text-white">{c.title}</h3>
+                    <h3 className="text-xl sm:text-2xl font-black text-white">{c.title}</h3>
                   </div>
                   <ul className="space-y-3 text-xs text-gray-300">
                     {c.points.map((pt) => (
@@ -280,7 +281,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
                 </div>
                 <button
                   onClick={c.onClick}
-                  className={`mt-6 w-full py-3 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 ${
+                  className={`pm-shine mt-6 w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 ${
                     a
                       ? 'bg-accent hover:bg-accent/80 text-on-accent shadow-accent/20'
                       : 'bg-accent2 hover:bg-accent2/80 text-on-accent2 shadow-accent2/20'
@@ -309,7 +310,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
       {/* 3. TENTANG KAMI */}
       <section
         id="index-about-section"
-        className="rounded-3xl bg-gradient-to-b from-surface/50 to-black/70 border border-white/[0.1] p-6 sm:p-10 space-y-6 scroll-mt-20"
+        className="rounded-3xl bg-gradient-to-b from-surface/50 to-black/70 border border-white/[0.1] p-4 sm:p-10 space-y-6 scroll-mt-20"
       >
         <div className="max-w-2xl mx-auto text-center space-y-3">
           <span className="text-[11px] font-bold text-accent uppercase tracking-wider font-mono">Tentang Kami</span>
@@ -344,12 +345,12 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
       </section>
 
       {/* 4. FAQ */}
-      <section id="index-faq-section" className="max-w-3xl mx-auto w-full space-y-4 scroll-mt-20">
+      <section id="index-faq-section" className="max-w-3xl mx-auto w-full space-y-4 scroll-mt-20 rounded-3xl p-3 sm:p-4 border border-transparent transition-colors">
         <h2 className="text-xl sm:text-2xl font-black text-white text-center">Pertanyaan yang sering muncul</h2>
         <div className="space-y-2.5">
           {FAQ.map((f) => (
             <details key={f.q} className="group rounded-2xl bg-surface/30 border border-white/[0.08] open:border-accent/40 transition-colors">
-              <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer list-none text-sm font-bold text-white">
+              <summary className="flex items-center justify-between gap-3 p-4 cursor-pointer list-none text-sm font-bold text-white [&::-webkit-details-marker]:hidden">
                 <span>{f.q}</span>
                 <ChevronDown className="w-4 h-4 text-accent shrink-0 transition-transform group-open:rotate-180" />
               </summary>
@@ -365,14 +366,14 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <button
             onClick={goAudio}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-sm inline-flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+            className="pm-shine w-full sm:w-auto px-6 py-3 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-sm inline-flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
           >
             <Headphones className="w-4 h-4" />
             <span>Buka Audio Studio</span>
           </button>
           <button
             onClick={goQuiz}
-            className="w-full sm:w-auto px-6 py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-sm inline-flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
+            className="pm-shine w-full sm:w-auto px-6 py-3 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-sm inline-flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all"
           >
             <Brain className="w-4 h-4" />
             <span>Buka Pusat Kuis</span>

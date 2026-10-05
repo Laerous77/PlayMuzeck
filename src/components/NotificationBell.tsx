@@ -226,7 +226,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
         onClick={toggle}
         aria-label="Notifikasi"
         title="Notifikasi"
-        className="p-2 rounded-xl bg-black/50 hover:bg-black/80 border border-white/[0.08] text-gray-300 hover:text-white relative transition-colors cursor-pointer"
+        className="h-9 w-9 flex items-center justify-center rounded-xl bg-black/50 hover:bg-black/80 border border-white/[0.08] text-gray-300 hover:text-white relative transition-colors cursor-pointer"
       >
         <Bell className="w-4 h-4" />
         {badge > 0 && (
@@ -237,7 +237,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
       </button>
 
       {open && (
-        <div className="fixed left-3 right-3 top-16 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 z-[60] rounded-2xl bg-surface border border-white/[0.12] shadow-2xl overflow-hidden">
+        <div className="fixed left-3 right-3 top-[calc(env(safe-area-inset-top,0px)+4rem)] max-h-[calc(100dvh-5.5rem)] overflow-y-auto sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 z-[60] rounded-2xl bg-surface border border-white/[0.12] shadow-2xl overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.08] bg-black/40">
             <h4 className="text-sm font-black text-white">Notifikasi</h4>
             {items.length > 0 && (

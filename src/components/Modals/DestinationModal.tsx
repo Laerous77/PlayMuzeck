@@ -21,7 +21,7 @@ export const DestinationModal: React.FC<DestinationModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl bg-surface border border-white/20 p-6 sm:p-8 shadow-2xl relative space-y-6 my-auto">
+      <div className="w-full max-w-xl max-h-[92dvh] overflow-y-auto rounded-3xl bg-surface border border-white/20 p-6 sm:p-8 shadow-2xl relative space-y-6 my-auto">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 rounded-xl bg-black/40 text-gray-400 hover:text-white hover:bg-black/70 transition-colors cursor-pointer"

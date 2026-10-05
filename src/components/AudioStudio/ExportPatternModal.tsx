@@ -343,7 +343,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl bg-[#14213D] border border-white/[0.12] p-6 shadow-2xl relative">
+      <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-2xl bg-[#14213D] border border-white/[0.12] p-6 shadow-2xl relative">
         <button
           onClick={onClose}
           disabled={isExporting}

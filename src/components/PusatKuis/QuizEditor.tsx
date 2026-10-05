@@ -563,7 +563,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.96 }}
-        className="w-full max-w-4xl rounded-3xl bg-surface border border-white/[0.12] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94vh]"
+        className="w-full max-w-4xl rounded-3xl bg-surface border border-white/[0.12] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94dvh]"
       >
         <input
           ref={fileInputRef}

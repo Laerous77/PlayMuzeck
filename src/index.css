@@ -126,7 +126,71 @@ html[data-mode="light"] {
     padding: 0;
     overflow-x: hidden;
     min-height: 100vh;
+    min-height: 100dvh;
+    -webkit-font-smoothing: antialiased;
   }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Hindari jeda ketuk-dua-kali di layar sentuh */
+  button, a, summary, [role="button"], label { touch-action: manipulation; }
+
+  /* iOS Safari memperbesar halaman otomatis saat fokus ke input berfont < 16px */
+  @media (max-width: 640px) {
+    input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+}
+
+/* ── Utilitas yang dipakai di banyak komponen tetapi sebelumnya belum didefinisikan ── */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+@keyframes pmEnter {
+  from { opacity: 0; transform: scale(0.97) translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.animate-in { animation: pmEnter 0.2s ease-out both; }
+
+/* ── Efek spotlight: kartu/bagian yang dituju dari menu navigasi menyala sebentar ── */
+@keyframes pmSpotRing {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pm-spot, var(--t-accent)) 70%, transparent), 0 0 0 0 color-mix(in srgb, var(--pm-spot, var(--t-accent)) 40%, transparent); }
+  40%  { box-shadow: 0 0 0 5px color-mix(in srgb, var(--pm-spot, var(--t-accent)) 45%, transparent), 0 0 44px 8px color-mix(in srgb, var(--pm-spot, var(--t-accent)) 40%, transparent); }
+  100% { box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; }
+}
+.pm-spotlight {
+  animation: pmSpotRing 1.3s ease-out 2;
+  border-color: var(--pm-spot, var(--t-accent)) !important;
+}
+
+/* Kilau yang menyapu tombol (saat hover/sentuh, dan saat kartunya sedang di-spotlight) */
+.pm-shine { position: relative; overflow: hidden; isolation: isolate; }
+.pm-shine::before {
+  content: "";
+  position: absolute;
+  top: 0; bottom: 0; left: -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.38), transparent);
+  transform: skewX(-18deg);
+  z-index: -1;
+  opacity: 0;
+  pointer-events: none;
+}
+@keyframes pmShine { from { left: -60%; } to { left: 140%; } }
+.pm-shine:hover::before,
+.pm-shine:active::before { opacity: 1; animation: pmShine 0.9s ease-in-out; }
+.pm-spotlight .pm-shine::before { opacity: 1; animation: pmShine 1.1s ease-in-out 2; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-spotlight { animation: none; }
+  .pm-shine::before, .animate-in { animation: none !important; }
 }
 
 /* Custom scrollbar */

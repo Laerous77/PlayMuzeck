@@ -187,9 +187,9 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
         </div>
 
         {/* Sisi Kanan: Status Widget Sesuai Segmen Aktif */}
-        <div className="z-10 self-start md:self-auto">
+        <div className="z-10 self-stretch sm:self-start md:self-auto min-w-0">
           {activeSection === 'assets' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-accent/25 shadow-inner">
+            <div className="flex items-center gap-3.5 bg-black/55 px-3 sm:px-4 py-2.5 w-full sm:w-auto rounded-2xl border border-accent/25 shadow-inner">
               <div className="flex items-end gap-1 h-6">
                 <span className="w-1 bg-accent rounded-full animate-pulse h-5" style={{ animationDuration: '0.6s' }} />
                 <span className="w-1 bg-accent rounded-full animate-pulse h-3" style={{ animationDuration: '0.4s' }} />
@@ -208,7 +208,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
           )}
 
           {activeSection === 'pad' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-accent/25 shadow-inner">
+            <div className="flex items-center gap-3.5 bg-black/55 px-3 sm:px-4 py-2.5 w-full sm:w-auto rounded-2xl border border-accent/25 shadow-inner">
               <div className="flex items-center gap-1.5">
                 <span className="w-2.5 h-2.5 rounded-full bg-accent animate-ping" style={{ animationDuration: '0.8s' }} />
                 <span className="w-2 h-2 rounded-full bg-accent opacity-70" />
@@ -226,7 +226,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
           )}
 
           {activeSection === 'tools' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-accent/30 shadow-inner">
+            <div className="flex items-center gap-3.5 bg-black/55 px-3 sm:px-4 py-2.5 w-full sm:w-auto rounded-2xl border border-accent/30 shadow-inner">
               <div className="w-7 h-7 rounded-xl bg-accent/20 border border-accent/40 flex items-center justify-center text-accent">
                 <Cpu className="w-4 h-4 animate-spin" style={{ animationDuration: '8s' }} />
               </div>
@@ -241,7 +241,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
           )}
 
           {activeSection === 'pricing' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2.5 rounded-2xl border border-emerald-500/30 shadow-inner">
+            <div className="flex items-center gap-3.5 bg-black/55 px-3 sm:px-4 py-2.5 w-full sm:w-auto rounded-2xl border border-emerald-500/30 shadow-inner">
               <div className="w-7 h-7 rounded-xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-emerald-400">
                 <ShieldCheck className="w-4 h-4" />
               </div>

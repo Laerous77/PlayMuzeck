@@ -478,7 +478,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
             onClick={() => setDetailModalTrack(null)}
           >
             <div
-              className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl bg-surface border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl"
+              className="relative w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface border border-white/15 p-6 sm:p-8 space-y-6 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <button

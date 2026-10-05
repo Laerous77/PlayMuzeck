@@ -1451,7 +1451,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
       {isExportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 overflow-y-auto animate-in fade-in duration-200">
-          <div className="w-full max-w-md max-h-[92vh] overflow-y-auto my-auto rounded-2xl bg-surface border border-white/[0.12] p-6 shadow-2xl relative space-y-4">
+          <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto my-auto rounded-2xl bg-surface border border-white/[0.12] p-6 shadow-2xl relative space-y-4">
             <button
               onClick={() => !isRendering && setIsExportModalOpen(false)}
               disabled={isRendering}

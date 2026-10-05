@@ -1339,7 +1339,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
       {editingPadIndex !== null && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto my-auto shadow-2xl p-6 space-y-5">
+          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto my-auto shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-accent" />

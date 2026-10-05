@@ -168,7 +168,7 @@ export const AnswerReviewModal: React.FC<{ title: string; answers: AnswerLogEntr
   onClose,
 }) => (
   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-    <div className="w-full max-w-lg max-h-[85vh] bg-surface border border-white/15 rounded-3xl p-5 shadow-2xl flex flex-col space-y-3">
+    <div className="w-full max-w-lg max-h-[85dvh] bg-surface border border-white/15 rounded-3xl p-5 shadow-2xl flex flex-col space-y-3">
       <div className="flex items-center justify-between border-b border-white/10 pb-3">
         <div className="flex items-center gap-2 min-w-0">
           <ListChecks className="w-5 h-5 text-accent2 shrink-0" />
@@ -209,7 +209,7 @@ export const QuizResultHistory: React.FC<{ onClose: () => void }> = ({ onClose }
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className="w-full max-w-lg max-h-[85vh] bg-surface border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col space-y-4">
+      <div className="w-full max-w-lg max-h-[85dvh] bg-surface border border-white/15 rounded-3xl p-5 sm:p-6 shadow-2xl flex flex-col space-y-4">
         <div className="flex items-center justify-between border-b border-white/10 pb-3 gap-2">
           <div className="flex items-center gap-2 min-w-0">
             {selected ? (
