@@ -15,6 +15,7 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
 import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
+import { createSoundFxRouter, ensureSoundFxSchema } from './soundFxRoutes';
 import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
@@ -111,6 +112,8 @@ Promise.resolve(initDatabase())
   .catch((err) => console.error('[DB] ensurePaymentTables gagal:', err))
   .then(() => ensureThemeSchema(pool))
   .catch((err) => console.error('[DB] ensureThemeSchema gagal:', err))
+  .then(() => ensureSoundFxSchema(pool))
+  .catch((err) => console.error('[DB] ensureSoundFxSchema gagal:', err))
   .then(() => ensureNotificationSchema(pool))
   .catch((err) => console.error('[DB] ensureNotificationSchema gagal:', err));
 
@@ -162,6 +165,7 @@ const requireSuperAdmin = (req: express.Request, res: express.Response, next: ex
 };
 
 app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
+app.use(createSoundFxRouter({ db: pool, requireUser }));
 app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));
 app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
 startDeletionSweeper(pool);

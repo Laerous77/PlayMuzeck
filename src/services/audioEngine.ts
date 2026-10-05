@@ -1,5 +1,7 @@
 // src/services/audioEngine.ts
 import { SoundFont2, GeneratorType, Generator } from 'soundfont2';
+import { getActiveClickEffect, ClickEffect } from './sfxSettings';
+import { playBuiltinClick, playGmClick } from './clickSfx';
 
 export interface InstrumentMeta {
   id: number;
@@ -438,24 +440,32 @@ class AudioEngine {
   // menambahkan bundle ke keranjang" (handleAddToCart di App.tsx juga
   // manggil playClickSound() di baris pertama, sebelum setCartItems).
   // -------------------------------------------------------------------
+  // Efek klik mengikuti pengaturan pengguna (src/services/sfxSettings.ts, disimpan
+  // di database). DEFAULT = HENING. Semua pemanggil lama tidak perlu diubah.
   public playClickSound(volume: number = 0.3) {
     try {
-      const ctx = this.getAudioContext();
-      const now = ctx.currentTime;
-      const osc = ctx.createOscillator();
-      osc.type = 'square';
-      osc.frequency.setValueAtTime(1100, now);
-
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.5 * volume, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
-
-      osc.connect(gain);
-      gain.connect(this.compressor || ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.05);
+      const effect = getActiveClickEffect();
+      if (!effect) return;
+      this.playClickEffect(effect, volume);
     } catch {
       // Suara UI tidak boleh pernah menjatuhkan alur logic pemanggilnya.
+    }
+  }
+
+  // Bunyikan satu efek tertentu (juga dipakai tombol "Coba" di tab Efek Suara).
+  public playClickEffect(effect: ClickEffect, volume: number = 0.3) {
+    try {
+      const ctx = this.getAudioContext();
+      const out: AudioNode = this.compressor || ctx.destination;
+      if (effect.kind === 'builtin') {
+        playBuiltinClick(ctx, out, effect.id, volume);
+      } else {
+        // Sampel diambil dari bank SF2 yang sama dengan Full 16-Bar Editor.
+        const meta = this.soundfontInstance ? this.getSampleMetadata(effect.note, effect.program) : null;
+        playGmClick(ctx, out, meta, effect.note, volume);
+      }
+    } catch {
+      // no-op
     }
   }
 

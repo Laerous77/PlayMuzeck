@@ -16,6 +16,7 @@ import { ThemeProvider } from './theme/ThemeContext';
 import { AppMode, CartItem, AudioEntitlements, UserSession, Deck, Topic, AudioTrackItem } from './types';
 import { storage } from './services/storage';
 import { audioEngine } from './services/audioEngine';
+import { setSfxSection, loadSfxForUser, needsSoundBank, subscribeSfx } from './services/sfxSettings';
 import { loadCmsContent, mergeWithLocalCustom, SiteSettings } from './services/cms';
 import { submitUser } from './services/analytics';
 import { isUserAdmin } from './services/adminConfig';
@@ -143,6 +144,24 @@ function MainApp() {
       );
     } catch {}
   }, [currentMode, activeAudioSection, activeQuizSection]);
+
+  // Efek suara klik: (1) bagian yang sedang aktif, (2) muat pengaturan akun dari
+  // database saat login / ganti akun / logout, (3) preload bank SF2 kalau mode Nada GM.
+  useEffect(() => {
+    setSfxSection(currentMode === 'audio' ? 'audio' : currentMode === 'quiz' ? 'quiz' : 'other');
+  }, [currentMode]);
+
+  useEffect(() => {
+    void loadSfxForUser(userSession.isLoggedIn ? userSession.email : null);
+  }, [userSession.isLoggedIn, userSession.email]);
+
+  useEffect(() => {
+    const preload = () => {
+      if (needsSoundBank()) void audioEngine.initBank();
+    };
+    preload();
+    return subscribeSfx(preload);
+  }, []);
   const [cartItems, setCartItems] = useState<CartItem[]>(() => {
     try {
       return storage.getCart() || [];
