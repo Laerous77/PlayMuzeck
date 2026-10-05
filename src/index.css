@@ -205,3 +205,17 @@ html[data-mode="light"] {
 }
 
 .glow-amber { animation: pulseGlow 2.5s infinite ease-in-out; }
+
+/* ── Playhead step sequencer (Pad Studio) ──
+   Penanda ketukan yang sedang berbunyi dipasang lewat atribut DOM (bukan state React),
+   supaya grid 600+ sel tidak dirender ulang di setiap ketukan. */
+[data-step][data-playing="1"] {
+  box-shadow: inset 0 0 0 2px #ffffff;
+  position: relative;
+  z-index: 10;
+}
+button[data-seek][data-playing="1"] {
+  background-color: var(--t-accent);
+  color: var(--t-on-accent);
+  font-weight: 900;
+}

@@ -1,5 +1,5 @@
 // src/components/AudioStudio/PadStudio.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import {
   Play,
   Lock,
@@ -77,6 +77,181 @@ export const TOTAL_BARS = 16;
 export const TOTAL_STEPS = STEPS_PER_BAR * TOTAL_BARS;
 
 const INSTRUMENT_CATEGORIES = Array.from(new Set(INSTRUMENTS_128.map((inst) => inst.category)));
+
+// ---------------------------------------------------------------------------
+// OPTIMASI PERFORMA SEQUENCER
+// - Sel grid dibuat komponen ter-memo: mengubah satu sel hanya me-render ulang satu sel itu,
+//   dan ketukan berjalan TIDAK me-render ulang grid sama sekali (playhead digambar lewat atribut DOM).
+// - Suara dijadwalkan dengan jam AudioContext (lookahead), bukan setInterval per ketukan.
+// ---------------------------------------------------------------------------
+const STEP_INDEXES: number[] = Array.from({ length: TOTAL_STEPS }, (_, i) => i);
+const GRID_STYLE: React.CSSProperties = { gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` };
+const SCHEDULER_TICK_MS = 25; // seberapa sering scheduler memeriksa
+const LOOKAHEAD_SEC = 0.12; // seberapa jauh ke depan suara dijadwalkan
+
+interface PadInfo {
+  midiNotes: number[];
+  displayName: string;
+}
+
+interface LiveSeqState {
+  bpm: number;
+  isDrumLoopActive: boolean;
+  isChordLoopActive: boolean;
+  isSeqLooping: boolean;
+  isUnlocked8Bar: boolean;
+  drumGrid: { [key: string]: boolean[] };
+  chordTracks: ChordTrackState[];
+  padInfo: PadInfo[];
+  selectedDrumKit: string;
+  drumVolume: number;
+  chordMasterVolume: number;
+  loopStartBar: number;
+  loopStartBeat: number;
+  loopEndBar: number;
+  loopEndBeat: number;
+}
+
+const DrumCell = memo(function DrumCell({
+  drumId,
+  stepIdx,
+  active,
+  onToggle,
+}: {
+  drumId: string;
+  stepIdx: number;
+  active: boolean;
+  onToggle: (drumId: string, stepIdx: number) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-step={stepIdx}
+      onClick={() => onToggle(drumId, stepIdx)}
+      className={`h-7 rounded-xs transition-colors relative flex items-center justify-center cursor-pointer ${
+        active
+          ? 'bg-accent text-on-accent font-bold shadow-xs'
+          : 'bg-black/60 hover:bg-black/90 border border-white/[0.05]'
+      }`}
+    />
+  );
+});
+
+const DrumRow = memo(function DrumRow({
+  id,
+  label,
+  row,
+  onToggle,
+}: {
+  id: string;
+  label: string;
+  row: boolean[] | undefined;
+  onToggle: (drumId: string, stepIdx: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-36 text-xs font-semibold text-gray-300 truncate shrink-0 px-1">{label}</span>
+      <div className="grid grid-cols-64 gap-0.5 flex-1" style={GRID_STYLE}>
+        {STEP_INDEXES.map((stepIdx) => (
+          <DrumCell key={stepIdx} drumId={id} stepIdx={stepIdx} active={Boolean(row?.[stepIdx])} onToggle={onToggle} />
+        ))}
+      </div>
+    </div>
+  );
+});
+
+const ChordCell = memo(function ChordCell({
+  trackIdx,
+  stepIdx,
+  padIdx,
+  isAssigned,
+  fullName,
+  options,
+  onPick,
+}: {
+  trackIdx: number;
+  stepIdx: number;
+  padIdx: number;
+  isAssigned: boolean;
+  fullName: string;
+  options: React.ReactNode;
+  onPick: (trackIdx: number, stepIdx: number, padIdx: number) => void;
+}) {
+  const shortName = isAssigned ? fullName.replace(/\s+/g, '') : '-';
+  return (
+    <div
+      data-step={stepIdx}
+      className={`h-20 rounded-lg p-1 flex flex-col justify-between items-center transition-colors relative ${
+        isAssigned
+          ? 'bg-accent/20 border border-accent text-white shadow-xs'
+          : 'bg-black/60 border border-white/[0.05] hover:border-white/20'
+      }`}
+    >
+      <span className="text-[10px] text-gray-400 font-mono font-bold">#{stepIdx + 1}</span>
+      <div className="w-full flex-1 flex flex-col items-center justify-center relative">
+        <span
+          className={`text-[11px] font-black tracking-tight leading-none text-center px-0.5 w-full overflow-hidden ${
+            isAssigned ? 'text-accent' : 'text-gray-500'
+          }`}
+          title={isAssigned ? fullName : '-'}
+        >
+          {shortName}
+        </span>
+        <select
+          value={padIdx}
+          onChange={(e) => onPick(trackIdx, stepIdx, Number(e.target.value))}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        >
+          {options}
+        </select>
+      </div>
+      <div className={`w-1.5 h-1.5 rounded-full mb-0.5 ${isAssigned ? 'bg-accent' : 'bg-transparent'}`} />
+    </div>
+  );
+});
+
+const ChordRow = memo(function ChordRow({
+  tIdx,
+  track,
+  instName,
+  padInfo,
+  options,
+  onPick,
+}: {
+  tIdx: number;
+  track: ChordTrackState;
+  instName: string;
+  padInfo: PadInfo[];
+  options: React.ReactNode;
+  onPick: (trackIdx: number, stepIdx: number, padIdx: number) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-36 shrink-0 px-1 flex flex-col justify-center">
+        <span className="text-xs font-semibold text-gray-200 truncate">{track.label}</span>
+        <span className="text-[10px] text-accent truncate font-mono">{instName}</span>
+      </div>
+      <div className="grid grid-cols-64 gap-0.5 flex-1" style={GRID_STYLE}>
+        {STEP_INDEXES.map((stepIdx) => {
+          const assigned = track.steps[stepIdx];
+          const info = assigned >= 0 ? padInfo[assigned] : undefined;
+          return (
+            <ChordCell
+              key={stepIdx}
+              trackIdx={tIdx}
+              stepIdx={stepIdx}
+              padIdx={assigned}
+              isAssigned={Boolean(info)}
+              fullName={info?.displayName ?? '-'}
+              options={options}
+              onPick={onPick}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+});
 
 interface ChordTrackState {
   id: number;
@@ -174,7 +349,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     },
   ]);
 
-  const [currentStep, setCurrentStep] = useState<number>(0);
   const [activePadAnim, setActivePadAnim] = useState<string | null>(null);
 
   const [selectedDrumKit, setSelectedDrumKit] = useState('80s Kit');
@@ -185,7 +359,27 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [exportScope, setExportScope] = useState<'drum' | 'chord' | 'both'>('both');
 
   const sequencerScrollRef = useRef<HTMLDivElement | null>(null);
-  const stepRef = useRef(0);
+  const stepRef = useRef(0); // ketukan BERIKUTNYA yang akan dijadwalkan
+
+  // Ref untuk scheduler & playhead (tidak memicu render ulang)
+  const liveRef = useRef<LiveSeqState | null>(null);
+  const nextTimeRef = useRef(0);
+  const visualQueueRef = useRef<{ step: number; time: number }[]>([]);
+  const playheadStepRef = useRef(0); // ketukan yang sedang ditandai di layar
+  const paintedElsRef = useRef<HTMLElement[]>([]);
+  const gateRef = useRef({ isUnlocked8Bar: Boolean(isUnlocked8Bar), onUnlockEditor });
+  gateRef.current = { isUnlocked8Bar: Boolean(isUnlocked8Bar), onUnlockEditor };
+
+  // Tandai kolom ketukan yang sedang berbunyi langsung di DOM (tanpa render ulang React).
+  const paintPlayhead = (step: number) => {
+    playheadStepRef.current = step;
+    const root = sequencerScrollRef.current;
+    if (!root) return;
+    paintedElsRef.current.forEach((el) => el.removeAttribute('data-playing'));
+    const els = Array.from(root.querySelectorAll<HTMLElement>(`[data-step="${step}"]`));
+    els.forEach((el) => el.setAttribute('data-playing', '1'));
+    paintedElsRef.current = els;
+  };
 
   // Bus Gain khusus live playback 4 track akor
   const chordBusGainRef = useRef<GainNode | null>(null);
@@ -349,23 +543,23 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setTimeout(() => setActivePadAnim(null), 250);
   };
 
-  const toggleDrumStep = (drumId: string, stepIndex: number) => {
+  const toggleDrumStep = useCallback((drumId: string, stepIndex: number) => {
     const barIndex = Math.floor(stepIndex / STEPS_PER_BAR);
-    if (!isUnlocked8Bar && barIndex > 0) {
-      onUnlockEditor();
+    if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
+      gateRef.current.onUnlockEditor();
       return;
     }
     setDrumGrid((prev) => {
-      const row = [...prev[drumId]];
+      const row = [...(prev[drumId] || Array(TOTAL_STEPS).fill(false))];
       row[stepIndex] = !row[stepIndex];
       return { ...prev, [drumId]: row };
     });
-  };
+  }, []);
 
-  const setTrackChordStep = (trackIndex: number, stepIndex: number, padIdx: number) => {
+  const setTrackChordStep = useCallback((trackIndex: number, stepIndex: number, padIdx: number) => {
     const barIndex = Math.floor(stepIndex / STEPS_PER_BAR);
-    if (!isUnlocked8Bar && barIndex > 0) {
-      onUnlockEditor();
+    if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
+      gateRef.current.onUnlockEditor();
       return;
     }
     setChordTracks((prev) => {
@@ -375,7 +569,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       copy[trackIndex] = { ...copy[trackIndex], steps: stepsCopy };
       return copy;
     });
-  };
+  }, []);
 
   const handleSeekStep = (targetStep: number) => {
     const barIdx = Math.floor(targetStep / STEPS_PER_BAR);
@@ -385,13 +579,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }
     audioEngine.getAudioContext().resume();
     stepRef.current = targetStep;
-    setCurrentStep(targetStep);
+    visualQueueRef.current = [];
+    paintPlayhead(targetStep);
   };
 
   const resetToBeginning = () => {
     const startStep = Math.max(0, (loopStartBar - 1) * STEPS_PER_BAR + (loopStartBeat - 1));
     stepRef.current = startStep;
-    setCurrentStep(startStep);
+    visualQueueRef.current = [];
+    paintPlayhead(startStep);
   };
 
   const toggleDrumLoop = () => {
@@ -413,89 +609,42 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   const isAnySeqActive = isDrumLoopActive || isChordLoopActive;
 
-  // Live Sequencer: 4 Track Akor Berbunyi Serentak Tanpa Saling Mencekik
-  useEffect(() => {
-    let interval: number | null = null;
-    if (isAnySeqActive) {
-      const stepDurationMs = (60 / bpm / 2) * 1000;
-      interval = window.setInterval(() => {
-        const step = stepRef.current;
-        setCurrentStep(step);
+  // Data turunan akor dihitung SEKALI per perubahan pad (bukan tiap render / tiap ketukan).
+  const padInfo = useMemo<PadInfo[]>(
+    () =>
+      padChords.map((ch) => {
+        const { midiNotes, displayName } = buildHarmonicChord(ch);
+        return { midiNotes, displayName };
+      }),
+    [padChords]
+  );
 
-        if (isDrumLoopActive) {
-          DRUM_INSTRUMENTS.forEach((inst) => {
-            if (drumGrid[inst.id]?.[step]) {
-              audioEngine.playDrumSound(inst.id, selectedDrumKit, drumVolume / 100);
-            }
-          });
-        }
+  // Opsi <select> sel akor dibuat sekali dan dipakai bersama oleh semua sel.
+  const chordOptions = useMemo<React.ReactNode>(
+    () => [
+      <option key="empty" value={-1} className="bg-black text-gray-400">
+        - Kosongkan -
+      </option>,
+      ...padInfo.map((p, pIdx) => (
+        <option key={pIdx} value={pIdx} className="bg-surface text-white font-bold">
+          Pad #{pIdx + 1}: {p.displayName}
+        </option>
+      )),
+    ],
+    [padInfo]
+  );
 
-        if (isChordLoopActive) {
-          const ctx = audioEngine.getAudioContext();
-          const chordBus = getChordBusNode(ctx);
-          const stepDurationSec = (stepDurationMs / 1000) * 1.5;
-
-          chordTracks.forEach((track) => {
-            if (!isTrackAudible(track, chordTracks)) return;
-
-            const padIdx = track.steps[step];
-            if (padIdx >= 0 && padChords[padIdx]) {
-              const chordDef = padChords[padIdx];
-              const { midiNotes } = buildHarmonicChord(chordDef);
-              const effectiveVol = (track.volume / 100) * (chordMasterVolume / 100);
-
-              midiNotes.forEach((note) => {
-                audioEngine.renderChordNoteToDestination(
-                  ctx,
-                  chordBus,
-                  note,
-                  track.program,
-                  ctx.currentTime,
-                  stepDurationSec,
-                  effectiveVol,
-                  track.adsr
-                );
-              });
-            }
-          });
-        }
-
-        const maxSteps = isUnlocked8Bar ? TOTAL_STEPS : STEPS_PER_BAR;
-        const nextStep = step + 1;
-        const configuredStartStep = Math.max(0, (loopStartBar - 1) * STEPS_PER_BAR + (loopStartBeat - 1));
-        const configuredEndStep = Math.min(maxSteps - 1, (loopEndBar - 1) * STEPS_PER_BAR + (loopEndBeat - 1));
-        const activeLoopTarget = nextStep > configuredEndStep ? configuredStartStep : nextStep;
-
-        if (nextStep >= maxSteps || step >= configuredEndStep) {
-          if (isSeqLooping) {
-            stepRef.current = configuredStartStep;
-            setCurrentStep(configuredStartStep);
-          } else {
-            setIsDrumLoopActive(false);
-            setIsChordLoopActive(false);
-            stopAllLiveChords();
-            stepRef.current = 0;
-            setCurrentStep(0);
-          }
-        } else {
-          stepRef.current = activeLoopTarget;
-        }
-      }, stepDurationMs);
-    }
-
-    return () => {
-      if (interval !== null) clearInterval(interval);
-    };
-  }, [
-    isAnySeqActive,
+  // Cermin state terbaru untuk scheduler: scheduler membaca dari sini, jadi TIDAK perlu dibuat ulang
+  // setiap grid/track/volume/tempo berubah (sebelumnya interval dihentikan & dibuat ulang tiap edit).
+  liveRef.current = {
+    bpm,
     isDrumLoopActive,
     isChordLoopActive,
-    bpm,
-    isUnlocked8Bar,
     isSeqLooping,
+    isUnlocked8Bar: Boolean(isUnlocked8Bar),
     drumGrid,
     chordTracks,
-    padChords,
+    padInfo,
     selectedDrumKit,
     drumVolume,
     chordMasterVolume,
@@ -503,7 +652,127 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     loopStartBeat,
     loopEndBar,
     loopEndBeat,
-  ]);
+  };
+
+  // Sample drum kit dimuat lebih dulu agar ketukan pertama tidak telat.
+  useEffect(() => {
+    audioEngine.preloadDrumKit(selectedDrumKit, DRUM_INSTRUMENTS.map((i) => i.id)).catch(() => {});
+  }, [selectedDrumKit]);
+
+  // Live Sequencer: scheduler Web Audio dengan lookahead.
+  // Suara dijadwalkan di jam AudioContext (presisi tinggi) beberapa milidetik ke depan, jadi ritme tetap
+  // rata walau thread utama sedang sibuk menggambar UI (penting di HP).
+  useEffect(() => {
+    if (!isAnySeqActive) return;
+    const ctx = audioEngine.getAudioContext();
+    nextTimeRef.current = ctx.currentTime + 0.06;
+    visualQueueRef.current = [];
+    let stopped = false;
+    let finishTimer: number | undefined;
+    let timerId: number | undefined;
+
+    const scheduleStep = (L: LiveSeqState, step: number, when: number, stepSec: number) => {
+      if (L.isDrumLoopActive) {
+        for (const inst of DRUM_INSTRUMENTS) {
+          if (L.drumGrid[inst.id]?.[step]) {
+            audioEngine.scheduleDrumSound(inst.id, L.selectedDrumKit, L.drumVolume / 100, when);
+          }
+        }
+      }
+      if (L.isChordLoopActive) {
+        const chordBus = getChordBusNode(ctx);
+        const holdSec = stepSec * 1.5;
+        for (const track of L.chordTracks) {
+          if (!isTrackAudible(track, L.chordTracks)) continue;
+          const padIdx = track.steps[step];
+          if (padIdx < 0) continue;
+          const info = L.padInfo[padIdx];
+          if (!info) continue;
+          const effectiveVol = (track.volume / 100) * (L.chordMasterVolume / 100);
+          for (const note of info.midiNotes) {
+            audioEngine.renderChordNoteToDestination(ctx, chordBus, note, track.program, when, holdSec, effectiveVol, track.adsr);
+          }
+        }
+      }
+      visualQueueRef.current.push({ step, time: when });
+    };
+
+    const tick = () => {
+      if (stopped) return;
+      const L = liveRef.current;
+      if (!L) return;
+      const stepSec = 60 / L.bpm / 2;
+
+      // Tab sempat di-background / thread macet lama: lewati ketukan yang terlewat, jangan menumpuk sekaligus.
+      if (nextTimeRef.current < ctx.currentTime - 0.1) {
+        nextTimeRef.current = ctx.currentTime + 0.05;
+      }
+
+      while (nextTimeRef.current < ctx.currentTime + LOOKAHEAD_SEC) {
+        const step = stepRef.current;
+        scheduleStep(L, step, nextTimeRef.current, stepSec);
+        nextTimeRef.current += stepSec;
+
+        const maxSteps = L.isUnlocked8Bar ? TOTAL_STEPS : STEPS_PER_BAR;
+        const nextStep = step + 1;
+        const configuredStartStep = Math.max(0, (L.loopStartBar - 1) * STEPS_PER_BAR + (L.loopStartBeat - 1));
+        const configuredEndStep = Math.min(maxSteps - 1, (L.loopEndBar - 1) * STEPS_PER_BAR + (L.loopEndBeat - 1));
+        const activeLoopTarget = nextStep > configuredEndStep ? configuredStartStep : nextStep;
+
+        if (nextStep >= maxSteps || step >= configuredEndStep) {
+          if (L.isSeqLooping) {
+            stepRef.current = configuredStartStep;
+          } else {
+            // Selesai (tanpa loop): berhenti setelah ketukan terakhir benar-benar selesai berbunyi.
+            stopped = true;
+            if (timerId !== undefined) window.clearInterval(timerId);
+            stepRef.current = 0;
+            const waitMs = Math.max(0, (nextTimeRef.current - ctx.currentTime) * 1000) + 30;
+            finishTimer = window.setTimeout(() => {
+              setIsDrumLoopActive(false);
+              setIsChordLoopActive(false);
+              stopAllLiveChords();
+              visualQueueRef.current = [];
+              paintPlayhead(0);
+            }, waitMs);
+            break;
+          }
+        } else {
+          stepRef.current = activeLoopTarget;
+        }
+      }
+    };
+
+    tick();
+    timerId = window.setInterval(tick, SCHEDULER_TICK_MS);
+
+    // Penanda playhead mengikuti jam audio (bukan jam timer), digambar sekali per frame.
+    let raf = 0;
+    const paintLoop = () => {
+      const q = visualQueueRef.current;
+      const now = ctx.currentTime;
+      let latest = -1;
+      while (q.length && q[0].time <= now) latest = q.shift()!.step;
+      if (latest >= 0 && latest !== playheadStepRef.current) paintPlayhead(latest);
+      raf = requestAnimationFrame(paintLoop);
+    };
+    raf = requestAnimationFrame(paintLoop);
+
+    return () => {
+      stopped = true;
+      if (timerId !== undefined) window.clearInterval(timerId);
+      if (finishTimer !== undefined) window.clearTimeout(finishTimer);
+      cancelAnimationFrame(raf);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAnySeqActive]);
+
+  // Gambar ulang penanda playhead saat grid berganti (tab drum/chord) atau baris track muncul.
+  const enabledKey = chordTracks.map((t) => (t.enabled ? 1 : 0)).join('');
+  useEffect(() => {
+    paintPlayhead(playheadStepRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, enabledKey]);
 
   const handleClearGrid = () => {
     stopAllLiveChords();
@@ -552,22 +821,27 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     el.scrollBy({ left: barWidth * direction, behavior: 'smooth' });
   };
 
-  const exportChordTracksData: ChordTrackExportData[] = chordTracks.map((t) => {
-    const audible = isTrackAudible(t, chordTracks);
-    const effVol = audible ? (t.volume / 100) * (chordMasterVolume / 100) : 0;
-    const instDef = INSTRUMENTS_128.find((i) => i.id === t.program);
-    return {
-      id: t.id,
-      name: instDef?.name || `Instrumen ${t.id}`,
-      program: t.program,
-      notesPerStep: t.steps.map((pIdx) => (pIdx >= 0 && padChords[pIdx] ? buildHarmonicChord(padChords[pIdx]).midiNotes : [])),
-      volume: effVol,
-      adsr: t.adsr,
-      enabled: t.enabled,
-      muted: t.muted,
-      solo: t.solo,
-    };
-  });
+  // Dihitung hanya saat modal ekspor terbuka (sebelumnya dihitung ulang di SETIAP render).
+  const exportChordTracksData = useMemo<ChordTrackExportData[]>(() => {
+    if (!isExportModalOpen) return [];
+    return chordTracks.map((t) => {
+      const audible = isTrackAudible(t, chordTracks);
+      const effVol = audible ? (t.volume / 100) * (chordMasterVolume / 100) : 0;
+      const instDef = INSTRUMENTS_128.find((i) => i.id === t.program);
+      return {
+        id: t.id,
+        name: instDef?.name || `Instrumen ${t.id}`,
+        program: t.program,
+        notesPerStep: t.steps.map((pIdx) => (pIdx >= 0 && padInfo[pIdx] ? padInfo[pIdx].midiNotes : [])),
+        volume: effVol,
+        adsr: t.adsr,
+        enabled: t.enabled,
+        muted: t.muted,
+        solo: t.solo,
+      };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isExportModalOpen, chordTracks, padInfo, chordMasterVolume]);
 
   return (
     <section id="pad-studio-section" className="w-full">
@@ -1127,7 +1401,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
               {padChords.map((chordDef, idx) => {
-                const { displayName } = buildHarmonicChord(chordDef);
+                const displayName = padInfo[idx]?.displayName ?? '';
                 const isActive = activePadAnim === `chord-${idx}`;
                 return (
                   <div
@@ -1227,11 +1501,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     <button
                       key={idx}
                       type="button"
+                      data-step={idx}
+                      data-seek="1"
                       onClick={() => handleSeekStep(idx)}
-                      className={`h-8 rounded-xs text-xs font-mono font-bold transition-all flex items-center justify-center ${
-                        currentStep === idx
-                          ? 'bg-accent text-on-accent ring-2 ring-white ring-inset z-10 font-black'
-                          : idx % 4 === 0
+                      className={`h-8 rounded-xs text-xs font-mono font-bold transition-colors flex items-center justify-center ${
+                        idx % 4 === 0
                           ? 'bg-white/15 text-white hover:bg-white/30'
                           : 'bg-black/50 text-gray-400 hover:bg-white/10'
                       }`}
@@ -1245,91 +1519,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               {activeTab === 'drum' ? (
                 <div className="space-y-1.5 pt-1">
                   {DRUM_INSTRUMENTS.map((inst) => (
-                    <div key={inst.id} className="flex items-center gap-2">
-                      <span className="w-36 text-xs font-semibold text-gray-300 truncate shrink-0 px-1">
-                        {inst.label}
-                      </span>
-                      <div className="grid grid-cols-64 gap-0.5 flex-1" style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}>
-                        {Array.from({ length: TOTAL_STEPS }).map((_, stepIdx) => {
-                          const isStepActive = drumGrid[inst.id]?.[stepIdx];
-                          return (
-                            <button
-                              key={stepIdx}
-                              onClick={() => toggleDrumStep(inst.id, stepIdx)}
-                              className={`h-7 rounded-xs transition-all relative flex items-center justify-center cursor-pointer ${
-                                isStepActive
-                                  ? 'bg-accent text-on-accent font-bold shadow-xs'
-                                  : 'bg-black/60 hover:bg-black/90 border border-white/[0.05]'
-                              } ${currentStep === stepIdx ? 'ring-2 ring-white ring-inset z-10' : ''}`}
-                            />
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <DrumRow key={inst.id} id={inst.id} label={inst.label} row={drumGrid[inst.id]} onToggle={toggleDrumStep} />
                   ))}
                 </div>
               ) : (
                 <div className="space-y-2 pt-1">
-                  {chordTracks.map((track, tIdx) => {
-                    if (!track.enabled) return null;
-                    return (
-                      <div key={track.id} className="flex items-center gap-2">
-                        <div className="w-36 shrink-0 px-1 flex flex-col justify-center">
-                          <span className="text-xs font-semibold text-gray-200 truncate">
-                            {track.label}
-                          </span>
-                          <span className="text-[10px] text-accent truncate font-mono">
-                            {INSTRUMENTS_128.find((i) => i.id === track.program)?.name || 'Piano'}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-64 gap-0.5 flex-1" style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}>
-                          {Array.from({ length: TOTAL_STEPS }).map((_, stepIdx) => {
-                            const assignedPadIdx = track.steps[stepIdx];
-                            const isAssigned = assignedPadIdx >= 0 && padChords[assignedPadIdx];
-                            const fullChordName = isAssigned ? buildHarmonicChord(padChords[assignedPadIdx]).displayName : '-';
-                            const shortChordName = isAssigned ? fullChordName.replace(/\s+/g, '') : '-';
-
-                            return (
-                              <div
-                                key={stepIdx}
-                                className={`h-20 rounded-lg p-1 flex flex-col justify-between items-center transition-all relative ${
-                                  isAssigned
-                                    ? 'bg-accent/20 border border-accent text-white shadow-xs'
-                                    : 'bg-black/60 border border-white/[0.05] hover:border-white/20'
-                                } ${currentStep === stepIdx ? 'ring-2 ring-white ring-inset z-10' : ''}`}
-                              >
-                                <span className="text-[10px] text-gray-400 font-mono font-bold">#{stepIdx + 1}</span>
-                                <div className="w-full flex-1 flex flex-col items-center justify-center relative">
-                                  <span
-                                    className={`text-[11px] font-black tracking-tight leading-none text-center px-0.5 w-full overflow-hidden ${
-                                      isAssigned ? 'text-accent' : 'text-gray-500'
-                                    }`}
-                                    title={fullChordName}
-                                  >
-                                    {shortChordName}
-                                  </span>
-                                  <select
-                                    value={assignedPadIdx}
-                                    onChange={(e) => setTrackChordStep(tIdx, stepIdx, Number(e.target.value))}
-                                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                  >
-                                    <option value={-1} className="bg-black text-gray-400">- Kosongkan -</option>
-                                    {padChords.map((ch, pIdx) => (
-                                      <option key={pIdx} value={pIdx} className="bg-surface text-white font-bold">
-                                        Pad #{pIdx + 1}: {buildHarmonicChord(ch).displayName}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className={`w-1.5 h-1.5 rounded-full mb-0.5 ${isAssigned ? 'bg-accent' : 'bg-transparent'}`} />
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {chordTracks.map((track, tIdx) =>
+                    track.enabled ? (
+                      <ChordRow
+                        key={track.id}
+                        tIdx={tIdx}
+                        track={track}
+                        instName={INSTRUMENTS_128.find((i) => i.id === track.program)?.name || 'Piano'}
+                        padInfo={padInfo}
+                        options={chordOptions}
+                        onPick={setTrackChordStep}
+                      />
+                    ) : null
+                  )}
                 </div>
               )}
             </div>

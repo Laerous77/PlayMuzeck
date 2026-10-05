@@ -341,6 +341,9 @@ class AudioEngine {
   public isLoaded: boolean = false;
   public isLoading: boolean = false;
   private drumCache: Record<string, AudioBuffer> = {};
+  // Sample drum yang terbukti tidak ada / gagal didekode. Tanpa ini, setiap ketukan drum yang
+  // sample-nya hilang memicu fetch jaringan baru (penyebab lag di sequencer).
+  private drumMissing = new Set<string>();
   private activeVoices: ActiveVoice[] = [];
 
   // Envelope Pengguna Default — khusus CHORD (dipakai playChordNotes &
@@ -1032,6 +1035,7 @@ class AudioEngine {
     if (this.drumCache[cacheKey]) {
       return this.drumCache[cacheKey];
     }
+    if (this.drumMissing.has(cacheKey)) return null;
     try {
       const res = await fetch(`/sounds/drums/${folder}/${part}.wav`);
       if (res.ok) {
@@ -1040,6 +1044,7 @@ class AudioEngine {
         this.drumCache[cacheKey] = buf;
         return buf;
       }
+      this.drumMissing.add(cacheKey);
     } catch {}
     return null;
   }
@@ -1097,18 +1102,68 @@ class AudioEngine {
       return;
     }
 
-    try {
-      const res = await fetch(`/sounds/drums/${folder}/${part}.wav`);
-      if (res.ok) {
-        const ab = await res.arrayBuffer();
-        const buf = await ctx.decodeAudioData(ab);
-        this.drumCache[cacheKey] = buf;
-        playBuffer(buf);
-        return;
+    if (!this.drumMissing.has(cacheKey)) {
+      try {
+        const res = await fetch(`/sounds/drums/${folder}/${part}.wav`);
+        if (res.ok) {
+          try {
+            const ab = await res.arrayBuffer();
+            const buf = await ctx.decodeAudioData(ab);
+            this.drumCache[cacheKey] = buf;
+            playBuffer(buf);
+            return;
+          } catch {
+            this.drumMissing.add(cacheKey); // bukan audio valid (mis. halaman 404 berstatus 200)
+          }
+        } else {
+          this.drumMissing.add(cacheKey);
+        }
+      } catch {
+        // gagal jaringan sesaat: jangan ditandai hilang permanen
       }
-    } catch {}
+    }
 
     this.synthesizeDrum(part, folder, ctx, volume);
+  }
+
+  // Unduh & dekode semua sample sebuah kit sebelum dimainkan, supaya ketukan pertama sequencer
+  // tidak telat/tersendat karena menunggu jaringan.
+  public async preloadDrumKit(kitName: string, parts: string[]): Promise<void> {
+    const ctx = this.getAudioContext();
+    const folder = kitName.toLowerCase().replace(/\s+kit/g, '').trim();
+    await Promise.all(
+      parts.map(async (part) => {
+        const key = `${folder}_${part}`;
+        if (this.drumCache[key] || this.drumMissing.has(key)) return;
+        await this.getDrumSampleBuffer(ctx, kitName, part);
+      })
+    );
+  }
+
+  // Jadwalkan satu hit drum pada waktu AudioContext tertentu (dipakai scheduler sequencer).
+  // Sinkron: sample sudah di-cache -> tepat waktu; belum -> jatuh ke playDrumSound (terlambat sekali saja).
+  public scheduleDrumSound(part: string, kitName: string, volume: number, when: number) {
+    const ctx = this.getAudioContext();
+    const folder = kitName.toLowerCase().replace(/\s+kit/g, '').trim();
+    const key = `${folder}_${part}`;
+    const buf = this.drumCache[key];
+    if (buf) {
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const gain = ctx.createGain();
+      const t = Math.max(when, ctx.currentTime);
+      const stopAt = this.applyAdsrEnvelope(gain, this.drumAdsr, t, buf.duration, volume);
+      src.connect(gain);
+      gain.connect(this.compressor || ctx.destination);
+      src.start(t);
+      src.stop(stopAt);
+      return;
+    }
+    if (this.drumMissing.has(key)) {
+      this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime));
+      return;
+    }
+    void this.playDrumSound(part, kitName, volume);
   }
 
   // NOTE: fallback `this.compressor` HANYA valid kalau `ctx` yang diberikan
