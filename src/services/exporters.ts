@@ -681,7 +681,12 @@ export function generateMidiFile(
   programNumber: number = 0,
   programNumber2?: number,
   // Birama untuk meta-event MIDI (default 4/4). 1 step = 1/16 not (selaras dengan grid Pad Studio).
-  timeSignature: { num: number; den: number } = { num: 4, den: 4 }
+  timeSignature: { num: number; den: number } = { num: 4, den: 4 },
+  // Data proyek Pad Studio yang disisipkan sebagai meta-event "Sequencer Specific" (0xFF 0x7F).
+  // DAW/pemutar lain mengabaikannya, tetapi Pad Studio bisa memulihkan proyek utuh dari berkas ini.
+  projectPayload?: Uint8Array,
+  // Program (instrumen) per channel: indeks = nomor channel. Jika diisi, menggantikan programNumber/programNumber2.
+  programsByChannel?: number[]
 ): Blob {
   const division = 480;
   const ticksPerStep = division / 4;
@@ -748,11 +753,23 @@ export function generateMidiFile(
   const tsDen = [1, 2, 4, 8, 16, 32].includes(timeSignature.den) ? timeSignature.den : 4;
   trackBytes.push(0x00, 0xff, 0x58, 0x04, tsNum, Math.round(Math.log2(tsDen)), 0x18, 0x08);
 
-  trackBytes.push(0x00, 0xc0 | 0, programNumber & 0x7f);
+  if (projectPayload && projectPayload.length > 0) {
+    trackBytes.push(0x00, 0xff, 0x7f);
+    writeVarInt(trackBytes, projectPayload.length);
+    for (let i = 0; i < projectPayload.length; i++) trackBytes.push(projectPayload[i]);
+  }
 
-  const usesChannel1 = events.some((ev) => ev.channel === 1);
-  if (usesChannel1 && programNumber2 !== undefined) {
-    trackBytes.push(0x00, 0xc0 | 1, programNumber2 & 0x7f);
+  if (programsByChannel && programsByChannel.length > 0) {
+    programsByChannel.forEach((prog, ch) => {
+      if (ch !== 9 && ch < 16) trackBytes.push(0x00, 0xc0 | ch, (prog || 0) & 0x7f);
+    });
+  } else {
+    trackBytes.push(0x00, 0xc0 | 0, programNumber & 0x7f);
+
+    const usesChannel1 = events.some((ev) => ev.channel === 1);
+    if (usesChannel1 && programNumber2 !== undefined) {
+      trackBytes.push(0x00, 0xc0 | 1, programNumber2 & 0x7f);
+    }
   }
 
   let lastTick = 0;

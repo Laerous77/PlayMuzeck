@@ -69,6 +69,9 @@ interface ExportPatternModalProps {
   adsr?: EnvelopeADSR;
   chordVolume?: number;
   selectedProgram?: number;
+  // Data proyek (dari midiProject.encodeProjectPayload) yang ikut disimpan di dalam berkas MIDI,
+  // supaya berkas ini bisa dimuat kembali ke Pad Studio dengan semua pengaturan utuh.
+  projectPayload?: Uint8Array;
 }
 
 interface GenericMidiEvent {
@@ -141,6 +144,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
   adsr,
   chordVolume,
   selectedProgram,
+  projectPayload,
 }) => {
   const scope: ExportScope = exportScope ?? tab;
   const activeDrumAdsr: EnvelopeADSR = drumAdsr ?? DEFAULT_DRUM_ADSR;
@@ -283,7 +287,9 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           title,
           programs[0] ?? 0,
           programs[1],
-          timeSignature
+          timeSignature,
+          projectPayload,
+          programs
         );
 
         const cleanName = fileName.replace(/[^\w\s.-]/gi, '').trim() || 'PlayMuzeck_Pattern';
@@ -526,7 +532,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           </div>
           <p className="text-[11px] text-gray-400 mt-1">
             {selectedFormat === 'MIDI'
-              ? 'Berkas MIDI standar yang dapat dibuka di DAW.'
+              ? 'Berkas MIDI standar yang dapat dibuka di DAW. Berkas ini juga menyimpan seluruh proyek Anda, jadi bisa dimuat lagi lewat tombol Muat Proyek.'
               : selectedFormat === 'WAV'
               ? 'Audio dirender langsung dari pola dan instrumen Anda, disimpan sebagai WAV PCM 24-bit.'
               : selectedFormat === 'FLAC'

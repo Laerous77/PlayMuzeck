@@ -30,6 +30,12 @@ import {
   Pencil,
   BoxSelect,
   SlidersHorizontal,
+  Undo2,
+  Redo2,
+  Eye,
+  EyeOff,
+  Save,
+  FolderOpen,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -45,6 +51,18 @@ import {
   SOUND_BANK_READY_MESSAGE,
 } from '../../services/audioEngine';
 import { ExportPatternModal, ChordTrackExportData } from './ExportPatternModal';
+import { downloadBlob } from '../../services/exporters';
+import {
+  PadProject,
+  ImportContext,
+  Adsr4,
+  Range4,
+  padToTuple,
+  tupleToPad,
+  encodeProjectPayload,
+  projectToMidiBlob,
+  importMidiBuffer,
+} from './midiProject';
 import { ModalPortal } from './ModalPortal';
 import { AdsrMini, AdsrRanges, IntField } from './NumberFields';
 import { InstrumentPickerModal } from './InstrumentPickerModal';
@@ -57,6 +75,7 @@ import {
   DRUM_LEVEL_CELL_CLASS,
   clampLevel,
   emptyTrackData,
+  normalizeLens,
   listNotes,
   noteStartCovering,
   insertNote,
@@ -355,29 +374,73 @@ const levelFromOffset = (dx: number, dy: number, halfW: number, halfH: number): 
 
 const SEL_CLASS = 'outline outline-2 outline-sky-300 -outline-offset-2';
 
+// Boolean yang diingat di localStorage (preferensi tampilan). Aman bila storage diblokir.
+function usePersistedBool(key: string, initial: boolean): [boolean, React.Dispatch<React.SetStateAction<boolean>>] {
+  const [val, setVal] = useState<boolean>(() => {
+    try {
+      const saved = window.localStorage.getItem(key);
+      return saved === null ? initial : saved === '1';
+    } catch {
+      return initial;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, val ? '1' : '0');
+    } catch {
+      // Abaikan jika storage tidak tersedia
+    }
+  }, [key, val]);
+  return [val, setVal];
+}
+
+// Riwayat undo/redo: hanya data pola (grid drum + not akor), bukan volume/ADSR/mute. Array bersifat immutable,
+// jadi snapshot cukup menyimpan referensi (murah).
+type DrumSnap = { [key: string]: number[] };
+type ChordSnap = Array<{ steps: number[]; lens: number[]; enabled: boolean }>;
+const HISTORY_LIMIT = 100;
+const snapChord = (tracks: Array<{ steps: number[]; lens: number[]; enabled: boolean }>): ChordSnap =>
+  tracks.map((t) => ({ steps: t.steps, lens: t.lens, enabled: t.enabled }));
+const chordSnapEqual = (a: ChordSnap, b: ChordSnap): boolean =>
+  a.length === b.length && a.every((t, i) => t.steps === b[i].steps && t.lens === b[i].lens && t.enabled === b[i].enabled);
+
 const DrumCell = memo(function DrumCell({
   drumId,
   stepIdx,
   level,
   selected,
   beat,
-  onPaint,
+  showLevel,
+  onCycle,
+  onMenu,
 }: {
   drumId: string;
   stepIdx: number;
   level: number;
   selected: boolean;
   beat: boolean;
-  onPaint: (drumId: string, stepIdx: number, el: HTMLElement) => void;
+  showLevel: boolean;
+  onCycle: (drumId: string, stepIdx: number) => void;
+  onMenu: (drumId: string, stepIdx: number, el: HTMLElement) => void;
 }) {
+  const next = (level + 1) % (DRUM_LEVEL_MAX + 1);
+  const nextText = next === 0 ? 'hapus' : `naik ke ${DRUM_LEVEL_SHORT[next]}`;
   return (
     <button
       type="button"
       data-step={stepIdx}
       data-level={level}
-      aria-label={level > 0 ? `Drum ${DRUM_LEVEL_LABEL[level]}, klik untuk ubah` : 'Pad kosong, klik untuk memilih kekuatan'}
-      title={level > 0 ? `${DRUM_LEVEL_LABEL[level]} (${DRUM_LEVEL_SHORT[level]}) — klik untuk ubah / hapus` : 'Klik untuk memasang drum'}
-      onClick={(e) => onPaint(drumId, stepIdx, e.currentTarget)}
+      aria-label={level > 0 ? `Drum ${DRUM_LEVEL_LABEL[level]}, klik untuk ${nextText}` : 'Pad kosong, klik untuk memasang (mulai dari pianissimo)'}
+      title={
+        level > 0
+          ? `${DRUM_LEVEL_LABEL[level]} (${DRUM_LEVEL_SHORT[level]}) — klik: ${nextText} • klik kanan: pilih langsung`
+          : 'Klik: pasang pp, klik lagi untuk menaikkan • klik kanan: pilih langsung'
+      }
+      onClick={() => onCycle(drumId, stepIdx)}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onMenu(drumId, stepIdx, e.currentTarget);
+      }}
       className={`h-8 rounded-sm transition-colors relative flex items-center justify-center cursor-pointer text-[9px] font-black italic leading-none ${
         level > 0
           ? `${DRUM_LEVEL_CELL_CLASS[level]} text-on-accent`
@@ -386,7 +449,7 @@ const DrumCell = memo(function DrumCell({
           : 'bg-black/60 hover:bg-white/10 border border-white/[0.05]'
       } ${selected ? SEL_CLASS : ''}`}
     >
-      {level > 0 ? DRUM_LEVEL_SHORT[level] : null}
+      {level > 0 && showLevel ? DRUM_LEVEL_SHORT[level] : null}
     </button>
   );
 });
@@ -484,6 +547,9 @@ const DrumLevelPicker: React.FC<{
 
 // Lebar kolom label di sisi kiri semua baris sequencer (nama + mixer ringkas).
 const LABEL_W = 'w-52';
+// Saat Mixer dibuka, panel kiri dilebarkan supaya volume & ADSR lega.
+const LABEL_W_WIDE = 'w-64';
+const labelWidth = (showMixer: boolean) => (showMixer ? LABEL_W_WIDE : LABEL_W);
 
 const DEFAULT_DRUM_ADSR: EnvelopeADSR = { attack: 0.002, decay: 0.15, sustain: 0.3, release: 0.12 };
 const DRUM_ADSR_RANGES: AdsrRanges = {
@@ -596,7 +662,11 @@ const DrumLabel = memo(function DrumLabel({
 }) {
   const [adsrOpen, setAdsrOpen] = useState(false);
   return (
-    <div className={`${LABEL_W} shrink-0 px-1 py-0.5 space-y-1`}>
+    <div className={`${labelWidth(showMixer)} shrink-0 relative border-r border-white/10 bg-black/40 pl-4 pr-3 py-2 space-y-2`}>
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-1 ${mix.muted ? 'bg-red-500/70' : mix.solo ? 'bg-accent' : 'bg-accent/40'}`}
+      />
       <div className="flex items-center justify-between gap-1.5">
         <span className="text-xs font-semibold text-gray-200 truncate">{label}</span>
         <MuteSoloButtons
@@ -607,13 +677,11 @@ const DrumLabel = memo(function DrumLabel({
         />
       </div>
       {showMixer && (
-        <>
-          <div className="flex items-center">
-            <MiniVolume value={mix.volume} onChange={(v) => onMix(id, { volume: v })} title={`Volume ${label}`} />
-          </div>
+        <div className="space-y-2 border-t border-white/[0.08] pt-2">
+          <MiniVolume value={mix.volume} onChange={(v) => onMix(id, { volume: v })} title={`Volume ${label}`} />
           <AdsrToggle open={adsrOpen} onClick={() => setAdsrOpen((o) => !o)} />
           {adsrOpen && <AdsrMini adsr={mix.adsr} ranges={DRUM_ADSR_RANGES} onChange={(p) => onAdsr(id, p)} />}
-        </>
+        </div>
       )}
     </div>
   );
@@ -641,7 +709,11 @@ const ChordLabel = memo(function ChordLabel({
 }) {
   const [adsrOpen, setAdsrOpen] = useState(false);
   return (
-    <div className={`${LABEL_W} shrink-0 px-1 py-0.5 space-y-1`}>
+    <div className={`${labelWidth(showMixer)} shrink-0 relative border-r border-white/10 bg-black/40 pl-4 pr-3 py-2 space-y-2`}>
+      <span
+        aria-hidden="true"
+        className={`absolute inset-y-0 left-0 w-1 ${track.muted ? 'bg-red-500/70' : track.solo ? 'bg-accent' : 'bg-accent/40'}`}
+      />
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
           <span className="text-xs font-semibold text-gray-200 truncate block">{track.label}</span>
@@ -675,13 +747,11 @@ const ChordLabel = memo(function ChordLabel({
         </div>
       </div>
       {showMixer && (
-        <>
-          <div className="flex items-center">
-            <MiniVolume value={track.volume} onChange={(v) => onUpdateTrack(tIdx, { volume: v })} title={`Volume ${track.label}`} />
-          </div>
+        <div className="space-y-2 border-t border-white/[0.08] pt-2">
+          <MiniVolume value={track.volume} onChange={(v) => onUpdateTrack(tIdx, { volume: v })} title={`Volume ${track.label}`} />
           <AdsrToggle open={adsrOpen} onClick={() => setAdsrOpen((o) => !o)} />
           {adsrOpen && <AdsrMini adsr={track.adsr} ranges={CHORD_ADSR_RANGES} onChange={(p) => onUpdateAdsr(tIdx, p)} />}
-        </>
+        </div>
       )}
     </div>
   );
@@ -702,9 +772,12 @@ const DrumRow = memo(function DrumRow({
   showMixer,
   onMix,
   onAdsr,
-  onPaint,
+  showLevels,
+  onCycle,
+  onMenu,
 }: {
   rowIdx: number;
+  showLevels: boolean;
   showMixer: boolean;
   id: string;
   label: string;
@@ -718,23 +791,32 @@ const DrumRow = memo(function DrumRow({
   gridStyle: React.CSSProperties;
   selS1: number; // -1 = baris ini tidak terpilih
   selS2: number;
-  onPaint: (drumId: string, stepIdx: number, el: HTMLElement) => void;
+  onCycle: (drumId: string, stepIdx: number) => void;
+  onMenu: (drumId: string, stepIdx: number, el: HTMLElement) => void;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg hover:bg-white/[0.025] transition-colors">
+    <div
+      className={`flex items-stretch rounded-xl border overflow-hidden bg-white/[0.02] border-white/[0.1] hover:border-white/25 transition-colors ${
+        mix.muted ? 'opacity-60' : ''
+      }`}
+    >
       <DrumLabel id={id} label={label} mix={mix} showMixer={showMixer} onMix={onMix} onAdsr={onAdsr} />
-      <div className="grid gap-0.5 flex-1" style={gridStyle} data-rowgrid="" data-row={rowIdx}>
-        {steps.map((stepIdx) => (
-          <DrumCell
-            key={stepIdx}
-            drumId={id}
-            stepIdx={stepIdx}
-            level={clampLevel(row?.[stepIdx])}
-            selected={selS1 >= 0 && stepIdx >= selS1 && stepIdx <= selS2}
-            beat={Boolean(beatMask[stepIdx % stepsPerBar])}
-            onPaint={onPaint}
-          />
-        ))}
+      <div className="flex-1 min-w-0 px-2 py-1 flex items-center">
+        <div className="grid gap-0.5 w-full min-w-0" style={gridStyle} data-rowgrid="" data-row={rowIdx}>
+          {steps.map((stepIdx) => (
+            <DrumCell
+              key={stepIdx}
+              drumId={id}
+              stepIdx={stepIdx}
+              level={clampLevel(row?.[stepIdx])}
+              selected={selS1 >= 0 && stepIdx >= selS1 && stepIdx <= selS2}
+              beat={Boolean(beatMask[stepIdx % stepsPerBar])}
+              showLevel={showLevels}
+              onCycle={onCycle}
+              onMenu={onMenu}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -942,7 +1024,11 @@ const ChordRow = memo(function ChordRow({
   });
 
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className={`flex items-stretch rounded-xl border overflow-hidden bg-white/[0.02] border-white/[0.1] hover:border-white/25 transition-colors ${
+        track.muted ? 'opacity-60' : ''
+      }`}
+    >
       <ChordLabel
         tIdx={tIdx}
         track={track}
@@ -953,7 +1039,8 @@ const ChordRow = memo(function ChordRow({
         onPickInstrument={onPickInstrument}
         onRemove={onRemove}
       />
-      <div className="grid gap-0.5 flex-1" style={gridStyle} data-rowgrid="" data-row={tIdx}>
+      <div className="flex-1 min-w-0 px-2 py-1.5 flex items-center">
+      <div className="grid gap-0.5 w-full min-w-0" style={gridStyle} data-rowgrid="" data-row={tIdx}>
         {steps.map((stepIdx, i) => {
           const posInBar = stepIdx % stepsPerBar;
           return (
@@ -987,6 +1074,7 @@ const ChordRow = memo(function ChordRow({
             onResize={onResize}
           />
         ))}
+      </div>
       </div>
     </div>
   );
@@ -1023,6 +1111,30 @@ interface ChordTrackState {
   steps: number[]; // indeks pad akor yang dimulai di step ini (-1 = kosong)
   lens: number[]; // panjang not (step) yang dimulai di step ini (0 = kosong)
 }
+
+// Konteks validasi/konversi untuk impor MIDI (nilai-nilai yang dimiliki Pad Studio).
+const adsrTuple = (a: EnvelopeADSR): Adsr4 => [a.attack, a.decay, a.sustain, a.release];
+const rangesTuple = (r: AdsrRanges): Range4 => [r.attack, r.decay, r.sustain, r.release];
+const IMPORT_CTX: ImportContext = {
+  drumIds: DRUM_INSTRUMENTS.map((i) => i.id),
+  totalBars: TOTAL_BARS,
+  timeSigs: TIME_SIGNATURES.map((t) => ({ id: t.id, num: t.num, den: t.den, steps: stepsPerBarOf(t) })),
+  kits: DRUM_KITS,
+  defaultKit: DRUM_KITS[0],
+  barsPerViewOptions: BARS_PER_VIEW_OPTIONS,
+  defaultBarsPerView,
+  defaultPads: makeDefaultPadChords(),
+  drumAdsr: adsrTuple(DEFAULT_DRUM_ADSR),
+  drumAdsrRanges: rangesTuple(DRUM_ADSR_RANGES),
+  chordAdsrRanges: rangesTuple(CHORD_ADSR_RANGES),
+  chordDefaults: [
+    { label: 'Progresi Akor 1', program: 0, volume: 80, adsr: [0.02, 0.25, 0.65, 0.35] },
+    { label: 'Progresi Akor 2', program: 12, volume: 65, adsr: [0.05, 0.4, 0.8, 0.9] },
+    { label: 'Progresi Akor 3', program: 48, volume: 70, adsr: [0.1, 0.5, 0.75, 1.2] },
+    { label: 'Progresi Akor 4', program: 32, volume: 75, adsr: [0.03, 0.3, 0.7, 0.8] },
+  ],
+  bpmRange: [60, 200],
+};
 
 export const PadStudio: React.FC<PadStudioProps> = ({
   entitlements,
@@ -1062,6 +1174,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [pickerTrack, setPickerTrack] = useState<number | null>(null);
   // Mixer (volume utama, volume per baris, ADSR) disembunyikan secara default agar sequencer bersih.
   const [showMixer, setShowMixer] = useState(false);
+  // Tampilkan label kekuatan (pp/p/f/ff) di pad sequencer & di live drum trigger. Warna pad tetap menunjukkan kekuatan.
+  const [showStepLevels, setShowStepLevels] = usePersistedBool('padstudio.showStepLevels', true);
+  const [showLiveLevels, setShowLiveLevels] = usePersistedBool('padstudio.showLiveLevels', true);
 
 
   // 4 Track Progresi Akor Mandiri
@@ -1123,6 +1238,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [exportScope, setExportScope] = useState<'drum' | 'chord' | 'both'>('both');
 
   const sequencerScrollRef = useRef<HTMLDivElement | null>(null);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const stepRef = useRef(0); // ketukan BERIKUTNYA yang akan dijadwalkan
 
   // Ref untuk scheduler & playhead (tidak memicu render ulang)
@@ -1312,16 +1428,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const newChordLenRef = useRef(newChordLen);
   newChordLenRef.current = newChordLen;
 
-  // Klik pad drum -> buka popover kekuatan (kosong maupun terisi).
-  const paintDrumStep = useCallback((drumId: string, stepIndex: number, el: HTMLElement) => {
-    const spb = layoutRef.current.stepsPerBar;
-    if (!gateRef.current.isUnlocked8Bar && Math.floor(stepIndex / spb) > 0) {
-      gateRef.current.onUnlockEditor();
-      return;
-    }
-    const r = el.getBoundingClientRect();
-    setDrumPicker({ drumId, stepIdx: stepIndex, x: r.left + r.width / 2, y: r.bottom });
-  }, []);
+  // Penanda gestur beruntun (mis. menyeret panjang akor) supaya satu seretan = satu langkah undo.
+  const coalesceUntilRef = useRef(0);
+  const coalescingRef = useRef(false);
 
   // Pasang kekuatan pada pad (0 = hapus) lalu bunyikan pratinjau bila drum tidak sedang diputar.
   const setDrumLevel = useCallback((drumId: string, stepIndex: number, level: number) => {
@@ -1341,6 +1450,32 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         m?.adsr
       );
     }
+  }, []);
+
+  // Klik pad drum = naik bertahap: kosong → pp → p → f → ff → kosong. Tiap klik dibunyikan sebagai pratinjau.
+  const cycleDrumStep = useCallback(
+    (drumId: string, stepIndex: number) => {
+      const spb = layoutRef.current.stepsPerBar;
+      if (!gateRef.current.isUnlocked8Bar && Math.floor(stepIndex / spb) > 0) {
+        gateRef.current.onUnlockEditor();
+        return;
+      }
+      const cur = clampLevel(liveRef.current?.drumGrid[drumId]?.[stepIndex]);
+      setDrumLevel(drumId, stepIndex, (cur + 1) % (DRUM_LEVEL_MAX + 1));
+    },
+    [setDrumLevel]
+  );
+
+  // Klik kanan / tahan lama pada pad = menu pilih kekuatan langsung (atau hapus).
+  const openDrumPicker = useCallback((drumId: string, stepIndex: number, el: HTMLElement) => {
+    if (modeRef.current === 'select') return;
+    const spb = layoutRef.current.stepsPerBar;
+    if (!gateRef.current.isUnlocked8Bar && Math.floor(stepIndex / spb) > 0) {
+      gateRef.current.onUnlockEditor();
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    setDrumPicker({ drumId, stepIdx: stepIndex, x: r.left + r.width / 2, y: r.bottom });
   }, []);
 
   // Pilih akor di sebuah sel: kosong → buat not baru (panjang default), blok → ganti akor, "-" → hapus not.
@@ -1369,6 +1504,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   }, []);
 
   const resizeChordNote = useCallback((trackIndex: number, start: number, newLen: number) => {
+    coalesceUntilRef.current = performance.now() + 350;
     setChordTracks((prev) => {
       const t = prev[trackIndex];
       if (!t || t.steps[start] < 0) return prev;
@@ -1660,6 +1796,113 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     );
   };
 
+  // ---------------------------------------------------------------------------
+  // UNDO / REDO (terpisah per tab: Drum Pad dan Chord Pad punya riwayat sendiri)
+  // Perubahan pola dicatat otomatis dari perubahan state grid, jadi semua jalur edit (klik, tempel, hapus,
+  // bersihkan, seret panjang akor, dst.) ikut tercatat tanpa perlu dibungkus satu per satu.
+  // ---------------------------------------------------------------------------
+  const histRef = useRef<{
+    drum: { past: DrumSnap[]; future: DrumSnap[] };
+    chord: { past: ChordSnap[]; future: ChordSnap[] };
+  }>({ drum: { past: [], future: [] }, chord: { past: [], future: [] } });
+  const lastDrumRef = useRef<DrumSnap>(drumGrid);
+  const lastChordRef = useRef<ChordSnap>(snapChord(chordTracks));
+  const historyResetRef = useRef(false);
+  const [histFlags, setHistFlags] = useState({ drumU: false, drumR: false, chordU: false, chordR: false });
+
+  const syncHistFlags = useCallback(() => {
+    const H = histRef.current;
+    const next = {
+      drumU: H.drum.past.length > 0,
+      drumR: H.drum.future.length > 0,
+      chordU: H.chord.past.length > 0,
+      chordR: H.chord.future.length > 0,
+    };
+    setHistFlags((p) => (p.drumU === next.drumU && p.drumR === next.drumR && p.chordU === next.chordU && p.chordR === next.chordR ? p : next));
+  }, []);
+
+  useEffect(() => {
+    const H = histRef.current;
+    const chordNow = snapChord(chordTracks);
+    if (historyResetRef.current) {
+      // Ukuran grid berubah (ganti birama): riwayat lama tidak cocok lagi.
+      historyResetRef.current = false;
+      H.drum = { past: [], future: [] };
+      H.chord = { past: [], future: [] };
+      lastDrumRef.current = drumGrid;
+      lastChordRef.current = chordNow;
+      syncHistFlags();
+      return;
+    }
+    if (drumGrid !== lastDrumRef.current) {
+      H.drum.past.push(lastDrumRef.current);
+      if (H.drum.past.length > HISTORY_LIMIT) H.drum.past.shift();
+      H.drum.future = [];
+      lastDrumRef.current = drumGrid;
+    }
+    if (!chordSnapEqual(chordNow, lastChordRef.current)) {
+      const coalesce = performance.now() < coalesceUntilRef.current;
+      if (!(coalesce && coalescingRef.current)) {
+        H.chord.past.push(lastChordRef.current);
+        if (H.chord.past.length > HISTORY_LIMIT) H.chord.past.shift();
+      }
+      coalescingRef.current = coalesce;
+      H.chord.future = [];
+      lastChordRef.current = chordNow;
+    }
+    syncHistFlags();
+  }, [drumGrid, chordTracks, syncHistFlags]);
+
+  const restoreChordSnap = (snap: ChordSnap) => {
+    stopAllLiveChords();
+    setChordTracks((prev) =>
+      prev.map((t, i) => (snap[i] ? { ...t, steps: snap[i].steps, lens: snap[i].lens, enabled: snap[i].enabled } : t))
+    );
+  };
+
+  const undo = () => {
+    const H = histRef.current;
+    if (activeTabRef.current === 'drum') {
+      const snap = H.drum.past.pop();
+      if (!snap) return;
+      H.drum.future.push(lastDrumRef.current);
+      lastDrumRef.current = snap;
+      setDrumGrid(snap);
+    } else {
+      const snap = H.chord.past.pop();
+      if (!snap) return;
+      H.chord.future.push(lastChordRef.current);
+      lastChordRef.current = snap;
+      restoreChordSnap(snap);
+    }
+    coalescingRef.current = false;
+    setSel(null);
+    syncHistFlags();
+  };
+
+  const redo = () => {
+    const H = histRef.current;
+    if (activeTabRef.current === 'drum') {
+      const snap = H.drum.future.pop();
+      if (!snap) return;
+      H.drum.past.push(lastDrumRef.current);
+      lastDrumRef.current = snap;
+      setDrumGrid(snap);
+    } else {
+      const snap = H.chord.future.pop();
+      if (!snap) return;
+      H.chord.past.push(lastChordRef.current);
+      lastChordRef.current = snap;
+      restoreChordSnap(snap);
+    }
+    coalescingRef.current = false;
+    setSel(null);
+    syncHistFlags();
+  };
+
+  const canUndo = activeTab === 'drum' ? histFlags.drumU : histFlags.chordU;
+  const canRedo = activeTab === 'drum' ? histFlags.drumR : histFlags.chordR;
+
   // Pintasan keyboard (aktif hanya saat pengguna terakhir berinteraksi di dalam Pad Studio dan tidak ada popup).
   const opsRef = useRef({
     copy: copySelection,
@@ -1669,6 +1912,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     dup: duplicateSelection,
     all: selectAll,
     clear: clearSelection,
+    undo,
+    redo,
   });
   opsRef.current = {
     copy: copySelection,
@@ -1678,6 +1923,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     dup: duplicateSelection,
     all: selectAll,
     clear: clearSelection,
+    undo,
+    redo,
   };
 
   useEffect(() => {
@@ -1690,7 +1937,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const mod = e.ctrlKey || e.metaKey;
       const k = e.key.toLowerCase();
       const ops = opsRef.current;
-      if (mod && k === 'c') {
+      if (mod && k === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) ops.redo();
+        else ops.undo();
+      } else if (mod && k === 'y') {
+        e.preventDefault();
+        ops.redo();
+      } else if (mod && k === 'c') {
         if (selRef.current) {
           e.preventDefault();
           ops.copy();
@@ -1861,7 +2115,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     () => ({ gridTemplateColumns: `repeat(${viewSteps}, minmax(0, 1fr))` }),
     [viewSteps]
   );
-  const gridMinWidth = viewSteps * 22 + 230;
+  const gridMinWidth = viewSteps * 22 + (showMixer ? 320 : 260);
 
   // Pasangan (program, nada) yang dipakai grid akor + semua pad track utama (untuk bermain live).
   const chordWarmPairs = useMemo<Array<[number, number]>>(() => {
@@ -2130,6 +2384,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const oldS = stepsPerBar;
     const newS = stepsPerBarOf(next);
 
+    historyResetRef.current = true;
     setIsDrumLoopActive(false);
     setIsChordLoopActive(false);
     stopAllLiveChords();
@@ -2171,6 +2426,164 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         ? `Birama diganti ke ${next.label}. Sebagian not di luar panjang bar baru terpotong.`
         : `Birama diganti ke ${next.label} (${newS} step per bar).`
     );
+  };
+
+  // ---------------------------------------------------------------------------
+  // SIMPAN / MUAT PROYEK (berkas MIDI di perangkat pengguna, tanpa server)
+  // ---------------------------------------------------------------------------
+  const snapshotProject = (): PadProject => {
+    const drum: Record<string, string> = {};
+    const mix: PadProject['drumMix'] = {};
+    DRUM_INSTRUMENTS.forEach((inst) => {
+      const row = drumGrid[inst.id] || [];
+      let str = '';
+      for (let i = 0; i < totalSteps; i++) str += String(clampLevel(row[i]));
+      drum[inst.id] = str;
+      const m = drumMix[inst.id];
+      mix[inst.id] = { v: m.volume, m: m.muted, s: m.solo, a: adsrTuple(m.adsr) };
+    });
+    return {
+      bpm,
+      timeSig: timeSigId,
+      kit: selectedDrumKit,
+      drumVolume,
+      chordVolume: chordMasterVolume,
+      barsPerView,
+      newChordLen,
+      loop: { sb: loopStartBar, sbt: loopStartBeat, eb: loopEndBar, ebt: loopEndBeat },
+      pads: padChords.map(padToTuple),
+      drum,
+      drumMix: mix,
+      chords: chordTracks.map((t) => ({
+        id: t.id,
+        label: t.label,
+        on: t.enabled,
+        program: t.program,
+        vol: t.volume,
+        m: t.muted,
+        s: t.solo,
+        a: adsrTuple(t.adsr),
+        notes: listNotes(t.steps, t.lens).map((n) => [n.start, n.len, n.pad] as [number, number, number]),
+      })),
+    };
+  };
+
+  // Terapkan proyek (sudah divalidasi oleh importMidiBuffer) ke seluruh state editor.
+  const loadProject = (p: PadProject) => {
+    const ts = getTimeSig(p.timeSig);
+    const S = stepsPerBarOf(ts);
+    const total = S * TOTAL_BARS;
+
+    historyResetRef.current = true;
+    setIsDrumLoopActive(false);
+    setIsChordLoopActive(false);
+    stopAllLiveChords();
+    stepRef.current = 0;
+    visualQueueRef.current = [];
+    playheadStepRef.current = 0;
+
+    const grid: { [key: string]: number[] } = {};
+    const mix: Record<string, DrumMixState> = {};
+    DRUM_INSTRUMENTS.forEach((inst) => {
+      const str = p.drum[inst.id] || '';
+      grid[inst.id] = Array.from({ length: total }, (_, i) => clampLevel(str.charCodeAt(i) - 48));
+      const m = p.drumMix[inst.id];
+      mix[inst.id] = {
+        volume: m.v,
+        muted: m.m,
+        solo: m.s,
+        adsr: { attack: m.a[0], decay: m.a[1], sustain: m.a[2], release: m.a[3] },
+      };
+    });
+
+    const tracks: ChordTrackState[] = p.chords.map((t) => {
+      const data = emptyTrackData(total);
+      t.notes.forEach(([start, len, pad]) => {
+        if (start >= 0 && start < total) {
+          data.steps[start] = pad;
+          data.lens[start] = len;
+        }
+      });
+      return {
+        id: t.id,
+        label: t.label,
+        enabled: t.on,
+        program: t.program,
+        volume: t.vol,
+        muted: t.m,
+        solo: t.s,
+        adsr: { attack: t.a[0], decay: t.a[1], sustain: t.a[2], release: t.a[3] },
+        steps: data.steps,
+        lens: normalizeLens(data.steps, data.lens),
+      };
+    });
+
+    setTimeSigId(ts.id);
+    setBpm(p.bpm);
+    setSelectedDrumKit(p.kit);
+    setDrumVolume(p.drumVolume);
+    setChordMasterVolume(p.chordVolume);
+    setDrumGrid(grid);
+    setDrumMix(mix);
+    setPadChords(p.pads.map(tupleToPad));
+    setChordTracks(tracks);
+    setLoopStartBar(p.loop.sb);
+    setLoopStartBeat(p.loop.sbt);
+    setLoopEndBar(p.loop.eb);
+    setLoopEndBeat(p.loop.ebt);
+    setBarsPerView(p.barsPerView);
+    setViewStartBar(0);
+    setNewChordLen(p.newChordLen);
+    setPadBank(0);
+    setLiveSel(0);
+    setSel(null);
+    setDrumPicker(null);
+    setPickerTrack(null);
+  };
+
+  const saveProject = () => {
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
+    try {
+      const blob = projectToMidiBlob(snapshotProject());
+      const d = new Date();
+      const two = (n: number) => String(n).padStart(2, '0');
+      const name = `PlayMuzeck_Proyek_${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}.mid`;
+      downloadBlob(blob, name);
+      onSuccessToast(`Proyek disimpan sebagai "${name}". Simpan berkas ini; muat kembali lewat tombol Muat Proyek.`);
+    } catch (err) {
+      alert(`Gagal menyimpan proyek: ${err instanceof Error ? err.message : 'terjadi kesalahan.'}`);
+    }
+  };
+
+  const openProjectPicker = () => {
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
+    importInputRef.current?.click();
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // supaya berkas yang sama bisa dipilih lagi
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Berkas terlalu besar (maksimal 5 MB).');
+      return;
+    }
+    try {
+      // Baca & validasi dulu; konfirmasi hanya muncul bila berkasnya memang bisa dimuat.
+      const res = importMidiBuffer(await file.arrayBuffer(), IMPORT_CTX);
+      if (!window.confirm(`Memuat "${file.name}" akan mengganti seluruh pola dan pengaturan yang sedang ada. Lanjutkan?`)) return;
+      loadProject(res.project);
+      onSuccessToast(`${res.summary} (${file.name})`);
+      if (res.warnings.length > 0) alert(`Catatan impor:\n- ${res.warnings.join('\n- ')}`);
+    } catch (err) {
+      alert(`Gagal memuat berkas: ${err instanceof Error ? err.message : 'berkas tidak dapat dibaca.'}`);
+    }
   };
 
   // Dihitung hanya saat modal ekspor terbuka (sebelumnya dihitung ulang di SETIAP render).
@@ -2305,6 +2718,34 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <Download className="w-3.5 h-3.5 text-accent" />
               <span>Ekspor Pola</span>
             </button>
+
+            <button
+              type="button"
+              onClick={saveProject}
+              title="Simpan seluruh proyek (pola, mixer, ADSR, akor) ke berkas MIDI di perangkat Anda"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer shrink-0"
+            >
+              <Save className="w-3.5 h-3.5 text-accent" />
+              <span>Simpan Proyek</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={openProjectPicker}
+              title="Muat proyek dari berkas MIDI (hasil Simpan Proyek / Ekspor MIDI, atau MIDI lain)"
+              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer shrink-0"
+            >
+              <FolderOpen className="w-3.5 h-3.5 text-accent" />
+              <span>Muat Proyek</span>
+            </button>
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".mid,.midi,audio/midi,audio/x-midi"
+              onChange={handleImportFile}
+              className="hidden"
+              aria-label="Pilih berkas MIDI proyek"
+            />
           </div>
         </div>
 
@@ -2336,6 +2777,20 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 ? `Live Drum Trigger Pads (${selectedDrumKit})`
                 : `Live Harmonic Chords — ${PAD_BANKS * PADS_PER_BANK} akor`}
             </span>
+            {activeTab === 'drum' && (
+              <button
+                type="button"
+                onClick={() => setShowLiveLevels((v) => !v)}
+                aria-pressed={showLiveLevels}
+                title="Tampilkan / sembunyikan cincin dan label kekuatan (pp, p, f, ff) di pad"
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  showLiveLevels ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
+                }`}
+              >
+                {showLiveLevels ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                <span>Tampilkan kekuatan</span>
+              </button>
+            )}
             {activeTab === 'chord' && engineStatus && (
               <span
                 className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1.5 flex-wrap ${
@@ -2494,7 +2949,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       {inst.label}
                     </span>
                     {/* Cincin kekuatan: batas tiap cincin = batas level (ff di tengah → pp di tepi) */}
-                    {LIVE_RING.map((r, i) => {
+                    {showLiveLevels && LIVE_RING.map((r, i) => {
                       const ringLevel = 4 - i; // cincin 0.3 = batas ff, 0.55 = batas f, 0.8 = batas p
                       return (
                         <span
@@ -2512,7 +2967,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       }`}
                       style={{ width: 22, height: 22 }}
                     >
-                      {shown ? DRUM_LEVEL_SHORT[shown] : '·'}
+                      {showLiveLevels && shown ? DRUM_LEVEL_SHORT[shown] : ''}
                     </span>
                   </button>
                 );
@@ -2555,7 +3010,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
           {activeTab === 'drum' ? (
             <p className="text-[10px] text-gray-500">
-              Tekan di pusat pad untuk pukulan paling keras (ff). Makin jauh dari pusat makin lemah: f, p, lalu pp di tepi.
+              Tekan di pusat pad untuk pukulan paling keras (ff). Makin jauh dari pusat makin lemah: f, p, lalu pp di tepi. Tombol "Tampilkan kekuatan" hanya menyembunyikan cincin dan label; posisi klik tetap menentukan kekuatan.
             </p>
           ) : (
             <p className="text-[10px] text-gray-500">
@@ -2673,6 +3128,30 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <span>Mixer</span>
               </button>
 
+              {activeTab === 'drum' && (
+                <button
+                  type="button"
+                  onClick={() => setShowStepLevels((v) => !v)}
+                  aria-pressed={showStepLevels}
+                  title="Tampilkan / sembunyikan label kekuatan (pp, p, f, ff) di pad. Warna pad tetap menunjukkan kekuatan."
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                    showStepLevels ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
+                  }`}
+                >
+                  {showStepLevels ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                  <span>Kekuatan</span>
+                </button>
+              )}
+
+              <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
+
+              <div className="flex items-center gap-1">
+                <ToolBtn icon={Undo2} label="Undo" title="Ctrl+Z" onClick={undo} disabled={!canUndo} />
+                <ToolBtn icon={Redo2} label="Redo" title="Ctrl+Shift+Z atau Ctrl+Y" onClick={redo} disabled={!canRedo} />
+              </div>
+
+              <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
+
               <div className="flex flex-wrap items-center gap-1">
                 <ToolBtn icon={Copy} label="Salin" title="Ctrl+C" onClick={copySelection} disabled={!activeSel} />
                 <ToolBtn icon={Scissors} label="Potong" title="Ctrl+X" onClick={cutSelection} disabled={!activeSel} />
@@ -2724,9 +3203,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
             <p className="text-[10px] text-gray-500 leading-relaxed">
               {activeTab === 'drum'
-                ? 'Klik pad kosong lalu pilih kekuatan: pp (pianissimo), p (piano), f (forte), ff (fortissimo). Warna makin pekat = makin keras. '
+                ? 'Klik pad untuk menaikkan kekuatan bertahap: kosong → pp (sangat pelan) → p (pelan) → f (keras) → ff (sangat keras) → kosong. Klik kanan (atau tahan lama di HP) untuk memilih kekuatan langsung. Warna makin pekat = makin keras. '
                 : 'Seret pegangan di tepi kanan blok akor untuk memanjang/memendekkan. '}
-              Klik label BAR untuk memilih satu bar. Mode Pilih (atau Shift+seret) untuk memilih area; Ctrl+C / X / V / D untuk salin, potong, tempel, duplikat; Delete untuk hapus.
+              Klik label BAR untuk memilih satu bar. Ctrl+Z / Ctrl+Shift+Z untuk undo / redo. Mode Pilih (atau Shift+seret) untuk memilih area; Ctrl+C / X / V / D untuk salin, potong, tempel, duplikat; Delete untuk hapus.
             </p>
           </div>
 
@@ -2746,11 +3225,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             }}
           >
             <div className="space-y-2" style={{ minWidth: gridMinWidth }}>
-              <div className="flex items-center gap-2">
-                <div className={`${LABEL_W} shrink-0 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-1`}>
+              <div className="flex items-stretch border border-transparent">
+                <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent flex items-center text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider pl-4`}>
                   SEGMEN BAR
                 </div>
-                <div className="grid gap-0.5 flex-1" style={gridStyle}>
+                <div className="grid gap-0.5 flex-1 min-w-0 px-2" style={gridStyle}>
                   {windowBars.map((barIdx) => (
                     <div
                       key={barIdx}
@@ -2765,8 +3244,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <div className={`${LABEL_W} shrink-0 flex items-center gap-1 bg-black/60 border border-white/10 rounded-xl px-1.5 py-1`}>
+              <div className="flex items-stretch border border-transparent">
+                <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent pr-2 flex items-center`}>
+                <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-xl px-1.5 py-1">
                   {(() => {
                     const playing = activeTab === 'drum' ? isDrumLoopActive : isChordLoopActive;
                     const partName = activeTab === 'drum' ? 'Drum' : 'Akor';
@@ -2803,8 +3283,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     <Repeat className="w-3 h-3" />
                   </button>
                 </div>
+                </div>
 
-                <div className="grid gap-0.5 flex-1" style={gridStyle}>
+                <div className="grid gap-0.5 flex-1 min-w-0 px-2" style={gridStyle}>
                   {windowSteps.map((idx) => {
                     const pos = idx % stepsPerBar;
                     const isBeat = beatInfo.isBeatStart[pos];
@@ -2827,11 +3308,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
 
               {showMixer && (
-                <div className="flex items-start gap-2">
-                  <div className={`${LABEL_W} shrink-0 bg-black/60 border border-white/10 rounded-xl px-2.5 py-2 space-y-1.5`}>
-                    <div className="flex items-center justify-between text-[11px] font-bold text-gray-200">
+                <div className="flex items-stretch rounded-xl border border-accent/30 bg-accent/[0.05] overflow-hidden">
+                  <div className={`${labelWidth(showMixer)} shrink-0 relative border-r border-accent/25 bg-black/40 pl-4 pr-3 py-2.5 space-y-2`}>
+                    <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-accent" />
+                    <div className="flex items-center justify-between text-[11px] font-bold text-gray-100">
                       <span className="flex items-center gap-1.5">
-                        <Volume2 className="w-3.5 h-3.5 text-gray-400" />
+                        <Volume2 className="w-3.5 h-3.5 text-accent" />
                         {activeTab === 'drum' ? 'Volume Drum' : 'Volume Akor'}
                       </span>
                       <span className="font-mono text-accent">{activeTab === 'drum' ? drumVolume : chordMasterVolume}%</span>
@@ -2848,12 +3330,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                     />
                   </div>
-                  <div className="flex-1" />
+                  <div className="flex-1 min-w-0 px-4 flex items-center text-[11px] text-gray-400 leading-snug">
+                    Volume utama memengaruhi semua baris di bawah. Atur volume dan ADSR tiap {activeTab === 'drum' ? 'instrumen' : 'progresi'} di panel kiri barisnya masing-masing.
+                  </div>
                 </div>
               )}
 
               {activeTab === 'drum' ? (
-                <div className="space-y-1.5 pt-1">
+                <div className="space-y-2 pt-1.5">
                   {DRUM_INSTRUMENTS.map((inst, di) => {
                     const inSel = activeSel !== null && di >= activeSel.r1 && di <= activeSel.r2;
                     return (
@@ -2866,6 +3350,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         showMixer={showMixer}
                         onMix={updateDrumMix}
                         onAdsr={updateDrumAdsr}
+                        showLevels={showStepLevels}
                         row={drumGrid[inst.id]}
                         steps={windowSteps}
                         stepsPerBar={stepsPerBar}
@@ -2873,13 +3358,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         gridStyle={gridStyle}
                         selS1={inSel ? activeSel!.s1 : -1}
                         selS2={inSel ? activeSel!.s2 : -1}
-                        onPaint={paintDrumStep}
+                        onCycle={cycleDrumStep}
+                        onMenu={openDrumPicker}
                       />
                     );
                   })}
                 </div>
               ) : (
-                <div className="space-y-2 pt-1">
+                <div className="space-y-2.5 pt-1.5">
                   {chordTracks.map((track, tIdx) =>
                     track.enabled ? (
                       <ChordRow
@@ -3200,6 +3686,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         drumMix={drumMix}
         drumVolume={drumVolume / 100}
         selectedDrumKit={selectedDrumKit}
+        projectPayload={isExportModalOpen ? encodeProjectPayload(snapshotProject()) : undefined}
         onSuccessToast={onSuccessToast}
       />
     </section>
