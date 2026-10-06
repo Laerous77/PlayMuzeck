@@ -31,8 +31,22 @@ export function installAuthFetch() {
   };
 }
 
-export interface AuthUser { id: string; email: string; name: string; isAdmin: boolean }
-interface ApiResult<T = any> { ok: boolean; status: number; data: T }
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  isAdmin: boolean;
+  // Profil (dikirim server lewat /api/auth/me); opsional supaya aman bila server belum mengirimnya.
+  avatarUrl?: string;
+  bio?: string;
+  greeting?: string;
+  frameId?: string;
+  // Jadwal penghapusan akun (null / tidak ada = tidak sedang dijadwalkan).
+  deletion?: { scheduledAt: string; requestedBy: 'self' | 'admin' } | null;
+}
+
+// Semua respons bisa membawa pesan galat dari server.
+interface ApiResult<T = any> { ok: boolean; status: number; data: T & { message?: string } }
 
 async function call<T = any>(url: string, body?: object): Promise<ApiResult<T>> {
   try {
@@ -42,10 +56,10 @@ async function call<T = any>(url: string, body?: object): Promise<ApiResult<T>> 
       headers: { 'Content-Type': 'application/json' },
       body: body ? JSON.stringify(body) : undefined,
     });
-    const data = await res.json().catch(() => ({}));
+    const data = (await res.json().catch(() => ({}))) as T & { message?: string };
     return { ok: res.ok, status: res.status, data };
   } catch {
-    return { ok: false, status: 0, data: { message: 'Tidak bisa terhubung ke server.' } as any };
+    return { ok: false, status: 0, data: { message: 'Tidak bisa terhubung ke server.' } as T & { message?: string } };
   }
 }
 
@@ -85,3 +99,4 @@ export const authApi = {
      /reset-password?token=... -> form password baru -> authApi.resetPassword(token, password)
    Pastikan server meng-serve index.html untuk path-path itu (SPA fallback).
 --------------------------------------------------------------------------- */
+</file>
