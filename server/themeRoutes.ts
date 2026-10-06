@@ -73,6 +73,8 @@ interface Options {
   db: Db;
   requireUser: RequestHandler;
   requireAdmin: RequestHandler;
+  /** Hanya Super Admin. Dipakai untuk semua aksi UBAH tema admin (admin biasa hanya boleh melihat). */
+  requireSuperAdmin?: RequestHandler;
   getUserEmail?: (req: Request) => string | undefined;
 }
 
@@ -80,8 +82,12 @@ export function createThemeRouter({
   db,
   requireUser,
   requireAdmin,
+  requireSuperAdmin,
   getUserEmail = (req) => (req as any).user?.email,
 }: Options) {
+  // PERBAIKAN HAK AKSES: dulu admin biasa bisa membuat/mengubah/menghapus tema admin dan memaksa tema ke
+  // akun pengguna mana pun, padahal panel menyatakan bagian ini hanya-baca untuk admin biasa.
+  const superOnly: RequestHandler = requireSuperAdmin ?? ((_req, _res, next) => next());
   const router = Router();
   // Body JSON sudah di-parse oleh express.json() global di index.ts.
 
@@ -228,7 +234,7 @@ export function createThemeRouter({
     res.json({ themes: rows.map(toTheme), max: LIMITS.admin });
   }));
 
-  router.post('/api/admin/themes', requireAdmin, h(async (req, res) => {
+  router.post('/api/admin/themes', requireAdmin, superOnly, h(async (req, res) => {
     const t = parseThemeBody(req.body);
     if ('error' in t) return res.status(400).json({ error: t.error });
     const created = await insertTheme('admin', null, t);
@@ -236,7 +242,7 @@ export function createThemeRouter({
     res.json({ theme: created });
   }));
 
-  router.put('/api/admin/themes/:id', requireAdmin, h(async (req, res) => {
+  router.put('/api/admin/themes/:id', requireAdmin, superOnly, h(async (req, res) => {
     const id = parseId(req.params.id);
     const t = parseThemeBody(req.body);
     if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
@@ -249,7 +255,7 @@ export function createThemeRouter({
     res.json({ theme: toTheme(rows[0]) });
   }));
 
-  router.delete('/api/admin/themes/:id', requireAdmin, h(async (req, res) => {
+  router.delete('/api/admin/themes/:id', requireAdmin, superOnly, h(async (req, res) => {
     const id = parseId(req.params.id);
     if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
     // Buka kunci pengguna yang sedang dikunci ke tema ini; FK akan mengembalikan mereka ke bawaan.
@@ -265,7 +271,7 @@ export function createThemeRouter({
     res.json(await loadState(email));
   }));
 
-  router.put('/api/admin/users/:email/theme', requireAdmin, h(async (req, res) => {
+  router.put('/api/admin/users/:email/theme', requireAdmin, superOnly, h(async (req, res) => {
     const email = String(req.params.email || '').trim().toLowerCase();
     if (!EMAIL.test(email)) return res.status(400).json({ error: 'Email tidak valid.' });
     if (!(await userExists(email))) return res.status(404).json({ error: 'Pengguna dengan email itu tidak ditemukan.' });

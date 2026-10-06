@@ -8,7 +8,8 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { pool, initDatabase, SUPER_ADMIN_EMAIL } from './db';
+import { pool, initDatabase, ensureAdminSchema, SUPER_ADMIN_EMAIL } from './db';
+import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url'; 
 import { attachMultiplayerSocket } from './multiplayerSocket';
 import helmet from 'helmet';
@@ -56,16 +57,26 @@ for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
     handlers.length ? original(routePath, ...handlers.map(safeHandler)) : original(routePath);
 }
 const PORT = Number(process.env.PORT) || 8787;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PlayMuzeck-admin';
+const IS_PROD = process.env.NODE_ENV === 'production';
+// PERBAIKAN KEAMANAN: dulu bila ADMIN_PASSWORD kosong, sandi bawaan 'PlayMuzeck-admin' dipakai di SEMUA
+// lingkungan, termasuk production -> siapa pun yang tahu sandi itu langsung menjadi Super Admin.
+// Sekarang sandi bawaan hanya berlaku saat development; di production login sandi dimatikan sampai
+// ADMIN_PASSWORD diisi (login Google / "akun ini" tetap bisa dipakai).
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PROD ? '' : 'PlayMuzeck-admin');
 if (!process.env.ADMIN_PASSWORD) {
-  console.warn('[SECURITY] ADMIN_PASSWORD belum diset - memakai sandi default yang mudah ditebak!');
+  console.warn(
+    IS_PROD
+      ? '[SECURITY] ADMIN_PASSWORD belum diset - login kata sandi admin DINONAKTIFKAN (login Google tetap berfungsi).'
+      : '[SECURITY] ADMIN_PASSWORD belum diset - memakai sandi default development.'
+  );
 }
 
 async function isServerAdminEmail(email: string): Promise<boolean> {
   const e = String(email || '').trim().toLowerCase();
   if (!e) return false;
   if (e === SUPER_ADMIN_EMAIL) return true;
-  const { rows } = await pool.query('SELECT 1 FROM admin_emails WHERE email = $1', [e]);
+  await ensureAdminSchema();
+  const { rows } = await pool.query('SELECT 1 FROM admin_emails WHERE lower(email) = $1', [e]);
   return rows.length > 0;
 }
 
@@ -176,35 +187,80 @@ const fileFilter = (_req: express.Request, file: Express.Multer.File, cb: multer
 };
 const upload = multer({ storage, fileFilter, limits: { fileSize: 150 * 1024 * 1024 } });
 
+// ---- Sesi admin ----
+// PERBAIKAN UTAMA: token admin dulu hanya disimpan di Map di memori proses. Setiap server restart /
+// deploy / cold start (atau lebih dari satu instance) membuat SEMUA token hilang, sehingga panel admin
+// menjawab "Token admin tidak valid atau sudah kedaluwarsa" dan halaman Admin & Akses kosong.
+// Sekarang token disimpan (sebagai hash SHA-256) di tabel admin_sessions di database.
 const ADMIN_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
-interface AdminTokenInfo { exp: number; email: string | null; isSuper: boolean; }
-const adminTokens = new Map<string, AdminTokenInfo>();
-const getAdminTokenInfo = (token: string): AdminTokenInfo | null => {
-  const info = adminTokens.get(token);
-  if (!info) return null;
-  if (info.exp < Date.now()) { adminTokens.delete(token); return null; }
-  return info;
-};
-const issueAdminToken = (email: string | null, isSuper: boolean): string => {
+interface AdminTokenInfo { email: string | null; isSuper: boolean; }
+const hashAdminToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
+const issueAdminToken = async (email: string | null, isSuper: boolean): Promise<string> => {
+  await ensureAdminSchema();
   const token = `adm_${crypto.randomBytes(32).toString('hex')}`;
-  adminTokens.set(token, { exp: Date.now() + ADMIN_TOKEN_TTL_MS, email, isSuper });
+  await pool.query(
+    `INSERT INTO admin_sessions (token_hash, email, is_super, expires_at)
+     VALUES ($1, $2, $3, now() + make_interval(secs => $4))`,
+    [hashAdminToken(token), email ? email.toLowerCase() : null, isSuper, ADMIN_TOKEN_TTL_MS / 1000]
+  );
   return token;
 };
+
+const getAdminTokenInfo = async (token: string): Promise<AdminTokenInfo | null> => {
+  if (!/^adm_[0-9a-f]{64}$/.test(token)) return null;
+  await ensureAdminSchema();
+  const { rows } = await pool.query(
+    `SELECT s.email, s.is_super,
+            (s.email IS NULL
+             OR lower(s.email) = $2
+             OR EXISTS (SELECT 1 FROM admin_emails a WHERE lower(a.email) = lower(s.email))) AS still_admin
+       FROM admin_sessions s
+      WHERE s.token_hash = $1 AND s.expires_at > now()`,
+    [hashAdminToken(token), SUPER_ADMIN_EMAIL]
+  );
+  const row = rows[0];
+  if (!row) return null;
+  // PERBAIKAN: akses admin berbasis email dicek ulang di SETIAP request. Dulu admin yang aksesnya sudah
+  // dicabut tetap bisa memakai tokennya sampai 12 jam.
+  if (!row.still_admin) {
+    await pool.query('DELETE FROM admin_sessions WHERE token_hash = $1', [hashAdminToken(token)]).catch(() => {});
+    return null;
+  }
+  const email: string | null = row.email ? String(row.email).toLowerCase() : null;
+  return { email, isSuper: email ? email === SUPER_ADMIN_EMAIL : Boolean(row.is_super) };
+};
+
+// Bersihkan sesi admin kedaluwarsa tiap jam.
+setInterval(() => {
+  pool.query('DELETE FROM admin_sessions WHERE expires_at < now()').catch(() => {});
+}, 60 * 60 * 1000).unref();
+
 const requireAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const auth = req.headers.authorization;
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'Akses ditolak: token admin tidak ditemukan.' });
-  const info = getAdminTokenInfo(auth.slice(7).trim());
-  if (!info) return res.status(401).json({ error: 'Token admin tidak valid atau sudah kedaluwarsa.' });
-  (req as any).adminEmail = info.email;
-  (req as any).isSuperAdmin = info.isSuper;
-  next();
+  void (async () => {
+    let info: AdminTokenInfo | null;
+    try {
+      info = await getAdminTokenInfo(auth.slice(7).trim());
+    } catch (err) {
+      // Database bermasalah BUKAN berarti token salah: jangan balas 401 (klien akan mengeluarkan admin).
+      console.error('[admin] gagal memeriksa sesi admin:', err);
+      if (!res.headersSent) res.status(503).json({ error: 'Server tidak dapat memeriksa sesi admin saat ini. Coba lagi sebentar.' });
+      return;
+    }
+    if (!info) return void res.status(401).json({ error: 'Token admin tidak valid atau sudah kedaluwarsa.' });
+    (req as any).adminEmail = info.email;
+    (req as any).isSuperAdmin = info.isSuper;
+    next();
+  })();
 };
 const requireSuperAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!(req as any).isSuperAdmin) return res.status(403).json({ error: 'Hanya Super Admin yang bisa melakukan aksi ini.' });
   next();
 };
 
-app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
+app.use(createThemeRouter({ db: pool, requireUser, requireAdmin, requireSuperAdmin }));
 app.use(createSoundFxRouter({ db: pool, requireUser }));
 app.use(createToolQuotaRouter({ db: pool, resolveEmail: softEmail }));
 startToolQuotaSweeper(pool);
@@ -273,23 +329,37 @@ const mapTrackRow = (t: any) => ({
 const mapAdminTrack = (t: any) => ({ ...mapTrackRow(t), ownerEmail: t.owner_email || null });
 
 // Admin login
-app.post('/api/admin/login', (req, res) => {
+// Batasi percobaan login admin (hanya percobaan yang GAGAL yang dihitung).
+const adminLoginLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { error: 'Terlalu banyak percobaan login admin. Coba lagi dalam 15 menit.' },
+});
+
+app.post('/api/admin/login', adminLoginLimiter, async (req, res) => {
+  if (!ADMIN_PASSWORD) {
+    return res.status(503).json({ error: 'Login kata sandi dimatikan: ADMIN_PASSWORD belum diset di server. Masuk lewat Google.' });
+  }
   const { password } = req.body || {};
-  const a = Buffer.from(String(password || ''));
-  const b = Buffer.from(ADMIN_PASSWORD);
-  if (a.length === b.length && crypto.timingSafeEqual(a, b)) {
-    return res.json({ token: issueAdminToken(null, true) });
+  // Bandingkan hash (panjang selalu sama) supaya panjang sandi tidak bocor lewat waktu respons.
+  const a = crypto.createHash('sha256').update(String(password || '')).digest();
+  const b = crypto.createHash('sha256').update(ADMIN_PASSWORD).digest();
+  if (crypto.timingSafeEqual(a, b)) {
+    return res.json({ token: await issueAdminToken(null, true) });
   }
   return res.status(401).json({ error: 'Kata sandi admin salah.' });
 });
 
-app.post('/api/admin/google-login', async (req, res) => {
+app.post('/api/admin/google-login', adminLoginLimiter, async (req, res) => {
   try {
     const { credential } = req.body || {};
     const verified = await verifyGoogleIdToken(String(credential || ''));
     if (!verified) return res.status(401).json({ error: 'Token Google tidak valid.' });
     if (!(await isServerAdminEmail(verified.email))) return res.status(403).json({ error: `Akses ditolak: ${verified.email} bukan admin.` });
-    const token = issueAdminToken(verified.email, verified.email === SUPER_ADMIN_EMAIL);
+    const token = await issueAdminToken(verified.email, verified.email === SUPER_ADMIN_EMAIL);
     res.json({ token, email: verified.email });
   } catch (err) {
     res.status(500).json({ error: 'Gagal memproses login Google.' });
@@ -299,13 +369,15 @@ app.post('/api/admin/google-login', async (req, res) => {
 app.post('/api/admin/session-login', requireAuth, async (req, res) => {
   const email = String(req.user!.email).toLowerCase();
   if (!(await isServerAdminEmail(email))) return res.status(403).json({ error: `Akses ditolak: ${email} bukan admin.` });
-  const token = issueAdminToken(email, email === SUPER_ADMIN_EMAIL);
+  const token = await issueAdminToken(email, email === SUPER_ADMIN_EMAIL);
   res.json({ token, email });
 });
 
-app.post('/api/admin/logout', (req, res) => {
+app.post('/api/admin/logout', async (req, res) => {
   const auth = req.headers.authorization;
-  if (auth?.startsWith('Bearer ')) adminTokens.delete(auth.slice(7).trim());
+  if (auth?.startsWith('Bearer ')) {
+    await pool.query('DELETE FROM admin_sessions WHERE token_hash = $1', [hashAdminToken(auth.slice(7).trim())]).catch(() => {});
+  }
   res.json({ success: true });
 });
 
@@ -345,22 +417,33 @@ app.post('/api/admin/tracks', requireAdmin, async (req, res) => {
   res.status(201).json(mapAdminTrack(rows[0]));
 });
 
+// Angka dari body request: undefined / kosong / bukan angka -> null (kolom lama dipertahankan lewat COALESCE).
+const finiteOrNull = (v: unknown): number | null => {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 app.put('/api/admin/tracks/:id', requireAdmin, async (req, res) => {
   if (!(await guardTrack(req, res, req.params.id))) return;
   const { id } = req.params;
-  const d = req.body;
+  const d = req.body || {};
+  // PERBAIKAN: dulu Number(undefined) = NaN dan field kosong (null) langsung dikirim ke kolom NOT NULL,
+  // sehingga update parsial gagal dengan galat 500. COALESCE mempertahankan nilai lama.
   const query = `
     UPDATE audio_tracks SET
-      title = $1, artist = $2, genre = $3, bpm = $4, duration = $5, duration_sec = $6,
-      cover_gradient = $7, cover_icon = $8, license_info = $9, price = $10,
+      title = COALESCE($1, title), artist = COALESCE($2, artist), genre = COALESCE($3, genre),
+      bpm = COALESCE($4, bpm), duration = COALESCE($5, duration), duration_sec = COALESCE($6, duration_sec),
+      cover_gradient = COALESCE($7, cover_gradient), cover_icon = COALESCE($8, cover_icon),
+      license_info = COALESCE($9, license_info), price = COALESCE($10, price),
       is_flagship = $11, is_published = $12, description = $13,
       stems = $14, chord_sequence = $15, bass_sequence = $16, melody_sequence = $17
     WHERE id = $18
     RETURNING *;
   `;
   const values = [
-    d.title, d.artist, d.genre, Number(d.bpm), d.duration, Number(d.durationSec),
-    d.coverGradient, d.coverIcon, d.licenseInfo, Number(d.price),
+    d.title ?? null, d.artist ?? null, d.genre ?? null, finiteOrNull(d.bpm), d.duration ?? null, finiteOrNull(d.durationSec),
+    d.coverGradient ?? null, d.coverIcon ?? null, d.licenseInfo ?? null, finiteOrNull(d.price),
     Boolean(d.isFlagship), d.isPublished !== false, d.description || '',
     JSON.stringify(d.stems || []), JSON.stringify(d.chordSequence || []),
     JSON.stringify(d.bassSequence || []), JSON.stringify(d.melodySequence || []),
@@ -526,23 +609,38 @@ app.delete('/api/admin/decks/:id', requireAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/import-content', requireAdmin, requireSuperAdmin, async (req, res) => {
-  const { topics = [], decks = [] } = req.body;
-  for (const t of topics) {
-    await pool.query(`
-      INSERT INTO topics (id, title, icon_name, description, price, original_price, badge)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      ON CONFLICT(id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description;
-    `, [t.id, t.title, t.iconName || 'BookOpen', t.description || '', Number(t.price) || 0, Number(t.originalPrice) || 0, t.badge || '']);
+  const topics = Array.isArray(req.body?.topics) ? req.body.topics : [];
+  const decks = Array.isArray(req.body?.decks) ? req.body.decks : [];
+  // PERBAIKAN: dulu tiap baris ditulis tanpa transaksi, jadi impor yang gagal di tengah meninggalkan
+  // data setengah masuk. Sekarang semua-atau-tidak-sama-sekali.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    for (const t of topics) {
+      if (!t?.id || !t?.title) throw Object.assign(new Error('Setiap topik wajib punya id dan title.'), { status: 400 });
+      await client.query(`
+        INSERT INTO topics (id, title, icon_name, description, price, original_price, badge)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT(id) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description;
+      `, [t.id, t.title, t.iconName || 'BookOpen', t.description || '', Number(t.price) || 0, Number(t.originalPrice) || 0, t.badge || '']);
+    }
+    for (const d of decks) {
+      if (!d?.id || !d?.title) throw Object.assign(new Error('Setiap deck wajib punya id dan title.'), { status: 400 });
+      const q = Array.isArray(d.questions) ? d.questions : [];
+      await client.query(`
+        INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        ON CONFLICT(id) DO UPDATE SET title = EXCLUDED.title, questions = EXCLUDED.questions, card_count = EXCLUDED.card_count;
+      `, [d.id, d.topicId || null, d.title, d.description || '', q.length, d.difficulty || 'Sedang', Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(q)]);
+    }
+    await client.query('COMMIT');
+    res.json({ topics: topics.length, decks: decks.length });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
   }
-  for (const d of decks) {
-    const q = Array.isArray(d.questions) ? d.questions : [];
-    await pool.query(`
-      INSERT INTO decks (id, topic_id, title, description, card_count, difficulty, is_free, price, badge, questions)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-      ON CONFLICT(id) DO UPDATE SET title = EXCLUDED.title, questions = EXCLUDED.questions;
-    `, [d.id, d.topicId || null, d.title, d.description || '', q.length, d.difficulty || 'Sedang', Boolean(d.isFree), Number(d.price) || 0, d.badge || '', JSON.stringify(q)]);
-  }
-  res.json({ topics: topics.length, decks: decks.length });
 });
 
 // Admin Analytics & Ops
@@ -641,10 +739,21 @@ app.post('/api/admin/clear-analytics', requireAdmin, requireSuperAdmin, async (_
 // ==========================================
 // CUSTOM AUDIO INQUIRY: POST /api/public/inquiries (Frontend CustomAudioModal)
 // ==========================================
-app.post('/api/public/inquiries', async (req, res) => {
+// Endpoint publik tanpa login: dibatasi supaya tidak bisa dipakai membanjiri database & kotak email admin.
+const publicFormLimiter = rateLimit({
+  windowMs: 60 * 60_000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Terlalu banyak pengiriman. Coba lagi nanti.' },
+});
+
+app.post('/api/public/inquiries', publicFormLimiter, async (req, res) => {
   try {
-    const { id, title, genre, mood, duration, notes, email } = req.body || {};
-    const inqId = id || `inquiry-${Date.now()}`;
+    const { title, genre, mood, duration, notes, email } = req.body || {};
+    // PERBAIKAN: id dibuat SERVER. Dulu id dari klien dipakai apa adanya dengan ON CONFLICT DO UPDATE,
+    // sehingga siapa pun yang menebak id bisa menimpa judul & catatan permintaan orang lain.
+    const inqId = `inquiry-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const cleanTitle = String(title || 'Komposisi Custom PlayMuzeck').trim().slice(0, 255);
     const cleanEmail = String(email || '').trim().slice(0, 255);
     const cleanGenre = String(genre || 'General').trim().slice(0, 100);
@@ -652,8 +761,7 @@ app.post('/api/public/inquiries', async (req, res) => {
     const cleanNotes = String(notes || '').trim().slice(0, 10000);
 
     await pool.query(
-      `INSERT INTO inquiries (id, title, email, genre, mood, status, notes) VALUES ($1, $2, $3, $4, $5, 'baru', $6)
-       ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, notes = EXCLUDED.notes`,
+      `INSERT INTO inquiries (id, title, email, genre, mood, status, notes) VALUES ($1, $2, $3, $4, $5, 'baru', $6)`,
       [inqId, cleanTitle, cleanEmail, cleanGenre, cleanMood, cleanNotes]
     );
 
@@ -678,8 +786,11 @@ app.post('/api/public/inquiries', async (req, res) => {
 // ==========================================
 // FEEDBACK & HUBUNGI KAMI: POST /api/user/contact
 // ==========================================
-app.post('/api/user/contact', async (req, res) => {
-  const { email, category, subject, message } = req.body || {};
+app.post('/api/user/contact', publicFormLimiter, async (req, res) => {
+  const { email } = req.body || {};
+  const message = String(req.body?.message ?? '').trim().slice(0, 5000);
+  const subject = String(req.body?.subject ?? '').trim().slice(0, 200);
+  const category = String(req.body?.category ?? '').trim().slice(0, 50);
   if (!email || !message) return res.status(400).json({ error: 'Pesan tidak boleh kosong.' });
 
   const client = await pool.connect();
@@ -687,9 +798,9 @@ app.post('/api/user/contact', async (req, res) => {
     await client.query('BEGIN');
     await client.query(
       `INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
-      [`usr_${Date.now()}`, email, email.split('@')[0]]
+      [`usr_${crypto.randomUUID()}`, email, email.split('@')[0]]
     );
-    const inqId = `inq_${Date.now()}`;
+    const inqId = `inq_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
     await client.query(
       `INSERT INTO inquiries (id, title, email, genre, mood, notes) VALUES ($1, $2, $3, $4, $5, $6)`,
       [inqId, subject || 'Masukan Pengguna', email, category || 'feedback', 'contact-form', message]
@@ -711,9 +822,9 @@ app.post('/api/user/contact', async (req, res) => {
 
     res.json({ success: true, unlockedFrameId: 'frame-contact' });
   } catch (err: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error mengirim masukan:', err);
-    res.status(500).json({ error: 'Gagal mengirim masukan.', detail: err.message });
+    res.status(500).json({ error: 'Gagal mengirim masukan.' });
   } finally {
     client.release();
   }
@@ -721,14 +832,26 @@ app.post('/api/user/contact', async (req, res) => {
 
 // Admin Admins list
 app.get('/api/admin/admins', requireAdmin, async (_req, res) => {
-  const { rows } = await pool.query('SELECT email, granted_by, created_at FROM admin_emails ORDER BY created_at ASC');
-  res.json(rows.map((r) => ({ email: r.email, grantedBy: r.granted_by, createdAt: r.created_at, isSuperAdmin: r.email === SUPER_ADMIN_EMAIL })));
+  await ensureAdminSchema();
+  const { rows } = await pool.query('SELECT lower(email) AS email, granted_by, created_at FROM admin_emails ORDER BY created_at ASC');
+  const list = rows.map((r) => ({
+    email: String(r.email),
+    grantedBy: r.granted_by as string | null,
+    createdAt: r.created_at as string,
+    isSuperAdmin: String(r.email) === SUPER_ADMIN_EMAIL,
+  }));
+  // PERBAIKAN: Super Admin selalu ada di daftar (dan paling atas), walau barisnya belum/tidak ada di tabel.
+  const superRow = list.find((a) => a.isSuperAdmin) ?? {
+    email: SUPER_ADMIN_EMAIL, grantedBy: 'system', createdAt: new Date().toISOString(), isSuperAdmin: true,
+  };
+  res.json([superRow, ...list.filter((a) => !a.isSuperAdmin)]);
 });
 
 app.post('/api/admin/admins', requireAdmin, requireSuperAdmin, async (req, res) => {
   const email = String(req.body?.email || '').trim().toLowerCase();
-  if (!email.includes('@')) return res.status(400).json({ error: 'Alamat email tidak valid.' });
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Alamat email tidak valid.' });
   const grantedBy = (req as any).adminEmail || 'password-admin';
+  await ensureAdminSchema();
   await pool.query('INSERT INTO admin_emails (email, granted_by) VALUES ($1, $2) ON CONFLICT (email) DO NOTHING', [email, grantedBy]);
   res.json({ success: true });
 });
@@ -736,7 +859,10 @@ app.post('/api/admin/admins', requireAdmin, requireSuperAdmin, async (req, res) 
 app.delete('/api/admin/admins/:email', requireAdmin, requireSuperAdmin, async (req, res) => {
   const email = String(req.params.email || '').trim().toLowerCase();
   if (email === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Super Admin tidak bisa dicabut.' });
-  await pool.query('DELETE FROM admin_emails WHERE email = $1', [email]);
+  await ensureAdminSchema();
+  await pool.query('DELETE FROM admin_emails WHERE lower(email) = $1', [email]);
+  // Cabut juga sesi admin yang sedang aktif milik email ini.
+  await pool.query('DELETE FROM admin_sessions WHERE lower(email) = $1', [email]);
   res.json({ success: true });
 });
 
@@ -751,11 +877,17 @@ app.get('/api/admin/settings', requireAdmin, async (_req, res) => {
 });
 
 app.put('/api/admin/settings', requireAdmin, requireSuperAdmin, async (req, res) => {
-  const s = req.body;
-  for (const [k, v] of Object.entries(s)) {
-    await pool.query('INSERT INTO site_settings (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value', [k, String(v)]);
+  // PERBAIKAN: kunci & panjang nilai divalidasi (dulu kunci apa pun, sepanjang apa pun, masuk ke database;
+  // kunci > 100 karakter membuat seluruh permintaan gagal 500 di tengah jalan).
+  const saved: Record<string, string> = {};
+  for (const [k, v] of Object.entries(req.body && typeof req.body === 'object' ? req.body : {})) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(k) || v === null || typeof v === 'object') continue;
+    saved[k] = String(v).slice(0, 2000);
   }
-  res.json(s);
+  for (const [k, v] of Object.entries(saved)) {
+    await pool.query('INSERT INTO site_settings (key, value) VALUES ($1, $2) ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value', [k, v]);
+  }
+  res.json(saved);
 });
 
 app.get('/api/admin/export', requireAdmin, requireSuperAdmin, async (_req, res) => {
@@ -790,13 +922,18 @@ app.get('/api/public/settings', async (_req, res) => {
   res.json(defaults);
 });
 
-app.post('/api/public/analytics', async (req, res) => {
+const analyticsLimiter = rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: true, legacyHeaders: false });
+app.post('/api/public/analytics', analyticsLimiter, async (req, res) => {
   try {
     const { event, eventType, path: p, ...payload } = req.body || {};
-    await pool.query(
-      'INSERT INTO analytics_events (id, event_type, payload) VALUES ($1, $2, $3)',
-      [`evt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, String(eventType || event || 'page_view').slice(0, 60), JSON.stringify({ path: p, ...payload })]
-    );
+    const json = JSON.stringify({ path: typeof p === 'string' ? p.slice(0, 300) : undefined, ...payload });
+    // Endpoint tanpa login: payload besar dibuang (bukan disimpan) supaya tabel tidak bisa digembungkan.
+    if (json.length <= 4000) {
+      await pool.query(
+        'INSERT INTO analytics_events (id, event_type, payload) VALUES ($1, $2, $3)',
+        [`evt_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`, String(eventType || event || 'page_view').slice(0, 60), json]
+      );
+    }
   } catch {}
   res.json({ success: true });
 });
@@ -893,9 +1030,13 @@ app.post('/api/user/decks', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [`usr_${Date.now()}`, email, email.split('@')[0]]);
+    await client.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [`usr_${crypto.randomUUID()}`, email, email.split('@')[0]]);
     const deckId = deck.id || `deck-custom-${Date.now()}`;
     const questions = Array.isArray(deck.questions) ? deck.questions : [];
+    // topic_id punya FOREIGN KEY ke topics: id topik yang tidak ada dulu membuat simpan kuis gagal 500.
+    const topicId = deck.topicId
+      ? ((await client.query('SELECT 1 FROM topics WHERE id = $1', [String(deck.topicId)])).rows.length ? String(deck.topicId) : null)
+      : null;
     const rawSettings = deck.settings && typeof deck.settings === 'object' ? deck.settings : {};
     const penaltyRaw = Number(rawSettings.penaltyPercent ?? deck.penaltyPercent);
     const deckSettings = {
@@ -912,7 +1053,7 @@ app.post('/api/user/decks', async (req, res) => {
          questions = EXCLUDED.questions, settings = EXCLUDED.settings
        WHERE decks.is_custom IS TRUE AND decks.owner_email = EXCLUDED.owner_email
        RETURNING *;`,
-      [deckId, deck.topicId || null, deck.title, deck.description || '', questions.length, deck.difficulty || 'Sedang', true, 0, deck.badge || 'Kustom Kamu', JSON.stringify(questions), email, JSON.stringify(deckSettings)]
+      [String(deckId).slice(0, 100), topicId, String(deck.title).slice(0, 255), deck.description || '', questions.length, String(deck.difficulty || 'Sedang').slice(0, 50), true, 0, String(deck.badge || 'Kustom Kamu').slice(0, 100), JSON.stringify(questions), email, JSON.stringify(deckSettings)]
     );
 
     if (!rows.length) {
@@ -929,7 +1070,8 @@ app.post('/api/user/decks', async (req, res) => {
     await client.query('COMMIT');
     res.status(201).json({ ...rows[0], topicId: rows[0].topic_id, cardCount: rows[0].card_count, isFree: Boolean(rows[0].is_free), questions, settings: rows[0].settings || deckSettings });
   } catch (error: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('Error menyimpan kuis kustom:', error);
     res.status(500).json({ error: 'Gagal menyimpan kuis kustom.' });
   } finally {
     client.release();
@@ -957,7 +1099,7 @@ app.delete('/api/user/decks/:id', async (req, res) => {
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err: any) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     res.status(500).json({ error: 'Gagal menghapus kuis.' });
   } finally {
     client.release();
@@ -1003,11 +1145,17 @@ app.get('/api/user/collections', async (req, res) => {
       ownershipByTrack.set(r.item_id, p);
     }
 
-    const audioItems = [];
+    // PERBAIKAN: satu query untuk semua lagu (dulu satu query PER lagu yang dimiliki -> lambat bila koleksi besar).
+    const audioItems: Array<{ track: ReturnType<typeof mapTrackRow>; ownership: any }> = [];
     let hasFullBundleOnAnyTrack = false;
+    const ownedTrackIds = Array.from(ownershipByTrack.keys());
+    const trackRows = ownedTrackIds.length
+      ? (await pool.query('SELECT * FROM public.audio_tracks WHERE id = ANY($1)', [ownedTrackIds])).rows
+      : [];
+    const trackById = new Map<string, any>(trackRows.map((t: any) => [String(t.id), t]));
     for (const [trackId, ownership] of ownershipByTrack) {
-      const t = await pool.query('SELECT * FROM public.audio_tracks WHERE id = $1', [trackId]);
-      if (t.rows.length) audioItems.push({ track: mapTrackRow(t.rows[0]), ownership });
+      const row = trackById.get(String(trackId));
+      if (row) audioItems.push({ track: mapTrackRow(row), ownership });
       if (ownership.fullMaster && ownership.loopVersion && ownership.separatedStems && ownership.sheetMusic) {
         hasFullBundleOnAnyTrack = true;
       }
@@ -1105,6 +1253,8 @@ app.get('/api/user/collections', async (req, res) => {
 app.post('/api/user/frame', async (req, res) => {
   const { email, frameId } = req.body || {};
   if (!email || !frameId) return res.status(400).json({ error: 'Data bingkai tidak lengkap.' });
+  // Nilai ini disimpan apa adanya di users.active_frame_id & dikirim balik ke klien: batasi bentuknya.
+  if (!/^[\w-]{1,100}$/.test(String(frameId))) return res.status(400).json({ error: 'ID bingkai tidak valid.' });
   try {
     // Hanya bingkai yang syaratnya tercatat sebagai baris 'frame' (donasi & masukan) yang dicek di sini.
     // Bingkai tema/bundle dihitung dari pembelian (bukan baris 'frame'), jadi tidak boleh ditolak.
@@ -1180,10 +1330,16 @@ Sitemap: https://playmuzeck.my.id/sitemap.xml`);
 const distDir = path.resolve(process.cwd(), 'dist');
 if (fs.existsSync(distDir)) {
   app.use(express.static(distDir));
-  app.get(/^\/(?!api|uploads).*/, (_req, res) => {
+  // PERBAIKAN: sebelumnya (?!api|uploads) juga memblokir halaman seperti /apik atau /uploads-info.
+  app.get(/^\/(?!api(?:\/|$)|uploads(?:\/|$)).*/, (_req, res) => {
     res.sendFile(path.join(distDir, 'index.html'));
   });
 }
+
+// Endpoint /api yang tidak ada: balas JSON (bukan halaman HTML bawaan Express yang membingungkan klien).
+app.use('/api', (_req, res) => {
+  res.status(404).json({ error: 'Endpoint tidak ditemukan.' });
+});
 
 // Penangan error terakhir: error dari handler async (lihat safeHandler) berakhir di sini, bukan menjatuhkan server.
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
@@ -1199,7 +1355,7 @@ const httpServer = app.listen(PORT, '0.0.0.0', () => {
   console.log('--- KESIAPAN LAYANAN ---');
   console.log(`${ok(process.env.RESEND_API_KEY)} RESEND_API_KEY (Layanan Email Resend: Reset Password, Verifikasi, Custom Audio & Feedback)`);
   console.log(`${ok(process.env.APP_URL)} APP_URL`);
-  console.log(`${ok(process.env.ADMIN_PASSWORD)} ADMIN_PASSWORD`);
+  console.log(`${ok(process.env.ADMIN_PASSWORD)} ADMIN_PASSWORD (kosong di production = login sandi admin dimatikan)`);
   console.log(`${ok(process.env.GOOGLE_CLIENT_ID)} GOOGLE_CLIENT_ID`);
   console.log(`${ok(process.env.MIDTRANS_SERVER_KEY)} MIDTRANS_SERVER_KEY`);
   console.log(`${ok(process.env.MIDTRANS_CLIENT_KEY)} MIDTRANS_CLIENT_KEY`);

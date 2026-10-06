@@ -313,6 +313,11 @@ export function createPaymentRouter(deps: PaymentDeps): express.Router {
       if (existing.rows[0] && existing.rows[0].status === 'cancelled') {
         return res.status(409).json({ error: 'Pesanan ini sudah dibatalkan. Buat pesanan baru.' });
       }
+      // PERBAIKAN: pesanan yang SUDAH LUNAS tetapi belum diaktifkan tidak boleh dibuat ulang lewat /charge:
+      // upsert di bawah akan menurunkan statusnya kembali ke 'pending'.
+      if (existing.rows[0] && existing.rows[0].status === 'paid') {
+        return res.status(409).json({ error: 'Pesanan ini sudah dibayar. Buka ulang aplikasi untuk mengaktifkan aksesnya.' });
+      }
 
       let kind: 'cart' | 'donation';
       let gross: number;
@@ -520,8 +525,8 @@ export function createPaymentRouter(deps: PaymentDeps): express.Router {
       await client.query('BEGIN');
 
       // FOREIGN KEY user_collections.user_email -> users.email: baris user harus ada duluan.
-      await pool.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [
-        `usr_${Date.now()}`, email, email.split('@')[0],
+      await client.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [
+        `usr_${crypto.randomUUID()}`, email, email.split('@')[0],
       ]);
 
       const insert = (category: string, id: string, typeKey = '') =>
@@ -594,7 +599,7 @@ export function createPaymentRouter(deps: PaymentDeps): express.Router {
     } catch (error: any) {
       try { await client.query('ROLLBACK'); } catch { /* abaikan */ }
       console.error('Error Checkout DB:', error);
-      res.status(500).json({ error: 'Gagal mencatat transaksi.', detail: error.message });
+      res.status(500).json({ error: 'Gagal mencatat transaksi.' });
     } finally {
       client.release();
     }
@@ -613,7 +618,7 @@ export function createPaymentRouter(deps: PaymentDeps): express.Router {
     try {
       await client.query('BEGIN');
       await client.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [
-        `usr_${Date.now()}`, email, email.split('@')[0],
+        `usr_${crypto.randomUUID()}`, email, email.split('@')[0],
       ]);
       // orderId dipakai sebagai id supaya "coba simpan ulang" tidak menggandakan donasi.
       await client.query('INSERT INTO donations (id, user_email, amount) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING', [
@@ -634,9 +639,9 @@ export function createPaymentRouter(deps: PaymentDeps): express.Router {
       await client.query('COMMIT');
       res.json({ success: true, unlockedFrameId: tier?.frameId || null });
     } catch (err: any) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK').catch(() => {});
       console.error('Error mencatat donasi:', err);
-      res.status(500).json({ error: 'Gagal mencatat donasi.', detail: err.message });
+      res.status(500).json({ error: 'Gagal mencatat donasi.' });
     } finally {
       client.release();
     }

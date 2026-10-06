@@ -13,13 +13,14 @@ import {
   Users,
 } from 'lucide-react';
 import {
-  adminFetch,
+  ADMIN_EXPIRED_EVENT,
+  ADMIN_EXPIRED_MSG,
   clearAdminToken,
   elevateToAdminViaSession,
   getAdminMe,
   getAdminToken,
   loginAdminWithGoogle,
-  setAdminToken,
+  loginAdminWithPassword,
   AdminMe,
 } from './adminApi';
 import { authApi } from '../services/authToken';
@@ -96,14 +97,40 @@ export default function AdminApp() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // Server menolak token admin (kedaluwarsa, server restart pada versi lama, atau akses dicabut):
+  // kembali ke layar login dengan pesan yang jelas, bukan panel kosong yang tampak "login".
+  useEffect(() => {
+    const onExpired = () => {
+      setToken('');
+      setMe(null);
+      setError(ADMIN_EXPIRED_MSG);
+    };
+    window.addEventListener(ADMIN_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(ADMIN_EXPIRED_EVENT, onExpired);
+  }, []);
+
+  const [meLoading, setMeLoading] = useState(false);
   useEffect(() => {
     if (!token) {
       setMe(null);
+      setMeLoading(false);
       return;
     }
+    let cancelled = false;
+    setMeLoading(true);
     getAdminMe()
-      .then(setMe)
-      .catch(() => setMe(null));
+      .then((m) => {
+        if (!cancelled) setMe(m);
+      })
+      .catch(() => {
+        if (!cancelled) setMe(null);
+      })
+      .finally(() => {
+        if (!cancelled) setMeLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const handleSessionLogin = async () => {
@@ -111,6 +138,7 @@ export default function AdminApp() {
     setError('');
     try {
       const adminToken = await elevateToAdminViaSession();
+      setError('');
       setToken(adminToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Akun ini bukan Administrator terdaftar.');
@@ -121,6 +149,7 @@ export default function AdminApp() {
     setError('');
     try {
       const adminToken = await loginAdminWithGoogle(credential);
+      setError('');
       setToken(adminToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Login admin dengan akun Google gagal.');
@@ -131,25 +160,24 @@ export default function AdminApp() {
     e.preventDefault();
     setError('');
     try {
-      const res = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Login gagal');
-      setAdminToken(data.token);
-      setToken(data.token);
+      const adminToken = await loginAdminWithPassword(password);
+      setPassword('');
+      setError('');
+      setToken(adminToken);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kata sandi admin tidak tepat atau server API belum aktif.');
     }
   };
 
   const handleLogout = async () => {
+    // Pakai fetch biasa (bukan adminFetch) supaya 401 saat logout tidak memicu pesan "sesi berakhir".
     try {
-      await adminFetch('/api/admin/logout', { method: 'POST' });
+      const t = getAdminToken();
+      if (t) await fetch('/api/admin/logout', { method: 'POST', headers: { Authorization: `Bearer ${t}` } });
     } catch {}
     clearAdminToken();
+    setMe(null);
+    setError('');
     setToken('');
   };
 
@@ -219,8 +247,6 @@ export default function AdminApp() {
               </div>
             </label>
 
-            {error && <p className="text-xs text-red-400 font-medium">{error}</p>}
-
             <button
               type="submit"
               className="w-full rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold py-2 text-xs transition-colors cursor-pointer border border-white/10"
@@ -239,7 +265,7 @@ export default function AdminApp() {
     );
   }
 
-  const activeAdminEmail = me?.email || (me?.isSuperAdmin ? 'Operator Server (kata sandi)' : 'Admin');
+  const activeAdminEmail = me?.email || (me?.isSuperAdmin ? 'Operator Server (kata sandi)' : meLoading ? 'Memuat…' : 'Admin');
 
   return (
     <div style={ADMIN_VARS} data-mode="dark" className="min-h-screen bg-black text-[#E5E5E5] flex">
@@ -248,7 +274,7 @@ export default function AdminApp() {
           <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-[0.2em] text-accent font-bold">Developer Console</p>
             <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/20 text-accent border border-accent/30">
-              {me?.isSuperAdmin ? 'Super Admin' : 'Admin'}
+              {me?.isSuperAdmin ? 'Super Admin' : meLoading ? '…' : 'Admin'}
             </span>
           </div>
           <h1 className="text-xl font-extrabold text-white mt-1">
@@ -300,6 +326,13 @@ export default function AdminApp() {
             <current.icon className="w-4 h-4 text-accent" />
             <h2 className="font-bold text-white">{current.label}</h2>
           </div>
+          <button
+            onClick={handleLogout}
+            title="Keluar dari Admin"
+            className="md:hidden ml-auto p-1.5 rounded-lg text-red-300 hover:bg-red-500/10 cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
           <select
             className="md:hidden bg-surface border border-white/10 rounded-lg px-2 py-1 text-sm text-white"
             value={page}

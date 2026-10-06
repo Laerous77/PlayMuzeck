@@ -260,8 +260,10 @@ r.post('/login', strict, wrap(async (req, res) => {
   const ok = !!u && check.ok;
 
   if (!ok) {
+    // PERBAIKAN: hitungan gagal di-reset saat akun dikunci. Dulu hitungan tetap >= 5 sesudah kunci 15 menit
+    // berakhir, jadi SATU salah ketik berikutnya langsung mengunci akun lagi 15 menit.
     if (u) await pool.query(
-      `UPDATE users SET failed_logins = failed_logins + 1,
+      `UPDATE users SET failed_logins = CASE WHEN failed_logins + 1 >= 5 THEN 0 ELSE failed_logins + 1 END,
               locked_until = CASE WHEN failed_logins + 1 >= 5 THEN now() + interval '15 minutes' ELSE locked_until END
         WHERE id=$1`, [u.id]);
     return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: 'Email atau password salah.' });
@@ -286,10 +288,10 @@ r.post('/forgot-password', mailLimit, wrap(async (req, res) => {
   const e = emailSchema.safeParse(req.body?.email);
   if (e.success) {
     const u = (await pool.query(`SELECT id FROM users WHERE lower(email)=$1`, [e.data])).rows[0];
-    if (!u) console.log(`[forgot] email tidak terdaftar: ${e.data}`);
+    // Alamat email tidak lagi ditulis ke log (data pribadi).
     if (u) {
       const token = await issueToken(u.id, 'reset_password', 30);
-      if (!token) console.log(`[forgot] DITAHAN: ${e.data} sudah minta reset 5x dalam 1 jam. Tunggu 1 jam.`);
+      if (!token) console.log(`[forgot] DITAHAN: akun ${u.id} sudah minta reset 5x dalam 1 jam.`);
       if (token) {
         const resetUrl = `${APP_URL}/reset-password?token=${token}`;
         void sendPasswordResetEmail(e.data, resetUrl);

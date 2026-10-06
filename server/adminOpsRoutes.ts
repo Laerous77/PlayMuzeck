@@ -8,6 +8,7 @@
 import { Router, Request, Response, RequestHandler } from 'express';
 import type { Pool, PoolClient } from 'pg';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { SUPER_ADMIN_EMAIL } from './db';
 import { sendMailStrict } from './emailService';
 
@@ -188,7 +189,7 @@ async function ensureUserEmail(client: PoolClient, email: string): Promise<strin
   if (found.rows[0]) return String(found.rows[0].email);
   await client.query(
     `INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
-    [`usr_${Date.now()}`, email, email.split('@')[0]]
+    [`usr_${crypto.randomUUID()}`, email, email.split('@')[0]]
   );
   return email;
 }
@@ -458,6 +459,9 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
 
   router.patch('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
     const { status, gross_amount } = req.body || {};
+    // PERBAIKAN: admin bisa memilih "ubah status TANPA mencabut akses" di panel, tetapi server dulu selalu
+    // mencabut. Default tetap mencabut (perilaku lama) kecuali klien mengirim revoke:false.
+    const doRevoke = req.body?.revoke !== false;
     if (status !== undefined && !MANUAL_STATUSES.includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
     if (status === undefined && gross_amount === undefined) return res.status(400).json({ error: 'Tidak ada perubahan.' });
 
@@ -494,7 +498,7 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
 
       let granted = 0;
       let revoked = 0;
-      if (wasPaid && (!isPaid || donationAmountChanged)) {
+      if (doRevoke && wasPaid && (!isPaid || donationAmountChanged)) {
         // Lunas -> status lain (atau nominal donasi berubah, mungkin pindah tier): cabut dulu yang lama.
         revoked = await revokeOrderAccess(client, before, tiers());
       }
@@ -522,8 +526,11 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
       const cur = await client.query('SELECT * FROM payment_orders WHERE order_id = $1 FOR UPDATE', [req.params.id]);
       const order = cur.rows[0];
       let revoked = 0;
+      // PERBAIKAN: panel mengirim ?revoke=0|1 ("hapus pesanan saja, akses tetap" vs "cabut juga akses"),
+      // tetapi server dulu mengabaikannya dan SELALU mencabut akses pesanan lunas. Tanpa parameter = mencabut.
+      const doRevoke = req.query.revoke === undefined ? true : ['1', 'true'].includes(String(req.query.revoke));
       // Menghapus pesanan lunas = akses dari pesanan itu ikut dicabut (kecuali ditanggung pesanan lunas lain).
-      if (order && order.status === 'paid') revoked = await revokeOrderAccess(client, order, tiers());
+      if (order && order.status === 'paid' && doRevoke) revoked = await revokeOrderAccess(client, order, tiers());
       await client.query('DELETE FROM payment_orders WHERE order_id = $1', [req.params.id]);
       await client.query('COMMIT');
       res.json({ success: true, revoked });
@@ -630,7 +637,7 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
           greeting: u.greeting || '',
           avatar_url: avatar_v ? `/api/avatar/${u.id}?v=${avatar_v}` : '',
           last_seen: u.last_seen || u.created_at,
-          is_super_admin: u.email === SUPER_ADMIN_EMAIL,
+          is_super_admin: String(u.email).toLowerCase() === SUPER_ADMIN_EMAIL,
         }))
       );
     } catch (err) {
@@ -644,7 +651,10 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
       const { email, name, role, password } = req.body || {};
       const cleanEmail = String(email || '').trim().toLowerCase();
       if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: 'Alamat email tidak valid.' });
-      if (password && String(password).length < 4) return res.status(400).json({ error: 'Kata sandi minimal 4 karakter.' });
+      // PERBAIKAN: minimal 8 karakter (dulu 4) dan maksimal 72 byte (batas bcrypt), selaras dengan pendaftaran biasa.
+      if (password && (String(password).length < 8 || Buffer.byteLength(String(password)) > 72)) {
+        return res.status(400).json({ error: 'Kata sandi 8-72 karakter.' });
+      }
       const exists = await pool.query('SELECT 1 FROM users WHERE LOWER(email) = $1', [cleanEmail]);
       if (exists.rows.length) return res.status(409).json({ error: 'Email ini sudah terdaftar.' });
       const hash = password ? await bcrypt.hash(String(password), 10) : null;
@@ -686,13 +696,21 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
         sets.push(`role = $${vals.length}`);
       }
       if (password) {
+        // PERBAIKAN: PATCH dulu tidak memvalidasi sandi sama sekali (sandi 1 huruf pun diterima).
+        if (String(password).length < 8 || Buffer.byteLength(String(password)) > 72) {
+          return res.status(400).json({ error: 'Kata sandi 8-72 karakter.' });
+        }
         vals.push(await bcrypt.hash(String(password), 10));
         sets.push(`password_hash = $${vals.length}`);
+        // Ganti sandi = reset hitungan gagal login & kunci akun.
+        sets.push('failed_logins = 0', 'locked_until = NULL');
       }
       if (!sets.length) return res.status(400).json({ error: 'Tidak ada perubahan.' });
       vals.push(req.params.id);
       const r = await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
       if (!r.rowCount) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
+      // Sandi diganti oleh admin -> semua sesi lama pengguna itu dicabut (orang yang memegang sesi lama keluar).
+      if (password) await pool.query('DELETE FROM sessions WHERE user_id = $1', [req.params.id]);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err?.message || 'Gagal memperbarui pengguna.' });
@@ -703,7 +721,7 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
     try {
       const found = await pool.query('SELECT email FROM users WHERE id = $1', [req.params.id]);
       if (!found.rows[0]) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
-      if (found.rows[0].email === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Akun Super Admin tidak bisa dihapus.' });
+      if (String(found.rows[0].email).toLowerCase() === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Akun Super Admin tidak bisa dihapus.' });
       await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
       res.json({ success: true });
     } catch (err: any) {
@@ -716,7 +734,7 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
       const reason = String(req.body?.reason || '').trim().slice(0, 500);
       const found = await pool.query('SELECT email FROM users WHERE id = $1', [req.params.id]);
       if (!found.rows[0]) return res.status(404).json({ error: 'Pengguna tidak ditemukan.' });
-      if (found.rows[0].email === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Akun Super Admin tidak bisa ditangguhkan.' });
+      if (String(found.rows[0].email).toLowerCase() === SUPER_ADMIN_EMAIL) return res.status(403).json({ error: 'Akun Super Admin tidak bisa ditangguhkan.' });
 
       await pool.query(`UPDATE users SET suspended_at = NOW(), suspended_reason = $2 WHERE id = $1`, [req.params.id, reason || null]);
       await pool.query('DELETE FROM sessions WHERE user_id = $1', [req.params.id]);

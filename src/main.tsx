@@ -5,7 +5,8 @@ import AdminApp from './admin/AdminApp.tsx';
 import { applyCachedPalette } from './theme/theme';
 import './index.css';
 
-const isAdmin = window.location.pathname.startsWith('/admin');
+// PERBAIKAN: cocokkan "/admin" persis (atau /admin/...), bukan sembarang path berawalan "admin".
+const isAdmin = /^\/admin(?:\/|$)/.test(window.location.pathname);
 
 // Pasang tema terakhir yang dipakai pengguna SEBELUM render, supaya tidak ada
 // kedipan warna bawaan. Panel admin sengaja tidak ikut ditema.

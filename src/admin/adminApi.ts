@@ -4,6 +4,10 @@
 
 const ADMIN_TOKEN_KEY = 'muzeck_admin_token_v1';
 
+/** Dikirim ke window saat server menolak token admin (kedaluwarsa / sesi server hilang / akses dicabut). */
+export const ADMIN_EXPIRED_EVENT = 'muzeck-admin-expired';
+export const ADMIN_EXPIRED_MSG = 'Sesi admin berakhir atau tidak dikenali server. Silakan masuk lagi.';
+
 export interface AdminMe {
   email: string | null;
   isSuperAdmin: boolean;
@@ -14,6 +18,14 @@ export interface AdminAccount {
   grantedBy: string | null;
   createdAt: string;
   isSuperAdmin: boolean;
+}
+
+/** Galat khusus supaya pemanggil bisa membedakan "sesi habis" dari galat biasa. */
+export class AdminSessionError extends Error {
+  constructor(message = ADMIN_EXPIRED_MSG) {
+    super(message);
+    this.name = 'AdminSessionError';
+  }
 }
 
 /* ---------------- Token admin ---------------- */
@@ -53,14 +65,29 @@ export async function publicFetch<T>(endpoint: string, init?: RequestInit): Prom
 
 export async function adminFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
   const token = getAdminToken();
+  // PERBAIKAN: jangan memaksa Content-Type JSON untuk FormData. Tanpa ini browser tidak membuat header
+  // multipart + boundary, sehingga SEMUA unggahan file (audio, sampul, partitur) sampai ke server
+  // sebagai "JSON" dan ditolak dengan "Tidak ada berkas yang diunggah".
+  const isForm = typeof FormData !== 'undefined' && init?.body instanceof FormData;
   const res = await fetch(endpoint, {
     ...init,
     headers: {
-      'Content-Type': 'application/json',
+      ...(isForm ? {} : { 'Content-Type': 'application/json' }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers || {}),
     },
   });
+
+  // PERBAIKAN: 401 = token admin ditolak server. Dulu hanya dilempar sebagai galat biasa sehingga panel
+  // tetap tampak "login" tetapi semua halaman kosong. Sekarang token dibuang dan aplikasi diberi tahu
+  // supaya kembali ke layar login dengan pesan yang jelas.
+  if (res.status === 401) {
+    clearAdminToken();
+    try {
+      window.dispatchEvent(new Event(ADMIN_EXPIRED_EVENT));
+    } catch {}
+    throw new AdminSessionError();
+  }
   if (!res.ok) throw await readError(res, 'Admin');
   return res.json() as Promise<T>;
 }
@@ -86,6 +113,19 @@ export async function loginAdminWithGoogle(credential: string): Promise<string> 
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ credential }),
+  });
+  if (!res.ok) throw await readError(res, 'Admin');
+  const data = await res.json();
+  setAdminToken(data.token);
+  return data.token as string;
+}
+
+/** Login admin memakai kata sandi server (ADMIN_PASSWORD). */
+export async function loginAdminWithPassword(password: string): Promise<string> {
+  const res = await fetch('/api/admin/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
   });
   if (!res.ok) throw await readError(res, 'Admin');
   const data = await res.json();
