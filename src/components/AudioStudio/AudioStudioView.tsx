@@ -1,13 +1,11 @@
 // src/components/AudioStudio/AudioStudioView.tsx
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AudioCatalogCarousel } from './AudioCatalogCarousel';
 import { FeaturedShowcase } from './FeaturedShowcase';
 import { LoopShowcase } from './LoopShowcase';
 import { StemMixer } from './StemMixer';
 import { PadStudio } from './PadStudio';
-import { AudioToolsSuite } from './AudioToolsSuite';
-import { AudioExtraTools, EXTRA_SLUG_TO_TOOL } from './AudioExtraTools';
-import { consumeExtraQuota } from '../../services/extraToolsQuota';
+import { AudioToolsSuite, TOOL_SLUG_TO_ID } from './AudioToolsSuite';
 import { ModularPurchaseBox } from './ModularPurchaseBox';
 import { AudioEntitlements, CartItem, AudioTrackItem } from '../../types';
 import { storage } from '../../services/storage';
@@ -67,19 +65,12 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     if (activeSection === 'tools') setToolsMounted(true);
   }, [activeSection]);
 
-  // Alat Tambahan (gabung, BPM, perekam, dll.): slug URL /alat-audio/<slug> memilih tab awal.
-  const extraSlug = typeof window !== 'undefined' ? window.location.pathname.split('/')[2] || '' : '';
-  const initialExtra = EXTRA_SLUG_TO_TOOL[extraSlug];
-  const extraRef = useRef<HTMLDivElement>(null);
+  // Audio Tools (15 alat dalam satu suite): slug URL /alat-audio/<slug> memilih alat yang dibuka pertama kali.
+  const toolSlug = typeof window !== 'undefined' ? window.location.pathname.split('/')[2] || '' : '';
+  const initialTool = TOOL_SLUG_TO_ID[toolSlug] ?? null;
   useEffect(() => {
-    if (initialExtra) extraRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (initialTool) document.getElementById('audio-tools-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const gateExtra = (toolId: string) => {
-    const ok = consumeExtraQuota(toolId, !!(entitlements as any)?.audioToolsSuite);
-    if (!ok) onSuccessToast('Jatah gratis alat ini hari ini habis (2x/hari). Buka Audio Tools tanpa batas di tab Harga.');
-    return ok;
-  };
 
   const catalog: AudioTrackItem[] = tracks;
   const activeTrack = catalog.find((t) => String(t.id) === String(activeTrackId)) || catalog[0];
@@ -365,13 +356,8 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             onUnlockEditor={handleUnlockAudioTools}
             onSuccessToast={onSuccessToast}
             isActive={activeSection === 'tools'}
+            initialTool={initialTool}
           />
-          {activeSection === 'tools' && (
-            <div ref={extraRef} className="mt-10 space-y-3 scroll-mt-20">
-              <h3 className="text-lg font-black text-white">Alat Tambahan</h3>
-              <AudioExtraTools initialTool={initialExtra ?? 'merge'} gate={gateExtra} onSuccessToast={onSuccessToast} />
-            </div>
-          )}
         </section>
       )}
 
@@ -392,3 +378,4 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     </div>
   );
 };
+

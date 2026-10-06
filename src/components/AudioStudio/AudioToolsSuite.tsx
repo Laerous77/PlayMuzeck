@@ -13,6 +13,13 @@ import {
   Info,
   Mic2,
   Upload,
+  Merge,
+  Eraser,
+  Activity,
+  AudioLines,
+  Timer,
+  Mic,
+  Sparkles,
   Play,
   Pause,
   Download,
@@ -27,6 +34,8 @@ import {
   X,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
+import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, type ExtraToolId } from './AudioExtraTools';
+import { consumeExtraQuota, remainingExtraQuota } from '../../services/extraToolsQuota';
 import {
   exportAudioFile,
   audioBufferToWav,
@@ -58,6 +67,8 @@ interface AudioToolsSuiteProps {
   toolsPrice?: number;
   /** false saat seksi Audio Tools disembunyikan (tetap ter-mount agar berkas & hasil proses tidak hilang). */
   isActive?: boolean;
+  /** Alat yang dibuka pertama kali (mis. dari URL /alat-audio/<slug>); bisa alat bawaan atau alat tambahan. */
+  initialTool?: UnifiedToolId | null;
 }
 
 type ToolType =
@@ -118,6 +129,54 @@ const TOOLS: ToolConfig[] = [
   { id: 'noise_reduction', name: 'Noise Reduction', desc: 'Peredam desis & dengung latar dengan spectral gate', icon: Waves },
   { id: 'vocal_separator', name: 'Vocal Isolator', desc: 'Pisahkan vokal & musik lewat teknik center-phase', icon: Mic2 },
 ];
+
+// ---------------------------------------------------------------------------
+// Suite gabungan: 9 alat bawaan + 6 alat tambahan, dikelompokkan menurut fungsi
+// ---------------------------------------------------------------------------
+
+export type UnifiedToolId = ToolType | ExtraToolId;
+
+interface ToolGroup {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  desc: string;
+  tools: UnifiedToolId[];
+}
+
+const TOOL_GROUPS: ToolGroup[] = [
+  { id: 'cut', label: 'Potong & Susun', icon: Scissors, desc: 'Ubah struktur audio: potong bagian, sambung beberapa file, atau balik urutannya.', tools: ['trim', 'merge', 'reverse'] },
+  { id: 'sound', label: 'Perbaiki Suara', icon: Sparkles, desc: 'Bersihkan dan seimbangkan suara: volume, jeda hening, loudness, mono, dan noise.', tools: ['volume', 'clean', 'noise_reduction'] },
+  { id: 'music', label: 'Nada, Tempo & Vokal', icon: Music, desc: 'Olah unsur musik: ubah nada, ubah kecepatan, atau pisahkan vokal dari musik.', tools: ['pitch', 'tempo', 'vocal_separator'] },
+  { id: 'format', label: 'Format & Ukuran', icon: RefreshCw, desc: 'Ganti format file (termasuk ekstrak audio dari video) atau perkecil ukurannya.', tools: ['convert', 'compress'] },
+  { id: 'record', label: 'Rekam & Analisis', icon: Mic, desc: 'Ambil audio baru dari mikrofon, atau cari tahu tempo dan kunci nada sebuah lagu.', tools: ['recorder', 'bpm'] },
+  { id: 'practice', label: 'Latihan Musik', icon: Timer, desc: 'Alat langsung untuk berlatih: jaga tempo dengan metronom dan setel instrumen dengan tuner.', tools: ['metronome', 'tuner'] },
+];
+
+const EXTRA_IDS = new Set<string>(EXTRA_TOOL_META.map((t) => t.id));
+const isExtraId = (id: UnifiedToolId): id is ExtraToolId => EXTRA_IDS.has(id);
+
+/** Nama, ikon, dan deskripsi untuk semua 15 alat. */
+function toolInfo(id: UnifiedToolId): { name: string; icon: React.ElementType; desc: string } {
+  const base = TOOLS.find((t) => t.id === id);
+  if (base) return { name: base.name, icon: base.icon, desc: base.desc };
+  const ex = EXTRA_TOOL_META.find((t) => t.id === id)!;
+  return { name: ex.label, icon: ex.icon, desc: ex.desc };
+}
+
+/** Slug halaman SEO (/alat-audio/<slug>) -> alat yang dibuka. */
+export const TOOL_SLUG_TO_ID: Record<string, UnifiedToolId> = {
+  'potong-audio': 'trim',
+  'atur-volume-audio': 'volume',
+  'ubah-nada-audio': 'pitch',
+  'ubah-kecepatan-audio': 'tempo',
+  'balik-audio': 'reverse',
+  'konversi-audio': 'convert',
+  'kompres-audio': 'compress',
+  'kurangi-noise-audio': 'noise_reduction',
+  'pisahkan-vokal': 'vocal_separator',
+  ...EXTRA_SLUG_TO_TOOL,
+};
 
 /** Tool real-time: tanpa tombol "Jalankan", hasil dibuat saat diunduh. */
 const LIVE_TOOLS: ToolType[] = ['volume', 'pitch', 'tempo'];
@@ -469,6 +528,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   onSuccessToast,
   toolsPrice = 20000,
   isActive = true,
+  initialTool = null,
 }) => {
   // Kepemilikan Audio Tools Suite (langsung, atau lewat salah satu track)
   const isToolsOwned = useMemo(() => {
@@ -478,7 +538,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     );
   }, [entitlements]);
 
-  const [selectedTool, setSelectedTool] = useState<ToolType>('trim');
+  const [selectedTool, setSelectedTool] = useState<ToolType>(initialTool && !isExtraId(initialTool) ? initialTool : 'trim');
+  // Alat tambahan yang aktif (null = alat bawaan `selectedTool` yang aktif).
+  const [selectedExtra, setSelectedExtra] = useState<ExtraToolId | null>(initialTool && isExtraId(initialTool) ? initialTool : null);
+  const [extraTick, setExtraTick] = useState(0);
+  const extraSessionRef = useRef<Set<string>>(new Set());
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
@@ -507,6 +571,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const [quotaMap, setQuotaMap] = useState<Record<ToolType, number>>(() => readQuota());
   const currentToolQuota = isToolsOwned ? Infinity : quotaMap[selectedTool] ?? DAILY_FREE_QUOTA;
+  // Kuota yang ditampilkan di header: mengikuti alat aktif (bawaan atau tambahan). `extraTick` memicu render ulang setelah pemakaian.
+  void extraTick;
+  const activeQuota = isToolsOwned ? Infinity : selectedExtra ? remainingExtraQuota(selectedExtra) : currentToolQuota;
+  const activeToolId: UnifiedToolId = selectedExtra ?? selectedTool;
+  const activeGroup = TOOL_GROUPS.find((g) => g.tools.includes(activeToolId)) ?? TOOL_GROUPS[0];
 
   // Convert: format tujuan tidak boleh sama dengan format berkas asal.
   const sourceFormat = useMemo(() => detectAudioFormat(audioFile), [audioFile]);
@@ -1269,6 +1338,36 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   // ---- Turunan UI ---------------------------------------------------------
 
   const toolMeta = TOOLS.find((t) => t.id === selectedTool)!;
+
+  /**
+   * Pintu kuota untuk 6 alat tambahan: aturannya sama dengan alat bawaan (2x gratis per hari per alat, lalu berbayar).
+   * `sessionKey` dipakai alat real-time (metronom, tuner): satu sesi halaman dihitung satu penggunaan.
+   */
+  const gateExtra = useCallback(
+    (toolId: ExtraToolId, sessionKey?: string) => {
+      const sKey = sessionKey ? `${toolId}:${sessionKey}` : null;
+      if (sKey && extraSessionRef.current.has(sKey)) return true;
+      const ok = consumeExtraQuota(toolId, isToolsOwned);
+      setExtraTick((t) => t + 1);
+      if (!ok) {
+        toastRef.current(`Jatah gratis ${toolInfo(toolId).name} hari ini habis (${DAILY_FREE_QUOTA}x/hari). Beli Audio Tools untuk pemakaian tanpa batas.`);
+      } else if (sKey) {
+        extraSessionRef.current.add(sKey);
+      }
+      return ok;
+    },
+    [isToolsOwned]
+  );
+
+  const pickTool = (id: UnifiedToolId) => {
+    stopPlayback();
+    if (isExtraId(id)) {
+      setSelectedExtra(id);
+    } else {
+      setSelectedExtra(null);
+      setSelectedTool(id);
+    }
+  };
   const isLiveTool = LIVE_TOOLS.includes(selectedTool);
   const isProcessing = currentToolState.isProcessing;
   const staticNeedsPurchase =
@@ -1320,7 +1419,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">Audio Processing Tools Suite</h3>
             </div>
             <p className="text-xs text-gray-300">
-              9 utilitas studio untuk pemotongan, pengaturan volume, nada, dan tempo, konversi format, kompresi, serta reduksi noise dan isolasi vokal.
+              15 alat studio dalam 6 kelompok: potong &amp; susun, perbaiki suara, nada/tempo/vokal, format &amp; ukuran, rekam &amp; analisis, serta latihan musik. Setiap alat gratis {DAILY_FREE_QUOTA}x per hari, selebihnya berbayar.
             </p>
           </div>
 
@@ -1329,12 +1428,12 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <span className="text-emerald-400 bg-emerald-500/10 h-9 px-3.5 rounded-xl border border-emerald-500/20 text-xs font-bold flex items-center gap-1.5">
                 <CheckCircle className="w-3.5 h-3.5" /> Sudah Dimiliki
               </span>
-            ) : currentToolQuota > 0 ? (
+            ) : activeQuota > 0 ? (
               <span className="text-accent bg-accent/10 h-9 px-3.5 rounded-xl border border-accent/20 text-xs font-bold flex items-center gap-1.5">
                 <Wrench className="w-3.5 h-3.5 text-accent" />
-                {currentToolQuota === DAILY_FREE_QUOTA
+                {activeQuota === DAILY_FREE_QUOTA
                   ? `${DAILY_FREE_QUOTA} penggunaan gratis hari ini (per alat)`
-                  : `${currentToolQuota} penggunaan gratis tersisa (per alat)`}
+                  : `${activeQuota} penggunaan gratis tersisa (per alat)`}
               </span>
             ) : (
               <button
@@ -1346,6 +1445,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               </button>
             )}
 
+            {!selectedExtra && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -1359,6 +1459,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               )}
               <span>{isLoadingFile ? 'Membaca...' : audioFile ? 'Ganti Berkas' : 'Unggah Berkas'}</span>
             </button>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -1386,38 +1487,76 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           </div>
         )}
 
-        {/* Bilah 9 Tools */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-2">
-          {TOOLS.map((tool) => {
-            const IconComp = tool.icon;
-            const isSelected = selectedTool === tool.id;
-            const tState = toolStates[tool.id];
+        {/* Kelompok alat (dikelompokkan menurut fungsi) */}
+        <div role="tablist" aria-label="Kelompok alat audio" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          {TOOL_GROUPS.map((g) => {
+            const GroupIcon = g.icon;
+            const on = g.id === activeGroup.id;
+            const busy = g.tools.some((id) => !isExtraId(id) && toolStates[id].isProcessing);
+            const ready = g.tools.some((id) => !isExtraId(id) && toolStates[id].resultBuffer);
+            return (
+              <button
+                key={g.id}
+                role="tab"
+                aria-selected={on}
+                type="button"
+                onClick={() => { if (!on) pickTool(g.tools[0]); }}
+                className={`relative p-3 rounded-xl border text-left transition-all cursor-pointer min-w-0 ${
+                  on ? 'bg-accent/15 border-accent text-white' : 'bg-black/40 text-gray-300 border-white/[0.06] hover:border-white/20'
+                }`}
+              >
+                {busy && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-400 animate-ping" />}
+                {!busy && ready && <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400" title="Ada hasil siap" />}
+                <span className="flex items-center gap-2 text-xs font-black leading-tight">
+                  <GroupIcon className={`w-4 h-4 shrink-0 ${on ? 'text-accent' : ''}`} />
+                  <span className="min-w-0 break-words">{g.label}</span>
+                </span>
+                <span className="mt-1 block text-[10px] text-gray-400 leading-snug">{g.tools.length} alat</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-xs text-gray-400 -mt-2">{activeGroup.desc}</p>
+
+        {/* Alat di dalam kelompok terpilih */}
+        <div role="tablist" aria-label={`Alat di ${activeGroup.label}`} className="flex flex-wrap gap-2 -mt-2">
+          {activeGroup.tools.map((id) => {
+            const info = toolInfo(id);
+            const IconComp = info.icon;
+            const isSelected = activeToolId === id;
+            const tState = isExtraId(id) ? null : toolStates[id];
             return (
               <button
                 type="button"
-                key={tool.id}
-                onClick={() => {
-                  stopPlayback();
-                  setSelectedTool(tool.id);
-                }}
-                className={`p-2.5 rounded-xl border flex flex-col items-center justify-center text-center gap-1.5 transition-all cursor-pointer relative min-w-0 ${
+                role="tab"
+                aria-selected={isSelected}
+                key={id}
+                onClick={() => pickTool(id)}
+                className={`px-3.5 py-2.5 rounded-xl border flex items-center gap-2 text-xs transition-all cursor-pointer relative ${
                   isSelected
                     ? 'bg-accent text-on-accent border-accent shadow-md font-black'
-                    : 'bg-black/40 text-gray-300 border-white/[0.06] hover:border-white/20'
+                    : 'bg-black/40 text-gray-300 border-white/[0.06] hover:border-white/20 font-bold'
                 }`}
               >
-                {tState.isProcessing && <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-blue-400 animate-ping" />}
-                {tState.resultBuffer && !tState.isProcessing && (
+                {tState?.isProcessing && <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-blue-400 animate-ping" />}
+                {tState?.resultBuffer && !tState.isProcessing && (
                   <span className="absolute top-1 left-1 w-2 h-2 rounded-full bg-emerald-400" title="Hasil siap" />
                 )}
                 <IconComp className="w-4 h-4 shrink-0" />
-                <span className="text-[11px] leading-tight w-full break-words">{tool.name}</span>
+                <span>{info.name}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Panel Kontrol */}
+        {/* Panel alat tambahan (6 alat; punya pemilih berkas sendiri) */}
+        {selectedExtra && (
+          <p className="text-[11px] text-gray-400 -mt-2">{toolInfo(selectedExtra).desc}. Semua diproses di perangkatmu.</p>
+        )}
+        <ExtraToolPanel active={selectedExtra} gate={gateExtra} onSuccessToast={onSuccessToast} />
+
+        {/* Panel Kontrol (9 alat bawaan, memakai tombol Unggah Berkas) */}
+        {!selectedExtra && (
         <div className="p-4 sm:p-5 rounded-xl bg-black/40 border border-white/[0.06] space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
@@ -1981,6 +2120,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             )}
           </div>
         </div>
+        )}
       </div>
     </section>
   );

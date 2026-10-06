@@ -1,18 +1,15 @@
 // src/components/AudioStudio/AudioExtraTools.tsx
 //
-// Alat audio tambahan PlayMuzeck (semua diproses di browser, tanpa unggah ke server).
-// Hanya alat yang TIDAK ada di "Audio Processing Tools Suite" (Trim, Volume, Pitch, Tempo, Reverse,
-// Convert, Compress, Noise Reduction, Vocal Isolator) agar tidak ada fitur kembar. Dikelompokkan per alur kerja:
-//
-//  Susun & Rapikan   : Gabung + Fade in/out  ·  Rapikan (hapus hening, normalisasi LUFS, stereo ke mono)
-//  Rekam & Analisis  : Perekam Suara + Trim  ·  Deteksi BPM & Kunci Nada
-//  Latihan Musik     : Metronom (birama, subdivisi, aksen, ekspor klik)  ·  Tuner (30+ preset instrumen)
-//
-// Catatan: "Pembuat Nada Dering" dihapus karena hanya kombinasi Trim/Cut (di Suite) + Fade (di Gabung & Fade).
+// 6 alat audio tambahan PlayMuzeck (semua diproses di browser, tanpa unggah ke server). Alat-alat ini
+// ditanam di dalam AudioToolsSuite (satu suite 15 alat, dikelompokkan per fungsi) lewat <ExtraToolPanel/>.
+// Hanya alat yang TIDAK ada di 9 alat bawaan Suite (Trim, Volume, Pitch, Tempo, Reverse, Convert,
+// Compress, Noise Reduction, Vocal Isolator):
+//   Gabung + Fade · Rapikan (hening/LUFS/mono) · Perekam + Trim · BPM & Kunci · Metronom · Tuner
+// Kuota: sama dengan alat bawaan, 2x gratis per hari per alat, lalu berbayar (diatur lewat prop `gate`).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Merge, Activity, Mic, Eraser, Timer, AudioLines, Upload, Download, Play, Square,
-  Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle, Layers, Music, RotateCcw,
+  Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle, RotateCcw,
 } from 'lucide-react';
 import {
   audioBufferToWav, downloadBlob, exportAudioFile,
@@ -31,8 +28,9 @@ export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' |
 export interface AudioExtraToolsProps {
   /** Tool yang dibuka pertama kali (mis. dari URL /alat-audio/<slug>). */
   initialTool?: ExtraToolId;
-  /** Dipanggil sebelum mengunduh hasil. Kembalikan false untuk memblokir (mis. kuota harian habis / buka modal beli). */
-  gate?: (toolId: ExtraToolId) => boolean;
+  /** Dipanggil sebelum satu "penggunaan" (unduh hasil, analisis, atau mulai sesi real-time). Kembalikan false untuk memblokir (kuota harian habis).
+   *  `sessionKey`: pemanggilan berikutnya dengan kunci yang sama di sesi halaman yang sama tidak menambah pemakaian. */
+  gate?: (toolId: ExtraToolId, sessionKey?: string) => boolean;
   onSuccessToast?: (msg: string) => void;
 }
 
@@ -50,38 +48,17 @@ export const EXTRA_SLUG_TO_TOOL: Record<string, ExtraToolId> = {
   'tuner-online': 'tuner',
 };
 
-type ToolMeta = { id: ExtraToolId; label: string; icon: React.ElementType; desc: string; realtime?: boolean };
-type GroupMeta = { id: string; label: string; icon: React.ElementType; desc: string; tools: ToolMeta[] };
+export interface ExtraToolMeta { id: ExtraToolId; label: string; icon: React.ElementType; desc: string; realtime?: boolean }
 
-/** Alat dikelompokkan per alur kerja supaya pengguna tahu harus mulai dari mana. */
-const GROUPS: GroupMeta[] = [
-  {
-    id: 'edit', label: 'Susun & Rapikan', icon: Layers,
-    desc: 'Untuk file audio yang sudah kamu punya: sambung beberapa file, lalu bersihkan hasilnya.',
-    tools: [
-      { id: 'merge', label: 'Gabung & Fade', icon: Merge, desc: 'Gabungkan beberapa audio, crossfade, fade in/out (satu file = fade saja).' },
-      { id: 'clean', label: 'Rapikan Audio', icon: Eraser, desc: 'Hapus jeda hening, samakan loudness (LUFS), ubah stereo ke mono.' },
-    ],
-  },
-  {
-    id: 'record', label: 'Rekam & Analisis', icon: Mic,
-    desc: 'Ambil audio baru dari mikrofon, atau cari tahu tempo dan kunci nada sebuah lagu.',
-    tools: [
-      { id: 'recorder', label: 'Perekam', icon: Mic, desc: 'Rekam suara dari mikrofon, potong awal/akhir, lalu unduh.', realtime: true },
-      { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu.' },
-    ],
-  },
-  {
-    id: 'practice', label: 'Latihan Musik', icon: Music,
-    desc: 'Alat langsung (real-time) untuk berlatih: jaga tempo dan setel instrumen.',
-    tools: [
-      { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Birama, subdivisi, aksen per ketukan, dan ekspor klik ke berkas.', realtime: true },
-      { id: 'tuner', label: 'Tuner', icon: AudioLines, desc: 'Setel gitar, bass, ukulele, alat gesek, banjo, mandolin, dan vokal.', realtime: true },
-    ],
-  },
+/** Metadata 6 alat tambahan; dipakai Suite untuk menyusun bilah alat gabungan. */
+export const EXTRA_TOOL_META: ExtraToolMeta[] = [
+  { id: 'merge', label: 'Gabung & Fade', icon: Merge, desc: 'Gabungkan beberapa audio, crossfade, fade in/out (satu file = fade saja)' },
+  { id: 'clean', label: 'Rapikan Audio', icon: Eraser, desc: 'Hapus jeda hening, samakan loudness (LUFS), ubah stereo ke mono' },
+  { id: 'recorder', label: 'Perekam', icon: Mic, desc: 'Rekam suara dari mikrofon, potong awal/akhir, lalu unduh', realtime: true },
+  { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu' },
+  { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Birama, subdivisi, aksen per ketukan, dan ekspor klik ke berkas', realtime: true },
+  { id: 'tuner', label: 'Tuner', icon: AudioLines, desc: 'Setel gitar, bass, ukulele, alat gesek, banjo, mandolin, dan vokal', realtime: true },
 ];
-const ALL_TOOLS: ToolMeta[] = GROUPS.flatMap((g) => g.tools);
-const groupOf = (id: ExtraToolId) => GROUPS.find((g) => g.tools.some((t) => t.id === id)) ?? GROUPS[0];
 
 // ───────────────────────── Helper umum ─────────────────────────
 
@@ -206,8 +183,8 @@ const Preview: React.FC<{ buffer: AudioBuffer | null }> = ({ buffer }) => {
 
 const ExportPanel: React.FC<{
   buffer: AudioBuffer | null; fileName: string; toolId: ExtraToolId;
-  gate?: AudioExtraToolsProps['gate']; onDone?: (m: string) => void;
-}> = ({ buffer, fileName, toolId, gate, onDone }) => {
+  gate?: AudioExtraToolsProps['gate']; onDone?: (m: string) => void; sessionKey?: string;
+}> = ({ buffer, fileName, toolId, gate, onDone, sessionKey }) => {
   const [fmt, setFmt] = useState<'MP3' | 'WAV' | 'FLAC' | 'M4A'>('MP3');
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
@@ -215,7 +192,7 @@ const ExportPanel: React.FC<{
   const [err, setErr] = useState<string | null>(null);
   if (!buffer) return null;
   const run = async () => {
-    if (gate && !gate(toolId)) return;
+    if (gate && !gate(toolId, sessionKey)) return;
     setBusy(true); setErr(null); setNote(null); setPct(0);
     try {
       const r = await exportAudioFile(buffer, fileName, fmt, { mp3Kbps: 192, onProgress: setPct });
@@ -348,13 +325,14 @@ const MergeFadeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
 
 // ───────────────────────── 2. BPM & Kunci ─────────────────────────
 
-const BpmKeyTool: React.FC<{ toast?: (m: string) => void }> = ({ toast }) => {
+const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
   const [fileName, setFileName] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<{ bpm: ReturnType<typeof detectBpm>; key: ReturnType<typeof detectKey>; seconds: number } | null>(null);
 
   const onFiles = async ([file]: File[]) => {
+    if (gate && !gate('bpm')) return; // 1 analisis = 1 penggunaan
     setBusy(true); setErr(null); setRes(null); setFileName(file.name);
     try {
       const buf = await decodeFile(file);
@@ -711,6 +689,7 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     }
   };
   const start = () => {
+    if (gate && !gate('metronome', 'session')) return; // 1 sesi (sampai halaman dimuat ulang) = 1 penggunaan
     stop();
     const ctx = new AudioCtx(); void ctx.resume();
     const master = ctx.createGain(); master.gain.value = cfg.current.vol; master.connect(ctx.destination);
@@ -788,7 +767,7 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
           </Field>
           <button type="button" onClick={makeFile} className={btnGhost}>Buat berkas</button>
         </div>
-        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${sig.id.replace('/', '-')}`} toolId="metronome" gate={gate} onDone={toast} /></>)}
+        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${sig.id.replace('/', '-')}`} toolId="metronome" gate={gate} onDone={toast} sessionKey="session" /></>)}
       </div>
     </Panel>
   );
@@ -798,7 +777,7 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
 
 const PRESET_GROUPS = Array.from(new Set(TUNING_PRESETS.map((p) => p.group)));
 
-const TunerTool: React.FC = () => {
+const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) => {
   const [preset, setPreset] = useState<TuningPreset>(TUNING_PRESETS.find((p) => p.id === 'guitar') ?? TUNING_PRESETS[1]);
   const [a4, setA4] = useState(440);
   const [running, setRunning] = useState(false);
@@ -823,6 +802,7 @@ const TunerTool: React.FC = () => {
   const start = async () => {
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr('Browser ini belum mendukung akses mikrofon.'); return; }
+    if (gate && !gate('tuner', 'session')) return; // 1 sesi (sampai halaman dimuat ulang) = 1 penggunaan
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       const ctx = new AudioCtx(); void ctx.resume();
@@ -912,49 +892,25 @@ const TunerTool: React.FC = () => {
   );
 };
 
-// ───────────────────────── Komponen utama ─────────────────────────
+// ───────────────────────── Panel gabungan (ditanam di AudioToolsSuite) ─────────────────────────
 
-export const AudioExtraTools: React.FC<AudioExtraToolsProps> = ({ initialTool = 'merge', gate, onSuccessToast }) => {
-  const [active, setActive] = useState<ExtraToolId>(initialTool);
-  const [visited, setVisited] = useState<Set<ExtraToolId>>(new Set([initialTool]));
-  const select = (id: ExtraToolId) => { setActive(id); setVisited((v) => new Set(v).add(id)); };
+/**
+ * Merender alat tambahan yang sedang dipilih. Alat non-real-time tetap ter-mount (disembunyikan) setelah pernah dibuka
+ * supaya berkas & hasilnya tidak hilang saat pengguna berpindah alat. `active = null` berarti alat bawaan Suite yang aktif.
+ */
+export const ExtraToolPanel: React.FC<{ active: ExtraToolId | null; gate?: AudioExtraToolsProps['gate']; onSuccessToast?: (msg: string) => void }> = ({ active, gate, onSuccessToast }) => {
+  const [visited, setVisited] = useState<Set<ExtraToolId>>(new Set());
+  useEffect(() => { if (active) setVisited((v) => (v.has(active) ? v : new Set(v).add(active))); }, [active]);
   const show = (id: ExtraToolId) => (active === id ? '' : 'hidden');
-  const mounted = (id: ExtraToolId) => (ALL_TOOLS.find((t) => t.id === id)?.realtime ? active === id : visited.has(id));
-  const group = groupOf(active);
-  const tool = ALL_TOOLS.find((t) => t.id === active);
-
+  const mounted = (id: ExtraToolId) => (EXTRA_TOOL_META.find((t) => t.id === id)?.realtime ? active === id : visited.has(id) || active === id);
   return (
-    <div className="space-y-4">
-      <div role="tablist" aria-label="Kelompok alat tambahan" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-        {GROUPS.map((g) => {
-          const on = g.id === group.id;
-          return (
-            <button key={g.id} role="tab" aria-selected={on} type="button" onClick={() => select(g.tools[0].id)}
-              className={`text-left px-3.5 py-3 rounded-2xl border cursor-pointer transition-all ${on ? 'bg-accent/15 border-accent text-white' : 'bg-black/40 border-white/[0.1] text-gray-300 hover:border-accent/50'}`}>
-              <span className="flex items-center gap-2 text-sm font-black"><g.icon className={`w-4 h-4 ${on ? 'text-accent' : ''}`} />{g.label}</span>
-              <span className="mt-1 block text-[11px] leading-snug text-gray-400">{g.tools.map((t) => t.label).join(' · ')}</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-xs text-gray-400">{group.desc}</p>
-      <div role="tablist" aria-label={`Alat di ${group.label}`} className="flex flex-wrap gap-2">
-        {group.tools.map((t) => (
-          <button key={t.id} role="tab" aria-selected={active === t.id} type="button" onClick={() => select(t.id)}
-            className={`px-3 py-2 rounded-xl text-xs font-black inline-flex items-center gap-2 border cursor-pointer transition-all ${active === t.id ? 'bg-accent text-on-accent border-accent' : 'bg-black/40 text-gray-300 border-white/[0.1] hover:border-accent/50'}`}>
-            <t.icon className="w-4 h-4" /><span>{t.label}</span>
-          </button>
-        ))}
-      </div>
-      <p className="text-[11px] text-gray-400">{tool?.desc} Semua diproses di perangkatmu.</p>
+    <div className={active ? '' : 'hidden'}>
       {mounted('merge') && <div className={show('merge')}><MergeFadeTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('clean') && <div className={show('clean')}><CleanTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('recorder') && <div className={show('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('bpm') && <div className={show('bpm')}><BpmKeyTool toast={onSuccessToast} /></div>}
+      {mounted('bpm') && <div className={show('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('metronome') && <div className={show('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('tuner') && <div className={show('tuner')}><TunerTool /></div>}
+      {mounted('tuner') && <div className={show('tuner')}><TunerTool gate={gate} /></div>}
     </div>
   );
 };
-
-export default AudioExtraTools;
