@@ -1,13 +1,8 @@
 // src/services/audioExtraDsp.ts
 //
-// DSP murni (tanpa Web Audio API) untuk alat-alat tambahan PlayMuzeck:
-// gabung audio, fade, deteksi BPM & kunci nada, hapus jeda hening, normalisasi
-// loudness (LUFS), stereo ke mono, pembuat klik metronom, dan deteksi pitch (tuner).
-// Semua fungsi bekerja pada array kanal Float32Array sehingga bisa diuji di Node.
+// DSP murni (tanpa Web Audio API) untuk alat-alat audio PlayMuzeck.
 
 export type Channels = Float32Array[];
-
-// ───────────────────────── Utilitas dasar ─────────────────────────
 
 export const dbToLin = (db: number) => Math.pow(10, db / 20);
 export const linToDb = (lin: number) => 20 * Math.log10(Math.max(lin, 1e-12));
@@ -36,7 +31,6 @@ function monoMix(ch: Channels): Float32Array {
   return toMono(ch)[0] ?? new Float32Array(0);
 }
 
-/** Ambil potongan [startSec, endSec) dari audio. */
 export function sliceChannels(ch: Channels, sr: number, startSec: number, endSec: number): Channels {
   const n = ch[0]?.length ?? 0;
   const a = Math.max(0, Math.min(n, Math.round(startSec * sr)));
@@ -44,7 +38,6 @@ export function sliceChannels(ch: Channels, sr: number, startSec: number, endSec
   return ch.map((c) => c.slice(a, b));
 }
 
-/** Samakan jumlah kanal (mono -> stereo dengan menduplikasi, atau kanal berlebih dibuang). */
 export function matchChannelCount(ch: Channels, count: number): Channels {
   if (ch.length === count) return ch;
   const out: Channels = [];
@@ -52,12 +45,6 @@ export function matchChannelCount(ch: Channels, count: number): Channels {
   return out;
 }
 
-// ───────────────────────── Gabung & Fade ─────────────────────────
-
-/**
- * Gabung beberapa audio berurutan. `crossfadeSec` > 0 membuat tumpang-tindih
- * dengan kurva equal-power di tiap sambungan. Semua bagian harus sample rate sama.
- */
 export function concatChannels(parts: Channels[], sr: number, crossfadeSec = 0): Channels {
   const valid = parts.filter((p) => (p[0]?.length ?? 0) > 0);
   if (valid.length === 0) return [new Float32Array(0)];
@@ -98,7 +85,6 @@ function fadeGain(t: number, curve: FadeCurve): number {
   return x;
 }
 
-/** Fade in di awal dan fade out di akhir (detik). Mengembalikan salinan baru. */
 export function applyFade(ch: Channels, sr: number, fadeInSec: number, fadeOutSec: number, curve: FadeCurve = 'natural'): Channels {
   const out = cloneChannels(ch);
   const n = out[0]?.length ?? 0;
@@ -110,8 +96,6 @@ export function applyFade(ch: Channels, sr: number, fadeInSec: number, fadeOutSe
   }
   return out;
 }
-
-// ───────────────────────── FFT kecil ─────────────────────────
 
 function fftInPlace(re: Float64Array, im: Float64Array) {
   const n = re.length;
@@ -139,7 +123,6 @@ function fftInPlace(re: Float64Array, im: Float64Array) {
   }
 }
 
-/** Turunkan sample rate dengan rata-rata blok (cukup untuk analisis, bukan untuk didengar). */
 function decimate(x: Float32Array, factor: number): Float32Array {
   if (factor <= 1) return x;
   const n = Math.floor(x.length / factor);
@@ -152,7 +135,6 @@ function decimate(x: Float32Array, factor: number): Float32Array {
   return out;
 }
 
-/** Ambil jendela analisis dari tengah lagu (maks `maxSec` detik) agar cepat. */
 function centerWindow(x: Float32Array, sr: number, maxSec: number): Float32Array {
   const max = Math.round(maxSec * sr);
   if (x.length <= max) return x;
@@ -160,24 +142,19 @@ function centerWindow(x: Float32Array, sr: number, maxSec: number): Float32Array
   return x.subarray(start, start + max);
 }
 
-// ───────────────────────── Deteksi BPM ─────────────────────────
-
 export interface BpmResult {
   bpm: number;
-  /** Alternatif umum (setengah / dua kali) yang masih dalam rentang 60–200. */
   alternatives: number[];
-  /** 0–1, makin tinggi makin yakin. */
   confidence: number;
 }
 
 export function detectBpm(ch: Channels, sr: number): BpmResult | null {
   const mono = monoMix(ch);
-  if (mono.length < sr * 4) return null; // terlalu pendek
+  if (mono.length < sr * 4) return null;
   const factor = Math.max(1, Math.round(sr / 11025));
   const fs = sr / factor;
   const x = centerWindow(decimate(mono, factor), fs, 90);
 
-  // Energi per frame -> kekuatan onset (kenaikan energi, skala log).
   const hop = 64, win = 256;
   const frames = Math.floor((x.length - win) / hop);
   if (frames < 200) return null;
@@ -196,8 +173,8 @@ export function detectBpm(ch: Channels, sr: number): BpmResult | null {
     const b = Math.log1p((1000 * energy[f - 1]) / maxE);
     onset[f] = Math.max(0, a - b);
   }
-  // Buang rata-rata bergerak supaya autokorelasi tidak bias.
-  const mw = Math.round(fs / hop); // ±1 detik
+
+  const mw = Math.round(fs / hop);
   const prefix = new Float64Array(frames + 1);
   for (let i = 0; i < frames; i++) prefix[i + 1] = prefix[i] + onset[i];
   const z = new Float64Array(frames);
@@ -222,19 +199,17 @@ export function detectBpm(ch: Channels, sr: number): BpmResult | null {
   const weighted = (lag: number) => {
     const bpm = (60 * frameRate) / lag;
     const o = Math.log2(bpm / 120);
-    return ac[lag] * Math.exp(-0.5 * o * o); // prior lembut di sekitar 120 BPM
+    return ac[lag] * Math.exp(-0.5 * o * o);
   };
 
   let best = minLag, bestV = -Infinity;
   for (let lag = minLag; lag <= maxLag; lag++) {
-    // hanya puncak lokal
     if (ac[lag] < ac[lag - 1] || ac[lag] < ac[lag + 1]) continue;
     const v = weighted(lag);
     if (v > bestV) { bestV = v; best = lag; }
   }
   if (bestV <= 0) return null;
 
-  // Interpolasi parabola agar presisi di bawah satu frame.
   const y0 = ac[best - 1], y1 = ac[best], y2 = ac[best + 1];
   const denom = y0 - 2 * y1 + y2;
   const shift = denom !== 0 ? (0.5 * (y0 - y2)) / denom : 0;
@@ -253,16 +228,10 @@ export function detectBpm(ch: Channels, sr: number): BpmResult | null {
   };
 }
 
-// ───────────────────────── Deteksi kunci nada ─────────────────────────
-
-const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-// Ejaan kunci yang lazim dipakai musisi: kunci mayor memakai Db/Eb/Ab/Bb (bukan C#/D#/G#/A#),
-// kunci minor memakai C#/G# (C# minor, G# minor) tetapi Eb/Bb (Eb minor, Bb minor).
 const MAJOR_KEY_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
 const MINOR_KEY_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
-/** Nama tonika kunci menurut ejaan musisi, mis. keyLabel(1, false) = "Db", keyLabel(1, true) = "C#". */
 export const keyLabel = (pc: number, minor: boolean): string => (minor ? MINOR_KEY_NAMES : MAJOR_KEY_NAMES)[((Math.round(pc) % 12) + 12) % 12];
-// Profil Krumhansl-Kessler.
+
 const KK_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
 const KK_MINOR = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
 
@@ -275,7 +244,6 @@ function pearson(a: number[], b: number[]): number {
   return da > 0 && db > 0 ? num / Math.sqrt(da * db) : 0;
 }
 
-/** Kode Camelot (dipakai DJ) untuk pitch class + mode. */
 export function camelotCode(pc: number, minor: boolean): string {
   const majorPc = minor ? (pc + 3) % 12 : pc;
   const num = ((8 + ((majorPc * 7) % 12) - 1) % 12) + 1;
@@ -283,16 +251,12 @@ export function camelotCode(pc: number, minor: boolean): string {
 }
 
 export interface KeyResult {
-  /** Contoh: "C mayor" / "A minor". */
   name: string;
   tonic: string;
   mode: 'mayor' | 'minor';
   camelot: string;
-  /** Kunci relatif, contoh "A minor" untuk C mayor. */
   relative: string;
-  /** 0–1, selisih korelasi antara kunci terbaik dan terbaik kedua. */
   confidence: number;
-  /** Chroma ternormalisasi (12 nilai, C..B) untuk visualisasi. */
   chroma: number[];
 }
 
@@ -319,7 +283,7 @@ export function detectKey(ch: Channels, sr: number): KeyResult | null {
       const mag = Math.hypot(re[k], im[k]);
       const midi = 69 + 12 * Math.log2((k * binHz) / 440);
       const nearest = Math.round(midi);
-      if (Math.abs(midi - nearest) > 0.4) continue; // abaikan bin di antara dua nada
+      if (Math.abs(midi - nearest) > 0.4) continue;
       chroma[((nearest % 12) + 12) % 12] += mag;
     }
   }
@@ -349,12 +313,10 @@ export function detectKey(ch: Channels, sr: number): KeyResult | null {
   };
 }
 
-// ───────────────────────── Hapus jeda hening ─────────────────────────
-
 export interface SilenceOptions {
-  thresholdDb?: number;   // default -45 dBFS
-  minSilenceMs?: number;  // jeda minimal yang dipotong, default 400 ms
-  keepMs?: number;        // sisa jeda yang dipertahankan per jeda, default 150 ms
+  thresholdDb?: number;
+  minSilenceMs?: number;
+  keepMs?: number;
 }
 
 export interface SilenceResult {
@@ -370,7 +332,7 @@ export function removeSilence(ch: Channels, sr: number, opts: SilenceOptions = {
   const n = ch[0]?.length ?? 0;
   if (n === 0) return { channels: ch, removedSeconds: 0, removedCount: 0 };
 
-  const frame = Math.max(1, Math.round(sr * 0.01)); // 10 ms
+  const frame = Math.max(1, Math.round(sr * 0.01));
   const thr = dbToLin(thresholdDb);
   const nFrames = Math.ceil(n / frame);
   const silent = new Uint8Array(nFrames);
@@ -381,7 +343,6 @@ export function removeSilence(ch: Channels, sr: number, opts: SilenceOptions = {
     silent[f] = peak < thr ? 1 : 0;
   }
 
-  // Kumpulkan rentang yang DIBUANG.
   const cuts: [number, number][] = [];
   let f = 0;
   while (f < nFrames) {
@@ -413,7 +374,6 @@ export function removeSilence(ch: Channels, sr: number, opts: SilenceOptions = {
   }
   for (let c = 0; c < ch.length; c++) out[c].set(ch[c].subarray(r, n), w);
 
-  // Fade sangat pendek di tiap sambungan supaya tidak berbunyi "klik".
   for (const j of joins) {
     for (let c = 0; c < out.length; c++) {
       for (let i = 0; i < fadeLen; i++) {
@@ -427,12 +387,9 @@ export function removeSilence(ch: Channels, sr: number, opts: SilenceOptions = {
   return { channels: out, removedSeconds: removed / sr, removedCount: cuts.length };
 }
 
-// ───────────────────────── Loudness (ITU-R BS.1770 / EBU R128) ─────────────────────────
-
 interface Biquad { b0: number; b1: number; b2: number; a1: number; a2: number; }
 
 function kWeightingFilters(fs: number): [Biquad, Biquad] {
-  // Tahap 1: high-shelf (+4 dB), tahap 2: high-pass ~38 Hz (RLB). Koefisien dihitung untuk fs berapa pun.
   const f0a = 1681.974450955533, Ga = 3.999843853973347, Qa = 0.7071752369554196;
   const Ka = Math.tan((Math.PI * f0a) / fs);
   const Vh = Math.pow(10, Ga / 20);
@@ -452,20 +409,18 @@ function kWeightingFilters(fs: number): [Biquad, Biquad] {
   return [shelf, hp];
 }
 
-/** Loudness terintegrasi dalam LUFS (dengan gating absolut -70 dan relatif -10 LU). null bila senyap. */
 export function measureLufs(ch: Channels, sr: number): number | null {
   const n = ch[0]?.length ?? 0;
-  const step = Math.round(0.1 * sr);   // geser 100 ms
-  const block = step * 4;              // blok 400 ms (overlap 75%)
+  const step = Math.round(0.1 * sr);
+  const block = step * 4;
   if (n < block) return null;
   const [shelf, hp] = kWeightingFilters(sr);
   const nSteps = Math.floor(n / step);
-  const stepEnergy = new Float64Array(nSteps); // jumlah energi (semua kanal) per langkah 100 ms
+  const stepEnergy = new Float64Array(nSteps);
 
-  // Streaming: filter K-weighting dijalankan sampel demi sampel, tanpa menyimpan array besar.
   for (const c of ch) {
-    let sx1 = 0, sx2 = 0, sy1 = 0, sy2 = 0; // shelf
-    let hx1 = 0, hx2 = 0, hy1 = 0, hy2 = 0; // high-pass
+    let sx1 = 0, sx2 = 0, sy1 = 0, sy2 = 0;
+    let hx1 = 0, hx2 = 0, hy1 = 0, hy2 = 0;
     const limit = nSteps * step;
     for (let i = 0; i < limit; i++) {
       const x = c[i];
@@ -490,7 +445,6 @@ export function measureLufs(ch: Channels, sr: number): number | null {
   return toLufs(rel.reduce((s, v) => s + v, 0) / rel.length);
 }
 
-/** Limiter lookahead sederhana: menjamin puncak sampel <= ceilingDb. Mengubah `ch` langsung. */
 export function limitPeaks(ch: Channels, sr: number, ceilingDb: number): void {
   const n = ch[0]?.length ?? 0;
   if (n === 0) return;
@@ -505,7 +459,6 @@ export function limitPeaks(ch: Channels, sr: number, ceilingDb: number): void {
     if (g[i] < 1) any = true;
   }
   if (!any) return;
-  // min bergeser ke depan (jendela W) dengan deque monoton
   const gmin = new Float32Array(n);
   const dq = new Int32Array(n);
   let head = 0, tail = 0;
@@ -515,8 +468,6 @@ export function limitPeaks(ch: Channels, sr: number, ceilingDb: number): void {
     while (dq[head] > i + W - 1) head++;
     gmin[i] = g[dq[head]];
   }
-  // rata-rata bergerak mundur sepanjang W (menjamin gain <= g di tiap sampel).
-  // Sebelum sampel pertama, ring diisi gmin[0] agar jaminan tetap berlaku di awal berkas.
   const ring = new Float32Array(W).fill(gmin[0]);
   let acc = gmin[0] * W;
   for (let i = 0; i < n; i++) {
@@ -536,7 +487,6 @@ export interface NormalizeResult {
   limited: boolean;
 }
 
-/** Normalisasi ke target LUFS. Puncak dijaga <= ceilingDb dengan limiter bila perlu. */
 export function normalizeLoudness(ch: Channels, sr: number, targetLufs: number, ceilingDb = -1): NormalizeResult {
   const before = measureLufs(ch, sr);
   if (before === null) return { channels: cloneChannels(ch), beforeLufs: null, afterLufs: null, gainDb: 0, limited: false };
@@ -551,12 +501,11 @@ export function normalizeLoudness(ch: Channels, sr: number, targetLufs: number, 
     if (linToDb(peakOf(out)) > ceilingDb) { limitPeaks(out, sr, ceilingDb); limited = true; }
     after = measureLufs(out, sr);
     if (after === null || Math.abs(after - targetLufs) < 0.3) break;
-    gainDb += targetLufs - after; // koreksi akibat limiter
+    gainDb += targetLufs - after;
   }
   return { channels: out, beforeLufs: before, afterLufs: after, gainDb, limited };
 }
 
-/** Normalisasi puncak ke targetDb (mis. -1 dBFS). */
 export function normalizePeak(ch: Channels, targetDb = -1): { channels: Channels; gainDb: number } {
   const p = peakOf(ch);
   if (p <= 0) return { channels: cloneChannels(ch), gainDb: 0 };
@@ -567,9 +516,6 @@ export function normalizePeak(ch: Channels, targetDb = -1): { channels: Channels
   return { channels: out, gainDb };
 }
 
-// ───────────────────────── Metronom (render ke berkas) ─────────────────────────
-
-/** Subdivisi = jumlah klik per pulsa (1 sampai 6), tersebar rata. Klik pertama di pulsa, sisanya lebih pelan. */
 export interface Subdivision { id: string; label: string; hint: string; offsets: number[]; }
 
 const even = (n: number) => Array.from({ length: n }, (_, i) => i / n);
@@ -580,9 +526,7 @@ export const SUBDIVISIONS: Subdivision[] = [1, 2, 3, 4, 5, 6].map((n) => ({
   offsets: even(n),
 }));
 
-/** Birama. `pulses` = jumlah pulsa per bar; BPM mengacu pada satu pulsa (nilai nada di penyebut). */
 export interface TimeSignature { id: string; label: string; pulses: number; accents: Accent[]; }
-/** 0 = senyap, 1 = normal, 2 = aksen. */
 export type Accent = 0 | 1 | 2;
 
 const acc = (n: number, strong: number[]): Accent[] => Array.from({ length: n }, (_, i) => (strong.includes(i) ? 2 : 1) as Accent);
@@ -598,7 +542,6 @@ export const TIME_SIGNATURES: TimeSignature[] = [
   ts('12/8', 12, [0, 3, 6, 9]),
 ];
 
-/** Karakter bunyi klik. `accent`/`normal`/`sub` = frekuensi (Hz); `decay` = peluruhan envelope; `noise` = campuran derau (0..1). */
 export interface ClickSound { id: string; label: string; accent: number; normal: number; sub: number; decay: number; noise: number; wave: 'sine' | 'square' | 'triangle'; }
 export const CLICK_SOUNDS: ClickSound[] = [
   { id: 'beep', label: 'Beep (sine)', accent: 1600, normal: 1000, sub: 700, decay: 90, noise: 0, wave: 'sine' },
@@ -610,16 +553,11 @@ export const CLICK_SOUNDS: ClickSound[] = [
 
 export interface MetronomeRenderOptions {
   bpm: number;
-  /** Jumlah pulsa per bar (pembilang birama). */
   beatsPerBar: number;
   bars: number;
-  /** Id SUBDIVISIONS ('1'..'6' = jumlah klik per ketukan). Default '1'. */
   subdivisionId?: string;
-  /** Jumlah klik per ketukan (1-6), alternatif dari subdivisionId. Diabaikan bila subdivisionId diisi. */
   subdivision?: number;
-  /** Aksen per pulsa (0 senyap, 1 normal, 2 aksen). Default: pulsa 1 = aksen, lainnya normal. */
   accents?: Accent[];
-  /** Id CLICK_SOUNDS. Default 'beep'. */
   sound?: string;
   sampleRate?: number;
 }
@@ -627,7 +565,6 @@ export interface MetronomeRenderOptions {
 export const getSubdivision = (id?: string): Subdivision => SUBDIVISIONS.find((x) => x.id === id) ?? SUBDIVISIONS[0];
 export const getClickSound = (id?: string): ClickSound => CLICK_SOUNDS.find((x) => x.id === id) ?? CLICK_SOUNDS[0];
 
-/** Istilah tempo klasik (Italia) untuk BPM yang diberikan. */
 export function tempoMarking(bpm: number): string {
   if (bpm < 40) return 'Grave';
   if (bpm < 60) return 'Largo';
@@ -641,7 +578,6 @@ export function tempoMarking(bpm: number): string {
   return 'Prestissimo';
 }
 
-/** Hasilkan loop klik metronom mono. Aksen mengikuti pola per pulsa; subdivisi memakai bunyi lebih pelan. */
 export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
   const sr = opts.sampleRate ?? 44100;
   const sub = getSubdivision(opts.subdivisionId ?? (opts.subdivision !== undefined ? String(Math.max(1, Math.min(6, Math.round(opts.subdivision)))) : undefined));
@@ -651,7 +587,7 @@ export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
   const pulseSamples = (60 / opts.bpm) * sr;
   const total = Math.round(pulseSamples * pulses * opts.bars);
   const out = new Float32Array(total);
-  let seed = 1234567; // derau deterministik agar hasil ekspor konsisten
+  let seed = 1234567;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xffffffff * 2 - 1; };
   const click = (startSample: number, freq: number, amp: number) => {
     const len = Math.round(0.06 * sr);
@@ -661,7 +597,7 @@ export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
       const ph = 2 * Math.PI * freq * t;
       const tone = snd.wave === 'sine' ? Math.sin(ph) : snd.wave === 'square' ? Math.sign(Math.sin(ph)) * 0.6 : (2 / Math.PI) * Math.asin(Math.sin(ph));
       const v = out[startSample + i] + (tone * (1 - snd.noise) + rnd() * snd.noise) * env * amp;
-      out[startSample + i] = v > 1 ? 1 : v < -1 ? -1 : v; // klik yang bertumpuk tidak boleh clipping
+      out[startSample + i] = v > 1 ? 1 : v < -1 ? -1 : v;
     }
   };
   for (let p = 0; p < pulses * opts.bars; p++) {
@@ -677,11 +613,8 @@ export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
   return out;
 }
 
-// ───────────────────────── Tuner (deteksi pitch YIN) ─────────────────────────
-
 export interface PitchResult { freq: number; clarity: number; }
 
-/** Deteksi pitch dasar dengan algoritma YIN. Mengembalikan null bila tidak ada nada jelas. */
 export function detectPitch(buf: Float32Array, sr: number, minHz = 60, maxHz = 1200): PitchResult | null {
   const size = buf.length;
   const half = Math.floor(size / 2);
@@ -691,7 +624,7 @@ export function detectPitch(buf: Float32Array, sr: number, minHz = 60, maxHz = 1
 
   let rms = 0;
   for (let i = 0; i < size; i++) rms += buf[i] * buf[i];
-  if (Math.sqrt(rms / size) < 0.008) return null; // terlalu pelan
+  if (Math.sqrt(rms / size) < 0.008) return null;
 
   const d = new Float32Array(tauMax + 1);
   for (let tau = 1; tau <= tauMax; tau++) {
@@ -722,14 +655,19 @@ export function detectPitch(buf: Float32Array, sr: number, minHz = 60, maxHz = 1
   return { freq: sr / refined, clarity: Math.max(0, Math.min(1, 1 - cmnd[tau])) };
 }
 
+export function midiToFreq(midi: number, a4 = 440): number {
+  return a4 * Math.pow(2, (midi - 69) / 12);
+}
+
 export interface NoteInfo { name: string; octave: number; midi: number; cents: number; targetFreq: number; }
 
-/** Ubah frekuensi jadi nada terdekat + selisih cent (a4 = frekuensi acuan A4). */
+const PITCH_NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
 export function freqToNote(freq: number, a4 = 440): NoteInfo {
   const midiExact = 69 + 12 * Math.log2(freq / a4);
   const midi = Math.round(midiExact);
   return {
-    name: NOTE_NAMES[((midi % 12) + 12) % 12],
+    name: PITCH_NOTE_NAMES[((midi % 12) + 12) % 12],
     octave: Math.floor(midi / 12) - 1,
     midi,
     cents: (midiExact - midi) * 100,
@@ -742,13 +680,11 @@ export interface TuningPreset { id: string; name: string; group: string; strings
 
 const NOTE_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const noteLabel = (midi: number) => `${NOTE_LABELS[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
-/** Buat deret senar dari nomor MIDI (urut dari senar terendah ke tertinggi). */
 const strs = (...midis: number[]): TuningString[] => midis.map((m) => ({ label: noteLabel(m), midi: m }));
 const pre = (id: string, name: string, group: string, ...midis: number[]): TuningPreset => ({ id, name, group, strings: strs(...midis) });
 
 export const TUNING_PRESETS: TuningPreset[] = [
   { id: 'chromatic', name: 'Kromatik (semua nada / vokal)', group: 'Umum', strings: [] },
-  // Gitar (MIDI: E2=40 A2=45 D3=50 G3=55 B3=59 E4=64)
   pre('guitar', 'Standar (E A D G B E)', 'Gitar 6 senar', 40, 45, 50, 55, 59, 64),
   pre('guitar-dropd', 'Drop D (D A D G B E)', 'Gitar 6 senar', 38, 45, 50, 55, 59, 64),
   pre('guitar-halfdown', 'Half-step down (Eb Ab Db Gb Bb Eb)', 'Gitar 6 senar', 39, 44, 49, 54, 58, 63),
@@ -759,22 +695,18 @@ export const TUNING_PRESETS: TuningPreset[] = [
   pre('guitar-opene', 'Open E (E B E G# B E)', 'Gitar 6 senar', 40, 47, 52, 56, 59, 64),
   pre('guitar7', 'Gitar 7 senar (B E A D G B E)', 'Gitar lain', 35, 40, 45, 50, 55, 59, 64),
   pre('guitar-bari', 'Gitar bariton (B E A D F# B)', 'Gitar lain', 35, 40, 45, 50, 54, 59),
-  // Bass
   pre('bass', 'Bass 4 senar (E A D G)', 'Bass', 28, 33, 38, 43),
   pre('bass-dropd', 'Bass 4 senar Drop D (D A D G)', 'Bass', 26, 33, 38, 43),
   pre('bass5', 'Bass 5 senar (B E A D G)', 'Bass', 23, 28, 33, 38, 43),
   pre('bass6', 'Bass 6 senar (B E A D G C)', 'Bass', 23, 28, 33, 38, 43, 48),
-  // Ukulele & sejenisnya
   pre('ukulele', 'Ukulele soprano/concert/tenor (G C E A)', 'Ukulele & sejenisnya', 67, 60, 64, 69),
   pre('ukulele-lowg', 'Ukulele low-G (G C E A, G satu oktaf lebih rendah)', 'Ukulele & sejenisnya', 55, 60, 64, 69),
   pre('ukulele-bari', 'Ukulele bariton (D G B E)', 'Ukulele & sejenisnya', 50, 55, 59, 64),
   pre('ukulele-d', 'Ukulele D-tuning (A D F# B)', 'Ukulele & sejenisnya', 69, 62, 66, 71),
-  // Gesek
   pre('violin', 'Biola / violin (G D A E)', 'Alat gesek', 55, 62, 69, 76),
   pre('viola', 'Viola (C G D A)', 'Alat gesek', 48, 55, 62, 69),
   pre('cello', 'Cello (C G D A)', 'Alat gesek', 36, 43, 50, 57),
   pre('doublebass', 'Kontrabas (E A D G)', 'Alat gesek', 28, 33, 38, 43),
-  // Petik lainnya
   pre('mandolin', 'Mandolin (G D A E)', 'Alat petik lain', 55, 62, 69, 76),
   pre('banjo5', 'Banjo 5 senar (G D G B D)', 'Alat petik lain', 67, 50, 55, 59, 62),
   pre('banjo-tenor', 'Banjo tenor (C G D A)', 'Alat petik lain', 48, 55, 62, 69),
@@ -782,17 +714,11 @@ export const TUNING_PRESETS: TuningPreset[] = [
   pre('bouzouki', 'Bouzouki Irlandia (G D A D)', 'Alat petik lain', 43, 50, 57, 62),
 ];
 
-/** Nada terendah di preset (Hz) — dipakai untuk menentukan batas bawah deteksi pitch. */
 export function lowestFreq(preset: TuningPreset, a4 = 440): number | null {
   if (!preset.strings.length) return null;
   return Math.min(...preset.strings.map((st) => midiToFreq(st.midi, a4)));
 }
 
-export function midiToFreq(midi: number, a4 = 440): number {
-  return a4 * Math.pow(2, (midi - 69) / 12);
-}
-
-/** Cari senar preset yang paling dekat dengan frekuensi terdeteksi. */
 export function nearestString(freq: number, preset: TuningPreset, a4 = 440): { string: TuningString; cents: number } | null {
   if (preset.strings.length === 0) return null;
   let best = preset.strings[0], bestAbs = Infinity, bestCents = 0;
@@ -803,7 +729,6 @@ export function nearestString(freq: number, preset: TuningPreset, a4 = 440): { s
   return { string: best, cents: bestCents };
 }
 
-/** Puncak waveform untuk tampilan (nilai 0..1 per bin). */
 export function peaksForDisplay(ch: Channels, bins: number): Float32Array {
   const n = ch[0]?.length ?? 0;
   const out = new Float32Array(bins);

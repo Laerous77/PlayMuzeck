@@ -12,12 +12,8 @@ import {
   Wrench,
   Mic2,
   Upload,
-  Merge,
   Eraser,
-  Activity,
-  AudioLines,
   Timer,
-  Mic,
   Play,
   Pause,
   Download,
@@ -30,6 +26,7 @@ import {
   Lock,
   AlertTriangle,
   X,
+  Target,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import { InfoTip, FORMAT_INFO, BTN_DOWNLOAD, BTN_PRIMARY, PANEL_CLS, quotaGuardProps } from './toolsShared';
@@ -62,14 +59,11 @@ interface AudioToolsSuiteProps {
   entitlements: AudioEntitlements;
   onUnlockEditor: () => void;
   onSuccessToast: (msg: string) => void;
-  /** Dipanggil saat jatah gratis harian sebuah alat habis dan pengguna menekan tombol di alat itu: arahkan ke Harga & Lisensi. Bawaan: onUnlockEditor. */
   onQuotaExhausted?: () => void;
-  /** Harga Audio Tools Suite (Rp), diambil dari sumber harga yang sama dengan keranjang. */
   toolsPrice?: number;
-  /** false saat seksi Audio Tools disembunyikan (tetap ter-mount agar berkas & hasil proses tidak hilang). */
   isActive?: boolean;
-  /** Alat yang dibuka pertama kali (mis. dari URL /alat-audio/<slug>); bisa alat bawaan atau alat tambahan. */
   initialTool?: UnifiedToolId | null;
+  studioActiveTrack?: { id: string; title: string; audioUrl?: string } | null;
 }
 
 type ToolType =
@@ -120,7 +114,7 @@ interface ToolExecutionState {
 }
 
 const TOOLS: ToolConfig[] = [
-  { id: 'trim', name: 'Trim / Cut', desc: 'Potong audio dengan menentukan batas awal & akhir (input manual)', icon: Scissors },
+  { id: 'trim', name: 'Trim / Cut', desc: 'Potong audio dengan menentukan batas awal & akhir', icon: Scissors },
   { id: 'volume', name: 'Volume / Gain', desc: 'Atur penguatan gain dinamis tanpa tombol apply', icon: Volume2 },
   { id: 'pitch', name: 'Pitch / Transpose', desc: 'Ubah nada dinamis dengan opsi Kunci Tempo', icon: Sliders },
   { id: 'tempo', name: 'Tempo / Speed', desc: 'Ubah kecepatan secara dinamis tanpa mengubah nada', icon: FastForward },
@@ -130,10 +124,6 @@ const TOOLS: ToolConfig[] = [
   { id: 'noise_reduction', name: 'Noise Reduction', desc: 'Peredam desis & dengung latar dengan spectral gate', icon: Waves },
   { id: 'vocal_separator', name: 'Vocal Isolator', desc: 'Pisahkan vokal & musik lewat teknik center-phase', icon: Mic2 },
 ];
-
-// ---------------------------------------------------------------------------
-// Suite gabungan: 9 alat bawaan + 8 alat tambahan, dikelompokkan menurut fungsi
-// ---------------------------------------------------------------------------
 
 export type UnifiedToolId = ToolType | ExtraToolId;
 
@@ -150,14 +140,13 @@ const TOOL_GROUPS: ToolGroup[] = [
   { id: 'sound', label: 'Perbaiki Suara', icon: Eraser, desc: 'Bersihkan dan seimbangkan suara: volume, jeda hening, loudness, mono, dan noise.', tools: ['volume', 'clean', 'noise_reduction'] },
   { id: 'music', label: 'Nada, Tempo & Vokal', icon: Music, desc: 'Olah unsur musik: ubah nada, ubah kecepatan, atau pisahkan vokal dari musik.', tools: ['pitch', 'tempo', 'vocal_separator'] },
   { id: 'format', label: 'Format & Ukuran', icon: RefreshCw, desc: 'Ganti format file (termasuk ekstrak audio dari video) atau perkecil ukurannya.', tools: ['convert', 'compress'] },
-  { id: 'record', label: 'Rekam & Analisis', icon: Mic, desc: 'Ambil audio baru dari mikrofon, cari tahu tempo dan kunci nada sebuah lagu, atau deteksi nada yang kamu nyanyikan.', tools: ['recorder', 'bpm', 'pitch_detect'] },
-  { id: 'practice', label: 'Latihan Musik', icon: Timer, desc: 'Alat langsung untuk berlatih: jaga tempo dengan metronom, setel instrumen dengan tuner, dan ukur jangkauan suaramu.', tools: ['metronome', 'tuner', 'vocal_range'] },
+  { id: 'record', label: 'Rekam & Analisis', icon: Mic2, desc: 'Ambil audio baru dari mikrofon, cari tahu tempo dan kunci nada lagu, atau deteksi nada vokal.', tools: ['recorder', 'bpm', 'pitch_detect'] },
+  { id: 'practice', label: 'Latihan Musik', icon: Timer, desc: 'Alat langsung berlatih: jaga tempo dengan metronom, setel instrumen dengan tuner, ukur vocal range, dan latihan cocokkan nada.', tools: ['metronome', 'tuner', 'vocal_range', 'pitch_match'] },
 ];
 
 const EXTRA_IDS = new Set<string>(EXTRA_TOOL_META.map((t) => t.id));
 const isExtraId = (id: UnifiedToolId): id is ExtraToolId => EXTRA_IDS.has(id);
 
-/** Nama, ikon, dan deskripsi untuk semua 17 alat. */
 function toolInfo(id: UnifiedToolId): { name: string; icon: React.ElementType; desc: string } {
   const base = TOOLS.find((t) => t.id === id);
   if (base) return { name: base.name, icon: base.icon, desc: base.desc };
@@ -165,7 +154,6 @@ function toolInfo(id: UnifiedToolId): { name: string; icon: React.ElementType; d
   return { name: ex.label, icon: ex.icon, desc: ex.desc };
 }
 
-/** Slug halaman SEO (/alat-audio/<slug>) -> alat yang dibuka. */
 export const TOOL_SLUG_TO_ID: Record<string, UnifiedToolId> = {
   'potong-audio': 'trim',
   'atur-volume-audio': 'volume',
@@ -179,9 +167,7 @@ export const TOOL_SLUG_TO_ID: Record<string, UnifiedToolId> = {
   ...EXTRA_SLUG_TO_TOOL,
 };
 
-/** Tool real-time: tanpa tombol "Jalankan", hasil dibuat saat diunduh. */
 const LIVE_TOOLS: ToolType[] = ['volume', 'pitch', 'tempo'];
-/** Tool yang hasilnya dihitung sekali lalu diputar dari file hasil. */
 const STATIC_RESULT_TOOLS: ToolType[] = ['trim', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator'];
 
 const RESULT_TTL_MS = 5 * 60 * 1000;
@@ -202,10 +188,6 @@ function makeInitialStates(): Record<ToolType, ToolExecutionState> {
   return s;
 }
 
-// ---------------------------------------------------------------------------
-// Kuota harian: satu sumber (services/toolQuota.ts -> database server) untuk ke-17 alat, 2x gratis per alat per hari
-// ---------------------------------------------------------------------------
-
 function readQuota(isOwned = false): Record<ToolType, number> {
   const q = {} as Record<ToolType, number>;
   TOOLS.forEach((t) => {
@@ -213,10 +195,6 @@ function readQuota(isOwned = false): Record<ToolType, number> {
   });
   return q;
 }
-
-// ---------------------------------------------------------------------------
-// Utilitas
-// ---------------------------------------------------------------------------
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const nextFrame = () => new Promise<void>((r) => setTimeout(r, 0));
@@ -267,7 +245,6 @@ function getAdaptiveCompressTiers(
     Math.max(36, Math.min(44, Math.round(base * 0.35))),
     Math.max(24, Math.min(28, Math.round(base * 0.22))),
   ];
-  // Tidak boleh melebihi bitrate sumber dan harus menurun ketat antar tingkat.
   const rates: number[] = [];
   raw.forEach((r, i) => {
     let v = Math.min(r, cap);
@@ -304,16 +281,13 @@ function getAdaptiveCompressTiers(
   });
 }
 
-/** Bulatkan ke 2 desimal agar tidak muncul artefak floating point (mis. 0.30000000000000004). */
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-/** Tampilan angka bertanda: 0 -> "0", 0.3 -> "+0.3", -1.25 -> "-1.25". */
 const formatSigned = (v: number) => {
   const r = round2(v);
   return r > 0 ? `+${r}` : `${r}`;
 };
 
-/** Format berkas asal (null bila video / tidak dikenali), dipakai agar Convert tidak mengonversi ke format yang sama. */
 const detectAudioFormat = (file: File | null): ExportAudioFormat | null => {
   if (!file) return null;
   const type = (file.type || '').toLowerCase();
@@ -326,36 +300,17 @@ const detectAudioFormat = (file: File | null): ExportAudioFormat | null => {
   return null;
 };
 
-// ---------------------------------------------------------------------------
-// Tombol informasi (popover) agar penjelasan tiap alat tidak memenuhi panel
-// ---------------------------------------------------------------------------
-
-
-
-/** Penjelasan tambahan per alat (di luar deskripsi singkat), ditampilkan di popover info. */
 const TOOL_INFO: Record<ToolType, string[]> = {
   trim: [],
-  volume: [
-    `Geser slider atau ketik langsung, desimal didukung (mis. ${formatSigned(0.3)} dB). Rentang -24 sampai +24 dB.`,
-  ],
-  pitch: [
-    `Desimal didukung (mis. ${formatSigned(0.02)} semitone = geser nada 2 cent). Rentang -12 sampai +12 semitone.`,
-  ],
+  volume: [`Geser slider atau ketik langsung, desimal didukung (mis. ${formatSigned(0.3)} dB). Rentang -24 sampai +24 dB.`],
+  pitch: [`Desimal didukung (mis. ${formatSigned(0.02)} semitone = geser nada 2 cent). Rentang -12 sampai +12 semitone.`],
   tempo: ['Geser slider atau ketik langsung, desimal didukung (mis. 1.25x). Rentang 0.5x sampai 2x.'],
   reverse: [],
   convert: [],
-  compress: [
-    'Memilih tingkatan langsung memproses ulang. Unduhan MP3 di-encode dengan LAME pada bitrate di atas (disesuaikan ke bitrate MP3 standar terdekat). M4A memakai encoder bawaan browser; bila hasilnya berbeda dari pilihan, ekstensi berkas disesuaikan dan Anda diberi tahu. WAV (PCM 16-bit) dan FLAC (lossless 16-bit) menyimpan hasil downsample tanpa kompresi lossy, sehingga bitrate tidak berlaku.',
-  ],
+  compress: ['Memilih tingkatan langsung memproses ulang dengan encoder LAME MP3 / FLAC / AAC.'],
   noise_reduction: [],
-  vocal_separator: [
-    'Memisahkan elemen yang berada di tengah stereo. Instrumen yang juga di tengah (bass, kick, snare) bisa ikut terbawa ke hasil vokal; hasil terbaik pada rekaman stereo dengan vokal di tengah.',
-  ],
+  vocal_separator: ['Memisahkan elemen yang berada di tengah stereo menggunakan center-phase isolation.'],
 };
-
-// ---------------------------------------------------------------------------
-// Input angka desimal bebas (boleh titik atau koma: 0.3 / 0,3), di-commit saat blur/Enter
-// ---------------------------------------------------------------------------
 
 const DecimalField: React.FC<{
   value: number;
@@ -394,10 +349,6 @@ const DecimalField: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// Input waktu dengan draft lokal (bisa diketik bebas, di-commit saat blur/Enter)
-// ---------------------------------------------------------------------------
-
 const TimeField: React.FC<{
   value: number;
   min: number;
@@ -430,10 +381,6 @@ const TimeField: React.FC<{
   );
 };
 
-// ---------------------------------------------------------------------------
-// Komponen utama
-// ---------------------------------------------------------------------------
-
 export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   entitlements,
   onUnlockEditor,
@@ -442,8 +389,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   toolsPrice = 20000,
   isActive = true,
   initialTool = null,
+  studioActiveTrack = null,
 }) => {
-  // Kepemilikan Audio Tools Suite (langsung, atau lewat salah satu track)
   const isToolsOwned = useMemo(() => {
     const e: any = entitlements;
     return Boolean(
@@ -452,7 +399,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   }, [entitlements]);
 
   const [selectedTool, setSelectedTool] = useState<ToolType>(initialTool && !isExtraId(initialTool) ? initialTool : 'trim');
-  // Alat tambahan yang aktif (null = alat bawaan `selectedTool` yang aktif).
   const [selectedExtra, setSelectedExtra] = useState<ExtraToolId | null>(initialTool && isExtraId(initialTool) ? initialTool : null);
   const [extraTick, setExtraTick] = useState(0);
   const extraSessionRef = useRef<Set<string>>(new Set());
@@ -473,7 +419,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const [exportProgress, setExportProgress] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
-  // Parameter alat
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(10);
   const [dynamicGainDb, setDynamicGainDb] = useState(0);
@@ -488,13 +433,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const [quotaMap, setQuotaMap] = useState<Record<ToolType, number>>(() => readQuota());
   const currentToolQuota = isToolsOwned ? Infinity : quotaMap[selectedTool] ?? DAILY_FREE_QUOTA;
-  // Kuota yang ditampilkan di header: mengikuti alat aktif (bawaan atau tambahan). `extraTick` memicu render ulang setelah pemakaian.
   void extraTick;
   const activeQuota = isToolsOwned ? Infinity : selectedExtra ? remainingQuota(selectedExtra) : currentToolQuota;
   const activeToolId: UnifiedToolId = selectedExtra ?? selectedTool;
   const activeGroup = TOOL_GROUPS.find((g) => g.tools.includes(activeToolId)) ?? TOOL_GROUPS[0];
 
-  // Convert: format tujuan tidak boleh sama dengan format berkas asal.
   const sourceFormat = useMemo(() => detectAudioFormat(audioFile), [audioFile]);
   const blockedFormat: ExportAudioFormat | null = selectedTool === 'convert' ? sourceFormat : null;
   useEffect(() => {
@@ -504,7 +447,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     }
   }, [blockedFormat, selectedExportFormat]);
 
-  // Refs
   const fileInputRef = useRef<HTMLInputElement>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -574,12 +516,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     return d;
   }, [decodedBuffer]);
 
-  // ---- Audio graph --------------------------------------------------------
-
   const getAudioContext = useCallback(() => {
     if (!audioCtxRef.current) {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      audioCtxRef.current = new AudioCtx();
+      const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+      audioCtxRef.current = new AudioCtxClass();
     }
     if (audioCtxRef.current.state === 'suspended') {
       audioCtxRef.current.resume().catch(() => undefined);
@@ -618,8 +558,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     applyGain();
   }, [selectedTool, dynamicGainDb, applyGain]);
 
-  // ---- Sumber audio aktif -------------------------------------------------
-
   const vocalPreviewTarget: 'vocal' | 'instrumental' =
     vocalExtractTarget === 'both' ? vocalPreviewChoice : vocalExtractTarget;
 
@@ -648,12 +586,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     stopPlayback();
   }, [activeAudioSrc, selectedTool, keepTempoOnPitch, stopPlayback]);
 
-  // Seksi disembunyikan (pengguna pindah ke Harga dsb.): hentikan suara, tetapi simpan state.
   useEffect(() => {
     if (!isActive) stopPlayback();
   }, [isActive, stopPlayback]);
 
-  // Rate & preservesPitch (load() mereset playbackRate, jadi disetel ulang tiap src berubah)
   const desiredRate =
     selectedTool === 'tempo'
       ? dynamicTempoSpeed
@@ -674,15 +610,12 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   useEffect(() => {
     applyRate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [desiredRate, desiredPreserve, activeAudioSrc, audioUrl]);
 
-  // Pitch granular: ubah rasio langsung saat memutar
   useEffect(() => {
     pitchPlayerRef.current?.setPitchRatio(Math.pow(2, dynamicPitchSemitones / 12));
   }, [dynamicPitchSemitones]);
 
-  // Preview Trim: berhenti persis di batas akhir + playhead
   useEffect(() => {
     if (!isPlaying || selectedTool !== 'trim' || toolStates.trim.resultBuffer) return;
     let raf = 0;
@@ -706,11 +639,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     return () => cancelAnimationFrame(raf);
   }, [isPlaying, selectedTool, toolStates.trim.resultBuffer, decodedBuffer, stopPlayback]);
 
-  // ---- Pembersihan hasil --------------------------------------------------
-
   const clearToolResult = useCallback((tool: ToolType) => {
     revokeStateUrls(toolStatesRef.current[tool]);
-    runIdsRef.current[tool] += 1; // batalkan proses yang sedang berjalan
+    runIdsRef.current[tool] += 1;
     if (tool === 'compress') compressChargedRef.current = false;
     setToolStates((prev) => ({ ...prev, [tool]: { ...INITIAL_TOOL_STATE } }));
   }, []);
@@ -721,7 +652,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     onSuccessToast(`Hasil ${TOOLS.find((t) => t.id === tool)?.name} berhasil dihapus.`);
   };
 
-  // Hasil kedaluwarsa otomatis (hemat memori) + penyegaran label sisa waktu
   useEffect(() => {
     const id = setInterval(() => {
       const t = Date.now();
@@ -733,7 +663,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         if (t > exp) {
           if (live.current.selectedTool === tool) stopPlayback();
           clearToolResult(tool);
-          toastRef.current(`Hasil ${TOOLS.find((x) => x.id === tool)?.name} kedaluwarsa dan dihapus dari memori.`);
+          toastRef.current(`Hasil ${TOOLS.find((x) => x.id === tool)?.name} kedaluwarsa dan dihapus.`);
         }
       });
       if (any) setNowTick(t);
@@ -741,7 +671,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     return () => clearInterval(id);
   }, [clearToolResult, stopPlayback]);
 
-  // Kuota dicatat di server: ambil saat dibuka, saat pindah alat, saat tab aktif lagi, dan saat status kepemilikan/akun berubah.
   useEffect(() => {
     const off = subscribeQuota(() => {
       setQuotaMap(readQuota());
@@ -752,53 +681,30 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   useEffect(() => {
     void refreshQuota();
   }, [selectedTool, selectedExtra, entitlements]);
-  useEffect(() => {
-    const onFocus = () => void refreshQuota();
-    window.addEventListener('focus', onFocus);
-    document.addEventListener('visibilitychange', onFocus);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      document.removeEventListener('visibilitychange', onFocus);
-    };
-  }, []);
 
-  // Cleanup saat unmount
-  useEffect(() => {
-    return () => {
-      pitchPlayerRef.current?.stop();
-      dragCleanupRef.current?.();
-      if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
-      Object.values(toolStatesRef.current).forEach(revokeStateUrls);
-    };
-  }, []);
-
-  /** Jatah gratis alat ini habis: arahkan ke Harga & Lisensi (dengan pemberitahuan singkat, tanpa spam). */
   const lastPricingRef = useRef(0);
   const goPricing = async (toolId?: UnifiedToolId) => {
     const now = Date.now();
     if (now - lastPricingRef.current < 600) return;
     lastPricingRef.current = now;
     if (toolId && !isToolsOwned) {
-      // Pastikan ke server dulu (mis. hari sudah berganti sejak data terakhir diambil): bila jatah ternyata ada, jangan arahkan.
       await refreshQuota();
       if (remainingQuota(toolId) > 0) {
-        toastRef.current(`Jatah gratis ${toolInfo(toolId).name} tersedia lagi. Silakan coba sekali lagi.`);
+        toastRef.current(`Jatah gratis ${toolInfo(toolId).name} tersedia lagi.`);
         return;
       }
     }
     if (toolId) {
-      toastRef.current(`Jatah gratis ${toolInfo(toolId).name} hari ini sudah habis (${DAILY_FREE_QUOTA}x/hari). Lanjutkan dengan memilih Audio Tools Suite di Harga & Lisensi.`);
+      toastRef.current(`Jatah gratis ${toolInfo(toolId).name} hari ini sudah habis (${DAILY_FREE_QUOTA}x/hari).`);
     }
     (onQuotaExhausted ?? onUnlockEditor)();
   };
 
   goPricingRef.current = goPricing;
 
-  // ---- Muat berkas --------------------------------------------------------
-
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    e.target.value = ''; // izinkan memilih berkas yang sama lagi
+    e.target.value = '';
     if (!file) return;
 
     const myLoad = ++loadIdRef.current;
@@ -813,7 +719,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (myLoad !== loadIdRef.current) return;
       if (!decoded.length) throw new Error('empty');
 
-      // Berhasil dibaca: baru ganti state & bersihkan hasil lama.
       Object.values(toolStatesRef.current).forEach(revokeStateUrls);
       (Object.keys(runIdsRef.current) as ToolType[]).forEach((t) => (runIdsRef.current[t] += 1));
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
@@ -831,16 +736,14 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (myLoad === loadIdRef.current) {
         setErrorMsg(
           convertSourceMode === 'video' || file.type.startsWith('video/')
-            ? 'Browser tidak bisa membaca track audio dari video ini (kontainer/codec tidak didukung). Coba MP4, WebM, atau MOV, atau ekstrak audionya lebih dulu.'
-            : 'Gagal membaca berkas. Pastikan format audio didukung browser (MP3, WAV, M4A, OGG, FLAC) dan file tidak rusak.'
+            ? 'Browser tidak bisa membaca track audio dari video ini. Coba MP4, WebM, atau MOV.'
+            : 'Gagal membaca berkas. Pastikan format audio didukung (MP3, WAV, M4A, OGG, FLAC).'
         );
       }
     } finally {
       if (myLoad === loadIdRef.current) setIsLoadingFile(false);
     }
   };
-
-  // ---- Pemutaran ----------------------------------------------------------
 
   const togglePlayback = async () => {
     if (isPlaying) {
@@ -853,9 +756,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       const ctx = getAudioContext();
       try {
         await ctx.resume();
-      } catch {
-        /* abaikan */
-      }
+      } catch {}
       const player = new LivePitchPlayer(ctx, decodedBuffer);
       player.setPitchRatio(Math.pow(2, dynamicPitchSemitones / 12));
       player.setOnEnded(() => {
@@ -872,9 +773,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     if (!a) return;
     try {
       await getAudioContext().resume();
-    } catch {
-      /* abaikan */
-    }
+    } catch {}
     ensureGraph();
     applyGain();
     applyRate();
@@ -889,8 +788,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       setIsPlaying(false);
     }
   };
-
-  // ---- Trim ---------------------------------------------------------------
 
   const changeTrimStart = (v: number) => {
     if (!decodedBuffer) return;
@@ -935,8 +832,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     dragCleanupRef.current = onUp;
   };
 
-  // ---- Proses tool statis -------------------------------------------------
-
   const executeProcessForTool = async (targetTool: ToolType, overrideTier?: string) => {
     if (!decodedBuffer) {
       fileInputRef.current?.click();
@@ -964,7 +859,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     revokeStateUrls(toolStatesRef.current[targetTool]);
     setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE, isProcessing: true, progress: 0 } }));
 
-    // Jatah dipesan di SERVER sebelum pekerjaan dimulai (hasil dihitung sekali per proses; kompresi sekali per berkas).
     let reservation: Reservation | null = null;
     if (needsCharge) {
       reservation = await reserveQuota(targetTool, targetTool === 'compress' ? `compress:${myLoad}:${pageNonce}` : undefined);
@@ -995,7 +889,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
     try {
       const ctx = getAudioContext();
-      await nextFrame(); // beri kesempatan UI menampilkan status "memproses"
+      await nextFrame();
 
       let outputBuffer: AudioBuffer;
       let vocalBuffers: ToolExecutionState['vocalBuffers'];
@@ -1005,7 +899,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         const s = Math.floor(clamp(live.current.trimStart, 0, dur) * sr);
         const e = Math.min(src.length, Math.floor(clamp(live.current.trimEnd, 0, dur) * sr));
         if (e - s < Math.floor(sr * 0.05)) {
-          throw new DspError('EMPTY', 'Rentang potong terlalu pendek (minimal 0,05 detik).');
+          throw new DspError('EMPTY', 'Rentang potong terlalu pendek.');
         }
         outputBuffer = makeBuffer(ctx, chs.map((c) => c.slice(s, e)), sr);
       } else if (targetTool === 'reverse') {
@@ -1020,7 +914,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         const out = await spectralNoiseGate(chs, sr, noiseAggression, dspOpts);
         outputBuffer = makeBuffer(ctx, out, sr);
       } else {
-        // vocal_separator
         if (chs.length < 2) {
           throw new DspError('MONO', 'Audio stereo (2 kanal) dibutuhkan untuk ekstraksi vokal.');
         }
@@ -1051,7 +944,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           URL.revokeObjectURL(vocalUrls.vocal);
           URL.revokeObjectURL(vocalUrls.instrumental);
         }
-        void refundReservation(targetTool, reservation); // hasil dibuang: jatah dikembalikan
+        void refundReservation(targetTool, reservation);
         return;
       }
 
@@ -1071,19 +964,15 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       }));
       onSuccessToast(`${TOOLS.find((t) => t.id === targetTool)?.name} selesai diproses.`);
     } catch (err) {
-      void refundReservation(targetTool, reservation); // proses gagal / dibatalkan: jatah dikembalikan
+      void refundReservation(targetTool, reservation);
       if (err instanceof DspError && err.code === 'CANCELLED') return;
       if (isStale()) return;
       console.error(err);
-      let msg = 'Pemrosesan audio gagal. Coba berkas lain atau muat ulang halaman.';
+      let msg = 'Pemrosesan audio gagal.';
       if (err instanceof DspError) {
-        if (err.code === 'MONO') {
-          msg =
-            chs.length < 2
-              ? 'Audio stereo (2 kanal) dibutuhkan untuk ekstraksi vokal.'
-              : 'Kedua kanal berkas ini identik (mono / stereo palsu) sehingga vokal tidak bisa dipisahkan dengan metode center-phase.';
-        } else if (err.code === 'SILENT') msg = 'Berkas ini senyap, tidak ada yang bisa diproses.';
-        else if (err.code === 'EMPTY') msg = err.message !== 'EMPTY' ? err.message : 'Berkas audio kosong.';
+        if (err.code === 'MONO') msg = 'Audio stereo dibutuhkan untuk ekstraksi vokal.';
+        else if (err.code === 'SILENT') msg = 'Berkas ini senyap.';
+        else if (err.code === 'EMPTY') msg = 'Berkas audio kosong.';
       }
       setErrorMsg(msg);
       setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE } }));
@@ -1092,17 +981,15 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const handleCompressTierChange = (newTierId: string) => {
     if (newTierId === selectedCompressTier && toolStates.compress.resultBuffer) return;
-    const wasCharged = compressChargedRef.current; // sudah dihitung kuotanya untuk berkas ini?
+    const wasCharged = compressChargedRef.current;
     setSelectedCompressTier(newTierId);
     if (live.current.selectedTool === 'compress') stopPlayback();
-    clearToolResult('compress'); // batalkan proses lama & hapus hasil tingkat sebelumnya
+    clearToolResult('compress');
     if (decodedBuffer) {
-      compressChargedRef.current = wasCharged; // ganti tingkat tidak memakan kuota lagi
+      compressChargedRef.current = wasCharged;
       void executeProcessForTool('compress', newTierId);
     }
   };
-
-  // ---- Unduh --------------------------------------------------------------
 
   const liveParamSig = (tool: ToolType) => {
     if (tool === 'volume') return `${loadIdRef.current}|volume|${dynamicGainDb}`;
@@ -1151,7 +1038,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     setIsExporting(true);
     setExportProgress(0);
 
-    // Pengaturan live (volume/pitch/tempo): jatah dipesan di SERVER saat unduh; pengaturan yang sama tidak dihitung dua kali.
     let liveRes: Reservation | null = null;
     let liveDone = false;
     if (isLive && !isToolsOwned && !alreadyCharged) {
@@ -1180,7 +1066,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       await nextFrame();
       const ctx = getAudioContext();
 
-      // --- Compress: encode bitrate nyata ---
       if (tool === 'compress') {
         const result = toolStates.compress.resultBuffer;
         if (!result) return;
@@ -1188,62 +1073,33 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         const fileBase = `${baseName}_compressed_${tier.id}`;
 
         if (fmt === 'WAV' || fmt === 'FLAC') {
-          // 16-bit: hasil kompresi tidak boleh membengkak jadi lebih besar dari sumbernya.
-          // FLAC = lossless sungguhan (lebih kecil dari WAV), WAV = PCM mentah.
           const res = await exportAudioFile(result, fileBase, fmt, { bitDepth: 16, onProgress: (pct) => setExportProgress(Math.round(pct)) });
-          onSuccessToast(`Berkas ${res.actualFormat} hasil kompresi (${tier.label}, ${Math.round(result.sampleRate / 1000)} kHz) berhasil diunduh.${res.note ? ' ' + res.note : ''}`);
+          onSuccessToast(`Berkas ${res.actualFormat} berhasil diunduh.`);
           return;
         }
 
         if (fmt === 'MP3') {
-          // MP3 sungguhan (LAME) pada bitrate tingkatan terpilih.
           try {
             const mp3 = await encodeMp3(result, tier.bitrate, (pct: number) => setExportProgress(Math.round(pct)));
             downloadBlob(mp3, `${fileBase}.mp3`);
-            onSuccessToast(`Berkas MP3 dikompresi (${tier.label}) berhasil diunduh.`);
+            onSuccessToast(`Berkas MP3 (${tier.label}) berhasil diunduh.`);
             return;
           } catch (mp3Err) {
-            console.error('Encode MP3 gagal:', mp3Err);
             const res = await exportAudioFile(result, fileBase, 'WAV', { bitDepth: 16 });
-            onSuccessToast(`Encoder MP3 gagal dimuat, berkas disimpan sebagai ${res.actualFormat}.`);
+            onSuccessToast(`Berkas disimpan sebagai ${res.actualFormat}.`);
             return;
           }
         }
 
-        // M4A: memakai encoder bawaan browser. Ekstensi berkas ditentukan dari
-        // format yang BENAR-BENAR dihasilkan, dan pengguna diberi tahu bila berbeda dari pilihan.
         const enc: CompressedAudioResult = await encodeCompressedAudio(result, tier.bitrate, (pct: number) =>
           setExportProgress(Math.round(pct))
         );
-        const mime = (enc.blob.type || '').toLowerCase();
-        const metaExt = String((enc as any).extension || (enc as any).ext || '')
-          .replace('.', '')
-          .toLowerCase();
-        const ext =
-          metaExt ||
-          (mime.includes('mpeg') || mime.includes('mp3')
-            ? 'mp3'
-            : mime.includes('mp4') || mime.includes('aac') || mime.includes('m4a')
-            ? 'm4a'
-            : mime.includes('flac')
-            ? 'flac'
-            : mime.includes('wav')
-            ? 'wav'
-            : mime.includes('webm')
-            ? 'webm'
-            : mime.includes('ogg') || mime.includes('opus')
-            ? 'ogg'
-            : fmt.toLowerCase());
+        const ext = enc.extension || 'm4a';
         downloadBlob(enc.blob, `${fileBase}.${ext}`);
-        onSuccessToast(
-          ext === fmt.toLowerCase()
-            ? `Berkas berhasil dikompresi (${tier.label}, .${ext}).`
-            : `Berkas dikompresi (${tier.label}). Encoder browser menghasilkan format .${ext}.`
-        );
+        onSuccessToast(`Berkas berhasil dikompresi (.${ext}).`);
         return;
       }
 
-      // --- Tool lainnya: siapkan buffer ---
       let buf: AudioBuffer | null = null;
       let suffix = tool as string;
 
@@ -1255,7 +1111,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         else {
           const { channels: out, clipped } = applyGainDb(chs, dynamicGainDb);
           buf = makeBuffer(ctx, out, sr);
-          if (clipped) onSuccessToast('Peringatan: sebagian puncak sinyal terpotong (clipping). Turunkan gain untuk hasil lebih bersih.');
+          if (clipped) onSuccessToast('Peringatan: sebagian puncak sinyal terpotong.');
         }
       } else if (tool === 'pitch') {
         if (dynamicPitchSemitones === 0) buf = decodedBuffer;
@@ -1288,34 +1144,22 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     } catch (err) {
       if (err instanceof DspError && err.code === 'CANCELLED') return;
       console.error(err);
-      setErrorMsg(
-        tool === 'compress'
-          ? 'Gagal mengompres berkas. Pastikan browser mendukung AudioEncoder, atau coba format WAV.'
-          : `Gagal mengekspor berkas ${fmt}. Coba format lain.`
-      );
+      setErrorMsg(`Gagal mengekspor berkas ${fmt}. Coba format lain.`);
     } finally {
-      if (liveRes && !liveDone) void refundReservation(tool, liveRes); // ekspor gagal / dibatalkan: jatah dikembalikan
+      if (liveRes && !liveDone) void refundReservation(tool, liveRes);
       setIsExporting(false);
       setExportProgress(0);
     }
   };
 
-  // ---- Turunan UI ---------------------------------------------------------
-
   const toolMeta = TOOLS.find((t) => t.id === selectedTool)!;
 
-  /**
-   * Pintu kuota untuk 8 alat tambahan: aturannya sama dengan alat bawaan (2x gratis per hari per alat, lalu berbayar).
-   * `sessionKey` menandai satu "penggunaan": pemanggilan berikutnya dengan kunci yang sama (mis. mengunduh hasil yang
-   * sama dalam format lain, atau memulai ulang metronom/tuner di halaman yang sama) tidak memakan jatah lagi.
-   */
   const extraGate: QuotaGate = useMemo(
     () => ({
       use: async (toolId, sessionKey) => {
         if (isToolsOwned) return true;
         const sKey = sessionKey ? `${toolId}:${sessionKey}` : null;
         if (sKey && extraSessionRef.current.has(sKey)) return true;
-        // Dipesan di SERVER. useKey memuat nonce halaman: "sesi" metronom/tuner dihitung per pembukaan halaman, bukan per hari.
         const res = await reserveQuota(toolId, sKey ? `${sKey}|${pageNonce}` : undefined);
         if (!res.allowed) {
           goPricingRef.current(toolId);
@@ -1337,11 +1181,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         if (sKey) extraSessionRef.current.delete(sKey);
         void refundReservation(toolId, res);
       },
-      // Terkunci: jatah habis dan alat ini belum dipakai di sesi halaman ini (hasil yang sudah dibayar tetap bisa diunduh).
       locked: (toolId) => !isToolsOwned && remainingQuota(toolId) <= 0 && !paidExtraRef.current.has(toolId),
       blocked: (toolId) => goPricingRef.current(toolId),
     }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isToolsOwned]
   );
 
@@ -1362,8 +1204,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     currentToolQuota <= 0 &&
     !(selectedTool === 'compress' && compressChargedRef.current);
 
-  // Jatah gratis alat bawaan yang aktif sudah habis, dan belum ada hasil yang sudah "dibayar" dengan jatah itu
-  // (hasil yang baru jadi / kompresi yang sudah dihitung / pengaturan live yang sudah diunduh tetap boleh diputar & diunduh).
   const hasPaidWork = isLiveTool
     ? liveAlreadyCharged
     : Boolean(currentToolState.resultBuffer || currentToolState.vocalBuffers || currentToolState.isProcessing) ||
@@ -1406,7 +1246,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           />
         )}
 
-        {/* Header Seksi & Status Kuota */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/[0.08] pb-4">
           <div className="space-y-1 min-w-0">
             <div className="flex items-center gap-2">
@@ -1441,19 +1280,19 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             )}
 
             {!selectedExtra && (
-            <button
-              type="button"
-              onClick={() => (panelLocked ? goPricing(selectedTool) : fileInputRef.current?.click())}
-              disabled={isLoadingFile}
-              className="h-9 px-3.5 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
-            >
-              {isLoadingFile ? (
-                <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" />
-              ) : (
-                <Upload className="w-3.5 h-3.5 text-accent" />
-              )}
-              <span>{isLoadingFile ? 'Membaca...' : audioFile ? 'Ganti Berkas' : 'Unggah Berkas'}</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => (panelLocked ? goPricing(selectedTool) : fileInputRef.current?.click())}
+                disabled={isLoadingFile}
+                className="h-9 px-3.5 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
+              >
+                {isLoadingFile ? (
+                  <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" />
+                ) : (
+                  <Upload className="w-3.5 h-3.5 text-accent" />
+                )}
+                <span>{isLoadingFile ? 'Membaca...' : audioFile ? 'Ganti Berkas' : 'Unggah Berkas'}</span>
+              </button>
             )}
             <input
               ref={fileInputRef}
@@ -1482,7 +1321,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           </div>
         )}
 
-        {/* Kelompok alat (dikelompokkan menurut fungsi) */}
+        {/* Kelompok alat */}
         <div role="tablist" aria-label="Kelompok alat audio" className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
           {TOOL_GROUPS.map((g) => {
             const GroupIcon = g.icon;
@@ -1544,528 +1383,478 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           })}
         </div>
 
-        {/* Panel alat tambahan (8 alat; punya pemilih berkas / mikrofon sendiri) */}
-        <ExtraToolPanel active={selectedExtra} gate={extraGate} onSuccessToast={onSuccessToast} />
+        {/* Panel alat tambahan */}
+        <ExtraToolPanel
+          active={selectedExtra}
+          gate={extraGate}
+          onSuccessToast={onSuccessToast}
+          studioActiveTrack={studioActiveTrack}
+        />
 
-        {/* Panel Kontrol (9 alat bawaan, memakai tombol Unggah Berkas) */}
+        {/* Panel Kontrol (9 alat bawaan) */}
         {!selectedExtra && (
-        <div className={PANEL_CLS} {...guardBuiltin}>
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div className="flex items-center gap-2">
-              <h4 className="text-sm font-bold text-white">{toolMeta.name}</h4>
-              <InfoTip label={`Info alat ${toolMeta.name}`}>
-                <p>{toolMeta.desc}.</p>
-                {TOOL_INFO[selectedTool].map((line) => (
-                  <p key={line} className="text-gray-400">
-                    {line}
-                  </p>
-                ))}
-              </InfoTip>
+          <div className={PANEL_CLS} {...guardBuiltin}>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-white">{toolMeta.name}</h4>
+                <InfoTip label={`Info alat ${toolMeta.name}`}>
+                  <p>{toolMeta.desc}.</p>
+                  {TOOL_INFO[selectedTool].map((line) => (
+                    <p key={line} className="text-gray-400">
+                      {line}
+                    </p>
+                  ))}
+                </InfoTip>
+              </div>
+
+              {audioFile && (
+                <span className="text-[11px] font-mono text-accent bg-black/60 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
+                  <FileAudio className="w-3.5 h-3.5" />
+                  <span className="truncate max-w-[150px] sm:max-w-xs">{audioFile.name}</span>
+                  <span className="text-gray-400">({decodedBuffer?.duration.toFixed(1)}s)</span>
+                </span>
+              )}
             </div>
 
-            {audioFile && (
-              <span className="text-[11px] font-mono text-accent bg-black/60 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
-                <FileAudio className="w-3.5 h-3.5" />
-                <span className="truncate max-w-[150px] sm:max-w-xs">{audioFile.name}</span>
-                <span className="text-gray-400">({decodedBuffer?.duration.toFixed(1)}s)</span>
-              </span>
+            {!decodedBuffer && (
+              <p className="text-[11px] text-gray-400 bg-black/40 border border-white/5 rounded-lg px-3 py-2">
+                Unggah berkas audio (atau video untuk ekstrak audio) terlebih dahulu untuk memakai alat ini.
+              </p>
             )}
-          </div>
 
-          {!decodedBuffer && (
-            <p className="text-[11px] text-gray-400 bg-black/40 border border-white/5 rounded-lg px-3 py-2">
-              Unggah berkas audio (atau video untuk ekstrak audio) terlebih dahulu untuk memakai alat ini.
-            </p>
-          )}
-
-          <div className="pt-2">
-            {/* 1. TRIM / CUT */}
-            {selectedTool === 'trim' && (
-              <div className="space-y-4 text-xs">
-                <div
-                  ref={timelineRef}
-                  className="relative w-full h-16 bg-black/60 rounded-xl border border-white/10 overflow-hidden select-none p-1 touch-none"
-                >
-                  {waveformPath && (
-                    <svg
-                      className="absolute inset-0 w-full h-full pointer-events-none text-gray-500"
-                      viewBox="0 0 400 100"
-                      preserveAspectRatio="none"
-                      aria-hidden="true"
-                    >
-                      <path d={waveformPath} stroke="currentColor" strokeWidth="0.8" fill="none" vectorEffect="non-scaling-stroke" />
-                    </svg>
-                  )}
+            <div className="pt-2">
+              {/* TRIM / CUT */}
+              {selectedTool === 'trim' && (
+                <div className="space-y-4 text-xs">
                   <div
-                    className="absolute top-0 bottom-0 bg-accent/25 border-x-2 border-accent flex items-center justify-center pointer-events-none"
-                    style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }}
+                    ref={timelineRef}
+                    className="relative w-full h-16 bg-black/60 rounded-xl border border-white/10 overflow-hidden select-none p-1 touch-none"
                   >
-                    <span className="text-[10px] font-mono font-bold text-accent bg-black/80 px-2 py-0.5 rounded shadow">
-                      Area Simpan: {(trimEnd - trimStart).toFixed(1)}s
-                    </span>
-                  </div>
-                  <div
-                    ref={playheadRef}
-                    className="absolute top-0 bottom-0 w-px bg-white pointer-events-none z-[5]"
-                    style={{ display: 'none' }}
-                  />
-
-                  {(['start', 'end'] as const).map((which) => (
+                    {waveformPath && (
+                      <svg
+                        className="absolute inset-0 w-full h-full pointer-events-none text-gray-500"
+                        viewBox="0 0 400 100"
+                        preserveAspectRatio="none"
+                        aria-hidden="true"
+                      >
+                        <path d={waveformPath} stroke="currentColor" strokeWidth="0.8" fill="none" vectorEffect="non-scaling-stroke" />
+                      </svg>
+                    )}
                     <div
-                      key={which}
-                      onPointerDown={handleTrimHandleDrag(which)}
-                      className="absolute top-0 bottom-0 w-4 -ml-2 z-10 flex items-center justify-center cursor-ew-resize group touch-none"
-                      style={{ left: `${which === 'start' ? startPercent : endPercent}%` }}
+                      className="absolute top-0 bottom-0 bg-accent/25 border-x-2 border-accent flex items-center justify-center pointer-events-none"
+                      style={{ left: `${startPercent}%`, width: `${Math.max(0, endPercent - startPercent)}%` }}
                     >
-                      <div className="w-1 h-full bg-accent group-hover:bg-accent/70 group-active:bg-white transition-colors" />
-                      <div className="absolute w-3 h-6 bg-accent group-hover:bg-accent/70 group-active:bg-white rounded-sm shadow" />
+                      <span className="text-[10px] font-mono font-bold text-accent bg-black/80 px-2 py-0.5 rounded shadow">
+                        Area Simpan: {(trimEnd - trimStart).toFixed(1)}s
+                      </span>
                     </div>
-                  ))}
-                </div>
+                    <div
+                      ref={playheadRef}
+                      className="absolute top-0 bottom-0 w-px bg-white pointer-events-none z-[5]"
+                      style={{ display: 'none' }}
+                    />
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2 bg-black/50 p-3 rounded-xl border border-white/5">
-                    <div className="flex justify-between items-center">
-                      <label className="text-gray-300 font-bold">Batas Awal (Start):</label>
-                      <div className="flex items-center gap-1">
-                        <TimeField
-                          value={trimStart}
-                          min={0}
-                          max={Math.max(0, trimEnd - minGap)}
-                          disabled={!decodedBuffer}
-                          onCommit={changeTrimStart}
-                        />
-                        <span className="text-gray-400 font-mono">detik</span>
+                    {(['start', 'end'] as const).map((which) => (
+                      <div
+                        key={which}
+                        onPointerDown={handleTrimHandleDrag(which)}
+                        className="absolute top-0 bottom-0 w-4 -ml-2 z-10 flex items-center justify-center cursor-ew-resize group touch-none"
+                        style={{ left: `${which === 'start' ? startPercent : endPercent}%` }}
+                      >
+                        <div className="w-1 h-full bg-accent group-hover:bg-accent/70 group-active:bg-white transition-colors" />
+                        <div className="absolute w-3 h-6 bg-accent group-hover:bg-accent/70 group-active:bg-white rounded-sm shadow" />
                       </div>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={totalDuration}
-                      step={0.01}
-                      value={trimStart}
-                      disabled={!decodedBuffer}
-                      onChange={(e) => changeTrimStart(Number(e.target.value))}
-                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent disabled:opacity-40"
-                    />
+                    ))}
                   </div>
 
-                  <div className="space-y-2 bg-black/50 p-3 rounded-xl border border-white/5">
-                    <div className="flex justify-between items-center">
-                      <label className="text-gray-300 font-bold">Batas Akhir (End):</label>
-                      <div className="flex items-center gap-1">
-                        <TimeField
-                          value={trimEnd}
-                          min={Math.min(totalDuration, trimStart + minGap)}
-                          max={totalDuration}
-                          disabled={!decodedBuffer}
-                          onCommit={changeTrimEnd}
-                        />
-                        <span className="text-gray-400 font-mono">detik</span>
-                      </div>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={totalDuration}
-                      step={0.01}
-                      value={trimEnd}
-                      disabled={!decodedBuffer}
-                      onChange={(e) => changeTrimEnd(Number(e.target.value))}
-                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent disabled:opacity-40"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 2. VOLUME / GAIN */}
-            {selectedTool === 'volume' && (
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <label className="text-gray-300 font-bold block">Penyesuaian Gain Dinamis (Real-time):</label>
-                  <div className="flex items-center gap-2">
-                    {dynamicGainDb !== 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setDynamicGainDb(0)}
-                        className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    )}
-                    <DecimalField value={dynamicGainDb} min={-24} max={24} unit="dB" onCommit={setDynamicGainDb} />
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="-24"
-                  max="24"
-                  step="0.01"
-                  value={dynamicGainDb}
-                  onChange={(e) => setDynamicGainDb(round2(Number(e.target.value)))}
-                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                />
-                {clipWarning && (
-                  <p className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                    <span>
-                      Puncak sinyal diperkirakan melewati 0 dBFS dan akan terpotong (clipping) saat diunduh.
-                      {safeGainDb > 0 ? ` Gain maksimum aman untuk berkas ini sekitar +${safeGainDb} dB.` : ' Berkas ini sudah mendekati level maksimum.'}
-                    </span>
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* 3. PITCH / TRANSPOSE */}
-            {selectedTool === 'pitch' && (
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <label className="text-gray-300 font-bold block">Pergeseran Nada Dinamis:</label>
-                  <div className="flex items-center gap-2">
-                    {dynamicPitchSemitones !== 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setDynamicPitchSemitones(0)}
-                        className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    )}
-                    <DecimalField
-                      value={dynamicPitchSemitones}
-                      min={-12}
-                      max={12}
-                      unit="semitone"
-                      onCommit={setDynamicPitchSemitones}
-                    />
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="-12"
-                  max="12"
-                  step="0.01"
-                  value={dynamicPitchSemitones}
-                  onChange={(e) => setDynamicPitchSemitones(round2(Number(e.target.value)))}
-                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                />
-                <div className="flex items-center gap-2 pt-1 bg-black/40 p-2.5 rounded-lg border border-white/5">
-                  <input
-                    type="checkbox"
-                    id="chk-keep-tempo"
-                    checked={keepTempoOnPitch}
-                    onChange={(e) => setKeepTempoOnPitch(e.target.checked)}
-                    className="accent-accent w-4 h-4 cursor-pointer"
-                  />
-                  <label htmlFor="chk-keep-tempo" className="text-gray-300 font-bold cursor-pointer select-none">
-                    Kunci Tempo (Keep Tempo)
-                  </label>
-                </div>
-              </div>
-            )}
-
-            {/* 4. TEMPO / SPEED */}
-            {selectedTool === 'tempo' && (
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <label className="text-gray-300 font-bold block">Kecepatan Putar Dinamis (Nada Terkunci Normal):</label>
-                  <div className="flex items-center gap-2">
-                    {Math.abs(dynamicTempoSpeed - 1) > 0.0001 && (
-                      <button
-                        type="button"
-                        onClick={() => setDynamicTempoSpeed(1)}
-                        className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
-                      >
-                        Reset
-                      </button>
-                    )}
-                    <DecimalField value={dynamicTempoSpeed} min={0.5} max={2} unit="x" onCommit={setDynamicTempoSpeed} />
-                  </div>
-                </div>
-                <input
-                  type="range"
-                  min="0.5"
-                  max="2"
-                  step="0.01"
-                  value={dynamicTempoSpeed}
-                  onChange={(e) => setDynamicTempoSpeed(round2(Number(e.target.value)))}
-                  className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                />
-                {decodedBuffer && (
-                  <p className="text-[11px] text-gray-400">
-                    Durasi hasil: {(decodedBuffer.duration / dynamicTempoSpeed).toFixed(2)}s (asli {decodedBuffer.duration.toFixed(2)}s)
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* 5. REVERSE */}
-            {/* Tidak ada pengaturan tambahan: cukup tekan tombol Jalankan */}
-
-            {/* 6. CONVERT */}
-            {selectedTool === 'convert' && (
-              <div className="space-y-3 text-xs">
-                <div className="flex items-center gap-2 border-b border-white/10 pb-3 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setConvertSourceMode('audio')}
-                    className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold cursor-pointer ${
-                      convertSourceMode === 'audio' ? 'bg-accent text-on-accent shadow' : 'bg-black/50 text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    <Music className="w-3.5 h-3.5" />
-                    <span>Audio ke Audio</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setConvertSourceMode('video');
-                      fileInputRef.current?.click();
-                    }}
-                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg font-bold cursor-pointer ${
-                      convertSourceMode === 'video' ? 'bg-accent text-on-accent shadow' : 'bg-black/50 text-gray-400 hover:text-white'
-                    }`}
-                  >
-                    <Film className="w-3.5 h-3.5" />
-                    <span>Video ke Audio (MP4, MKV, WebM, MOV, AVI, dll.)</span>
-                  </button>
-                </div>
-
-                {blockedFormat && (
-                  <p className="text-[11px] text-gray-400">
-                    Format asal: <span className="font-bold text-gray-200">{blockedFormat}</span>. Pilih format tujuan yang berbeda.
-                  </p>
-                )}
-
-                {convertSourceMode === 'video' && (
-                  <p className="text-[11px] text-accent bg-accent/10 p-3 rounded-xl border border-accent/20 leading-relaxed">
-                    Audio diekstrak oleh decoder bawaan browser dari berkas video, lalu disimpan ke format pilihan Anda.
-                    Dukungan bergantung pada codec browser: <strong>.mp4, .webm, .mov, .m4v</strong> umumnya aman, sedangkan
-                    <strong> .mkv, .avi, .flv, .wmv</strong> bisa gagal dibaca di sebagian browser.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* 7. COMPRESS */}
-            {selectedTool === 'compress' && (
-              <div className="space-y-3 text-xs">
-                <span className="text-gray-300 font-bold block">Pilih Tingkatan Kompresi:</span>
-                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                  {compressTiers.map((tier) => {
-                    const isSel = selectedCompressTier === tier.id;
-                    return (
-                      <button
-                        key={tier.id}
-                        type="button"
-                        onClick={() => handleCompressTierChange(tier.id)}
-                        className={`p-3 rounded-xl border flex flex-col justify-between text-left transition-all cursor-pointer ${
-                          isSel
-                            ? 'bg-accent text-on-accent border-accent font-bold shadow-md'
-                            : 'bg-black/50 text-gray-300 border-white/[0.08] hover:border-white/20'
-                        }`}
-                      >
-                        <div>
-                          <span className="text-xs font-black block">{tier.name}</span>
-                          <span className="text-[10px] opacity-80 font-mono block mt-0.5">{tier.label}</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2 bg-black/50 p-3 rounded-xl border border-white/5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-gray-300 font-bold">Batas Awal (Start):</label>
+                        <div className="flex items-center gap-1">
+                          <TimeField
+                            value={trimStart}
+                            min={0}
+                            max={Math.max(0, trimEnd - minGap)}
+                            disabled={!decodedBuffer}
+                            onCommit={changeTrimStart}
+                          />
+                          <span className="text-gray-400 font-mono">detik</span>
                         </div>
-                        <p className="text-[9px] opacity-75 mt-2 leading-tight">{tier.desc}</p>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={totalDuration}
+                        step={0.01}
+                        value={trimStart}
+                        disabled={!decodedBuffer}
+                        onChange={(e) => changeTrimStart(Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent disabled:opacity-40"
+                      />
+                    </div>
 
-            {/* 8. NOISE REDUCTION */}
-            {selectedTool === 'noise_reduction' && (
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-accent font-bold">
-                  <Waves className="w-4 h-4" />
-                  <span>Spectral Noise Gate</span>
+                    <div className="space-y-2 bg-black/50 p-3 rounded-xl border border-white/5">
+                      <div className="flex justify-between items-center">
+                        <label className="text-gray-300 font-bold">Batas Akhir (End):</label>
+                        <div className="flex items-center gap-1">
+                          <TimeField
+                            value={trimEnd}
+                            min={Math.min(totalDuration, trimStart + minGap)}
+                            max={totalDuration}
+                            disabled={!decodedBuffer}
+                            onCommit={changeTrimEnd}
+                          />
+                          <span className="text-gray-400 font-mono">detik</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={totalDuration}
+                        step={0.01}
+                        value={trimEnd}
+                        disabled={!decodedBuffer}
+                        onChange={(e) => changeTrimEnd(Number(e.target.value))}
+                        className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent disabled:opacity-40"
+                      />
+                    </div>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-gray-300 font-bold block">Intensitas Pembersihan: {noiseAggression}%</label>
+              )}
+
+              {/* VOLUME / GAIN */}
+              {selectedTool === 'volume' && (
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <label className="text-gray-300 font-bold block">Penyesuaian Gain Dinamis:</label>
+                    <div className="flex items-center gap-2">
+                      {dynamicGainDb !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setDynamicGainDb(0)}
+                          className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <DecimalField value={dynamicGainDb} min={-24} max={24} unit="dB" onCommit={setDynamicGainDb} />
+                    </div>
+                  </div>
                   <input
                     type="range"
-                    min="10"
-                    max="100"
-                    value={noiseAggression}
-                    onChange={(e) => {
-                      setNoiseAggression(Number(e.target.value));
-                      if (toolStatesRef.current.noise_reduction.resultBuffer || toolStatesRef.current.noise_reduction.isProcessing) {
-                        if (live.current.selectedTool === 'noise_reduction') stopPlayback();
-                        clearToolResult('noise_reduction');
-                      }
-                    }}
-                    className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
+                    min="-24"
+                    max="24"
+                    step="0.01"
+                    value={dynamicGainDb}
+                    onChange={(e) => setDynamicGainDb(round2(Number(e.target.value)))}
+                    className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                   />
+                  {clipWarning && (
+                    <p className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                      <span>
+                        Puncak sinyal diperkirakan melewati 0 dBFS.
+                        {safeGainDb > 0 ? ` Gain maksimum aman sekitar +${safeGainDb} dB.` : ''}
+                      </span>
+                    </p>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* 9. VOCAL ISOLATOR */}
-            {selectedTool === 'vocal_separator' && (
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center gap-2 text-accent font-bold">
-                  <Mic2 className="w-4 h-4" />
-                  <span>Center-Phase Vocal Isolation</span>
+              {/* PITCH / TRANSPOSE */}
+              {selectedTool === 'pitch' && (
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <label className="text-gray-300 font-bold block">Pergeseran Nada Dinamis:</label>
+                    <div className="flex items-center gap-2">
+                      {dynamicPitchSemitones !== 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setDynamicPitchSemitones(0)}
+                          className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <DecimalField
+                        value={dynamicPitchSemitones}
+                        min={-12}
+                        max={12}
+                        unit="semitone"
+                        onCommit={setDynamicPitchSemitones}
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="-12"
+                    max="12"
+                    step="0.01"
+                    value={dynamicPitchSemitones}
+                    onChange={(e) => setDynamicPitchSemitones(round2(Number(e.target.value)))}
+                    className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
+                  />
+                  <div className="flex items-center gap-2 pt-1 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                    <input
+                      type="checkbox"
+                      id="chk-keep-tempo"
+                      checked={keepTempoOnPitch}
+                      onChange={(e) => setKeepTempoOnPitch(e.target.checked)}
+                      className="accent-accent w-4 h-4 cursor-pointer"
+                    />
+                    <label htmlFor="chk-keep-tempo" className="text-gray-300 font-bold cursor-pointer select-none">
+                      Kunci Tempo (Keep Tempo)
+                    </label>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 pt-1 flex-wrap">
-                  {(['vocal', 'instrumental', 'both'] as const).map((mode) => (
+              )}
+
+              {/* TEMPO / SPEED */}
+              {selectedTool === 'tempo' && (
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <label className="text-gray-300 font-bold block">Kecepatan Putar Dinamis:</label>
+                    <div className="flex items-center gap-2">
+                      {Math.abs(dynamicTempoSpeed - 1) > 0.0001 && (
+                        <button
+                          type="button"
+                          onClick={() => setDynamicTempoSpeed(1)}
+                          className="text-[11px] text-gray-400 hover:text-white underline cursor-pointer"
+                        >
+                          Reset
+                        </button>
+                      )}
+                      <DecimalField value={dynamicTempoSpeed} min={0.5} max={2} unit="x" onCommit={setDynamicTempoSpeed} />
+                    </div>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.01"
+                    value={dynamicTempoSpeed}
+                    onChange={(e) => setDynamicTempoSpeed(round2(Number(e.target.value)))}
+                    className="w-full h-2 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
+                  />
+                  {decodedBuffer && (
+                    <p className="text-[11px] text-gray-400">
+                      Durasi hasil: {(decodedBuffer.duration / dynamicTempoSpeed).toFixed(2)}s (asli {decodedBuffer.duration.toFixed(2)}s)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* CONVERT */}
+              {selectedTool === 'convert' && (
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-center gap-2 border-b border-white/10 pb-3 flex-wrap">
                     <button
-                      key={mode}
                       type="button"
-                      onClick={() => {
-                        if (live.current.selectedTool === 'vocal_separator') stopPlayback();
-                        setVocalExtractTarget(mode);
-                      }}
-                      className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
-                        vocalExtractTarget === mode ? 'bg-accent text-on-accent' : 'bg-black/60 text-gray-400 hover:text-white'
+                      onClick={() => setConvertSourceMode('audio')}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold cursor-pointer ${
+                        convertSourceMode === 'audio' ? 'bg-accent text-on-accent shadow' : 'bg-black/50 text-gray-400 hover:text-white'
                       }`}
                     >
-                      {mode === 'vocal' ? 'Vokal Saja' : mode === 'instrumental' ? 'Musik Saja' : 'Keduanya (2 File)'}
+                      <Music className="w-3.5 h-3.5" />
+                      <span>Audio ke Audio</span>
                     </button>
-                  ))}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConvertSourceMode('video');
+                        fileInputRef.current?.click();
+                      }}
+                      className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg font-bold cursor-pointer ${
+                        convertSourceMode === 'video' ? 'bg-accent text-on-accent shadow' : 'bg-black/50 text-gray-400 hover:text-white'
+                      }`}
+                    >
+                      <Film className="w-3.5 h-3.5" />
+                      <span>Video ke Audio</span>
+                    </button>
+                  </div>
+                  {blockedFormat && (
+                    <p className="text-[11px] text-gray-400">
+                      Format asal: <span className="font-bold text-gray-200">{blockedFormat}</span>. Pilih format tujuan yang berbeda.
+                    </p>
+                  )}
                 </div>
-                {vocalExtractTarget === 'both' && currentToolState.vocalUrls && (
-                  <div className="flex items-center gap-2 pt-1">
-                    <span className="text-gray-400">Dengar:</span>
-                    {(['vocal', 'instrumental'] as const).map((w) => (
+              )}
+
+              {/* COMPRESS */}
+              {selectedTool === 'compress' && (
+                <div className="space-y-3 text-xs">
+                  <span className="text-gray-300 font-bold block">Pilih Tingkatan Kompresi:</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                    {compressTiers.map((tier) => {
+                      const isSel = selectedCompressTier === tier.id;
+                      return (
+                        <button
+                          key={tier.id}
+                          type="button"
+                          onClick={() => handleCompressTierChange(tier.id)}
+                          className={`p-3 rounded-xl border flex flex-col justify-between text-left transition-all cursor-pointer ${
+                            isSel
+                              ? 'bg-accent text-on-accent border-accent font-bold shadow-md'
+                              : 'bg-black/50 text-gray-300 border-white/[0.08] hover:border-white/20'
+                          }`}
+                        >
+                          <div>
+                            <span className="text-xs font-black block">{tier.name}</span>
+                            <span className="text-[10px] opacity-80 font-mono block mt-0.5">{tier.label}</span>
+                          </div>
+                          <p className="text-[9px] opacity-75 mt-2 leading-tight">{tier.desc}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* NOISE REDUCTION */}
+              {selectedTool === 'noise_reduction' && (
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-accent font-bold">
+                    <Waves className="w-4 h-4" />
+                    <span>Spectral Noise Gate</span>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-gray-300 font-bold block">Intensitas Pembersihan: {noiseAggression}%</label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="100"
+                      value={noiseAggression}
+                      onChange={(e) => {
+                        setNoiseAggression(Number(e.target.value));
+                        if (toolStatesRef.current.noise_reduction.resultBuffer || toolStatesRef.current.noise_reduction.isProcessing) {
+                          if (live.current.selectedTool === 'noise_reduction') stopPlayback();
+                          clearToolResult('noise_reduction');
+                        }
+                      }}
+                      className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* VOCAL ISOLATOR */}
+              {selectedTool === 'vocal_separator' && (
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center gap-2 text-accent font-bold">
+                    <Mic2 className="w-4 h-4" />
+                    <span>Center-Phase Vocal Isolation</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    {(['vocal', 'instrumental', 'both'] as const).map((mode) => (
                       <button
-                        key={w}
+                        key={mode}
                         type="button"
                         onClick={() => {
-                          stopPlayback();
-                          setVocalPreviewChoice(w);
+                          if (live.current.selectedTool === 'vocal_separator') stopPlayback();
+                          setVocalExtractTarget(mode);
                         }}
-                        className={`px-2.5 py-1 rounded-md font-bold cursor-pointer ${
-                          vocalPreviewChoice === w ? 'bg-white/20 text-white' : 'bg-black/60 text-gray-400 hover:text-white'
+                        className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
+                          vocalExtractTarget === mode ? 'bg-accent text-on-accent' : 'bg-black/60 text-gray-400 hover:text-white'
                         }`}
                       >
-                        {w === 'vocal' ? 'Vokal' : 'Musik'}
+                        {mode === 'vocal' ? 'Vokal Saja' : mode === 'instrumental' ? 'Musik Saja' : 'Keduanya (2 File)'}
                       </button>
                     ))}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Format Unduhan & Aksi */}
-          <div className="pt-3 border-t border-white/[0.06] space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-              <span className="text-gray-300 font-bold flex items-center gap-2">
-                Format Unduhan:
-                <InfoTip label="Info format unduhan">
-                  <p>{FORMAT_INFO}</p>
-                </InfoTip>
-              </span>
-              <div className="flex items-center gap-1.5">
-                {(['MP3', 'WAV', 'M4A', 'FLAC'] as const).map((fmt) => (
-                  <button
-                    key={fmt}
-                    type="button"
-                    disabled={blockedFormat === fmt}
-                    title={blockedFormat === fmt ? 'Sama dengan format berkas asal' : undefined}
-                    onClick={() => setSelectedExportFormat(fmt)}
-                    className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                      blockedFormat === fmt
-                        ? 'bg-black/30 text-gray-600 line-through cursor-not-allowed'
-                        : selectedExportFormat === fmt
-                        ? 'bg-accent text-on-accent shadow cursor-pointer'
-                        : 'bg-black/60 text-gray-400 hover:text-white cursor-pointer'
-                    }`}
-                  >
-                    {fmt}
-                  </button>
-                ))}
-              </div>
+                </div>
+              )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                {/* Jalankan (tool statis) */}
-                {!isLiveTool &&
-                  (staticNeedsPurchase ? (
+            {/* Format Unduhan & Aksi */}
+            <div className="pt-3 border-t border-white/[0.06] space-y-3">
+              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+                <span className="text-gray-300 font-bold flex items-center gap-2">
+                  Format Unduhan:
+                  <InfoTip label="Info format unduhan">
+                    <p>{FORMAT_INFO}</p>
+                  </InfoTip>
+                </span>
+                <div className="flex items-center gap-1.5">
+                  {(['MP3', 'WAV', 'M4A', 'FLAC'] as const).map((fmt) => (
                     <button
+                      key={fmt}
                       type="button"
-                      data-quota-free
-                      onClick={onUnlockEditor}
-                      className={BTN_PRIMARY}
+                      disabled={blockedFormat === fmt}
+                      title={blockedFormat === fmt ? 'Sama dengan format berkas asal' : undefined}
+                      onClick={() => setSelectedExportFormat(fmt)}
+                      className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                        blockedFormat === fmt
+                          ? 'bg-black/30 text-gray-600 line-through cursor-not-allowed'
+                          : selectedExportFormat === fmt
+                          ? 'bg-accent text-on-accent shadow cursor-pointer'
+                          : 'bg-black/60 text-gray-400 hover:text-white cursor-pointer'
+                      }`}
                     >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => executeProcessForTool(selectedTool)}
-                      disabled={isProcessing}
-                      className={BTN_PRIMARY}
-                    >
-                      {isProcessing ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Memproses ({currentToolState.progress}%)...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="w-3.5 h-3.5 fill-on-accent" />
-                          <span>Jalankan {toolMeta.name}</span>
-                        </>
-                      )}
+                      {fmt}
                     </button>
                   ))}
-
-                {audioUrl && (
-                  <button
-                    type="button"
-                    onClick={togglePlayback}
-                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
-                  >
-                    {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
-                    <span>{playLabel}</span>
-                  </button>
-                )}
-
-                {Boolean(currentToolState.resultBuffer || currentToolState.vocalBuffers) && (
-                  <button
-                    type="button"
-                    onClick={() => handleClearToolResult(selectedTool)}
-                    className="px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Hapus Hasil</span>
-                  </button>
-                )}
+                </div>
               </div>
 
-              {/* Unduhan */}
-              {selectedTool === 'vocal_separator' && vocalExtractTarget === 'both' && currentToolState.vocalBuffers ? (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <button
-                    type="button"
-                    disabled={isExporting}
-                    onClick={() => handleDownloadFile({ buffer: currentToolState.vocalBuffers!.vocal, suffix: 'Vocal_Only' })}
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 text-xs font-black flex items-center gap-1 cursor-pointer shadow disabled:opacity-50"
-                  >
-                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} Unduh Vokal ({selectedExportFormat})
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isExporting}
-                    onClick={() => handleDownloadFile({ buffer: currentToolState.vocalBuffers!.instrumental, suffix: 'Music_Only' })}
-                    className="px-3 py-1.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1 cursor-pointer shadow disabled:opacity-50"
-                  >
-                    {isExporting ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />} Unduh Musik ({selectedExportFormat})
-                  </button>
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  {!isLiveTool &&
+                    (staticNeedsPurchase ? (
+                      <button
+                        type="button"
+                        data-quota-free
+                        onClick={onUnlockEditor}
+                        className={BTN_PRIMARY}
+                      >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => executeProcessForTool(selectedTool)}
+                        disabled={isProcessing}
+                        className={BTN_PRIMARY}
+                      >
+                        {isProcessing ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Memproses ({currentToolState.progress}%)...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5 fill-on-accent" />
+                            <span>Jalankan {toolMeta.name}</span>
+                          </>
+                        )}
+                      </button>
+                    ))}
+
+                  {audioUrl && (
+                    <button
+                      type="button"
+                      onClick={togglePlayback}
+                      className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {isPlaying ? <Pause className="w-3.5 h-3.5 fill-current" /> : <Play className="w-3.5 h-3.5 fill-current" />}
+                      <span>{playLabel}</span>
+                    </button>
+                  )}
+
+                  {Boolean(currentToolState.resultBuffer || currentToolState.vocalBuffers) && (
+                    <button
+                      type="button"
+                      onClick={() => handleClearToolResult(selectedTool)}
+                      className="px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus Hasil</span>
+                    </button>
+                  )}
                 </div>
-              ) : (
-                (hasResult || isLiveTool) &&
-                decodedBuffer && (
+
+                {(hasResult || isLiveTool) && decodedBuffer && (
                   <div className="flex items-center gap-2">
                     <span className="text-emerald-400 text-xs font-bold flex items-center gap-1">
                       <CheckCircle className="w-3.5 h-3.5" /> Siap
@@ -2103,17 +1892,16 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       </button>
                     )}
                   </div>
-                )
+                )}
+              </div>
+
+              {remainingMin !== null && (
+                <p className="text-[11px] text-gray-500">
+                  Hasil disimpan sementara di memori browser (sisa ±{remainingMin} menit).
+                </p>
               )}
             </div>
-
-            {remainingMin !== null && (
-              <p className="text-[11px] text-gray-500">
-                Hasil disimpan sementara di memori browser (sisa ±{remainingMin} menit), lalu dihapus otomatis.
-              </p>
-            )}
           </div>
-        </div>
         )}
       </div>
     </section>

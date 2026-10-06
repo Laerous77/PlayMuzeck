@@ -1,160 +1,22 @@
 // src/admin/adminApi.ts
-export const ADMIN_TOKEN_KEY = 'muzeck_admin_token';
-
-// PERBAIKAN: sebelumnya fungsi ini "menebak" token admin sendiri di browser
-// (`admin-google-<email>`) hanya berdasarkan isUserAdmin(email) di klien.
-// Server tidak pernah menerbitkan atau mengenal token itu, jadi requireAdmin
-// di server SELALU menolaknya (401) dan seluruh halaman admin gagal memuat
-// data dari database. Sekarang getAdminToken() murni membaca token asli yang
-// sebelumnya disimpan lewat setAdminToken() setelah login berhasil ke server
-// (baik lewat /api/admin/login maupun /api/admin/google-login).
-export function getAdminToken(): string {
-  return localStorage.getItem(ADMIN_TOKEN_KEY) || '';
-}
-
-export function setAdminToken(token: string): void {
-  localStorage.setItem(ADMIN_TOKEN_KEY, token);
-}
-
-export function clearAdminToken(): void {
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
-}
-
-/**
- * Login admin lewat Google Sign-In SUNGGUHAN. `credential` adalah ID token
- * (JWT) asli dari Google Identity Services — server yang memverifikasinya ke
- * Google dan mengecek daftar admin, bukan klien yang mengaku-aku emailnya.
- */
-export async function loginAdminWithGoogle(credential: string): Promise<string> {
-  const res = await fetch('/api/admin/google-login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ credential }),
-  });
-  const data = await res.json().catch(() => ({}));
+export async function publicFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(endpoint, init);
   if (!res.ok) {
-    throw new Error(data.error || 'Login admin dengan akun Google gagal.');
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
   }
-  setAdminToken(data.token);
-  return data.token as string;
+  return res.json() as Promise<T>;
 }
 
-/**
- * Menaikkan sesi login SITUS UTAMA menjadi sesi admin, tanpa perlu login
- * Google kedua kalinya. Sesi situs utama sekarang berupa cookie httpOnly
- * (muzeck_sid) yang diatur server, jadi TIDAK ada token yang dikirim dari
- * JavaScript: browser otomatis membawa cookie-nya (credentials: 'include'),
- * lalu server memverifikasi sesi itu dan mengecek daftar admin.
- */
-export async function elevateToAdminViaSession(): Promise<string> {
-  const res = await fetch('/api/admin/session-login', {
-    method: 'POST',
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
+export async function adminFetch<T>(endpoint: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(endpoint, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers || {}),
+    },
   });
-  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || 'Akun ini bukan Administrator terdaftar.');
+    throw new Error(`Admin HTTP ${res.status}: ${res.statusText}`);
   }
-  setAdminToken(data.token);
-  return data.token as string;
-}
-
-export interface AdminAccount {
-  email: string;
-  grantedBy: string;
-  createdAt: string;
-  isSuperAdmin: boolean;
-}
-
-export interface AdminMe {
-  email: string | null;
-  isSuperAdmin: boolean;
-}
-
-/** Info admin yang sedang login (email & apakah dia Super Admin). */
-export const getAdminMe = () => adminFetch<AdminMe>('/api/admin/me');
-
-/** Daftar semua email yang punya akses admin (bisa dilihat semua admin). */
-export const listAdmins = () => adminFetch<AdminAccount[]>('/api/admin/admins');
-
-/** Beri akses admin ke email baru — hanya berhasil jika pemanggil Super Admin. */
-export const grantAdmin = (email: string) =>
-  adminFetch('/api/admin/admins', { method: 'POST', body: JSON.stringify({ email }) });
-
-/** Cabut akses admin dari sebuah email — hanya berhasil jika pemanggil Super Admin. */
-export const revokeAdmin = (email: string) =>
-  adminFetch(`/api/admin/admins/${encodeURIComponent(email)}`, { method: 'DELETE' });
-
-/**
- * Fetch untuk endpoint publik (tanpa token admin), dipakai misalnya oleh cms.ts
- * untuk memuat katalog audio, topik, deck, dan pengaturan situs yang memang
- * boleh diakses semua pengunjung tanpa login.
- */
-export async function publicFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
-  const headers = new Headers(options.headers || {});
-
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (!res.ok) {
-    let errMsg = `Permintaan ke server gagal (${res.status})`;
-    try {
-      const errData = await res.json();
-      errMsg = errData.error || errData.message || errMsg;
-    } catch {
-      try {
-        const text = await res.text();
-        if (text) errMsg = text;
-      } catch {}
-    }
-    throw new Error(errMsg);
-  }
-
-  return res.json();
-}
-
-export async function adminFetch<T = any>(url: string, options: RequestInit = {}): Promise<T> {
-  const token = getAdminToken();
-  const headers = new Headers(options.headers || {});
-
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  const res = await fetch(url, {
-    ...options,
-    headers,
-  });
-
-  if (res.status === 401) {
-    clearAdminToken();
-    throw new Error('Sesi admin tidak valid atau telah berakhir. Silakan login kembali.');
-  }
-
-  if (!res.ok) {
-    let errMsg = `Permintaan ke server gagal (${res.status})`;
-    try {
-      const errData = await res.json();
-      errMsg = errData.error || errData.message || errMsg;
-    } catch {
-      try {
-        const text = await res.text();
-        if (text) errMsg = text;
-      } catch {}
-    }
-    throw new Error(errMsg);
-  }
-
-  return res.json();
+  return res.json() as Promise<T>;
 }

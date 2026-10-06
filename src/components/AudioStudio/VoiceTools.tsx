@@ -1,15 +1,4 @@
 // src/components/AudioStudio/VoiceTools.tsx
-//
-// Dua alat suara untuk Audio Tools Suite (tampilan & aturan kuota sama dengan 15 alat lainnya):
-//   1. Deteksi Nada Suara: aktifkan perekaman, nada yang kamu nyanyikan/siulkan dideteksi langsung (grafik pitch),
-//      lalu diringkas: nada terendah/tertinggi, nada paling sering, perkiraan kunci, ketepatan intonasi.
-//   2. Tes Vocal Range: tes terpandu (nada terendah -> tertinggi -> nada nyaman) untuk mengetahui jangkauan suara,
-//      jenis suara, wilayah nyaman, contoh lagu yang pas di rentangmu, dan latihan pemanasan.
-//
-// Kuota (2x gratis per alat per hari) dicatat di DATABASE lewat `gate` dari AudioToolsSuite:
-//   - Deteksi Nada: 1 sesi perekaman = 1 penggunaan (dikembalikan bila mikrofon gagal / tidak ada nada terdeteksi /
-//     pengguna meninggalkan alat sebelum ada nada terdeteksi). Menghapus hasil TIDAK mengembalikan jatah.
-//   - Vocal Range: 1 tes = 1 penggunaan (dikembalikan bila dibatalkan atau ditinggalkan sebelum hasil / mikrofon gagal).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Mic, Square, Play, Download, Copy, AlertTriangle, CheckCircle, RotateCcw, Loader2, X, ArrowRight, Volume2, Trash2,
@@ -25,8 +14,6 @@ import {
   midiToFreq, noteName, summarize, tessituraFrom, warmupStart, type NoteSegment, type WarmUp,
 } from '../../services/voiceDsp';
 import { fitSongs, type FitLevel, type SongFit } from '../../data/vocalRangeSongs';
-
-// ───────────────────────── Helper umum ─────────────────────────
 
 const AudioCtx: typeof AudioContext = (typeof window !== 'undefined' &&
   (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)) as typeof AudioContext;
@@ -76,23 +63,22 @@ const InfoNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 const STOP_BTN = 'px-5 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-md w-fit';
 
-// ───────────────────────── Mikrofon & pitch per frame ─────────────────────────
-
 interface Frame { t: number; freq: number | null; clarity: number; rms: number }
 interface MicHandle { stream: MediaStream; stop: () => void }
 
 const FRAME_MS = 50;
 
-/** Buka mikrofon (tanpa pengolahan otomatis agar nada tidak berubah) dan kirim satu frame pitch tiap 50 ms. */
 async function openMic(onFrame: (f: Frame) => void): Promise<MicHandle> {
   if (!navigator.mediaDevices?.getUserMedia || !AudioCtx) throw new DOMException('Tidak didukung', 'NotSupportedError');
   const stream = await navigator.mediaDevices.getUserMedia({
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
   });
   const ctx = new AudioCtx();
-  void ctx.resume();
+  if (ctx.state === 'suspended') {
+    try { await ctx.resume(); } catch {}
+  }
   const analyser = ctx.createAnalyser();
-  analyser.fftSize = 4096; // ≥ 2 periode untuk E2 (≈82 Hz) pada 44,1/48 kHz
+  analyser.fftSize = 4096;
   analyser.smoothingTimeConstant = 0;
   ctx.createMediaStreamSource(stream).connect(analyser);
   const buf = new Float32Array(analyser.fftSize);
@@ -105,7 +91,7 @@ async function openMic(onFrame: (f: Frame) => void): Promise<MicHandle> {
     const p = detectPitch(buf, ctx.sampleRate, 60, 1400);
     onFrame({
       t: (performance.now() - t0) / 1000,
-      freq: p && p.clarity >= 0.85 ? p.freq : null,
+      freq: p && p.clarity >= 0.72 ? p.freq : null,
       clarity: p?.clarity ?? 0,
       rms,
     });
@@ -128,7 +114,6 @@ const micError = (e: unknown) => {
   return 'Gagal mengakses mikrofon.';
 };
 
-/** Rekam stream yang sama ke berkas (untuk diputar ulang & diunduh). null bila browser tidak mendukung MediaRecorder. */
 function startRecorder(stream: MediaStream): { stop: () => Promise<Blob | null> } | null {
   if (typeof MediaRecorder === 'undefined') return null;
   try {
@@ -152,7 +137,6 @@ async function decodeBlob(blob: Blob): Promise<AudioBuffer> {
   try { return await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { void ctx.close(); }
 }
 
-/** Mainkan deretan nada (gelombang segitiga) sebagai acuan. Mengembalikan pengendali untuk menghentikan. */
 function playSequence(midis: number[], a4 = 440, step = 0.6, hold = 0.55): { stop: () => void; durationMs: number } {
   const ctx = new AudioCtx();
   void ctx.resume();
@@ -176,7 +160,6 @@ function playSequence(midis: number[], a4 = 440, step = 0.6, hold = 0.55): { sto
   return { durationMs, stop: () => { window.clearTimeout(id); void ctx.close(); } };
 }
 
-/** Pemutar nada acuan: menghentikan yang sedang berbunyi sebelum memulai yang baru. */
 function useTonePlayer(a4 = 440) {
   const cur = useRef<{ stop: () => void } | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
@@ -200,9 +183,6 @@ function useTonePlayer(a4 = 440) {
 let runSeq = 0;
 const newRunKey = (prefix: string) => `${prefix}-${++runSeq}-${Date.now().toString(36)}`;
 
-// ───────────────────────── Tampilan bersama ─────────────────────────
-
-/** Kartu pembacaan langsung: nama nada besar, Hz, cent, jarum, dan indikator level mikrofon. */
 const LiveReading: React.FC<{
   midi: number | null; freq: number | null; cents: number; level: number; active: boolean; idle: string;
 }> = ({ midi, freq, cents, level, active, idle }) => {
@@ -236,10 +216,8 @@ const LiveReading: React.FC<{
 };
 
 const levelPct = (rms: number) => Math.max(0, Math.min(100, ((20 * Math.log10(Math.max(rms, 1e-5)) + 60) / 50) * 100));
-
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
 
-/** Unduh rekaman dengan pilihan format (tidak memakan kuota: sudah dihitung saat perekaman dimulai). */
 const RecordingExport: React.FC<{ buffer: AudioBuffer; fileName: string; onDone?: (m: string) => void }> = ({ buffer, fileName, onDone }) => {
   const [fmt, setFmt] = useState<'MP3' | 'WAV' | 'FLAC' | 'M4A'>('MP3');
   const [busy, setBusy] = useState(false);
@@ -308,8 +286,6 @@ const StatCard: React.FC<{ label: string; value: React.ReactNode; sub?: React.Re
   </div>
 );
 
-// ───────────────────────── 1. Deteksi Nada Suara ─────────────────────────
-
 const GRAPH_SECONDS = 8;
 const MAX_RECORD_SEC = 300;
 
@@ -336,7 +312,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
   const hist = useRef<{ t: number; m: number | null }[]>([]);
   const recent = useRef<number[]>([]);
   const lastVoiced = useRef(0);
-  const range = useRef({ lo: 48, hi: 72 }); // grafik hanya melebar, tidak menyempit, agar tidak "loncat"
+  const range = useRef({ lo: 48, hi: 72 });
   const runKey = useRef<string | null>(null);
   const stoppingRef = useRef(false);
 
@@ -345,7 +321,6 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     setAudioUrl((u) => { if (u) URL.revokeObjectURL(u); return null; });
   }, []);
 
-  /** Hapus hasil deteksi (ringkasan, daftar nada, rekaman). Jatah harian yang sudah terpakai tidak dikembalikan. */
   const handleClear = useCallback(() => {
     clearResult();
     setErr(null); setElapsed(0); setLive(null); setLevel(0);
@@ -366,21 +341,21 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     segRef.current = null;
     const key = runKey.current; runKey.current = null;
     if (segs.length === 0) {
-      if (key) gate?.refund('pitch_detect', key); // tidak ada nada terdeteksi: jatah dikembalikan
-      setErr('Tidak ada nada yang terdeteksi, jadi penggunaan ini tidak dihitung. Dekatkan mikrofon, bernyanyilah dengan "aaa" atau bersiullah, dan pastikan ruangan tenang.');
+      if (key) gate?.refund('pitch_detect', key);
+      setErr('Tidak ada nada yang terdeteksi. Dekatkan mikrofon, bernyanyilah dengan "aaa" atau bersiullah, dan pastikan ruangan tenang.');
       setBusy(false); stoppingRef.current = false;
       return;
     }
     setSegments(segs);
     if (blob) {
       setAudioUrl(URL.createObjectURL(blob));
-      try { setAudioBuffer(await decodeBlob(blob)); } catch { /* pemutaran tetap bisa, hanya unduhan multi-format yang tidak tersedia */ }
+      try { setAudioBuffer(await decodeBlob(blob)); } catch {}
     }
     if (auto) toast?.('Batas perekaman 5 menit tercapai; rekaman dihentikan.');
     setBusy(false); stoppingRef.current = false;
   }, [gate, toast]);
 
-  useEffect(() => () => { // unmount: matikan mikrofon, bebaskan URL, dan kembalikan jatah bila belum ada nada sama sekali
+  useEffect(() => () => {
     micRef.current?.stop(); micRef.current = null;
     void recRef.current?.stop(); recRef.current = null;
     const key = runKey.current; runKey.current = null;
@@ -394,7 +369,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr(micError(new DOMException('', 'NotSupportedError'))); return; }
     const key = newRunKey('pd');
-    if (gate && !(await gate.use('pitch_detect', key))) return; // jatah dipesan di server
+    if (gate && !(await gate.use('pitch_detect', key))) return;
     setBusy(true);
     try {
       clearResult();
@@ -428,7 +403,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
       setElapsed(0); setRunning(true);
     } catch (e) {
       micRef.current?.stop(); micRef.current = null; segRef.current = null; runKey.current = null;
-      gate?.refund('pitch_detect', key); // mikrofon gagal dibuka: jatah dikembalikan
+      gate?.refund('pitch_detect', key);
       setErr(micError(e));
     } finally { setBusy(false); }
   };
@@ -446,11 +421,10 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     L.push(`Rata-rata penyimpangan dari nada tepat: ${summary.avgAbsCents.toFixed(0)} cent (${accuracyLabel(summary.avgAbsCents)})`);
     L.push(`Acuan A4: ${a4} Hz`, '', 'Urutan nada (waktu mulai, nada, durasi):');
     segments.forEach((s) => L.push(`${fmtClock(s.start)}.${Math.floor((s.start % 1) * 10)}  ${noteName(s.midi)}  ${s.duration.toFixed(2)} dtk  (${s.avgCents >= 0 ? '+' : ''}${s.avgCents.toFixed(0)} cent)`));
-    L.push('', 'Catatan: hasil berupa deteksi otomatis. Suara serak, bernapas, atau ruangan bising dapat memengaruhi akurasi.');
+    L.push('', 'Catatan: hasil berupa deteksi otomatis.');
     return L.join('\n');
   }, [summary, segments, a4]);
 
-  // ---- Grafik pitch (roll nada) ----
   const { lo, hi } = range.current;
   const rows = hi - lo + 1;
   const now = hist.current.length ? hist.current[hist.current.length - 1].t : 0;
@@ -474,12 +448,10 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
   return (
     <Panel title="Deteksi Nada Suara" info={[
       'Aktifkan perekaman lalu bernyanyi, bersenandung, atau bersiul. Nada yang kamu hasilkan dideteksi langsung dan digambar sebagai grafik pitch.',
-      'Setelah berhenti, kamu mendapat ringkasan: nada terendah/tertinggi, nada paling sering, perkiraan kunci, dan seberapa tepat intonasimu, plus rekaman yang bisa diputar & diunduh.',
-      'Satu sesi perekaman dihitung satu penggunaan. Bila tidak ada nada terdeteksi atau mikrofon gagal, penggunaan itu dikembalikan. Tombol "Hapus hasil" membersihkan ringkasan dan rekaman dari layar, tetapi tidak mengembalikan jatah.',
-      'Untuk hasil terbaik: ruangan tenang, mikrofon 10-20 cm dari mulut, satu suara saja (bukan beberapa nada sekaligus seperti akor).',
+      'Setelah berhenti, kamu mendapat ringkasan: nada terendah/tertinggi, nada paling sering, perkiraan kunci, dan seberapa tepat intonasimu.',
     ]}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label={`Acuan A4: ${a4} Hz`} hint="Standar 440 Hz. Ubah bila instrumen pengiringmu disetel berbeda.">
+        <Field label={`Acuan A4: ${a4} Hz`} hint="Standar 440 Hz.">
           <div className="flex items-center gap-2">
             <input type="range" min={430} max={450} value={a4} onChange={(e) => setA4(+e.target.value)} className={SLIDER_CLS} disabled={running} />
             <button type="button" onClick={() => setA4(440)} disabled={a4 === 440 || running} className={BTN_GHOST}>440</button>
@@ -538,37 +510,33 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
             <StatCard
               label="PERKIRAAN KUNCI"
               value={summary.key ? summary.key.name : '—'}
-              sub={summary.key ? `relatif ${summary.key.relative} · keyakinan ${Math.round(summary.key.confidence * 100)}%` : 'Butuh minimal 4 nada dari 3 nada berbeda.'}
+              sub={summary.key ? `relatif ${summary.key.relative} · keyakinan ${Math.round(summary.key.confidence * 100)}%` : 'Data belum mencukupi'}
             />
           </div>
           <div className={`${CARD_CLS} text-xs space-y-1`}>
             <div className="font-bold text-gray-300">Ketepatan intonasi</div>
             <p className="text-gray-400">
-              Rata-rata nadamu menyimpang <span className="font-bold text-white">{summary.avgAbsCents.toFixed(0)} cent</span> dari nada tepat ({accuracyLabel(summary.avgAbsCents)}). 100 cent = 1 semiton (satu tuts piano); di bawah ±20 cent umumnya terdengar pas oleh telinga.
+              Rata-rata nadamu menyimpang <span className="font-bold text-white">{summary.avgAbsCents.toFixed(0)} cent</span> dari nada tepat ({accuracyLabel(summary.avgAbsCents)}).
             </p>
           </div>
           <div className="space-y-2">
             <div className="text-xs font-bold text-gray-300">Urutan nada yang kamu nyanyikan</div>
             <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
               {segments.slice(0, 120).map((s, i) => (
-                <span key={i} className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 text-[11px] font-mono text-gray-200" title={`${fmtClock(s.start)} · ${s.duration.toFixed(2)} dtk · ${s.avgCents >= 0 ? '+' : ''}${s.avgCents.toFixed(0)} cent`}>
+                <span key={i} className="px-2 py-1 rounded-lg bg-black/50 border border-white/10 text-[11px] font-mono text-gray-200" title={`${fmtClock(s.start)} · ${s.duration.toFixed(2)} dtk`}>
                   <span className="font-black text-white">{noteName(s.midi)}</span> <span className="text-gray-500">{s.duration.toFixed(1)}s</span>
                 </span>
               ))}
-              {segments.length > 120 && <span className="text-[11px] text-gray-500 self-center">+{segments.length - 120} nada lagi (ada di laporan)</span>}
             </div>
           </div>
           {audioUrl && <audio controls src={audioUrl} className="w-full" />}
           <ReportButtons report={report} fileName="PlayMuzeck_Deteksi_Nada.txt" toast={toast} onClear={handleClear} />
           {audioBuffer && <RecordingExport buffer={audioBuffer} fileName="PlayMuzeck_Rekaman_Suara" onDone={toast} />}
-          <InfoNote>Hasil berupa deteksi otomatis dari mikrofon. Suara berdesis, napas, atau ruangan bising dapat membuat sebagian nada terlewat.</InfoNote>
         </div>
       )}
     </Panel>
   );
 };
-
-// ───────────────────────── 2. Tes Vocal Range ─────────────────────────
 
 type Phase = 'intro' | 'low' | 'high' | 'comfort' | 'result';
 
@@ -579,9 +547,9 @@ const STEPS: { id: Exclude<Phase, 'intro' | 'result'>; label: string }[] = [
 ];
 
 const PHASE_HELP: Record<'low' | 'high' | 'comfort', string> = {
-  low: 'Nyanyikan "aaa" mulai dari nada yang nyaman, lalu turunkan pelan-pelan selangkah demi selangkah. Tahan nada terendah yang masih jernih (bukan bisikan atau geraman) selama sekitar 1 detik.',
-  high: 'Sekarang naikkan nada pelan-pelan dengan "aaa" atau "ooo". Tahan nada tertinggi yang masih bisa kamu nyanyikan tanpa mencekik atau memaksa (boleh pakai suara kepala/falsetto). Berhenti bila tenggorokan terasa tegang.',
-  comfort: 'Nyanyikan sepotong lagu yang kamu hafal dengan nyaman (misalnya "Happy Birthday") selama 10-20 detik. Bagian ini dipakai untuk menentukan wilayah nyamanmu. Boleh dilewati.',
+  low: 'Nyanyikan "aaa" mulai dari nada yang nyaman, lalu turunkan pelan-pelan selangkah demi selangkah. Tahan nada terendah yang masih jernih selama sekitar 1 detik.',
+  high: 'Sekarang naikkan nada pelan-pelan dengan "aaa" atau "ooo". Tahan nada tertinggi yang masih bisa kamu nyanyikan tanpa memaksa. Berhenti bila tenggorokan terasa tegang.',
+  comfort: 'Nyanyikan sepotong lagu yang kamu hafal dengan nyaman selama 10-20 detik untuk mengukur wilayah nyamanmu.',
 };
 
 const LEVEL_META: Record<FitLevel, { label: string; hint: string }> = {
@@ -591,19 +559,18 @@ const LEVEL_META: Record<FitLevel, { label: string; hint: string }> = {
 };
 
 const A4 = 440;
-const AXIS_MIN = 36; // C2
-const AXIS_MAX = 96; // C7
+const AXIS_MIN = 36;
+const AXIS_MAX = 96;
 
 const pctOf = (m: number) => ((Math.min(AXIS_MAX, Math.max(AXIS_MIN, m)) - AXIS_MIN) / (AXIS_MAX - AXIS_MIN)) * 100;
 
-/** Tampilan hasil tes: rentang, jenis suara, wilayah nyaman, contoh lagu, dan latihan pemanasan. */
 export const VocalRangeResult: React.FC<{
   low: number; high: number; tessMeasured: Map<number, number> | null; toast?: (m: string) => void; onRetake: () => void; onClear?: () => void;
 }> = ({ low, high, tessMeasured, toast, onRetake, onClear }) => {
   const [songTab, setSongTab] = useState<FitLevel>('comfort');
   const [showAll, setShowAll] = useState(false);
   const player = useTonePlayer(A4);
-  // ---- Hasil ----
+
   const result = useMemo(() => {
     const lo = Math.min(low, high), hi = Math.max(low, high);
     const matches = classifyVoice(lo, hi);
@@ -619,7 +586,6 @@ export const VocalRangeResult: React.FC<{
     return g;
   }, [result]);
 
-  // Tab lagu: jangan biarkan kosong bila tab lain berisi.
   useEffect(() => {
     if (fitsByLevel[songTab].length === 0) {
       const first = (['comfort', 'range', 'challenge'] as const).find((l) => fitsByLevel[l].length > 0);
@@ -632,152 +598,116 @@ export const VocalRangeResult: React.FC<{
     const L = ['PlayMuzeck - Hasil Tes Vocal Range', ''];
     L.push(`Rentang suara: ${noteName(result.lo)} – ${noteName(result.hi)} (${midiHz(result.lo)} – ${midiHz(result.hi)})`);
     L.push(`Jangkauan: ${describeSpan(result.span)} (${result.span} semiton)`);
-    L.push(`Wilayah nyaman${result.tess.measured ? '' : ' (perkiraan)'}: ${noteName(result.tess.low)} – ${noteName(result.tess.high)}`);
-    L.push(`Jenis suara paling mendekati: ${top.type.name} (kecocokan rentang ${Math.round(top.fit * 100)}%)`);
+    L.push(`Wilayah nyaman: ${noteName(result.tess.low)} – ${noteName(result.tess.high)}`);
+    L.push(`Jenis suara paling mendekati: ${top.type.name}`);
     L.push('', 'Contoh lagu:');
     (['comfort', 'range', 'challenge'] as const).forEach((lv) => {
-      fitsByLevel[lv].forEach((f) => L.push(`- [${LEVEL_META[lv].label}] ${f.song.title}: kunci ${keyName(f.tonic)}${f.shift === 0 ? ' (kunci asli)' : ` (${semis(f.shift)} semiton dari kunci acuan)`}, melodi ${noteName(f.low)}–${noteName(f.high)}`));
+      fitsByLevel[lv].forEach((f) => L.push(`- [${LEVEL_META[lv].label}] ${f.song.title}: kunci ${keyName(f.tonic)}, melodi ${noteName(f.low)}–${noteName(f.high)}`));
     });
-    L.push('', 'Catatan: jenis suara ditentukan juga oleh warna suara dan titik peralihan register, bukan hanya rentang. Hasil ini perkiraan; guru vokal dapat memastikannya.');
     return L.join('\n');
   }, [result, fitsByLevel]);
 
   const visibleSongs = fitsByLevel[songTab].slice(0, showAll ? 50 : 6);
 
   return (
-        <div className="space-y-5">
-          <p className="text-xs text-emerald-300 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" />Tes selesai. Ini hasil jangkauan suaramu.</p>
+    <div className="space-y-5">
+      <p className="text-xs text-emerald-300 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" />Tes selesai. Ini hasil jangkauan suaramu.</p>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatCard label="RENTANG SUARA" value={`${noteName(result.lo)}–${noteName(result.hi)}`} sub={`${midiHz(result.lo)} – ${midiHz(result.hi)}`} />
-            <StatCard label="JANGKAUAN" value={describeSpan(result.span)} sub={`${result.span} semiton`} />
-            <StatCard label={result.tess.measured ? 'WILAYAH NYAMAN' : 'WILAYAH NYAMAN (PERKIRAAN)'} value={`${noteName(result.tess.low)}–${noteName(result.tess.high)}`} sub={result.tess.measured ? 'Dari nyanyianmu di langkah 3' : '60% bagian tengah rentang'} />
-            <StatCard label="JENIS SUARA TERDEKAT" value={result.matches[0].type.name} sub={`kecocokan rentang ${Math.round(result.matches[0].fit * 100)}%`} />
-          </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <StatCard label="RENTANG SUARA" value={`${noteName(result.lo)}–${noteName(result.hi)}`} sub={`${midiHz(result.lo)} – ${midiHz(result.hi)}`} />
+        <StatCard label="JANGKAUAN" value={describeSpan(result.span)} sub={`${result.span} semiton`} />
+        <StatCard label={result.tess.measured ? 'WILAYAH NYAMAN' : 'WILAYAH NYAMAN (PERKIRAAN)'} value={`${noteName(result.tess.low)}–${noteName(result.tess.high)}`} sub={result.tess.measured ? 'Dari nyanyianmu di langkah 3' : '60% bagian tengah rentang'} />
+        <StatCard label="JENIS SUARA TERDEKAT" value={result.matches[0].type.name} sub={`kecocokan rentang ${Math.round(result.matches[0].fit * 100)}%`} />
+      </div>
 
-          {/* Peta rentang: rentangmu di atas rentang baku tiap jenis suara */}
-          <div className="space-y-2">
-            <div className="text-xs font-bold text-gray-300">Rentangmu dibanding jenis suara</div>
-            <div className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-1.5">
-              {[{ id: 'me', name: 'Kamu', low: result.lo, high: result.hi }, ...VOICE_TYPES].map((row) => {
-                const me = row.id === 'me';
-                const top = result.matches[0].type.id === row.id;
-                return (
-                  <div key={row.id} className="flex items-center gap-2 text-[11px]">
-                    <span className={`w-24 shrink-0 truncate ${me ? 'font-black text-accent' : top ? 'font-bold text-white' : 'text-gray-400'}`}>{row.name}</span>
-                    <div className="relative h-3 flex-1 rounded bg-white/[0.06]">
-                      <div className={`absolute top-0 bottom-0 rounded ${me ? 'bg-accent' : top ? 'bg-white/50' : 'bg-white/20'}`} style={{ left: `${pctOf(row.low)}%`, width: `${Math.max(1.5, pctOf(row.high) - pctOf(row.low))}%` }} />
-                      {me && <div className="absolute top-0 bottom-0 rounded border-2 border-white/80" style={{ left: `${pctOf(result.tess.low)}%`, width: `${Math.max(1, pctOf(result.tess.high) - pctOf(result.tess.low))}%` }} title="Wilayah nyaman" />}
-                    </div>
-                  </div>
-                );
-              })}
-              <div className="flex items-center gap-2 text-[10px] text-gray-500">
-                <span className="w-24 shrink-0" />
-                <div className="relative flex-1 h-3">
-                  {[36, 48, 60, 72, 84, 96].map((m) => <span key={m} className="absolute -translate-x-1/2 font-mono" style={{ left: `${pctOf(m)}%` }}>{noteName(m)}</span>)}
+      <div className="space-y-2">
+        <div className="text-xs font-bold text-gray-300">Rentangmu dibanding jenis suara</div>
+        <div className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-1.5">
+          {[{ id: 'me', name: 'Kamu', low: result.lo, high: result.hi }, ...VOICE_TYPES].map((row) => {
+            const me = row.id === 'me';
+            const top = result.matches[0].type.id === row.id;
+            return (
+              <div key={row.id} className="flex items-center gap-2 text-[11px]">
+                <span className={`w-24 shrink-0 truncate ${me ? 'font-black text-accent' : top ? 'font-bold text-white' : 'text-gray-400'}`}>{row.name}</span>
+                <div className="relative h-3 flex-1 rounded bg-white/[0.06]">
+                  <div className={`absolute top-0 bottom-0 rounded ${me ? 'bg-accent' : top ? 'bg-white/50' : 'bg-white/20'}`} style={{ left: `${pctOf(row.low)}%`, width: `${Math.max(1.5, pctOf(row.high) - pctOf(row.low))}%` }} />
+                  {me && <div className="absolute top-0 bottom-0 rounded border-2 border-white/80" style={{ left: `${pctOf(result.tess.low)}%`, width: `${Math.max(1, pctOf(result.tess.high) - pctOf(result.tess.low))}%` }} title="Wilayah nyaman" />}
                 </div>
               </div>
-              <p className="text-[10px] text-gray-500 pl-[6.5rem]">Kotak putih = wilayah nyaman. C4 = do tengah piano.</p>
-            </div>
-            <div className={`${CARD_CLS} text-xs space-y-1`}>
-              <p className="text-gray-200"><span className="font-bold text-white">{result.matches[0].type.name}:</span> {result.matches[0].type.desc}{result.matches[1] && result.matches[1].fit > 0.4 ? ` Dekat juga dengan ${result.matches[1].type.name}.` : ''}</p>
-              <p className="text-gray-500">Jenis suara sebenarnya juga ditentukan oleh warna suara dan titik peralihan register, bukan hanya rentang, jadi anggap ini perkiraan. Wanita umumnya alto/mezzo/sopran, pria bass/bariton/tenor.</p>
-            </div>
-          </div>
-
-          {/* Contoh lagu */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h5 className="text-sm font-bold text-white">Contoh lagu di rentangmu</h5>
-              <InfoTip label="Info contoh lagu">
-                <p>Setiap lagu dicari kunci yang paling dekat dengan kunci aslinya agar seluruh melodi utama muat di suaramu. "Kunci asli" berarti tidak perlu digeser; selain itu lagu perlu dinaikkan/diturunkan beberapa semiton (transposisi).</p>
-                <p>Rentang yang ditampilkan adalah melodi utama pada kunci acuan. Versi rekaman lagu yang sama bisa memakai kunci berbeda.</p>
-              </InfoTip>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {(['comfort', 'range', 'challenge'] as const).map((lv) => (
-                <button key={lv} type="button" onClick={() => { setSongTab(lv); setShowAll(false); }} className={pillCls(songTab === lv)}>
-                  {LEVEL_META[lv].label} ({fitsByLevel[lv].length})
-                </button>
-              ))}
-            </div>
-            <p className="text-[11px] text-gray-400">{LEVEL_META[songTab].hint}</p>
-            {visibleSongs.length === 0 ? (
-              <InfoNote>Belum ada lagu pada kategori ini untuk rentangmu. Coba kategori lain.</InfoNote>
-            ) : (
-              <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                {visibleSongs.map((f) => {
-                  const id = `song-${f.song.id}`;
-                  const playing = player.playingId === id;
-                  return (
-                    <li key={f.song.id} className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2 min-w-0">
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-white break-words">{f.song.title}</div>
-                        <div className="text-[11px] text-gray-400">{f.song.artist}</div>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
-                        <span className="px-2 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/20">Kunci {keyName(f.tonic)}</span>
-                        <span className={`px-2 py-0.5 rounded-md border ${f.shift === 0 ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-black/60 text-gray-300 border-white/10'}`}>
-                          {f.shift === 0 ? 'Kunci asli' : `${f.shift > 0 ? 'Naik' : 'Turun'} ${Math.abs(f.shift)} semiton`}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md bg-black/60 text-gray-300 border border-white/10 font-mono">{noteName(f.low)}–{noteName(f.high)}</span>
-                      </div>
-                      {f.level === 'challenge' && <p className="text-[11px] text-amber-300">Butuh sekitar {f.shortBy} semiton lebih luas dari rentangmu saat ini.</p>}
-                      {f.song.note && <p className="text-[11px] text-gray-400">{f.song.note}</p>}
-                      <button type="button" className={BTN_GHOST} onClick={() => (playing ? player.stop() : player.play(id, [f.tonic, f.low, f.high]))}>
-                        {playing ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-accent" />}
-                        <span>{playing ? 'Hentikan' : 'Dengar nada tonika, terendah & tertinggi'}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-            {fitsByLevel[songTab].length > 6 && (
-              <button type="button" className={BTN_GHOST} onClick={() => setShowAll((v) => !v)}>{showAll ? 'Tampilkan lebih sedikit' : `Tampilkan semua (${fitsByLevel[songTab].length})`}</button>
-            )}
-          </div>
-
-          {/* Pemanasan */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <h5 className="text-sm font-bold text-white">Latihan pemanasan di wilayah nyamanmu</h5>
-              <InfoTip label="Info latihan pemanasan">
-                <p>Nyanyikan dengan "aaa" atau "ooo" mengikuti nada acuan. Mulai dari batas bawah wilayah nyamanmu supaya seluruh latihan tetap di area aman. Setelah nyaman, geser awal latihan naik/turun setengah nada.</p>
-              </InfoTip>
-            </div>
-            <ul className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {result.warm.map(({ w, start }: { w: WarmUp; start: number | null }) => {
-                const id = `warm-${w.id}`;
-                const playing = player.playingId === id;
-                return (
-                  <li key={w.id} className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2">
-                    <div className="text-xs font-bold text-white">{w.name}</div>
-                    <p className="text-[11px] text-gray-400">{w.desc}</p>
-                    {start === null ? (
-                      <p className="text-[11px] text-amber-300">Wilayah nyamanmu belum cukup lebar untuk latihan ini.</p>
-                    ) : (
-                      <>
-                        <p className="text-[11px] text-gray-300">Mulai dari <span className="font-mono font-bold text-accent">{noteName(start)}</span> sampai <span className="font-mono font-bold text-accent">{noteName(start + Math.max(...w.steps))}</span></p>
-                        <button type="button" className={BTN_GHOST} onClick={() => (playing ? player.stop() : player.play(id, w.steps.map((s) => start + s), 0.5, 0.45))}>
-                          {playing ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-accent" />}
-                          <span>{playing ? 'Hentikan' : 'Mainkan acuan'}</span>
-                        </button>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-
-          <ReportButtons report={report} fileName="PlayMuzeck_Vocal_Range.txt" toast={toast} />
-          <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={onRetake} className={BTN_GHOST}><RotateCcw className="w-3.5 h-3.5" /><span>Tes ulang</span></button>
-            {onClear && <button type="button" onClick={onClear} className={BTN_DELETE}><Trash2 className="w-3.5 h-3.5" /><span>Hapus hasil</span></button>}
-          </div>
+            );
+          })}
         </div>
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h5 className="text-sm font-bold text-white">Contoh lagu di rentangmu</h5>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(['comfort', 'range', 'challenge'] as const).map((lv) => (
+            <button key={lv} type="button" onClick={() => { setSongTab(lv); setShowAll(false); }} className={pillCls(songTab === lv)}>
+              {LEVEL_META[lv].label} ({fitsByLevel[lv].length})
+            </button>
+          ))}
+        </div>
+        {visibleSongs.length === 0 ? (
+          <InfoNote>Belum ada lagu pada kategori ini untuk rentangmu.</InfoNote>
+        ) : (
+          <ul className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {visibleSongs.map((f) => {
+              const id = `song-${f.song.id}`;
+              const playing = player.playingId === id;
+              return (
+                <li key={f.song.id} className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2 min-w-0">
+                  <div className="min-w-0">
+                    <div className="text-sm font-bold text-white break-words">{f.song.title}</div>
+                    <div className="text-[11px] text-gray-400">{f.song.artist}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 text-[10px] font-bold">
+                    <span className="px-2 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/20">Kunci {keyName(f.tonic)}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-black/60 text-gray-300 border border-white/10 font-mono">{noteName(f.low)}–{noteName(f.high)}</span>
+                  </div>
+                  <button type="button" className={BTN_GHOST} onClick={() => (playing ? player.stop() : player.play(id, [f.tonic, f.low, f.high]))}>
+                    {playing ? <Square className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5 text-accent" />}
+                    <span>{playing ? 'Hentikan' : 'Dengar nada tonika & rentang'}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <h5 className="text-sm font-bold text-white">Latihan pemanasan</h5>
+        </div>
+        <ul className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          {result.warm.map(({ w, start }: { w: WarmUp; start: number | null }) => {
+            const id = `warm-${w.id}`;
+            const playing = player.playingId === id;
+            return (
+              <li key={w.id} className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2">
+                <div className="text-xs font-bold text-white">{w.name}</div>
+                <p className="text-[11px] text-gray-400">{w.desc}</p>
+                {start !== null && (
+                  <button type="button" className={BTN_GHOST} onClick={() => (playing ? player.stop() : player.play(id, w.steps.map((s) => start + s), 0.5, 0.45))}>
+                    {playing ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-accent" />}
+                    <span>{playing ? 'Hentikan' : 'Mainkan acuan'}</span>
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <ReportButtons report={report} fileName="PlayMuzeck_Vocal_Range.txt" toast={toast} />
+      <div className="flex flex-wrap gap-2">
+        <button type="button" onClick={onRetake} className={BTN_GHOST}><RotateCcw className="w-3.5 h-3.5" /><span>Tes ulang</span></button>
+        {onClear && <button type="button" onClick={onClear} className={BTN_DELETE}><Trash2 className="w-3.5 h-3.5" /><span>Hapus hasil</span></button>}
+      </div>
+    </div>
   );
 };
 
@@ -791,7 +721,6 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const [level, setLevel] = useState(0);
   const [hold, setHold] = useState(0);
   const [tessMeasured, setTessMeasured] = useState<Map<number, number> | null>(null);
-  /** Sudah pernah menyelesaikan tes di sesi ini (menentukan label tombol: "Mulai tes" vs "Tes ulang"). */
   const [hasTaken, setHasTaken] = useState(false);
 
   const gateRef = useRef(gate); gateRef.current = gate;
@@ -799,7 +728,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const lowRef = useRef<number | null>(null);
   const highRef = useRef<number | null>(null);
   const histRef = useRef<Map<number, number>>(new Map());
-  const detRef = useRef(new StableNoteDetector(7, 0.9, A4));
+  const detRef = useRef(new StableNoteDetector(6, 0.80, A4));
   const micRef = useRef<MicHandle | null>(null);
   const recent = useRef<number[]>([]);
   const lastVoiced = useRef(0);
@@ -809,14 +738,13 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const goPhase = (p: Phase) => { phaseRef.current = p; detRef.current.reset(); setHold(0); setPhase(p); };
 
   const closeMic = useCallback(() => { micRef.current?.stop(); micRef.current = null; setLive(null); setLevel(0); }, []);
-  // Unmount (pengguna pindah alat) di tengah tes, sebelum hasil jadi: tutup mikrofon dan kembalikan jatah.
+
   useEffect(() => () => {
     micRef.current?.stop(); micRef.current = null;
     const key = runKey.current; runKey.current = null;
     if (key) gateRef.current?.refund('vocal_range', key);
   }, []);
 
-  /** Tes dibatalkan / gagal sebelum hasil: tutup mikrofon, kembalikan jatah. */
   const abort = (message?: string) => {
     closeMic();
     const key = runKey.current; runKey.current = null;
@@ -843,7 +771,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
     setHold(detRef.current.progress);
     if (ph === 'low' && stable !== null && (lowRef.current === null || stable < lowRef.current)) { lowRef.current = stable; setLow(stable); }
     if (ph === 'high' && stable !== null && (highRef.current === null || stable > highRef.current)) { highRef.current = stable; setHigh(stable); }
-    if (ph === 'comfort' && f.freq !== null && f.clarity >= 0.9) {
+    if (ph === 'comfort' && f.freq !== null && f.clarity >= 0.78) {
       const m = Math.round(freqToMidi(f.freq, A4));
       histRef.current.set(m, (histRef.current.get(m) ?? 0) + dt);
     }
@@ -854,7 +782,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr(micError(new DOMException('', 'NotSupportedError'))); return; }
     const key = newRunKey('vr');
-    if (gate && !(await gate.use('vocal_range', key))) return; // jatah dipesan di server
+    if (gate && !(await gate.use('vocal_range', key))) return;
     setBusy(true);
     try {
       lowRef.current = null; highRef.current = null; histRef.current = new Map();
@@ -864,7 +792,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
       goPhase('low');
     } catch (e) {
       micRef.current?.stop(); micRef.current = null; runKey.current = null;
-      gate?.refund('vocal_range', key); // mikrofon gagal dibuka: jatah dikembalikan
+      gate?.refund('vocal_range', key);
       setErr(micError(e));
     } finally { setBusy(false); }
   };
@@ -881,7 +809,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
     if (phase === 'low') { goPhase('high'); return; }
     if (phase === 'high') {
       if (lowRef.current !== null && highRef.current !== null && highRef.current <= lowRef.current) {
-        setErr(`Nada tertinggi (${noteName(highRef.current)}) harus berada di atas nada terendah (${noteName(lowRef.current)}). Ulangi bagian ini dan naikkan nadamu lebih tinggi.`);
+        setErr(`Nada tertinggi (${noteName(highRef.current)}) harus berada di atas nada terendah (${noteName(lowRef.current)}). Ulangi dan naikkan nadamu lebih tinggi.`);
         return;
       }
       goPhase('comfort'); return;
@@ -891,7 +819,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
 
   const finishTest = (useComfort: boolean) => {
     closeMic();
-    runKey.current = null; // hasil sudah jadi: jatah tetap terpakai
+    runKey.current = null;
     setTessMeasured(useComfort && histRef.current.size >= 3 ? new Map(histRef.current) : null);
     setHasTaken(true);
     goPhase('result');
@@ -900,7 +828,6 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
 
   const retake = () => { setErr(null); goPhase('intro'); };
 
-  /** Hapus hasil tes dari layar (jatah yang sudah terpakai tidak dikembalikan). */
   const clearResult = () => {
     lowRef.current = null; highRef.current = null; histRef.current = new Map();
     setLow(null); setHigh(null); setTessMeasured(null); setHasTaken(false); setErr(null);
@@ -911,20 +838,17 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const stepIndex = STEPS.findIndex((s) => s.id === phase);
   const captured = phase === 'low' ? low : phase === 'high' ? high : null;
   const comfortSeconds = [...histRef.current.values()].reduce((s, v) => s + v, 0);
-  const canNext = phase === 'comfort' ? comfortSeconds >= 3 : captured !== null;
-
+  const canNext = phase === 'comfort' ? comfortSeconds >= 2.5 : captured !== null;
 
   return (
     <Panel title="Tes Vocal Range" info={[
       'Tes terpandu untuk mengetahui jangkauan suaramu: nada terendah, nada tertinggi, dan wilayah nyaman.',
-      'Dari rentang itu kamu mendapat perkiraan jenis suara (bass, bariton, tenor, alto, mezzo-sopran, sopran), contoh lagu yang pas (bila perlu digeser kuncinya), dan latihan pemanasan.',
-      'Satu tes dihitung satu penggunaan; bila dibatalkan sebelum selesai atau mikrofon gagal, penggunaan itu dikembalikan.',
-      'Nada dihitung hanya setelah ditahan stabil sekitar sepertiga detik dan jernih, jadi desis, napas, atau lompatan sesaat tidak ikut tercatat. Jangan memaksakan suara: berhenti bila terasa tegang atau sakit.',
+      'Dari rentang itu kamu mendapat perkiraan jenis suara, contoh lagu yang pas, dan latihan pemanasan.',
     ]}>
       {phase === 'intro' && (
         <div className="space-y-3">
           <InfoNote>
-            Tes ini 3 langkah: (1) nada terendah, (2) nada tertinggi, (3) menyanyikan sepotong lagu dengan nyaman (boleh dilewati). Siapkan ruangan tenang, hangatkan suara dulu dengan bersenandung, dan gunakan vokal "aaa". Mikrofon hanya dipakai di browser ini; suaramu tidak diunggah.
+            Tes 3 langkah: (1) nada terendah, (2) nada tertinggi, (3) menyanyikan sepotong lagu dengan nyaman. Gunakan vokal "aaa".
           </InfoNote>
           <button type="button" onClick={begin} disabled={busy} className={BTN_PRIMARY}>
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
@@ -951,7 +875,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs gap-3">
                 <span className="text-gray-300 font-bold">Menahan nada…</span>
-                <span className="text-gray-500">Tahan satu nada ±0,4 detik sampai tercatat</span>
+                <span className="text-gray-500">Tahan nada stabil sejenak</span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-accent transition-[width] duration-100" style={{ width: `${hold * 100}%` }} /></div>
               <div className={`${CARD_CLS} flex items-center justify-between gap-3 text-xs`}>
@@ -964,7 +888,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
           ) : (
             <div className={`${CARD_CLS} flex items-center justify-between gap-3 text-xs`}>
               <span className="text-gray-300 font-bold">Waktu bernada nyaman terekam:</span>
-              <span className="font-mono font-black text-accent text-base tabular-nums">{comfortSeconds.toFixed(0)} dtk{comfortSeconds < 3 ? ' (min. 3)' : ''}</span>
+              <span className="font-mono font-black text-accent text-base tabular-nums">{comfortSeconds.toFixed(0)} dtk{comfortSeconds < 2.5 ? ' (min. 3s)' : ''}</span>
             </div>
           )}
 
@@ -981,8 +905,15 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
         </div>
       )}
 
-      {phase === 'result' && low !== null && high !== null && (
-        <VocalRangeResult low={low} high={high} tessMeasured={tessMeasured} toast={toast} onRetake={retake} onClear={clearResult} />
+      {phase === 'result' && (
+        <VocalRangeResult
+          low={low ?? lowRef.current ?? 48}
+          high={high ?? highRef.current ?? 72}
+          tessMeasured={tessMeasured}
+          toast={toast}
+          onRetake={retake}
+          onClear={clearResult}
+        />
       )}
     </Panel>
   );

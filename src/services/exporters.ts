@@ -1,14 +1,9 @@
-// Pure Client-Side Audio & MIDI Exporter for PlayMuzeck
-// Generates real, binary playable files without server backend
+// src/services/exporters.ts
 
-// 1. WAV Encoder (PCM, bit depth dapat dipilih 8, 16, atau 24 bit)
-// bitDepth 8 dipakai sebagai fallback kompresi nyata (ukuran file benar-benar
-// mengecil ~50% dibanding 16-bit) ketika browser tidak mendukung encoder
-// codec asli (MediaRecorder/Opus/AAC).
 export function audioBufferToWav(buffer: AudioBuffer, bitDepth: 8 | 16 | 24 = 16): Blob {
   const numChannels = buffer.numberOfChannels;
   const sampleRate = buffer.sampleRate;
-  const format = 1; // PCM
+  const format = 1;
   const bytesPerSample = bitDepth / 8;
 
   const length = buffer.length * numChannels * bytesPerSample;
@@ -16,26 +11,22 @@ export function audioBufferToWav(buffer: AudioBuffer, bitDepth: 8 | 16 | 24 = 16
   const outBuffer = new ArrayBuffer(headerLength + length);
   const view = new DataView(outBuffer);
 
-  // RIFF identifier
   writeString(view, 0, 'RIFF');
   view.setUint32(4, 36 + length, true);
   writeString(view, 8, 'WAVE');
 
-  // fmt sub-chunk
   writeString(view, 12, 'fmt ');
-  view.setUint32(16, 16, true); // subchunk1size (16 for PCM)
+  view.setUint32(16, 16, true);
   view.setUint16(20, format, true);
   view.setUint16(22, numChannels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * numChannels * bytesPerSample, true); // byteRate
-  view.setUint16(32, numChannels * bytesPerSample, true); // blockAlign
+  view.setUint32(28, sampleRate * numChannels * bytesPerSample, true);
+  view.setUint16(32, numChannels * bytesPerSample, true);
   view.setUint16(34, bitDepth, true);
 
-  // data sub-chunk
   writeString(view, 36, 'data');
   view.setUint32(40, length, true);
 
-  // Write audio samples
   let offset = 44;
   const channels: Float32Array[] = [];
   for (let c = 0; c < numChannels; c++) {
@@ -45,22 +36,18 @@ export function audioBufferToWav(buffer: AudioBuffer, bitDepth: 8 | 16 | 24 = 16
   for (let i = 0; i < buffer.length; i++) {
     for (let c = 0; c < numChannels; c++) {
       let sample = channels[c][i];
-      // Clamping between -1 and 1
       sample = Math.max(-1, Math.min(1, sample));
       if (bitDepth === 24) {
-        // 24-bit signed little-endian (3 byte per sampel)
         const v = Math.round(sample < 0 ? sample * 0x800000 : sample * 0x7fffff);
         view.setUint8(offset, v & 0xff);
         view.setUint8(offset + 1, (v >> 8) & 0xff);
         view.setUint8(offset + 2, (v >> 16) & 0xff);
         offset += 3;
       } else if (bitDepth === 16) {
-        // Scale to 16-bit signed int
         const intSample = Math.round(sample < 0 ? sample * 0x8000 : sample * 0x7fff);
         view.setInt16(offset, intSample, true);
         offset += 2;
       } else {
-        // 8-bit PCM WAV bersifat unsigned, titik tengah di 128
         const intSample = Math.max(0, Math.min(255, Math.round((sample * 0.5 + 0.5) * 255)));
         view.setUint8(offset, intSample);
         offset += 1;
@@ -71,16 +58,6 @@ export function audioBufferToWav(buffer: AudioBuffer, bitDepth: 8 | 16 | 24 = 16
   return new Blob([view], { type: 'audio/wav' });
 }
 
-// 1b. Kompresi Audio NYATA (Real Codec) untuk fitur Compress
-// Masalah sebelumnya: tombol "Compress" hanya mengubah sample rate lalu
-// tetap mengekspor PCM mentah (WAV) — jadi ukurannya SELALU lebih besar
-// daripada file sumber yang biasanya sudah terkompresi (mis. MP3). Fungsi
-// ini memakai MediaRecorder browser untuk benar-benar meng-encode audio ke
-// codec lossy asli (Opus/AAC) dengan bitrate sesuai tier yang dipilih,
-// sehingga ukuran file benar-benar mengecil dan 5 tingkatan benar-benar
-// berbeda. Jika browser tidak punya encoder sama sekali (sangat jarang),
-// baru fallback ke WAV bit-depth rendah (tetap nyata lebih kecil, bukan
-// sekadar ganti label ekstensi).
 export interface CompressedAudioResult {
   blob: Blob;
   mimeType: string;
@@ -94,9 +71,9 @@ export async function encodeCompressedAudio(
   onProgress?: (percent: number) => void
 ): Promise<CompressedAudioResult> {
   const codecCandidates: { mime: string; ext: string }[] = [
-    { mime: 'audio/mp4;codecs=mp4a.40.2', ext: 'm4a' }, // AAC (Safari umumnya mendukung ini)
-    { mime: 'audio/webm;codecs=opus', ext: 'webm' }, // Opus (Chrome/Edge/Firefox)
-    { mime: 'audio/ogg;codecs=opus', ext: 'ogg' }, // Opus (Firefox)
+    { mime: 'audio/mp4;codecs=mp4a.40.2', ext: 'm4a' },
+    { mime: 'audio/webm;codecs=opus', ext: 'webm' },
+    { mime: 'audio/ogg;codecs=opus', ext: 'ogg' },
     { mime: 'audio/webm', ext: 'webm' },
   ];
 
@@ -118,13 +95,9 @@ export async function encodeCompressedAudio(
         return { blob, mimeType: supported.mime, extension: supported.ext, isRealCodec: true };
       }
     } catch {
-      // Lanjut ke fallback di bawah jika perekaman gagal di tengah jalan
     }
   }
 
-  // Fallback: PCM dengan bit-depth diturunkan sesuai keagresifan tier.
-  // Ini TETAP nyata lebih kecil (bukan cuma ganti label), karena jumlah
-  // byte per sample benar-benar berkurang.
   const bitDepth: 8 | 16 = targetBitrateKbps <= 96 ? 8 : 16;
   const wavBlob = audioBufferToWav(buffer, bitDepth);
   onProgress?.(100);
@@ -140,7 +113,6 @@ function recordBufferAsCompressed(
   return new Promise((resolve, reject) => {
     const AudioCtxCtor = window.AudioContext || (window as any).webkitAudioContext;
     const ctx: AudioContext = new AudioCtxCtor();
-    // Tanpa resume(), AudioContext bisa 'suspended' (kebijakan autoplay) -> hasil rekaman kosong/hening.
     ctx.resume?.().catch(() => {});
     const dest = ctx.createMediaStreamDestination();
     const src = ctx.createBufferSource();
@@ -193,16 +165,12 @@ function recordBufferAsCompressed(
       }, 150);
     }
 
-    // Encoding berjalan real-time (durasi encode = durasi audio), karena
-    // browser tidak menyediakan encoder Opus/AAC yang lebih cepat dari
-    // waktu nyata tanpa pustaka pihak ketiga.
     src.onended = () => {
       setTimeout(() => {
         if (recorder.state !== 'inactive') recorder.stop();
       }, 80);
     };
 
-    // Pengaman jika event 'ended' tidak terpicu (mis. buffer sangat pendek)
     const safetyMs = buffer.duration * 1000 + 1500;
     setTimeout(() => {
       if (recorder.state !== 'inactive') recorder.stop();
@@ -210,9 +178,6 @@ function recordBufferAsCompressed(
   });
 }
 
-// 1c. Penggabung Buffer (dipakai Vocal Isolator untuk output ke-3:
-// "Vokal + Musik" sebagai satu file gabungan yang tetap terpisah dari
-// file vokal-saja dan musik-saja)
 export function mixBuffers(a: AudioBuffer, b: AudioBuffer): AudioBuffer {
   const numChannels = Math.max(a.numberOfChannels, b.numberOfChannels);
   const length = Math.max(a.length, b.length);
@@ -233,11 +198,6 @@ export function mixBuffers(a: AudioBuffer, b: AudioBuffer): AudioBuffer {
   return out;
 }
 
-// ---------------------------------------------------------------------------
-// 1d. FLAC Encoder NYATA (lossless, 16/24-bit) — murni TypeScript, tanpa dependensi.
-// Memakai prediktor FIXED (order 0-4) + Rice coding, dan decorrelation stereo
-// (L/R, L/S, R/S, M/S) yang dipilih per frame. Hasilnya berkas .flac valid.
-// ---------------------------------------------------------------------------
 class BitWriter {
   buf = new Uint8Array(1 << 16);
   len = 0;
@@ -252,7 +212,7 @@ class BitWriter {
     }
     this.buf[this.len++] = b;
   }
-  /** Tulis `n` bit (n <= 32) dari `value` (>= 0, < 2^n). */
+
   write(value: number, n: number) {
     while (n > 0) {
       const take = Math.min(8 - this.nbits, n);
@@ -268,11 +228,12 @@ class BitWriter {
       }
     }
   }
+
   writeSigned(value: number, n: number) {
     this.write(value < 0 ? value + Math.pow(2, n) : value, n);
   }
+
   writeUnary(q: number) {
-    // q nol diikuti satu bit 1
     while (q > 0 && this.nbits !== 0) {
       this.write(0, 1);
       q--;
@@ -287,9 +248,11 @@ class BitWriter {
     }
     this.write(1, 1);
   }
+
   align() {
     if (this.nbits !== 0) this.write(0, 8 - this.nbits);
   }
+
   bytes() {
     return this.buf.subarray(0, this.len);
   }
@@ -348,7 +311,6 @@ function planSubframe(x: Int32Array, bps: number): SubframePlan {
     return { kind: 'constant', order: 0, partOrder: 0, params: [], residual: new Int32Array(0), bits: 8 + bps };
   }
 
-  // Pilih order FIXED terbaik lewat jumlah |residual|
   const maxOrder = Math.min(4, n - 1);
   let bestOrder = 0;
   let bestSum = Infinity;
@@ -384,14 +346,13 @@ function planSubframe(x: Int32Array, bps: number): SubframePlan {
     }
     residual[i - order] = r;
   }
-  // folded (zigzag) value u = 2r (r>=0) | -2r-1 (r<0)
+
   const u = new Float64Array(residual.length);
   for (let i = 0; i < residual.length; i++) {
     const r = residual[i];
     u[i] = r >= 0 ? 2 * r : -2 * r - 1;
   }
 
-  // Cari partition order terbaik
   let maxP = 0;
   while (maxP < 8 && n % (1 << (maxP + 1)) === 0 && (n >> (maxP + 1)) > order) maxP++;
   let best: { p: number; params: number[]; bits: number } | null = null;
@@ -446,7 +407,7 @@ function writeSubframe(w: BitWriter, plan: SubframePlan, x: Int32Array, bps: num
   w.write(8 + plan.order, 6);
   w.write(0, 1);
   for (let i = 0; i < plan.order; i++) w.writeSigned(x[i], bps);
-  w.write(1, 2); // metode residual: parameter Rice 5-bit
+  w.write(1, 2);
   w.write(plan.partOrder, 4);
   const parts = 1 << plan.partOrder;
   const psize = n >> plan.partOrder;
@@ -479,10 +440,6 @@ function writeUtf8Number(w: BitWriter, v: number) {
 
 const tick = () => new Promise<void>((r) => setTimeout(r, 0));
 
-/**
- * Encode AudioBuffer menjadi FLAC lossless sungguhan.
- * @param bitDepth 16 atau 24 (nilai PCM yang disimpan di berkas)
- */
 export async function encodeFlac(
   buffer: AudioBuffer,
   bitDepth: 16 | 24 = 16,
@@ -495,7 +452,6 @@ export async function encodeFlac(
   const posScale = Math.pow(2, bps - 1) - 1;
   const negScale = Math.pow(2, bps - 1);
 
-  // Kuantisasi sekali untuk seluruh berkas
   const pcm: Int32Array[] = [];
   for (let c = 0; c < nCh; c++) {
     const src = buffer.getChannelData(c);
@@ -510,13 +466,12 @@ export async function encodeFlac(
   const frames: Uint8Array[] = [];
   let minFrame = Infinity;
   let maxFrame = 0;
-  const bpsCode = bps === 16 ? 4 : 6; // 100 = 16-bit, 110 = 24-bit
+  const bpsCode = bps === 16 ? 4 : 6;
 
   for (let start = 0, fno = 0; start < total; start += blockSize, fno++) {
     const n = Math.min(blockSize, total - start);
     const chans = pcm.map((p) => p.subarray(start, start + n));
 
-    // Pilih penugasan kanal & rencana subframe
     let assign = nCh - 1;
     let subs: { x: Int32Array; bps: number; plan: SubframePlan }[];
     if (nCh === 2) {
@@ -546,11 +501,10 @@ export async function encodeFlac(
     }
 
     const w = new BitWriter();
-    // Header frame
-    w.write(0xfff8, 16); // sync + fixed block size
+    w.write(0xfff8, 16);
     const bsCode = n === 4096 ? 12 : n <= 256 ? 6 : 7;
     w.write(bsCode, 4);
-    w.write(0, 4); // sample rate dari STREAMINFO
+    w.write(0, 4);
     w.write(assign, 4);
     w.write(bpsCode, 3);
     w.write(0, 1);
@@ -574,9 +528,8 @@ export async function encodeFlac(
     }
   }
 
-  // STREAMINFO (34 byte). MD5 diisi nol = "tidak diset" (valid menurut spesifikasi).
   const si = new BitWriter();
-  const siBlock = Math.max(16, Math.min(blockSize, total)); // dekoder menolak blocksize STREAMINFO < 16
+  const siBlock = Math.max(16, Math.min(blockSize, total));
   si.write(siBlock, 16);
   si.write(siBlock, 16);
   si.write(frames.length ? minFrame : 0, 24);
@@ -590,13 +543,9 @@ export async function encodeFlac(
 
   const head = new Uint8Array([0x66, 0x4c, 0x61, 0x43, 0x80, 0x00, 0x00, 0x22]);
   onProgress?.(100);
-  return new Blob([head, si.bytes().slice(), ...frames], { type: 'audio/flac' });
+  return new Blob([head, si.bytes().slice(), ...frames] as unknown as BlobPart[], { type: 'audio/flac' });
 }
 
-// ---------------------------------------------------------------------------
-// 1e. MP3 Encoder NYATA (LAME via lamejs). Butuh: npm i @breezystack/lamejs
-// Dimuat lazy supaya tidak membebani bundle awal.
-// ---------------------------------------------------------------------------
 const MP3_RATES_MPEG1 = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
 const MP3_RATES_MPEG2 = [8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
 const MP3_SAMPLE_RATES = [48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000];
@@ -658,7 +607,7 @@ export async function encodeMp3(
   const tail = encoder.flush();
   if (tail.length) parts.push(new Uint8Array(tail));
   onProgress?.(100);
-  return new Blob(parts, { type: 'audio/mpeg' });
+  return new Blob(parts as unknown as BlobPart[], { type: 'audio/mpeg' });
 }
 
 function writeString(view: DataView, offset: number, string: string) {
@@ -667,16 +616,8 @@ function writeString(view: DataView, offset: number, string: string) {
   }
 }
 
-// 2. Export Helper dengan encoder nyata per format
-//  - WAV : PCM 8/16/24-bit
-//  - MP3 : LAME (lamejs), default 320 kbps CBR
-//  - FLAC: lossless 16/24-bit (encoder bawaan di file ini)
-//  - M4A : encoder bawaan browser (AAC, atau Opus bila AAC tidak ada)
-// Jika sebuah encoder gagal dimuat, berkas disimpan sebagai WAV dan `note` menjelaskannya.
 export interface ExportAudioOptions {
-  /** Kedalaman bit untuk WAV (8/16/24) dan FLAC (16/24). Default 16. */
   bitDepth?: 8 | 16 | 24;
-  /** Bitrate MP3 dalam kbps (default 320). */
   mp3Kbps?: number;
   onProgress?: (percent: number) => void;
 }
@@ -726,41 +667,26 @@ export async function exportAudioFile(
   return { success: true, mimeType, actualFormat: ext.toUpperCase(), note };
 }
 
-// 3. Real MIDI File Generator (Standard MIDI File Type 0)
 export function generateMidiFile(
   bpm: number,
   events: Array<{
-    step: number; // 0 to 31 (16th notes)
-    note: number; // MIDI note number (e.g. 36 = kick, 60 = middle C)
+    step: number;
+    note: number;
     velocity?: number;
-    durationSteps?: number; // duration in 16th notes
+    durationSteps?: number;
     isDrum?: boolean;
-    // Channel eksplisit (0-15). Kalau tidak diisi: drum -> channel 9,
-    // melodi/akor -> channel 0. Dipakai supaya Progresi Akor 2 (opsional)
-    // bisa ditulis di channel 1 dengan Program Change GM-nya sendiri,
-    // terpisah dari Progresi Akor 1 di channel 0.
     channel?: number;
   }>,
   trackName: string = 'PlayMuzeck Pattern',
-  // Nomor program GM (0-127) untuk channel melodi/akor UTAMA (channel 0),
-  // sesuai instrumen yang sedang dipilih di editor (selectedProgram). SEBELUMNYA
-  // tidak ada Program Change sama sekali di sini, jadi DAW/player selalu
-  // memutar channel 0 dengan patch DEFAULT-nya sendiri (biasanya Acoustic
-  // Grand Piano) berapa pun program yang sebenarnya dipilih pengguna.
   programNumber: number = 0,
-  // Nomor program GM (0-127) untuk Progresi Akor 2 (channel 1), opsional.
-  // Program Change untuk channel 1 HANYA ditulis kalau ada event yang
-  // benar-benar memakai channel tsb.
   programNumber2?: number
 ): Blob {
-  const division = 480; // ticks per quarter note
-  const ticksPerStep = division / 4; // 120 ticks per 16th note
+  const division = 480;
+  const ticksPerStep = division / 4;
 
-  // Microseconds per quarter note: 60,000,000 / BPM
   const safeBpm = Number.isFinite(bpm) && bpm > 0 ? Math.min(400, Math.max(20, bpm)) : 120;
   const mpqn = Math.round(60000000 / safeBpm);
 
-  // Group events by tick time
   interface MidiAction {
     tick: number;
     type: 'on' | 'off';
@@ -775,7 +701,7 @@ export function generateMidiFile(
     const startTick = ev.step * ticksPerStep;
     const duration = (ev.durationSteps || 1) * ticksPerStep;
     const endTick = startTick + Math.max(1, duration - 10);
-    const channel = ev.channel !== undefined ? ev.channel : ev.isDrum ? 9 : 0; // Channel 10 (0-indexed 9) is MIDI standard drum channel; channel 1 = Progresi Akor 2
+    const channel = ev.channel !== undefined ? ev.channel : ev.isDrum ? 9 : 0;
     const vel = ev.velocity || 100;
 
     actions.push({
@@ -795,20 +721,16 @@ export function generateMidiFile(
     });
   });
 
-  // Sort actions by tick
   actions.sort((a, b) => a.tick - b.tick);
 
-  // Build Track Data Chunk
   const trackBytes: number[] = [];
 
-  // Track Name meta event
-  trackName = trackName.replace(/[^\x20-\x7e]/g, '').slice(0, 100); // meta length 1 byte & harus ASCII
+  trackName = trackName.replace(/[^\x20-\x7e]/g, '').slice(0, 100);
   trackBytes.push(0x00, 0xff, 0x03, trackName.length);
   for (let i = 0; i < trackName.length; i++) {
     trackBytes.push(trackName.charCodeAt(i));
   }
 
-  // Set Tempo meta event (delta 0, 0xFF, 0x51, 0x03, 3 bytes tempo)
   trackBytes.push(
     0x00,
     0xff,
@@ -819,21 +741,10 @@ export function generateMidiFile(
     mpqn & 0xff
   );
 
-  // Time Signature meta event (4/4 time)
   trackBytes.push(0x00, 0xff, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08);
 
-  // Program Change untuk channel 0 (melodi/akor) — pastikan DAW/player
-  // membuka file ini dengan instrumen GM yang sama dengan yang dipakai
-  // untuk merender chord pad di editor (selectedProgram), bukan patch
-  // default channel tsb. Channel 9 (drum) sengaja TIDAK diberi Program
-  // Change: di GM, not drum (36/38/42/dst) sudah tetap artinya sendiri
-  // (Bass Drum/Snare/Hi-Hat) terlepas dari "kit" karakter synth yang
-  // dipakai di aplikasi, jadi tidak ada program GM yang perlu disetel.
   trackBytes.push(0x00, 0xc0 | 0, programNumber & 0x7f);
 
-  // Program Change untuk channel 1 (Progresi Akor 2, opsional) — hanya
-  // ditulis kalau ada event yang benar-benar memakai channel 1, supaya
-  // file MIDI tetap bersih/minimal saat Progresi Akor 2 tidak diaktifkan.
   const usesChannel1 = events.some((ev) => ev.channel === 1);
   if (usesChannel1 && programNumber2 !== undefined) {
     trackBytes.push(0x00, 0xc0 | 1, programNumber2 & 0x7f);
@@ -845,7 +756,6 @@ export function generateMidiFile(
     const delta = act.tick - lastTick;
     lastTick = act.tick;
 
-    // Write delta time as variable length quantity
     writeVarInt(trackBytes, delta);
 
     if (act.type === 'on') {
@@ -859,26 +769,18 @@ export function generateMidiFile(
     }
   });
 
-  // End of Track meta event
   writeVarInt(trackBytes, 0);
   trackBytes.push(0xff, 0x2f, 0x00);
 
-  // Build Header Chunk
   const headerBytes: number[] = [
-    // 'MThd'
     0x4d, 0x54, 0x68, 0x64,
-    // length = 6
     0x00, 0x00, 0x00, 0x06,
-    // format = 0 (single track)
     0x00, 0x00,
-    // num tracks = 1
     0x00, 0x01,
-    // division
     (division >> 8) & 0xff,
     division & 0xff,
   ];
 
-  // Track chunk header: 'MTrk' + 4-byte length
   const trackLength = trackBytes.length;
   const trackHeader: number[] = [
     0x4d,
@@ -913,7 +815,6 @@ function writeVarInt(arr: number[], value: number) {
   }
 }
 
-// 4. Download helper
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
