@@ -553,6 +553,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   const [selectedDrumKit, setSelectedDrumKit] = useState('80s Kit');
   const [engineStatus, setEngineStatus] = useState<string>('');
+  const [bankState, setBankState] = useState<'idle' | 'loading' | 'ready' | 'error'>(() => audioEngine.getBankState());
 
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
@@ -637,18 +638,37 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }
   }, [drumAttackVal, drumDecayVal, drumSustainVal, drumReleaseVal]);
 
+  // Bank SF2 hanya dipakai Chord Pad (drum memakai sample WAV), jadi hanya diunduh untuk pengguna yang
+  // sudah membuka editor penuh. Pengguna gratis tidak lagi dipaksa mengunduh berkas besar yang tak terpakai.
+  // Status pemuatan dipantau lewat subscribeBank, jadi tetap tampil walau pemuatan sudah dimulai komponen lain
+  // (sebelumnya pemanggil kedua tidak pernah menerima pesan progres, dan kegagalan tidak terlihat).
   useEffect(() => {
+    if (!isUnlocked8Bar) return;
     let hideTimer: number | undefined;
-    audioEngine.initBank((msg: string) => {
+    const apply = (msg: string, state: 'idle' | 'loading' | 'ready' | 'error') => {
+      setBankState(state);
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = undefined;
+      }
       setEngineStatus(msg);
-      if (msg === SOUND_BANK_READY_MESSAGE) {
+      if (state === 'ready' || msg === SOUND_BANK_READY_MESSAGE) {
         hideTimer = window.setTimeout(() => setEngineStatus(''), 2000);
       }
-    });
+    };
+    const off = audioEngine.subscribeBank(apply);
+    if (audioEngine.isLoaded) {
+      setBankState('ready');
+    } else {
+      const st = audioEngine.getBankState();
+      if (st === 'loading' || st === 'error') apply(audioEngine.getBankMessage(), st);
+      void audioEngine.initBank();
+    }
     return () => {
+      off();
       if (hideTimer) clearTimeout(hideTimer);
     };
-  }, []);
+  }, [isUnlocked8Bar]);
 
   const updateTrack = (trackIndex: number, updates: Partial<ChordTrackState>) => {
     setChordTracks((prev) => {
@@ -779,17 +799,22 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       setIsChordLoopActive(false);
       return;
     }
-    // Siapkan semua sample akor yang dipakai SEBELUM mulai, supaya tidak ada pemrosesan di tengah ketukan.
+    // Panaskan sample akor sebelum mulai, tapi JANGAN membuat pengguna menunggu:
+    // - Bank sudah siap: tunggu paling lama 350 ms (biasanya cukup), sisanya jalan di latar belakang.
+    // - Bank belum siap: langsung mulai. Engine membunyikan suara sintesis sementara dan otomatis
+    //   pindah ke sample SF2 begitu bank selesai dimuat (sebelumnya tombol putar menunggu seluruh unduhan).
     preparingChordsRef.current = true;
-    const statusTimer = window.setTimeout(() => setEngineStatus('Menyiapkan suara akor...'), 150);
     try {
-      await audioEngine.prewarmChordSamples(chordWarmPairs);
-    } catch {
-      // Lanjut saja: scheduler melewati nada yang belum siap, bukan berhenti.
+      if (audioEngine.isLoaded) {
+        const warm = audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
+        await Promise.race([warm, new Promise<void>((r) => window.setTimeout(r, 350))]);
+      } else {
+        void audioEngine.initBank();
+        void audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
+      }
+    } finally {
+      preparingChordsRef.current = false;
     }
-    window.clearTimeout(statusTimer);
-    setEngineStatus('');
-    preparingChordsRef.current = false;
     setIsChordLoopActive(true);
   };
 
@@ -860,7 +885,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Panaskan sample akor di latar belakang setiap kali instrumen/akor yang dipakai berubah (ditunda 250 ms
   // supaya tidak berulang-ulang saat pengguna sedang mengedit).
   useEffect(() => {
-    if (chordWarmPairs.length === 0) return;
+    if (chordWarmPairs.length === 0 || !isUnlocked8Bar) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       audioEngine.prewarmChordSamples(chordWarmPairs, { shouldAbort: () => cancelled }).catch(() => {});
@@ -870,7 +895,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chordWarmKey]);
+  }, [chordWarmKey, isUnlocked8Bar]);
 
   // Cermin state terbaru untuk scheduler: scheduler membaca dari sini, jadi TIDAK perlu dibuat ulang
   // setiap grid/track/volume/tempo berubah (sebelumnya interval dihentikan & dibuat ulang tiap edit).
@@ -1556,8 +1581,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   Preset Instrumen & Mixer Saluran (4 Progresi Akor)
                 </span>
                 {engineStatus && (
-                  <span className="text-[10px] text-accent font-mono bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
-                    {engineStatus}
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1.5 flex-wrap ${
+                      bankState === 'error'
+                        ? 'text-red-300 bg-red-500/10 border-red-500/30'
+                        : 'text-accent bg-accent/10 border-accent/20'
+                    }`}
+                  >
+                    <span>{engineStatus}</span>
+                    {bankState === 'loading' && <span className="text-gray-400">· suara sementara aktif</span>}
+                    {bankState === 'error' && (
+                      <button
+                        type="button"
+                        onClick={() => void audioEngine.retryBank()}
+                        className="underline font-bold cursor-pointer text-red-200 hover:text-white"
+                      >
+                        Coba lagi
+                      </button>
+                    )}
                   </span>
                 )}
               </div>

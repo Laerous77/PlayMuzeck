@@ -126,15 +126,15 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     {
       key: 'fullEditor8Bar',
       title: 'Drum & Chord Pad Editor (Akses Permanen)',
-      description: 'Buka batas 1-bar menjadi multi-bar penuh dengan ekspor MIDI/Audio.',
+      description: 'Buka Chord Pad (16 pad akor, 4 track, 128 instrumen GM), sequencer 16 bar dengan 11 birama, serta ekspor MIDI, WAV, MP3, M4A, dan FLAC. Juga membuka mode Nada GM untuk efek suara klik.',
       price: pricing.products.fullEditor8Bar,
       isOwned: isEditorOwned,
       icon: Sliders,
     },
     {
       key: 'audioToolsSuite',
-      title: 'Audio Tools Suite (15 Tools Studio)',
-      description: 'Akses tanpa batas harian untuk seluruh 15 alat audio studio.',
+      title: 'Audio Tools Suite (18 Tools Studio)',
+      description: 'Akses tanpa batas harian untuk seluruh 18 alat: potong, gabung, volume, pitch, tempo, vokal isolator, konversi, kompres, perekam, deteksi BPM, metronom, tuner, dan lainnya.',
       price: pricing.products.audioToolsSuite,
       isOwned: isToolsOwned,
       icon: Wrench,
@@ -244,6 +244,9 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
         <p className="text-xs text-gray-400 mt-1">
           Pilih item individual sesuai kebutuhan untuk lagu <span className="text-accent font-semibold">{activeTrack?.title}</span>, atau beli paket komplit untuk hemat maksimal.
         </p>
+        <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
+          Gratis tanpa membeli: Drum Pad 1 bar dan 18 Audio Tools dengan jatah 2x per alat per hari. Pad Editor dan Audio Tools Suite dibeli sekali dan berlaku untuk akunmu, tidak per lagu.
+        </p>
       </div>
 
       <div className="space-y-3">
@@ -289,7 +292,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5 max-w-xl line-clamp-1">{p.description}</p>
+                  <p className="text-xs text-gray-400 mt-0.5 max-w-xl line-clamp-2">{p.description}</p>
                 </div>
               </div>
 

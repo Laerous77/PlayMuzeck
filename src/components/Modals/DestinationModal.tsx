@@ -60,7 +60,7 @@ export const DestinationModal: React.FC<DestinationModalProps> = ({
               <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
             </h3>
             <p className="text-xs text-gray-400 group-hover:text-on-accent/80 mt-1 transition-colors leading-relaxed">
-              Katalog musik orisinal, 16-bar sequencer, 4 track akor, dan 9 Audio Tools.
+              Katalog musik orisinal, sequencer 16-bar dengan 11 birama, 4 track akor, dan 18 Audio Tools.
             </p>
           </button>
 

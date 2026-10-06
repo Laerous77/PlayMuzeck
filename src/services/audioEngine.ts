@@ -267,7 +267,7 @@ export function buildHarmonicChord(def: ChordFormulaDef): { displayName: string;
 }
 
 interface ActiveVoice {
-  source: AudioBufferSourceNode;
+  source: AudioScheduledSourceNode;
   gain: GainNode;
   stopAtTime: number;
   // 'primary'    = Progresi Akor 1 (instrumen utama)
@@ -442,9 +442,9 @@ class AudioEngine {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       try {
-        // 'balanced' = buffer audio sedikit lebih besar dari 'interactive' -> lebih tahan hitch saat
-        // thread utama sibuk, tapi pad live tetap terasa responsif.
-        this.ctx = new AudioCtx({ latencyHint: 'balanced' });
+        // 'interactive' = latensi terendah supaya pad langsung berbunyi saat ditekan.
+        // Sequencer tetap aman dari hitch karena scheduler memakai lookahead 220 ms di jam AudioContext.
+        this.ctx = new AudioCtx({ latencyHint: 'interactive' });
       } catch {
         this.ctx = new AudioCtx();
       }
@@ -609,117 +609,262 @@ class AudioEngine {
   // dipakai, dan HAPUS file SF2 lama dari /public supaya tidak ada
   // kemungkinan tersandung nama file basi lagi.
   // -------------------------------------------------------------------
-  private static readonly PRIMARY_SOUNDFONT_PATH = 'https://huggingface.co/Laerous77/playmuzeck-assets/resolve/main/soundfont.sf2'; 
+  private static readonly PRIMARY_SOUNDFONT_PATH = 'https://huggingface.co/Laerous77/playmuzeck-assets/resolve/main/soundfont.sf2';
   private static readonly FALLBACK_SOUNDFONT_PATHS = [
-    '/just t4.sf2',
     '/soundfont.sf2',
+    '/just t4.sf2',
   ];
 
-  private static readonly SF_CACHE_NAME = 'soundfont-cache-v1';
-  private static readonly SF_FETCH_TIMEOUT_MS = 120000;
+  // Naikkan angka ini setiap kali isi file SF2 di sumbernya diganti (path tetap sama), supaya cache
+  // browser pengguna lama tidak terus memakai bank yang basi.
+  private static readonly SF_CACHE_NAME = 'soundfont-cache-v2';
+  private static readonly SF_LEGACY_CACHE_NAMES = ['soundfont-cache-v1'];
+  // Waktu tunggu sampai server MULAI menjawab (header). Bila lewat, pindah ke sumber cadangan
+  // alih-alih menunggu 2 menit tanpa suara.
+  private static readonly SF_HEADER_TIMEOUT_MS = 12000;
+  // Unduhan yang sudah jalan boleh lama, asal data terus mengalir. Mati bila macet selama ini.
+  private static readonly SF_STALL_TIMEOUT_MS = 25000;
   private bankLoadPromise: Promise<boolean> | null = null;
+
+  // -------------------------------------------------------------------
+  // STATUS BANK + PEMBERITAHUAN KE UI
+  // Sebelumnya bila bank gagal dimuat, pad cuma diam tanpa penjelasan. Sekarang statusnya
+  // ('idle' | 'loading' | 'ready' | 'error') bisa dibaca & dipantau komponen mana pun.
+  // -------------------------------------------------------------------
+  private bankState: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+  private bankMessage = '';
+  private bankListeners: Set<(msg: string, state: 'idle' | 'loading' | 'ready' | 'error') => void> = new Set();
+
+  public getBankState() {
+    return this.bankState;
+  }
+
+  public getBankMessage() {
+    return this.bankMessage;
+  }
+
+  public subscribeBank(fn: (msg: string, state: 'idle' | 'loading' | 'ready' | 'error') => void): () => void {
+    this.bankListeners.add(fn);
+    return () => {
+      this.bankListeners.delete(fn);
+    };
+  }
+
+  private setBankStatus(state: 'idle' | 'loading' | 'ready' | 'error', msg: string) {
+    this.bankState = state;
+    this.bankMessage = msg;
+    this.bankListeners.forEach((fn) => {
+      try {
+        fn(msg, state);
+      } catch {}
+    });
+  }
+
+  private async openSoundfontCache(): Promise<Cache | null> {
+    try {
+      if (typeof caches === 'undefined') return null;
+      return await caches.open(AudioEngine.SF_CACHE_NAME);
+    } catch {
+      return null;
+    }
+  }
+
+  private isSoundfontMagic(bytes: Uint8Array): boolean {
+    if (bytes.length < 1024) return false;
+    const riff = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+    const sfbk = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11]);
+    return riff === 'RIFF' && sfbk === 'sfbk';
+  }
+
+  // Satu percobaan unduh. Mengembalikan bytes valid, atau null bila gagal (tanpa melempar).
+  private async downloadSoundfont(
+    path: string,
+    onProgress?: (msg: string) => void
+  ): Promise<Uint8Array | null> {
+    const ctrl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => ctrl.abort(), AudioEngine.SF_HEADER_TIMEOUT_MS);
+    const rearm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => ctrl.abort(), AudioEngine.SF_STALL_TIMEOUT_MS);
+    };
+    try {
+      const res = await fetch(path, { signal: ctrl.signal, credentials: 'omit' });
+      if (!res.ok || !res.body) {
+        console.warn('[SF2] Respons tidak valid:', path, res.status);
+        return null;
+      }
+      rearm();
+
+      const total = Number(res.headers.get('content-length')) || 0;
+      const reader = res.body.getReader();
+      // Bila ukuran diketahui, tulis langsung ke satu buffer (tanpa salinan kedua = lebih cepat & hemat memori HP).
+      let bytes: Uint8Array | null = total > 0 ? new Uint8Array(total) : null;
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+      let lastPct = -1;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        rearm();
+        if (bytes && received + value.length <= bytes.length) {
+          bytes.set(value, received);
+        } else {
+          if (bytes) {
+            // content-length ternyata kurang dari kenyataan (mis. di-decompress proxy): pindah ke mode potongan.
+            chunks.push(bytes.subarray(0, received));
+            bytes = null;
+          }
+          chunks.push(value);
+        }
+        received += value.length;
+        const mb = (received / 1048576).toFixed(1);
+        const pct = total ? Math.min(100, Math.round((received / total) * 100)) : -1;
+        if (pct !== lastPct || !total) {
+          lastPct = pct;
+          onProgress?.(total ? `Mengunduh bank sampel... ${pct}% (${mb} MB)` : `Mengunduh bank sampel... ${mb} MB`);
+        }
+      }
+
+      let out: Uint8Array;
+      if (bytes && received === bytes.length) {
+        out = bytes;
+      } else {
+        const parts = bytes ? [bytes.subarray(0, received)] : chunks;
+        out = new Uint8Array(received);
+        let offset = 0;
+        for (const c of parts) {
+          out.set(c, offset);
+          offset += c.length;
+        }
+      }
+
+      // Tolak LFS pointer / halaman error HTML: SF2 asli diawali "RIFF....sfbk".
+      if (!this.isSoundfontMagic(out)) {
+        console.warn('[SF2] Bukan file SoundFont valid:', path, out.length, 'bytes');
+        return null;
+      }
+      return out;
+    } catch (err) {
+      console.warn('[SF2] Unduhan gagal:', path, err);
+      return null;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
 
   private async fetchSoundfontBytes(
     path: string,
     onProgress?: (msg: string) => void
   ): Promise<Uint8Array | null> {
-    // 1) Cache browser dulu — muat berikutnya hampir instan
-    let cache: Cache | null = null;
+    // 1) Cache browser dulu: muat berikutnya hampir instan, tanpa jaringan.
+    const cache = await this.openSoundfontCache();
     try {
-      if (typeof caches !== 'undefined') {
-        cache = await caches.open(AudioEngine.SF_CACHE_NAME);
-        const hit = await cache.match(path);
-        if (hit) {
-          onProgress?.('Memuat Bank Sampel dari cache...');
-          return new Uint8Array(await hit.arrayBuffer());
-        }
+      const hit = await cache?.match(path);
+      if (hit) {
+        onProgress?.('Memuat Bank Sampel dari cache...');
+        const cached = new Uint8Array(await hit.arrayBuffer());
+        if (this.isSoundfontMagic(cached)) return cached;
+        await cache?.delete(path); // cache rusak/basi: buang dan unduh ulang
       }
     } catch {}
 
-    // 2) Unduh dengan progres + timeout
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), AudioEngine.SF_FETCH_TIMEOUT_MS);
-    try {
-      const res = await fetch(path, { signal: ctrl.signal });
-      if (!res.ok || !res.body) return null;
-
-      const total = Number(res.headers.get('content-length')) || 0;
-      const reader = res.body.getReader();
-      const chunks: Uint8Array[] = [];
-      let received = 0;
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        const mb = (received / 1048576).toFixed(1);
-        onProgress?.(
-          total
-            ? `Mengunduh bank sampel... ${Math.round((received / total) * 100)}% (${mb} MB)`
-            : `Mengunduh bank sampel... ${mb} MB`
-        );
-      }
-
-      const bytes = new Uint8Array(received);
-      let offset = 0;
-      for (const c of chunks) {
-        bytes.set(c, offset);
-        offset += c.length;
-      }
-
-      // Tolak LFS pointer / halaman error HTML (SF2 asli diawali "RIFF")
-      const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
-      if (bytes.length < 1024 || magic !== 'RIFF') {
-        console.warn('[SF2] Bukan file SoundFont valid:', path, bytes.length, 'bytes');
-        return null;
-      }
-
-      try { await cache?.put(path, new Response(bytes)); } catch {}
-      return bytes;
-    } finally {
-      clearTimeout(timer);
+    // 2) Unduh. Satu kali ulang untuk gangguan jaringan sesaat sebelum menyerah pada sumber ini.
+    let bytes = await this.downloadSoundfont(path, onProgress);
+    if (!bytes) {
+      onProgress?.('Koneksi tersendat, mencoba lagi...');
+      await new Promise((r) => setTimeout(r, 700));
+      bytes = await this.downloadSoundfont(path, onProgress);
     }
+    if (!bytes) return null;
+
+    // Simpan ke cache di latar belakang: tidak menunda suara pertama.
+    if (cache) {
+      const toStore = bytes;
+      void (async () => {
+        try {
+          await cache.put(path, new Response(toStore as unknown as BodyInit));
+          for (const name of AudioEngine.SF_LEGACY_CACHE_NAMES) {
+            try {
+              await caches.delete(name);
+            } catch {}
+          }
+        } catch {}
+      })();
+    }
+    return bytes;
   }
 
   public initBank(onProgress?: (msg: string) => void): Promise<boolean> {
-    if (this.isLoaded) return Promise.resolve(true);
+    // Pendengar tambahan: pemanggil ke-2 dst. tetap menerima pesan progres proses yang sama.
+    let off: (() => void) | null = null;
+    if (onProgress) {
+      off = this.subscribeBank((msg) => onProgress(msg));
+      if (this.bankState === 'loading' && this.bankMessage) onProgress(this.bankMessage);
+    }
+    const done = (v: boolean) => {
+      off?.();
+      return v;
+    };
+
+    if (this.isLoaded) {
+      onProgress?.(SOUND_BANK_READY_MESSAGE);
+      return Promise.resolve(done(true));
+    }
     // Pemanggil kedua ikut menunggu proses yang sama (bukan langsung "sukses" palsu)
-    if (this.bankLoadPromise) return this.bankLoadPromise;
+    if (this.bankLoadPromise) return this.bankLoadPromise.then(done);
 
     this.isLoading = true;
+    this.setBankStatus('loading', 'Memuat Bank Sampel...');
     this.bankLoadPromise = (async () => {
       const candidatePaths = [
         AudioEngine.PRIMARY_SOUNDFONT_PATH,
         ...AudioEngine.FALLBACK_SOUNDFONT_PATHS,
       ];
+      const report = (msg: string) => this.setBankStatus('loading', msg);
       try {
         for (const path of candidatePaths) {
           try {
-            onProgress?.('Memuat Bank Sampel...');
-            const bytes = await this.fetchSoundfontBytes(path, onProgress);
+            report('Memuat Bank Sampel...');
+            const bytes = await this.fetchSoundfontBytes(path, report);
             if (!bytes) continue;
 
-            onProgress?.('Mengurai struktur gelombang akustik...');
+            report('Mengurai struktur gelombang akustik...');
             await new Promise((r) => setTimeout(r, 0)); // beri waktu repaint sebelum parsing sinkron
             this.soundfontInstance = new SoundFont2(bytes);
             this.resetSampleCaches();
             this.isLoaded = true;
             this.loadedSoundfontPath = path;
-            onProgress?.(SOUND_BANK_READY_MESSAGE);
+            this.setBankStatus('ready', SOUND_BANK_READY_MESSAGE);
             return true;
           } catch (err) {
             console.error('[SF2] Gagal memuat', path, err);
           }
         }
-        onProgress?.('Bank sampel gagal dimuat. Periksa koneksi lalu muat ulang.');
+        this.setBankStatus('error', 'Bank sampel gagal dimuat. Memakai suara sintesis sementara; periksa koneksi lalu coba lagi.');
         return false;
       } finally {
         this.isLoading = false;
         this.bankLoadPromise = null;
       }
     })();
-    return this.bankLoadPromise;
+    return this.bankLoadPromise.then(done);
+  }
+
+  // Coba muat ulang setelah gagal (dipakai tombol "Coba lagi" dan saat pad ditekan ketika bank belum siap).
+  public retryBank(): Promise<boolean> {
+    this.lastBankKickAt = Date.now();
+    return this.initBank();
+  }
+
+  // Dipanggil saat suara diminta tapi bank belum siap: mulai/lanjutkan pemuatan di latar belakang.
+  // Dibatasi supaya tombol yang ditekan berulang tidak menembakkan unduhan baru terus-menerus.
+  private lastBankKickAt = 0;
+  private kickBank() {
+    if (this.isLoaded || this.bankLoadPromise) return;
+    if (Date.now() - this.lastBankKickAt < 15000) return;
+    this.lastBankKickAt = Date.now();
+    void this.initBank();
   }
 
   // Ambil nilai generator SF2 (mis. fineTune, overridingRootKey) dari peta gabungan,
@@ -974,12 +1119,18 @@ class AudioEngine {
       // Buffer dibuat SEKALI per sample SF2 lalu dibagi ke semua nada yang memakainya.
       let shared = this.sampleBufferCache.get(sample);
       if (!shared) {
-        let isUnnormalized = false;
-        const checkLimit = Math.min(120, sampleData.length);
-        for (let i = 0; i < checkLimit; i++) {
-          if (Math.abs(sampleData[i]) > 1.2) {
-            isUnnormalized = true;
-            break;
+        // Pustaka soundfont2 memberi sample sebagai Int16Array (rentang +-32768). Tipe datanya sudah
+        // cukup pasti; heuristik amplitudo hanya cadangan untuk data bertipe lain. Heuristik lama hanya
+        // memeriksa 120 nilai pertama, padahal banyak sample dibuka dengan hening/fade-in sehingga salah
+        // dikira sudah ternormalisasi -> level & loudness-gain jadi kacau.
+        let isUnnormalized = (sampleData as unknown) instanceof Int16Array;
+        if (!isUnnormalized) {
+          const checkLimit = Math.min(8192, sampleData.length);
+          for (let i = 0; i < checkLimit; i++) {
+            if (Math.abs(sampleData[i]) > 1.2) {
+              isUnnormalized = true;
+              break;
+            }
           }
         }
 
@@ -1044,53 +1195,130 @@ class AudioEngine {
 
     const peakVolBase = 0.35 * volume;
 
-    if (this.soundfontInstance) {
-      midiNotes.forEach((midiNote) => {
-        const meta = this.getSampleMetadata(midiNote, programNumber);
-        if (meta) {
-          const peakVol = peakVolBase * meta.normalizationGain;
-          const sustainVol = peakVol * s;
+    const bankReady = Boolean(this.soundfontInstance);
+    if (!bankReady) this.kickBank();
 
-          const src = ctx.createBufferSource();
-          src.buffer = meta.buffer;
+    midiNotes.forEach((midiNote) => {
+      const meta = bankReady ? this.getSampleMetadata(midiNote, programNumber) : null;
+      let src: AudioScheduledSourceNode;
+      let gain: GainNode;
+      let totalStop: number;
 
-          if (meta.isLooping) {
-            src.loop = true;
-            src.loopStart = meta.loopStartSec;
-            src.loopEnd = meta.loopEndSec;
-          }
+      if (meta) {
+        const peakVol = peakVolBase * meta.normalizationGain;
+        const sustainVol = peakVol * s;
 
-          const semitoneDiff = midiNote - meta.rootKey;
-          const totalCents = semitoneDiff * meta.scaleTuningCents + meta.tuningCentsOffset;
-          src.playbackRate.value = Math.pow(2, totalCents / 1200);
+        const bufSrc = ctx.createBufferSource();
+        bufSrc.buffer = meta.buffer;
 
-          const gain = ctx.createGain();
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peakVol), now + a);
-          gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, sustainVol), now + a + d);
-          const holdUntil = now + Math.max(a + d, noteDurationSec);
-          gain.gain.setValueAtTime(Math.max(0.0001, sustainVol), holdUntil);
-          gain.gain.exponentialRampToValueAtTime(0.0001, holdUntil + r);
-
-          src.connect(gain);
-          gain.connect(this.compressor || ctx.destination);
-
-          const totalStop = holdUntil + r + 0.05;
-          src.start(now);
-          src.stop(totalStop);
-
-          const voice: ActiveVoice = { source: src, gain, stopAtTime: totalStop, group };
-          this.activeVoices.add(voice);
-          src.onended = () => {
-            this.activeVoices.delete(voice);
-            try {
-              src.disconnect();
-              gain.disconnect();
-            } catch {}
-          };
+        if (meta.isLooping) {
+          bufSrc.loop = true;
+          bufSrc.loopStart = meta.loopStartSec;
+          bufSrc.loopEnd = meta.loopEndSec;
         }
-      });
-    }
+
+        const semitoneDiff = midiNote - meta.rootKey;
+        const totalCents = semitoneDiff * meta.scaleTuningCents + meta.tuningCentsOffset;
+        bufSrc.playbackRate.value = Math.pow(2, totalCents / 1200);
+
+        gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peakVol), now + a);
+        gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, sustainVol), now + a + d);
+        const holdUntil = now + Math.max(a + d, noteDurationSec);
+        gain.gain.setValueAtTime(Math.max(0.0001, sustainVol), holdUntil);
+        gain.gain.exponentialRampToValueAtTime(0.0001, holdUntil + r);
+
+        bufSrc.connect(gain);
+        gain.connect(this.compressor || ctx.destination);
+
+        totalStop = holdUntil + r + 0.05;
+        bufSrc.start(now);
+        bufSrc.stop(totalStop);
+        src = bufSrc;
+      } else {
+        // Bank belum siap (masih diunduh / gagal) atau nada ini belum bisa diproses:
+        // bunyikan suara sintesis sementara supaya pad TIDAK pernah diam.
+        const fb = this.createFallbackVoice(ctx, this.compressor || ctx.destination, midiNote, programNumber, now, noteDurationSec, volume, adsr);
+        src = fb.src;
+        gain = fb.gain;
+        totalStop = fb.stopAt;
+      }
+
+      const voice: ActiveVoice = { source: src, gain, stopAtTime: totalStop, group };
+      this.activeVoices.add(voice);
+      src.onended = () => {
+        this.activeVoices.delete(voice);
+        try {
+          src.disconnect();
+          gain.disconnect();
+        } catch {}
+      };
+    });
+  }
+
+  // -------------------------------------------------------------------
+  // SUARA SINTESIS SEMENTARA (fallback)
+  // Dipakai selama bank SF2 belum selesai dimuat atau bila sebuah nada tidak punya sample. Oscillator +
+  // filter + envelope ADSR yang sama dengan voice sample, jadi pad langsung berbunyi saat ditekan.
+  // Begitu bank siap, voice berikutnya otomatis memakai sample SF2 asli.
+  // -------------------------------------------------------------------
+  private fallbackTimbre(program: number): { type: OscillatorType; bright: number; level: number } {
+    if (program < 8) return { type: 'triangle', bright: 9, level: 1.0 }; // piano
+    if (program < 16) return { type: 'sine', bright: 6, level: 1.0 }; // perkusi kromatik
+    if (program < 24) return { type: 'square', bright: 4, level: 0.55 }; // organ
+    if (program < 32) return { type: 'triangle', bright: 7, level: 1.0 }; // gitar
+    if (program < 40) return { type: 'triangle', bright: 4, level: 1.1 }; // bass
+    if (program < 56) return { type: 'sawtooth', bright: 3.5, level: 0.5 }; // gesek & ensemble
+    if (program < 80) return { type: 'sawtooth', bright: 4, level: 0.5 }; // brass, reed, pipe
+    if (program < 96) return { type: 'sawtooth', bright: 4, level: 0.5 }; // synth lead & pad
+    return { type: 'triangle', bright: 6, level: 0.9 };
+  }
+
+  private createFallbackVoice(
+    ctx: BaseAudioContext,
+    destination: AudioNode,
+    midiNote: number,
+    program: number,
+    startTime: number,
+    holdSec: number,
+    volume: number,
+    adsr: EnvelopeADSR
+  ): { src: AudioScheduledSourceNode; gain: GainNode; stopAt: number } {
+    const a = Math.max(0.005, adsr.attack);
+    const d = Math.max(0.01, adsr.decay);
+    const sus = Math.max(0.0, Math.min(1.0, adsr.sustain));
+    const r = Math.max(0.04, adsr.release);
+    const t = this.fallbackTimbre(program);
+
+    const freq = 440 * Math.pow(2, (midiNote - 69) / 12);
+    const osc = ctx.createOscillator();
+    osc.type = t.type;
+    osc.frequency.setValueAtTime(freq, startTime);
+
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(Math.min(9000, Math.max(700, freq * t.bright)), startTime);
+    filter.Q.setValueAtTime(0.6, startTime);
+
+    const peak = 0.2 * volume * t.level;
+    const sustainVol = Math.max(0.0001, peak * sus);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), startTime + a);
+    gain.gain.exponentialRampToValueAtTime(sustainVol, startTime + a + d);
+    const holdUntil = startTime + Math.max(a + d, holdSec);
+    gain.gain.setValueAtTime(sustainVol, holdUntil);
+    gain.gain.exponentialRampToValueAtTime(0.0001, holdUntil + r);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(destination);
+
+    const stopAt = holdUntil + r + 0.05;
+    osc.start(startTime);
+    osc.stop(stopAt);
+    return { src: osc, gain, stopAt };
   }
 
   // Pemutaran Polifonik Bersih dengan Kontrol ADSR Penuh — Progresi Akor 1
@@ -1312,13 +1540,15 @@ class AudioEngine {
     const ctx = this.getAudioContext();
     const t = Math.max(opts.when, ctx.currentTime);
 
-    const resolved: Array<{ note: number; meta: SampleBufferMetadata }> = [];
+    // Nada tanpa sample siap tidak lagi dilewati (itu yang membuat sequencer terdengar bisu di awal):
+    // dibunyikan dengan suara sintesis sementara, sambil sample aslinya dipanaskan di latar belakang.
+    const resolved: Array<{ note: number; meta: SampleBufferMetadata | null }> = [];
     for (const note of opts.midiNotes) {
       const meta = this.peekSampleMetadata(note, opts.program);
-      if (meta) {
-        resolved.push({ note, meta });
-      } else if (this.soundfontInstance) {
-        this.queueBackgroundWarm(note, opts.program);
+      resolved.push({ note, meta });
+      if (!meta) {
+        if (this.soundfontInstance) this.queueBackgroundWarm(note, opts.program);
+        else this.kickBank();
       }
     }
     if (resolved.length === 0) return;
@@ -1347,7 +1577,9 @@ class AudioEngine {
 
     for (const { note, meta } of resolved) {
       if (this.activeVoices.size >= AudioEngine.MAX_LIVE_VOICES) break;
-      const { src, gain, stopAt } = this.createChordVoice(ctx, groupGain, meta, note, t, opts.holdSec, opts.volume, opts.adsr);
+      const { src, gain, stopAt } = meta
+        ? this.createChordVoice(ctx, groupGain, meta, note, t, opts.holdSec, opts.volume, opts.adsr)
+        : this.createFallbackVoice(ctx, groupGain, note, opts.program, t, opts.holdSec, opts.volume, opts.adsr);
       const voice: ActiveVoice = { source: src, gain, stopAtTime: stopAt, group: 'seq' };
       this.activeVoices.add(voice);
       rec.voices.add(voice);
