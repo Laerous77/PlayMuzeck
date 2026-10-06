@@ -16,6 +16,7 @@ import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
 import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
 import { createSoundFxRouter, ensureSoundFxSchema } from './soundFxRoutes';
+import { createToolQuotaRouter, ensureToolQuotaSchema, startToolQuotaSweeper } from './toolQuotaRoutes';
 import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
@@ -106,6 +107,14 @@ const requireUser: express.RequestHandler = (req, res, next) => {
 };
 app.use('/api/user', requireUser);
 
+// Email akun yang sedang login, atau null untuk tamu (tidak pernah membalas 401). Dipakai kuota Audio Tools.
+const softEmail = (req: express.Request): Promise<string | null> =>
+  new Promise((resolve) => {
+    const fakeRes: any = { status: () => fakeRes, json: () => { resolve(null); return fakeRes; } };
+    try { (requireAuth as any)(req, fakeRes, () => resolve(req.user?.email ?? null)); } catch { resolve(null); }
+  });
+
+
 Promise.resolve(initDatabase())
   .catch((err) => console.error('[DB] initDatabase gagal:', err))
   .then(() => ensurePaymentTables())
@@ -114,6 +123,8 @@ Promise.resolve(initDatabase())
   .catch((err) => console.error('[DB] ensureThemeSchema gagal:', err))
   .then(() => ensureSoundFxSchema(pool))
   .catch((err) => console.error('[DB] ensureSoundFxSchema gagal:', err))
+  .then(() => ensureToolQuotaSchema(pool))
+  .catch((err) => console.error('[DB] ensureToolQuotaSchema gagal:', err))
   .then(() => ensureNotificationSchema(pool))
   .catch((err) => console.error('[DB] ensureNotificationSchema gagal:', err));
 
@@ -166,6 +177,8 @@ const requireSuperAdmin = (req: express.Request, res: express.Response, next: ex
 
 app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
 app.use(createSoundFxRouter({ db: pool, requireUser }));
+app.use(createToolQuotaRouter({ db: pool, resolveEmail: softEmail }));
+startToolQuotaSweeper(pool);
 app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));
 app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
 startDeletionSweeper(pool);

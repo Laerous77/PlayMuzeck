@@ -1,15 +1,16 @@
 // src/components/AudioStudio/AudioExtraTools.tsx
 //
-// 6 alat audio tambahan PlayMuzeck. Alat-alat ini
+// 8 alat audio tambahan PlayMuzeck. Alat-alat ini
 // ditanam di dalam AudioToolsSuite (satu suite 15 alat, dikelompokkan per fungsi) lewat <ExtraToolPanel/>.
 // Hanya alat yang TIDAK ada di 9 alat bawaan Suite (Trim, Volume, Pitch, Tempo, Reverse, Convert,
 // Compress, Noise Reduction, Vocal Isolator):
 //   Gabung + Fade · Rapikan (hening/LUFS/mono) · Perekam + Trim · BPM & Kunci · Metronom · Tuner
+//   · Deteksi Nada Suara · Tes Vocal Range (lihat VoiceTools.tsx)
 // Kuota: sama dengan alat bawaan, 2x gratis per hari per alat, lalu diarahkan ke Harga & Lisensi (diatur lewat prop `gate`).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Merge, Activity, Mic, Eraser, Timer, AudioLines, Upload, Download, Play, Square,
-  Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle, RotateCcw,
+  Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle, RotateCcw, Music2, Ruler,
 } from 'lucide-react';
 import {
   audioBufferToWav, downloadBlob, exportAudioFile,
@@ -17,6 +18,7 @@ import {
 import {
   BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, INPUT_CLS, InfoTip, NUM_FIELD_CLS, PANEL_CLS, SLIDER_CLS, pillCls, quotaGuardProps,
 } from './toolsShared';
+import { PitchDetectTool, VocalRangeTool } from './VoiceTools';
 import {
   CLICK_SOUNDS, SUBDIVISIONS, TIME_SIGNATURES, TUNING_PRESETS, applyFade, concatChannels, detectBpm, detectKey,
   detectPitch, freqToNote, getClickSound, getSubdivision, lowestFreq, measureLufs, midiToFreq, nearestString,
@@ -26,7 +28,7 @@ import {
 
 // ───────────────────────── Tipe & konstanta ─────────────────────────
 
-export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner';
+export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner' | 'pitch_detect' | 'vocal_range';
 
 /** Pintu kuota harian (2x gratis per alat per hari) yang disediakan AudioToolsSuite. */
 export interface QuotaGate {
@@ -64,11 +66,13 @@ export const EXTRA_SLUG_TO_TOOL: Record<string, ExtraToolId> = {
   'stereo-ke-mono': 'clean',
   'metronom-online': 'metronome',
   'tuner-online': 'tuner',
+  'deteksi-nada-suara': 'pitch_detect',
+  'tes-vocal-range': 'vocal_range',
 };
 
 export interface ExtraToolMeta { id: ExtraToolId; label: string; icon: React.ElementType; desc: string; realtime?: boolean }
 
-/** Metadata 6 alat tambahan; dipakai Suite untuk menyusun bilah alat gabungan. */
+/** Metadata 8 alat tambahan; dipakai Suite untuk menyusun bilah alat gabungan. */
 export const EXTRA_TOOL_META: ExtraToolMeta[] = [
   { id: 'merge', label: 'Gabung & Fade', icon: Merge, desc: 'Gabungkan beberapa audio, crossfade, fade in/out (satu file = fade saja)' },
   { id: 'clean', label: 'Rapikan Audio', icon: Eraser, desc: 'Hapus jeda hening, samakan loudness (LUFS), ubah stereo ke mono' },
@@ -76,6 +80,8 @@ export const EXTRA_TOOL_META: ExtraToolMeta[] = [
   { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu' },
   { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Birama, subdivisi, aksen per ketukan, dan ekspor klik ke berkas', realtime: true },
   { id: 'tuner', label: 'Tuner', icon: AudioLines, desc: 'Setel gitar, bass, ukulele, alat gesek, banjo, mandolin, dan vokal', realtime: true },
+  { id: 'pitch_detect', label: 'Deteksi Nada Suara', icon: Music2, desc: 'Rekam suaramu, deteksi nada yang kamu nyanyikan secara langsung, lalu lihat ringkasan nada dan kunci', realtime: true },
+  { id: 'vocal_range', label: 'Tes Vocal Range', icon: Ruler, desc: 'Ukur jangkauan suara, jenis suara, dan wilayah nyaman, lengkap dengan contoh lagu yang pas', realtime: true },
 ];
 
 // ───────────────────────── Helper umum ─────────────────────────
@@ -980,6 +986,8 @@ export const ExtraToolPanel: React.FC<{ active: ExtraToolId | null; gate?: Audio
       {mounted('bpm') && <div className={show('bpm')} {...guard('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('metronome') && <div className={show('metronome')} {...guard('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('tuner') && <div className={show('tuner')} {...guard('tuner')}><TunerTool gate={gate} /></div>}
+      {mounted('pitch_detect') && <div className={show('pitch_detect')} {...guard('pitch_detect')}><PitchDetectTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('vocal_range') && <div className={show('vocal_range')} {...guard('vocal_range')}><VocalRangeTool gate={gate} toast={onSuccessToast} /></div>}
     </div>
   );
 };

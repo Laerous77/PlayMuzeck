@@ -132,7 +132,7 @@ const TOOLS: ToolConfig[] = [
 ];
 
 // ---------------------------------------------------------------------------
-// Suite gabungan: 9 alat bawaan + 6 alat tambahan, dikelompokkan menurut fungsi
+// Suite gabungan: 9 alat bawaan + 8 alat tambahan, dikelompokkan menurut fungsi
 // ---------------------------------------------------------------------------
 
 export type UnifiedToolId = ToolType | ExtraToolId;
@@ -150,14 +150,14 @@ const TOOL_GROUPS: ToolGroup[] = [
   { id: 'sound', label: 'Perbaiki Suara', icon: Eraser, desc: 'Bersihkan dan seimbangkan suara: volume, jeda hening, loudness, mono, dan noise.', tools: ['volume', 'clean', 'noise_reduction'] },
   { id: 'music', label: 'Nada, Tempo & Vokal', icon: Music, desc: 'Olah unsur musik: ubah nada, ubah kecepatan, atau pisahkan vokal dari musik.', tools: ['pitch', 'tempo', 'vocal_separator'] },
   { id: 'format', label: 'Format & Ukuran', icon: RefreshCw, desc: 'Ganti format file (termasuk ekstrak audio dari video) atau perkecil ukurannya.', tools: ['convert', 'compress'] },
-  { id: 'record', label: 'Rekam & Analisis', icon: Mic, desc: 'Ambil audio baru dari mikrofon, atau cari tahu tempo dan kunci nada sebuah lagu.', tools: ['recorder', 'bpm'] },
-  { id: 'practice', label: 'Latihan Musik', icon: Timer, desc: 'Alat langsung untuk berlatih: jaga tempo dengan metronom dan setel instrumen dengan tuner.', tools: ['metronome', 'tuner'] },
+  { id: 'record', label: 'Rekam & Analisis', icon: Mic, desc: 'Ambil audio baru dari mikrofon, cari tahu tempo dan kunci nada sebuah lagu, atau deteksi nada yang kamu nyanyikan.', tools: ['recorder', 'bpm', 'pitch_detect'] },
+  { id: 'practice', label: 'Latihan Musik', icon: Timer, desc: 'Alat langsung untuk berlatih: jaga tempo dengan metronom, setel instrumen dengan tuner, dan ukur jangkauan suaramu.', tools: ['metronome', 'tuner', 'vocal_range'] },
 ];
 
 const EXTRA_IDS = new Set<string>(EXTRA_TOOL_META.map((t) => t.id));
 const isExtraId = (id: UnifiedToolId): id is ExtraToolId => EXTRA_IDS.has(id);
 
-/** Nama, ikon, dan deskripsi untuk semua 15 alat. */
+/** Nama, ikon, dan deskripsi untuk semua 17 alat. */
 function toolInfo(id: UnifiedToolId): { name: string; icon: React.ElementType; desc: string } {
   const base = TOOLS.find((t) => t.id === id);
   if (base) return { name: base.name, icon: base.icon, desc: base.desc };
@@ -203,7 +203,7 @@ function makeInitialStates(): Record<ToolType, ToolExecutionState> {
 }
 
 // ---------------------------------------------------------------------------
-// Kuota harian: satu sumber (services/extraToolsQuota.ts) untuk ke-15 alat, 2x gratis per alat per hari
+// Kuota harian: satu sumber (services/toolQuota.ts -> database server) untuk ke-17 alat, 2x gratis per alat per hari
 // ---------------------------------------------------------------------------
 
 function readQuota(isOwned = false): Record<ToolType, number> {
@@ -1305,7 +1305,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const toolMeta = TOOLS.find((t) => t.id === selectedTool)!;
 
   /**
-   * Pintu kuota untuk 6 alat tambahan: aturannya sama dengan alat bawaan (2x gratis per hari per alat, lalu berbayar).
+   * Pintu kuota untuk 8 alat tambahan: aturannya sama dengan alat bawaan (2x gratis per hari per alat, lalu berbayar).
    * `sessionKey` menandai satu "penggunaan": pemanggilan berikutnya dengan kunci yang sama (mis. mengunduh hasil yang
    * sama dalam format lain, atau memulai ulang metronom/tuner di halaman yang sama) tidak memakan jatah lagi.
    */
@@ -1544,7 +1544,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           })}
         </div>
 
-        {/* Panel alat tambahan (6 alat; punya pemilih berkas sendiri) */}
+        {/* Panel alat tambahan (8 alat; punya pemilih berkas / mikrofon sendiri) */}
         <ExtraToolPanel active={selectedExtra} gate={extraGate} onSuccessToast={onSuccessToast} />
 
         {/* Panel Kontrol (9 alat bawaan, memakai tombol Unggah Berkas) */}
