@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { X, Download, Loader2, Music, Disc, Repeat, Layers } from 'lucide-react';
 import { generateMidiFile, exportAudioFile, downloadBlob } from '../../services/exporters';
 import { audioEngine, EnvelopeADSR } from '../../services/audioEngine';
+import { ModalPortal } from './ModalPortal';
+import { IntField } from './NumberFields';
 
 export type ExportScope = 'drum' | 'chord' | 'both';
 
@@ -363,8 +365,8 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
   const ScopeIcon = scope === 'drum' ? Disc : scope === 'chord' ? Music : Layers;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-      <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-2xl bg-[#14213D] border border-white/[0.12] p-6 shadow-2xl relative">
+    <ModalPortal onClose={onClose} dismissible={!isExporting}>
+      <div className="w-full max-w-md max-h-[92dvh] overflow-y-auto overscroll-contain rounded-2xl bg-[#14213D] border border-white/[0.12] p-6 shadow-2xl relative">
         <button
           onClick={onClose}
           disabled={isExporting}
@@ -470,85 +472,75 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
         </div>
 
         <div className="space-y-2 mb-5">
-          <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold text-gray-300">Rentang Ekspor</label>
-            <button
-              type="button"
-              onClick={() => setUseFullRange(!useFullRange)}
-              disabled={isExporting}
-              className={`text-[11px] font-bold px-2.5 py-1 rounded-lg border transition-colors cursor-pointer ${
-                useFullRange
-                  ? 'bg-[#FCA311] text-black border-[#FCA311]'
-                  : 'bg-black/40 text-gray-300 border-white/[0.1] hover:border-white/25'
-              }`}
-            >
-              {useFullRange ? `Penuh (Bar 1–${totalBars})` : 'Kustom'}
-            </button>
+          <label className="text-xs font-semibold text-gray-300">Rentang Ekspor</label>
+
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-black/50 border border-white/[0.08]" role="tablist" aria-label="Rentang ekspor">
+            {([
+              { full: true, label: `Penuh (Bar 1–${totalBars})` },
+              { full: false, label: 'Kustom' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                role="tab"
+                aria-selected={useFullRange === opt.full}
+                onClick={() => setUseFullRange(opt.full)}
+                disabled={isExporting}
+                className={`py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                  useFullRange === opt.full
+                    ? 'bg-[#FCA311] text-black shadow'
+                    : 'text-gray-300 hover:bg-white/[0.06]'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
           </div>
 
           {!useFullRange && (
             <div className="grid grid-cols-2 gap-3 bg-black/40 border border-white/[0.08] rounded-xl p-3">
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Dari</span>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1">
-                    <span className="text-[9px] text-gray-500 block">Bar</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={totalBars}
-                      value={fromBar}
-                      disabled={isExporting}
-                      onChange={(e) => setFromBar(Math.max(1, Math.min(totalBars, Number(e.target.value) || 1)))}
-                      className="w-full bg-black/60 rounded-lg border border-white/[0.1] px-2 py-1.5 text-xs font-mono text-white focus:border-[#FCA311] outline-none"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-[9px] text-gray-500 block">Step</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={stepsPerBar}
-                      value={fromBeat}
-                      disabled={isExporting}
-                      onChange={(e) => setFromBeat(Math.max(1, Math.min(stepsPerBar, Number(e.target.value) || 1)))}
-                      className="w-full bg-black/60 rounded-lg border border-white/[0.1] px-2 py-1.5 text-xs font-mono text-white focus:border-[#FCA311] outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Sampai</span>
-                <div className="flex items-center gap-1.5">
-                  <div className="flex-1">
-                    <span className="text-[9px] text-gray-500 block">Bar</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={totalBars}
-                      value={toBar}
-                      disabled={isExporting}
-                      onChange={(e) => setToBar(Math.max(1, Math.min(totalBars, Number(e.target.value) || 1)))}
-                      className="w-full bg-black/60 rounded-lg border border-white/[0.1] px-2 py-1.5 text-xs font-mono text-white focus:border-[#FCA311] outline-none"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <span className="text-[9px] text-gray-500 block">Step</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={stepsPerBar}
-                      value={toBeat}
-                      disabled={isExporting}
-                      onChange={(e) => setToBeat(Math.max(1, Math.min(stepsPerBar, Number(e.target.value) || 1)))}
-                      className="w-full bg-black/60 rounded-lg border border-white/[0.1] px-2 py-1.5 text-xs font-mono text-white focus:border-[#FCA311] outline-none"
-                    />
+              {([
+                { title: 'Dari', bar: fromBar, beat: fromBeat, setBar: setFromBar, setBeat: setFromBeat },
+                { title: 'Sampai', bar: toBar, beat: toBeat, setBar: setToBar, setBeat: setToBeat },
+              ] as const).map((f) => (
+                <div key={f.title} className="space-y-1.5">
+                  <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{f.title}</span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] text-gray-500 block">Bar (1–{totalBars})</span>
+                      <IntField
+                        value={f.bar}
+                        min={1}
+                        max={totalBars}
+                        onChange={f.setBar}
+                        disabled={isExporting}
+                        ariaLabel={`${f.title} bar`}
+                        className="w-full bg-black/60 rounded-lg border border-white/[0.1] px-2 py-1.5 text-xs font-mono text-white focus:border-[#FCA311] outline-none"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[9px] text-gray-500 block">Step (1–{stepsPerBar})</span>
+                      <IntField
+                        value={f.beat}
+                        min={1}
+                        max={stepsPerBar}
+                        onChange={f.setBeat}
+                        disabled={isExporting}
+                        ariaLabel={`${f.title} step`}
+                        className="w-full bg-black/60 rounded-lg border border-white/[0.1] px-2 py-1.5 text-xs font-mono text-white focus:border-[#FCA311] outline-none"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
+              ))}
             </div>
           )}
+
+          <p className="text-[11px] text-gray-400">
+            Bar {Math.floor(rangeFromStep / stepsPerBar) + 1} step {(rangeFromStep % stepsPerBar) + 1} →{' '}
+            Bar {Math.floor(rangeToStep / stepsPerBar) + 1} step {(rangeToStep % stepsPerBar) + 1}
+            {' '}• {rangeStepCount} step • ±{((rangeStepCount * 60) / bpm / 4).toFixed(1)} detik
+          </p>
         </div>
 
         <div className="space-y-2 mb-5">
@@ -623,6 +615,6 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           )}
         </button>
       </div>
-    </div>
+    </ModalPortal>
   );
 };

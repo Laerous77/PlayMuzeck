@@ -34,6 +34,8 @@ import {
   SOUND_BANK_READY_MESSAGE,
 } from '../../services/audioEngine';
 import { ExportPatternModal, ChordTrackExportData } from './ExportPatternModal';
+import { ModalPortal } from './ModalPortal';
+import { AdsrField, IntField } from './NumberFields';
 
 interface PadStudioProps {
   entitlements: AudioEntitlements;
@@ -1379,58 +1381,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     <span>Envelope DRUM KIT ({selectedDrumKit}) — Karakter perkusif</span>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                      <span className="text-gray-400 font-bold">A (Attack):</span>
-                      <input
-                        type="range"
-                        min="0.001"
-                        max="0.1"
-                        step="0.001"
-                        value={drumAttackVal}
-                        onChange={(e) => setDrumAttackVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                      />
-                      <span className="font-mono text-accent w-12 text-right">{(drumAttackVal * 1000).toFixed(0)}ms</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                      <span className="text-gray-400 font-bold">D (Decay):</span>
-                      <input
-                        type="range"
-                        min="0.01"
-                        max="2.0"
-                        step="0.01"
-                        value={drumDecayVal}
-                        onChange={(e) => setDrumDecayVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                      />
-                      <span className="font-mono text-accent w-12 text-right">{(drumDecayVal * 1000).toFixed(0)}ms</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                      <span className="text-gray-400 font-bold">S (Sustain):</span>
-                      <input
-                        type="range"
-                        min="0.0"
-                        max="1.0"
-                        step="0.05"
-                        value={drumSustainVal}
-                        onChange={(e) => setDrumSustainVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                      />
-                      <span className="font-mono text-accent w-10 text-right">{(drumSustainVal * 100).toFixed(0)}%</span>
-                    </div>
-                    <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                      <span className="text-gray-400 font-bold">R (Release):</span>
-                      <input
-                        type="range"
-                        min="0.02"
-                        max="2.0"
-                        step="0.02"
-                        value={drumReleaseVal}
-                        onChange={(e) => setDrumReleaseVal(Number(e.target.value))}
-                        className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                      />
-                      <span className="font-mono text-accent w-12 text-right">{(drumReleaseVal * 1000).toFixed(0)}ms</span>
-                    </div>
+                    <AdsrField label="A (Attack)" kind="time" min={0.001} max={0.1} step={0.001} value={drumAttackVal} onChange={setDrumAttackVal} />
+                    <AdsrField label="D (Decay)" kind="time" min={0.01} max={2} step={0.01} value={drumDecayVal} onChange={setDrumDecayVal} />
+                    <AdsrField label="S (Sustain)" kind="percent" min={0} max={1} step={0.05} value={drumSustainVal} onChange={setDrumSustainVal} />
+                    <AdsrField label="R (Release)" kind="time" min={0.02} max={2} step={0.02} value={drumReleaseVal} onChange={setDrumReleaseVal} />
                   </div>
                 </div>
               ) : (
@@ -1444,58 +1398,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                           <span>Envelope {track.label}: {instName}</span>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                            <span className="text-gray-400 font-bold">A (Attack):</span>
-                            <input
-                              type="range"
-                              min="0.005"
-                              max="5.0"
-                              step="0.01"
-                              value={track.adsr.attack}
-                              onChange={(e) => updateTrackAdsr(tIdx, { attack: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                            />
-                            <span className="font-mono text-accent w-12 text-right">{(track.adsr.attack * 1000).toFixed(0)}ms</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                            <span className="text-gray-400 font-bold">D (Decay):</span>
-                            <input
-                              type="range"
-                              min="0.02"
-                              max="5.0"
-                              step="0.01"
-                              value={track.adsr.decay}
-                              onChange={(e) => updateTrackAdsr(tIdx, { decay: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                            />
-                            <span className="font-mono text-accent w-12 text-right">{(track.adsr.decay * 1000).toFixed(0)}ms</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                            <span className="text-gray-400 font-bold">S (Sustain):</span>
-                            <input
-                              type="range"
-                              min="0.0"
-                              max="1.0"
-                              step="0.05"
-                              value={track.adsr.sustain}
-                              onChange={(e) => updateTrackAdsr(tIdx, { sustain: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                            />
-                            <span className="font-mono text-accent w-10 text-right">{(track.adsr.sustain * 100).toFixed(0)}%</span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 bg-black/40 px-3 py-2 rounded-lg border border-white/[0.04]">
-                            <span className="text-gray-400 font-bold">R (Release):</span>
-                            <input
-                              type="range"
-                              min="0.05"
-                              max="10.0"
-                              step="0.05"
-                              value={track.adsr.release}
-                              onChange={(e) => updateTrackAdsr(tIdx, { release: Number(e.target.value) })}
-                              className="flex-1 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                            />
-                            <span className="font-mono text-accent w-12 text-right">{(track.adsr.release * 1000).toFixed(0)}ms</span>
-                          </div>
+                          <AdsrField label="A (Attack)" kind="time" min={0.005} max={5} step={0.01} value={track.adsr.attack} onChange={(v) => updateTrackAdsr(tIdx, { attack: v })} />
+                          <AdsrField label="D (Decay)" kind="time" min={0.02} max={5} step={0.01} value={track.adsr.decay} onChange={(v) => updateTrackAdsr(tIdx, { decay: v })} />
+                          <AdsrField label="S (Sustain)" kind="percent" min={0} max={1} step={0.05} value={track.adsr.sustain} onChange={(v) => updateTrackAdsr(tIdx, { sustain: v })} />
+                          <AdsrField label="R (Release)" kind="time" min={0.05} max={10} step={0.05} value={track.adsr.release} onChange={(v) => updateTrackAdsr(tIdx, { release: v })} />
                         </div>
                       </div>
                     );
@@ -1513,44 +1419,16 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5">
                 <span className="text-gray-400">Mulai: Bar</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={TOTAL_BARS}
-                  value={loopStartBar}
-                  onChange={(e) => setLoopStartBar(Math.max(1, Math.min(TOTAL_BARS, Number(e.target.value) || 1)))}
-                  className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
-                />
+                <IntField min={1} max={TOTAL_BARS} value={loopStartBar} onChange={setLoopStartBar} ariaLabel="loopStartBar" />
                 <span className="text-gray-400">Step</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={stepsPerBar}
-                  value={loopStartBeat}
-                  onChange={(e) => setLoopStartBeat(Math.max(1, Math.min(stepsPerBar, Number(e.target.value) || 1)))}
-                  className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
-                />
+                <IntField min={1} max={stepsPerBar} value={loopStartBeat} onChange={setLoopStartBeat} ariaLabel="loopStartBeat" />
               </div>
               <span className="text-gray-500">—</span>
               <div className="flex items-center gap-1.5">
                 <span className="text-gray-400">Sampai: Bar</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={TOTAL_BARS}
-                  value={loopEndBar}
-                  onChange={(e) => setLoopEndBar(Math.max(1, Math.min(TOTAL_BARS, Number(e.target.value) || 1)))}
-                  className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
-                />
+                <IntField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={setLoopEndBar} ariaLabel="loopEndBar" />
                 <span className="text-gray-400">Step</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={stepsPerBar}
-                  value={loopEndBeat}
-                  onChange={(e) => setLoopEndBeat(Math.max(1, Math.min(stepsPerBar, Number(e.target.value) || 1)))}
-                  className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
-                />
+                <IntField min={1} max={stepsPerBar} value={loopEndBeat} onChange={setLoopEndBeat} ariaLabel="loopEndBeat" />
               </div>
             </div>
           </div>
@@ -1960,8 +1838,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       </div>
 
       {editingPadIndex !== null && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto my-auto shadow-2xl p-6 space-y-5">
+        <ModalPortal>
+          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain shadow-2xl p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-accent" />
@@ -2138,13 +2016,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       {isExportMenuOpen && isUnlocked8Bar && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="fixed inset-0" onClick={() => setIsExportMenuOpen(false)} />
-          <div className="relative w-full max-w-xs rounded-2xl bg-surface border border-white/[0.12] p-5 shadow-2xl">
+        <ModalPortal onClose={() => setIsExportMenuOpen(false)}>
+          <div className="relative w-full max-w-xs max-h-[92dvh] overflow-y-auto overscroll-contain rounded-2xl bg-surface border border-white/[0.12] p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-bold text-white">Pilih Cakupan Ekspor</h3>
               <button
@@ -2194,7 +2071,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             </div>
           </div>
-        </div>
+        </ModalPortal>
       )}
 
       <ExportPatternModal
