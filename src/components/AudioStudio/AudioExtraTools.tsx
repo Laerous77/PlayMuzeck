@@ -657,7 +657,7 @@ const clampBpm = (n: number) => Math.max(30, Math.min(300, Math.round(n) || 100)
 const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
   const [bpm, setBpm] = useState(100);
   const [sigId, setSigId] = useState('4/4');
-  const [subId, setSubId] = useState('quarter');
+  const [subId, setSubId] = useState('1');
   const [soundId, setSoundId] = useState('beep');
   const [vol, setVol] = useState(0.8);
   const sig = TIME_SIGNATURES.find((t) => t.id === sigId) ?? TIME_SIGNATURES[2];

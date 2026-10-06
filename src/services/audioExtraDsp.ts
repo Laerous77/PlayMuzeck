@@ -256,6 +256,12 @@ export function detectBpm(ch: Channels, sr: number): BpmResult | null {
 // ───────────────────────── Deteksi kunci nada ─────────────────────────
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+// Ejaan kunci yang lazim dipakai musisi: kunci mayor memakai Db/Eb/Ab/Bb (bukan C#/D#/G#/A#),
+// kunci minor memakai C#/G# (C# minor, G# minor) tetapi Eb/Bb (Eb minor, Bb minor).
+const MAJOR_KEY_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'];
+const MINOR_KEY_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
+/** Nama tonika kunci menurut ejaan musisi, mis. keyLabel(1, false) = "Db", keyLabel(1, true) = "C#". */
+export const keyLabel = (pc: number, minor: boolean): string => (minor ? MINOR_KEY_NAMES : MAJOR_KEY_NAMES)[((Math.round(pc) % 12) + 12) % 12];
 // Profil Krumhansl-Kessler.
 const KK_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
 const KK_MINOR = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
@@ -330,14 +336,14 @@ export function detectKey(ch: Channels, sr: number): KeyResult | null {
   }
   scores.sort((a, b) => b.r - a.r);
   const top = scores[0], second = scores[1];
-  const tonic = NOTE_NAMES[top.pc];
+  const tonic = keyLabel(top.pc, top.minor);
   const relPc = top.minor ? (top.pc + 3) % 12 : (top.pc + 9) % 12;
   return {
     name: `${tonic} ${top.minor ? 'minor' : 'mayor'}`,
     tonic,
     mode: top.minor ? 'minor' : 'mayor',
     camelot: camelotCode(top.pc, top.minor),
-    relative: `${NOTE_NAMES[relPc]} ${top.minor ? 'mayor' : 'minor'}`,
+    relative: `${keyLabel(relPc, !top.minor)} ${top.minor ? 'mayor' : 'minor'}`,
     confidence: Math.max(0, Math.min(1, (top.r - second.r) * 4)),
     chroma: norm,
   };
@@ -654,7 +660,8 @@ export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
       const env = Math.exp(-t * snd.decay);
       const ph = 2 * Math.PI * freq * t;
       const tone = snd.wave === 'sine' ? Math.sin(ph) : snd.wave === 'square' ? Math.sign(Math.sin(ph)) * 0.6 : (2 / Math.PI) * Math.asin(Math.sin(ph));
-      out[startSample + i] += (tone * (1 - snd.noise) + rnd() * snd.noise) * env * amp;
+      const v = out[startSample + i] + (tone * (1 - snd.noise) + rnd() * snd.noise) * env * amp;
+      out[startSample + i] = v > 1 ? 1 : v < -1 ? -1 : v; // klik yang bertumpuk tidak boleh clipping
     }
   };
   for (let p = 0; p < pulses * opts.bars; p++) {

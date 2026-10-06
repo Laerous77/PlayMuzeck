@@ -1,5 +1,5 @@
 // Uji logika musik alat suara: jalankan dengan `tsx tests/voiceDsp.test.ts`
-import { detectPitch } from '../src/services/audioExtraDsp';
+import { detectPitch, keyLabel } from '../src/services/audioExtraDsp';
 import {
   NoteSegmenter, StableNoteDetector, centsOff, classifyVoice, describeSpan, estimateKey, keyName, midiToFreq, noteName,
   summarize, tessituraFrom, warmupStart, WARMUPS,
@@ -120,6 +120,49 @@ ok('rentang sangat sempit tidak crash', classifyVoice(60, 61).length === 7);
   const five = WARMUPS.find((w) => w.id === 'five')!;
   ok('warmup muat -> nada awal = bawah tessitura', warmupStart(five, 53, 67) === 53);
   ok('warmup tidak muat -> null', warmupStart(WARMUPS.find((w) => w.id === 'octave')!, 53, 60) === null);
+}
+
+
+// Ejaan kunci: mayor memakai Db/Eb/Ab/Bb, minor memakai C#/G# (C# minor, bukan Db minor)
+{
+  ok('keyLabel mayor: pc1=Db, pc3=Eb, pc8=Ab, pc10=Bb', keyLabel(1, false) === 'Db' && keyLabel(3, false) === 'Eb' && keyLabel(8, false) === 'Ab' && keyLabel(10, false) === 'Bb');
+  ok('keyLabel minor: pc1=C#, pc6=F#, pc8=G#, pc10=Bb', keyLabel(1, true) === 'C#' && keyLabel(6, true) === 'F#' && keyLabel(8, true) === 'G#' && keyLabel(10, true) === 'Bb');
+  const mk = (tonic: number, scale: number[], minorish = false) => {
+    const notes = [0, ...scale, 0, scale[2], scale[4], 0, scale[4], scale[2], 0].map((d) => tonic + d);
+    return notes.map((m, i) => ({ midi: m, start: i, duration: m === tonic ? 1 : 0.5, avgCents: 0 }));
+  };
+  const MAJ = [2, 4, 5, 7, 9, 11, 12];
+  const MIN = [2, 3, 5, 7, 8, 10, 12];
+  const eMaj = estimateKey(mk(64, MAJ));
+  ok('E mayor -> relatifnya "C# minor" (bukan Db minor)', !!eMaj && eMaj.name === 'E mayor' && eMaj.relative === 'C# minor');
+  const dbMaj = estimateKey(mk(61, MAJ));
+  ok('Db mayor -> relatifnya "Bb minor"', !!dbMaj && dbMaj.name === 'Db mayor' && dbMaj.relative === 'Bb minor');
+  const csMin = estimateKey(mk(61, MIN));
+  ok('C# minor terbaca "C# minor", relatif "E mayor"', !!csMin && csMin.name === 'C# minor' && csMin.relative === 'E mayor');
+  const gsMin = estimateKey(mk(68, MIN));
+  ok('G# minor terbaca "G# minor", relatif "B mayor"', !!gsMin && gsMin.name === 'G# minor' && gsMin.relative === 'B mayor');
+}
+
+// Ketepatan intonasi: vibrato +-30 cent tidak boleh terbaca "sangat akurat" (rata-rata bertanda ~0, tetapi simpangan nyata ~20 cent)
+{
+  const seg = new NoteSegmenter();
+  let t = 0;
+  for (let i = 0; i < 40; i++) { seg.feed(t, midiToFreq(60 + 0.3 * Math.sin(i * 1.3))); t += 0.05; }
+  const out = seg.finish();
+  ok('vibrato: rata-rata bertanda mendekati 0', out.length === 1 && Math.abs(out[0].avgCents) < 8);
+  ok('vibrato: simpangan mutlak tercatat (>15 cent)', out.length === 1 && (out[0].absCents ?? 0) > 15);
+  ok('ringkasan memakai simpangan mutlak', summarize(out).avgAbsCents > 15);
+  const flat = new NoteSegmenter();
+  let tf = 0; for (let i = 0; i < 20; i++) { flat.feed(tf, midiToFreq(60 - 0.25)); tf += 0.05; }
+  const fo = flat.finish();
+  ok('nada konsisten flat 25 cent: bertanda -25, mutlak 25', Math.abs(fo[0].avgCents + 25) < 1 && Math.abs((fo[0].absCents ?? 0) - 25) < 1);
+}
+
+// Tessitura tidak boleh terbalik bila nada nyaman jatuh di luar rentang terukur
+{
+  const w = new Map<number, number>([[40, 2], [42, 2], [44, 2]]); // semua di bawah rentang 60-72
+  const t = tessituraFrom(60, 72, w);
+  ok('tessitura: data di luar rentang -> kembali ke perkiraan, tidak terbalik', t.low < t.high && !t.measured);
 }
 
 console.log(bad ? `\n${bad} uji GAGAL` : '\nSemua uji voiceDsp lulus');

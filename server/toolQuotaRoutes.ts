@@ -14,6 +14,8 @@ import {
 export { ensureToolQuotaSchema };
 
 const DEVICE_COOKIE = 'pm_dev';
+/** Kolom identity di DB VARCHAR(160): email yang sangat panjang di-hash supaya INSERT tidak gagal. */
+const MAX_IDENTITY = 160;
 const USE_KEY_RE = /^[A-Za-z0-9:_|.\-]{1,120}$/;
 
 interface Deps {
@@ -25,10 +27,21 @@ interface Deps {
 export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
   const router = Router();
 
+  // Pastikan tabel ada sebelum dipakai. Bila pembuatan saat boot gagal (DB belum siap), dicoba lagi pada permintaan berikutnya,
+  // sehingga kuota tidak diam-diam jatuh ke penghitung memori di browser hanya karena DB telat hidup.
+  let schemaReady: Promise<unknown> | null = null;
+  const ready = () => {
+    if (!schemaReady) schemaReady = ensureToolQuotaSchema(db).catch((e) => { schemaReady = null; throw e; });
+    return schemaReady;
+  };
+
   /** Akun login -> per-email. Tamu -> per-perangkat (cookie httpOnly yang dibuat server). */
   const identityOf = async (req: Request, res: Response): Promise<string> => {
     const email = await resolveEmail(req).catch(() => null);
-    if (email) return `u:${email.trim().toLowerCase()}`;
+    if (email) {
+      const id = `u:${email.trim().toLowerCase()}`;
+      return id.length <= MAX_IDENTITY ? id : `u:h:${crypto.createHash('sha256').update(id).digest('hex')}`;
+    }
     let dev = String(req.cookies?.[DEVICE_COOKIE] ?? '');
     if (!/^[0-9a-f-]{36}$/i.test(dev)) {
       dev = crypto.randomUUID();
@@ -47,6 +60,7 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
 
   router.get('/api/tool-quota', async (req, res) => {
     try {
+      await ready();
       const identity = await identityOf(req, res);
       const day = await serverDay(db);
       res.set('Cache-Control', 'no-store');
@@ -59,6 +73,7 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
       const { toolId, useKey } = req.body ?? {};
       if (!isQuotaTool(toolId)) return res.status(400).json({ error: 'Alat tidak dikenal.' });
       const key = typeof useKey === 'string' && USE_KEY_RE.test(useKey) ? useKey : crypto.randomUUID();
+      await ready();
       const identity = await identityOf(req, res);
       res.set('Cache-Control', 'no-store');
       res.json(await reserve(db, identity, toolId, key));
@@ -71,6 +86,7 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
       if (!isQuotaTool(toolId) || typeof useKey !== 'string' || !USE_KEY_RE.test(useKey)) {
         return res.status(400).json({ error: 'Permintaan tidak valid.' });
       }
+      await ready();
       const identity = await identityOf(req, res);
       res.set('Cache-Control', 'no-store');
       res.json({ ok: true, remaining: await refund(db, identity, toolId, useKey) });

@@ -5,6 +5,8 @@
 //
 // Konvensi: notasi ilmiah (C4 = do tengah = MIDI 60 = 261,63 Hz pada A4 = 440 Hz).
 
+import { keyLabel } from './audioExtraDsp';
+
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'] as const;
 /** Nama kunci (tonika) yang lazim dipakai musisi: Db, Eb, Ab, Bb memakai mol. */
 export const KEY_NAMES = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const;
@@ -40,8 +42,10 @@ export interface NoteSegment {
   /** Detik sejak awal sesi. */
   start: number;
   duration: number;
-  /** Rata-rata penyimpangan dari nada tepat, dalam cent. */
+  /** Rata-rata penyimpangan BERTANDA dari nada tepat (cent): positif = cenderung sharp, negatif = cenderung flat. */
   avgCents: number;
+  /** Rata-rata penyimpangan MUTLAK (cent). Vibrato ±30 cent tidak saling menghapus, jadi ini ukuran ketepatan yang jujur. */
+  absCents?: number;
 }
 
 /**
@@ -52,7 +56,7 @@ export interface NoteSegment {
  */
 export class NoteSegmenter {
   readonly segments: NoteSegment[] = [];
-  private cur: { midi: number; start: number; last: number; centsSum: number; n: number } | null = null;
+  private cur: { midi: number; start: number; last: number; centsSum: number; absSum: number; n: number } | null = null;
   private pending: { midi: number; t: number; cents: number; count: number } | null = null;
   constructor(private readonly minDur = 0.12, private readonly gapSec = 0.18, private readonly a4 = 440) {}
 
@@ -68,7 +72,8 @@ export class NoteSegmenter {
     if (!this.cur) { this.open(r, t, m); return; }
     if (t - this.cur.last > this.gapSec) { this.close(); this.open(r, t, m); return; }
     if (Math.abs(m - this.cur.midi) <= 0.65) {
-      this.cur.last = t; this.cur.n++; this.cur.centsSum += (m - this.cur.midi) * 100; this.pending = null;
+      const dev = (m - this.cur.midi) * 100;
+      this.cur.last = t; this.cur.n++; this.cur.centsSum += dev; this.cur.absSum += Math.abs(dev); this.pending = null;
       return;
     }
     if (this.pending && this.pending.midi === r) this.pending.count++;
@@ -82,14 +87,14 @@ export class NoteSegmenter {
   }
 
   private open(midi: number, t: number, m: number) {
-    this.cur = { midi, start: t, last: t, centsSum: (m - midi) * 100, n: 1 };
+    this.cur = { midi, start: t, last: t, centsSum: (m - midi) * 100, absSum: Math.abs((m - midi) * 100), n: 1 };
   }
   private close(endAt?: number) {
     const c = this.cur; this.cur = null;
     if (!c) return;
     const end = endAt ?? c.last;
     const duration = Math.max(0, end - c.start) + (endAt === undefined ? 0.06 : 0); // frame terakhir punya lebar
-    if (duration >= this.minDur) this.segments.push({ midi: c.midi, start: c.start, duration, avgCents: c.centsSum / c.n });
+    if (duration >= this.minDur) this.segments.push({ midi: c.midi, start: c.start, duration, avgCents: c.centsSum / c.n, absCents: c.absSum / c.n });
   }
   /** Tutup segmen yang masih berjalan dan kembalikan semua segmen. */
   finish(): NoteSegment[] { this.close(); this.pending = null; return this.segments; }
@@ -152,10 +157,10 @@ export function estimateKey(segments: NoteSegment[]): SungKey | null {
   const top = scores[0], second = scores[1];
   const relPc = top.minor ? (top.pc + 3) % 12 : (top.pc + 9) % 12;
   return {
-    name: `${KEY_NAMES[top.pc]} ${top.minor ? 'minor' : 'mayor'}`,
+    name: `${keyLabel(top.pc, top.minor)} ${top.minor ? 'minor' : 'mayor'}`,
     tonicPc: top.pc,
     minor: top.minor,
-    relative: `${KEY_NAMES[relPc]} ${top.minor ? 'mayor' : 'minor'}`,
+    relative: `${keyLabel(relPc, !top.minor)} ${top.minor ? 'mayor' : 'minor'}`,
     confidence: Math.max(0, Math.min(1, top.r > 0 ? (top.r - Math.max(0, second.r)) * 4 + top.r * 0.4 : 0)),
   };
 }
@@ -169,7 +174,7 @@ export interface SessionSummary {
   /** Nada (kelas nada + oktaf) yang paling lama dinyanyikan. */
   mostSung: { midi: number; seconds: number } | null;
   totalSungSeconds: number;
-  /** Rata-rata |cent| tertimbang durasi: seberapa dekat dengan nada tepat. */
+  /** Rata-rata |cent| tertimbang durasi (dihitung per frame, bukan dari rata-rata bertanda): seberapa dekat dengan nada tepat. */
   avgAbsCents: number;
   key: SungKey | null;
 }
@@ -182,7 +187,7 @@ export function summarize(segments: NoteSegment[]): SessionSummary {
     if (!lowest || s.midi < lowest.midi) lowest = s;
     if (!highest || s.midi > highest.midi) highest = s;
     byMidi.set(s.midi, (byMidi.get(s.midi) ?? 0) + s.duration);
-    total += s.duration; centsW += Math.abs(s.avgCents) * s.duration;
+    total += s.duration; centsW += (s.absCents ?? Math.abs(s.avgCents)) * s.duration;
   }
   let most: { midi: number; seconds: number } | null = null;
   byMidi.forEach((sec, midi) => { if (!most || sec > most.seconds) most = { midi, seconds: sec }; });
@@ -244,7 +249,8 @@ export function tessituraFrom(low: number, high: number, weighted?: Map<number, 
         if (!gotLo && acc / total >= 0.1) { lo = m; gotLo = true; }
         if (acc / total >= 0.9) { hi = m; break; }
       }
-      if (hi > lo) return { low: Math.max(low, lo), high: Math.min(high, hi), measured: true };
+      const tl = Math.max(low, lo), th = Math.min(high, hi);
+      if (hi > lo && th > tl) return { low: tl, high: th, measured: true };
     }
   }
   const span = high - low;

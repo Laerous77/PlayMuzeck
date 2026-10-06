@@ -7,11 +7,12 @@
 //      jenis suara, wilayah nyaman, contoh lagu yang pas di rentangmu, dan latihan pemanasan.
 //
 // Kuota (2x gratis per alat per hari) dicatat di DATABASE lewat `gate` dari AudioToolsSuite:
-//   - Deteksi Nada: 1 sesi perekaman = 1 penggunaan (dikembalikan bila mikrofon gagal / tidak ada nada terdeteksi).
-//   - Vocal Range: 1 tes = 1 penggunaan (dikembalikan bila dibatalkan sebelum hasil / mikrofon gagal).
+//   - Deteksi Nada: 1 sesi perekaman = 1 penggunaan (dikembalikan bila mikrofon gagal / tidak ada nada terdeteksi /
+//     pengguna meninggalkan alat sebelum ada nada terdeteksi). Menghapus hasil TIDAK mengembalikan jatah.
+//   - Vocal Range: 1 tes = 1 penggunaan (dikembalikan bila dibatalkan atau ditinggalkan sebelum hasil / mikrofon gagal).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Mic, Square, Play, Download, Copy, AlertTriangle, CheckCircle, RotateCcw, Loader2, X, ArrowRight, Volume2,
+  Mic, Square, Play, Download, Copy, AlertTriangle, CheckCircle, RotateCcw, Loader2, X, ArrowRight, Volume2, Trash2,
 } from 'lucide-react';
 import { detectPitch } from '../../services/audioExtraDsp';
 import { downloadBlob, exportAudioFile } from '../../services/exporters';
@@ -281,7 +282,9 @@ const RecordingExport: React.FC<{ buffer: AudioBuffer; fileName: string; onDone?
   );
 };
 
-const ReportButtons: React.FC<{ report: string; fileName: string; toast?: (m: string) => void }> = ({ report, fileName, toast }) => (
+const BTN_DELETE = 'px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer transition-colors';
+
+const ReportButtons: React.FC<{ report: string; fileName: string; toast?: (m: string) => void; onClear?: () => void }> = ({ report, fileName, toast, onClear }) => (
   <div className="flex flex-wrap gap-2">
     <button type="button" className={BTN_PRIMARY} onClick={() => { downloadBlob(new Blob([report], { type: 'text/plain;charset=utf-8' }), fileName); toast?.('Laporan diunduh.'); }}>
       <Download className="w-4 h-4" /><span>Unduh laporan (.txt)</span>
@@ -289,6 +292,11 @@ const ReportButtons: React.FC<{ report: string; fileName: string; toast?: (m: st
     <button type="button" className={BTN_GHOST} onClick={() => { void navigator.clipboard?.writeText(report); toast?.('Hasil disalin.'); }}>
       <Copy className="w-4 h-4" /><span>Salin hasil</span>
     </button>
+    {onClear && (
+      <button type="button" className={BTN_DELETE} onClick={onClear}>
+        <Trash2 className="w-4 h-4" /><span>Hapus hasil</span>
+      </button>
+    )}
   </div>
 );
 
@@ -321,6 +329,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
 
   const a4Ref = useRef(a4); a4Ref.current = a4;
+  const gateRef = useRef(gate); gateRef.current = gate;
   const micRef = useRef<MicHandle | null>(null);
   const recRef = useRef<ReturnType<typeof startRecorder>>(null);
   const segRef = useRef<NoteSegmenter | null>(null);
@@ -335,6 +344,14 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     setSegments(null); setAudioBuffer(null);
     setAudioUrl((u) => { if (u) URL.revokeObjectURL(u); return null; });
   }, []);
+
+  /** Hapus hasil deteksi (ringkasan, daftar nada, rekaman). Jatah harian yang sudah terpakai tidak dikembalikan. */
+  const handleClear = useCallback(() => {
+    clearResult();
+    setErr(null); setElapsed(0); setLive(null); setLevel(0);
+    hist.current = []; recent.current = [];
+    toast?.('Hasil deteksi nada dihapus.');
+  }, [clearResult, toast]);
 
   const finish = useCallback(async (auto = false) => {
     if (stoppingRef.current) return;
@@ -363,9 +380,12 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     setBusy(false); stoppingRef.current = false;
   }, [gate, toast]);
 
-  useEffect(() => () => { // unmount: matikan mikrofon & bebaskan URL
+  useEffect(() => () => { // unmount: matikan mikrofon, bebaskan URL, dan kembalikan jatah bila belum ada nada sama sekali
     micRef.current?.stop(); micRef.current = null;
     void recRef.current?.stop(); recRef.current = null;
+    const key = runKey.current; runKey.current = null;
+    const seg = segRef.current; segRef.current = null;
+    if (key && (!seg || (seg.segments.length === 0 && seg.currentMidi === null))) gateRef.current?.refund('pitch_detect', key);
   }, []);
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
@@ -455,7 +475,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     <Panel title="Deteksi Nada Suara" info={[
       'Aktifkan perekaman lalu bernyanyi, bersenandung, atau bersiul. Nada yang kamu hasilkan dideteksi langsung dan digambar sebagai grafik pitch.',
       'Setelah berhenti, kamu mendapat ringkasan: nada terendah/tertinggi, nada paling sering, perkiraan kunci, dan seberapa tepat intonasimu, plus rekaman yang bisa diputar & diunduh.',
-      'Satu sesi perekaman dihitung satu penggunaan. Bila tidak ada nada terdeteksi atau mikrofon gagal, penggunaan itu dikembalikan.',
+      'Satu sesi perekaman dihitung satu penggunaan. Bila tidak ada nada terdeteksi atau mikrofon gagal, penggunaan itu dikembalikan. Tombol "Hapus hasil" membersihkan ringkasan dan rekaman dari layar, tetapi tidak mengembalikan jatah.',
       'Untuk hasil terbaik: ruangan tenang, mikrofon 10-20 cm dari mulut, satu suara saja (bukan beberapa nada sekaligus seperti akor).',
     ]}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -539,7 +559,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
             </div>
           </div>
           {audioUrl && <audio controls src={audioUrl} className="w-full" />}
-          <ReportButtons report={report} fileName="PlayMuzeck_Deteksi_Nada.txt" toast={toast} />
+          <ReportButtons report={report} fileName="PlayMuzeck_Deteksi_Nada.txt" toast={toast} onClear={handleClear} />
           {audioBuffer && <RecordingExport buffer={audioBuffer} fileName="PlayMuzeck_Rekaman_Suara" onDone={toast} />}
           <InfoNote>Hasil berupa deteksi otomatis dari mikrofon. Suara berdesis, napas, atau ruangan bising dapat membuat sebagian nada terlewat.</InfoNote>
         </div>
@@ -578,8 +598,8 @@ const pctOf = (m: number) => ((Math.min(AXIS_MAX, Math.max(AXIS_MIN, m)) - AXIS_
 
 /** Tampilan hasil tes: rentang, jenis suara, wilayah nyaman, contoh lagu, dan latihan pemanasan. */
 export const VocalRangeResult: React.FC<{
-  low: number; high: number; tessMeasured: Map<number, number> | null; toast?: (m: string) => void; onRetake: () => void;
-}> = ({ low, high, tessMeasured, toast, onRetake }) => {
+  low: number; high: number; tessMeasured: Map<number, number> | null; toast?: (m: string) => void; onRetake: () => void; onClear?: () => void;
+}> = ({ low, high, tessMeasured, toast, onRetake, onClear }) => {
   const [songTab, setSongTab] = useState<FitLevel>('comfort');
   const [showAll, setShowAll] = useState(false);
   const player = useTonePlayer(A4);
@@ -755,6 +775,7 @@ export const VocalRangeResult: React.FC<{
           <ReportButtons report={report} fileName="PlayMuzeck_Vocal_Range.txt" toast={toast} />
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={onRetake} className={BTN_GHOST}><RotateCcw className="w-3.5 h-3.5" /><span>Tes ulang</span></button>
+            {onClear && <button type="button" onClick={onClear} className={BTN_DELETE}><Trash2 className="w-3.5 h-3.5" /><span>Hapus hasil</span></button>}
           </div>
         </div>
   );
@@ -770,7 +791,10 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const [level, setLevel] = useState(0);
   const [hold, setHold] = useState(0);
   const [tessMeasured, setTessMeasured] = useState<Map<number, number> | null>(null);
+  /** Sudah pernah menyelesaikan tes di sesi ini (menentukan label tombol: "Mulai tes" vs "Tes ulang"). */
+  const [hasTaken, setHasTaken] = useState(false);
 
+  const gateRef = useRef(gate); gateRef.current = gate;
   const phaseRef = useRef<Phase>('intro');
   const lowRef = useRef<number | null>(null);
   const highRef = useRef<number | null>(null);
@@ -785,7 +809,12 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const goPhase = (p: Phase) => { phaseRef.current = p; detRef.current.reset(); setHold(0); setPhase(p); };
 
   const closeMic = useCallback(() => { micRef.current?.stop(); micRef.current = null; setLive(null); setLevel(0); }, []);
-  useEffect(() => () => { micRef.current?.stop(); micRef.current = null; }, []);
+  // Unmount (pengguna pindah alat) di tengah tes, sebelum hasil jadi: tutup mikrofon dan kembalikan jatah.
+  useEffect(() => () => {
+    micRef.current?.stop(); micRef.current = null;
+    const key = runKey.current; runKey.current = null;
+    if (key) gateRef.current?.refund('vocal_range', key);
+  }, []);
 
   /** Tes dibatalkan / gagal sebelum hasil: tutup mikrofon, kembalikan jatah. */
   const abort = (message?: string) => {
@@ -864,11 +893,20 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
     closeMic();
     runKey.current = null; // hasil sudah jadi: jatah tetap terpakai
     setTessMeasured(useComfort && histRef.current.size >= 3 ? new Map(histRef.current) : null);
+    setHasTaken(true);
     goPhase('result');
     toast?.('Tes vocal range selesai.');
   };
 
   const retake = () => { setErr(null); goPhase('intro'); };
+
+  /** Hapus hasil tes dari layar (jatah yang sudah terpakai tidak dikembalikan). */
+  const clearResult = () => {
+    lowRef.current = null; highRef.current = null; histRef.current = new Map();
+    setLow(null); setHigh(null); setTessMeasured(null); setHasTaken(false); setErr(null);
+    goPhase('intro');
+    toast?.('Hasil tes vocal range dihapus.');
+  };
 
   const stepIndex = STEPS.findIndex((s) => s.id === phase);
   const captured = phase === 'low' ? low : phase === 'high' ? high : null;
@@ -881,7 +919,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
       'Tes terpandu untuk mengetahui jangkauan suaramu: nada terendah, nada tertinggi, dan wilayah nyaman.',
       'Dari rentang itu kamu mendapat perkiraan jenis suara (bass, bariton, tenor, alto, mezzo-sopran, sopran), contoh lagu yang pas (bila perlu digeser kuncinya), dan latihan pemanasan.',
       'Satu tes dihitung satu penggunaan; bila dibatalkan sebelum selesai atau mikrofon gagal, penggunaan itu dikembalikan.',
-      'Nada dihitung hanya setelah ditahan sekitar setengah detik dan jernih, jadi desis, napas, atau lompatan sesaat tidak ikut tercatat. Jangan memaksakan suara: berhenti bila terasa tegang atau sakit.',
+      'Nada dihitung hanya setelah ditahan stabil sekitar sepertiga detik dan jernih, jadi desis, napas, atau lompatan sesaat tidak ikut tercatat. Jangan memaksakan suara: berhenti bila terasa tegang atau sakit.',
     ]}>
       {phase === 'intro' && (
         <div className="space-y-3">
@@ -890,7 +928,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
           </InfoNote>
           <button type="button" onClick={begin} disabled={busy} className={BTN_PRIMARY}>
             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mic className="w-3.5 h-3.5" />}
-            <span>{busy ? 'Membuka mikrofon…' : result ? 'Tes ulang' : 'Mulai tes'}</span>
+            <span>{busy ? 'Membuka mikrofon…' : hasTaken ? 'Tes ulang' : 'Mulai tes'}</span>
           </button>
         </div>
       )}
@@ -913,7 +951,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs gap-3">
                 <span className="text-gray-300 font-bold">Menahan nada…</span>
-                <span className="text-gray-500">Tahan satu nada ±0,5 detik sampai tercatat</span>
+                <span className="text-gray-500">Tahan satu nada ±0,4 detik sampai tercatat</span>
               </div>
               <div className="h-1.5 rounded-full bg-white/10 overflow-hidden"><div className="h-full bg-accent transition-[width] duration-100" style={{ width: `${hold * 100}%` }} /></div>
               <div className={`${CARD_CLS} flex items-center justify-between gap-3 text-xs`}>
@@ -944,7 +982,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
       )}
 
       {phase === 'result' && low !== null && high !== null && (
-        <VocalRangeResult low={low} high={high} tessMeasured={tessMeasured} toast={toast} onRetake={retake} />
+        <VocalRangeResult low={low} high={high} tessMeasured={tessMeasured} toast={toast} onRetake={retake} onClear={clearResult} />
       )}
     </Panel>
   );
