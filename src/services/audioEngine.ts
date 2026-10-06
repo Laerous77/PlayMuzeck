@@ -1673,7 +1673,7 @@ class AudioEngine {
   }
 
   // Pemutar Drum Pad
-  public async playDrumSound(part: string, kitName: string = '80s Kit', volume: number = 1.0) {
+  public async playDrumSound(part: string, kitName: string = '80s Kit', volume: number = 1.0, adsr?: EnvelopeADSR) {
     const ctx = this.getAudioContext();
     const folder = kitName.toLowerCase().replace(/\s+kit/g, '').trim();
     const cacheKey = `${folder}_${part}`;
@@ -1683,7 +1683,7 @@ class AudioEngine {
       src.buffer = buf;
       const gain = ctx.createGain();
       const now = ctx.currentTime;
-      const stopAt = this.applyAdsrEnvelope(gain, this.drumAdsr, now, buf.duration, volume);
+      const stopAt = this.applyAdsrEnvelope(gain, adsr ?? this.drumAdsr, now, buf.duration, volume);
       src.connect(gain);
       gain.connect(this.compressor || ctx.destination);
       src.start(now);
@@ -1735,7 +1735,7 @@ class AudioEngine {
 
   // Jadwalkan satu hit drum pada waktu AudioContext tertentu (dipakai scheduler sequencer).
   // Sinkron: sample sudah di-cache -> tepat waktu; belum -> jatuh ke playDrumSound (terlambat sekali saja).
-  public scheduleDrumSound(part: string, kitName: string, volume: number, when: number) {
+  public scheduleDrumSound(part: string, kitName: string, volume: number, when: number, adsr?: EnvelopeADSR) {
     const ctx = this.getAudioContext();
     const folder = kitName.toLowerCase().replace(/\s+kit/g, '').trim();
     const key = `${folder}_${part}`;
@@ -1745,7 +1745,7 @@ class AudioEngine {
       src.buffer = buf;
       const gain = ctx.createGain();
       const t = Math.max(when, ctx.currentTime);
-      const stopAt = this.applyAdsrEnvelope(gain, this.drumAdsr, t, buf.duration, volume);
+      const stopAt = this.applyAdsrEnvelope(gain, adsr ?? this.drumAdsr, t, buf.duration, volume);
       src.connect(gain);
       gain.connect(this.compressor || ctx.destination);
       src.start(t);
@@ -1756,7 +1756,7 @@ class AudioEngine {
       this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime));
       return;
     }
-    void this.playDrumSound(part, kitName, volume);
+    void this.playDrumSound(part, kitName, volume, adsr);
   }
 
   // NOTE: fallback `this.compressor` HANYA valid kalau `ctx` yang diberikan

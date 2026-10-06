@@ -19,6 +19,8 @@ import {
   ChevronRight,
   Drum,
   Layers,
+  Square,
+  ChevronDown,
   Copy,
   Scissors,
   ClipboardPaste,
@@ -42,7 +44,8 @@ import {
 } from '../../services/audioEngine';
 import { ExportPatternModal, ChordTrackExportData } from './ExportPatternModal';
 import { ModalPortal } from './ModalPortal';
-import { AdsrField, IntField } from './NumberFields';
+import { AdsrMini, AdsrRanges, IntField } from './NumberFields';
+import { InstrumentPickerModal } from './InstrumentPickerModal';
 import {
   DRUM_LEVEL_MAX,
   DRUM_LEVEL_LABEL,
@@ -287,6 +290,7 @@ interface LiveSeqState {
   isUnlocked8Bar: boolean;
   stepsPerBar: number;
   drumGrid: { [key: string]: number[] };
+  drumMix: Record<string, DrumMixState>;
   chordTracks: ChordTrackState[];
   padInfo: PadInfo[];
   selectedDrumKit: string;
@@ -333,6 +337,197 @@ const DrumCell = memo(function DrumCell({
   );
 });
 
+// Lebar kolom label di sisi kiri semua baris sequencer (nama + mixer ringkas).
+const LABEL_W = 'w-52';
+
+const DEFAULT_DRUM_ADSR: EnvelopeADSR = { attack: 0.002, decay: 0.15, sustain: 0.3, release: 0.12 };
+const DRUM_ADSR_RANGES: AdsrRanges = {
+  attack: [0.001, 0.1],
+  decay: [0.01, 2],
+  sustain: [0, 1],
+  release: [0.02, 2],
+};
+const CHORD_ADSR_RANGES: AdsrRanges = {
+  attack: [0.005, 5],
+  decay: [0.02, 5],
+  sustain: [0, 1],
+  release: [0.05, 10],
+};
+
+interface DrumMixState {
+  volume: number; // 0–100, relatif terhadap volume drum utama
+  muted: boolean;
+  solo: boolean;
+  adsr: EnvelopeADSR;
+}
+
+const makeDefaultDrumMix = (): Record<string, DrumMixState> =>
+  Object.fromEntries(
+    DRUM_INSTRUMENTS.map((inst) => [inst.id, { volume: 100, muted: false, solo: false, adsr: { ...DEFAULT_DRUM_ADSR } }])
+  );
+
+// Drum terdengar jika tidak di-mute, dan (bila ada solo) hanya yang solo.
+const isDrumAudible = (id: string, mix: Record<string, DrumMixState>): boolean => {
+  const m = mix[id];
+  if (!m || m.muted) return false;
+  const anySolo = Object.values(mix).some((x) => x.solo);
+  return anySolo ? m.solo : true;
+};
+
+const MuteSoloButtons: React.FC<{ muted: boolean; solo: boolean; onMute: () => void; onSolo: () => void }> = ({
+  muted,
+  solo,
+  onMute,
+  onSolo,
+}) => (
+  <div className="flex items-center gap-1 shrink-0">
+    <button
+      type="button"
+      onClick={onMute}
+      title={muted ? 'Buka Mute' : 'Mute'}
+      className={`w-5 h-5 rounded text-[9px] font-black flex items-center justify-center cursor-pointer transition-colors ${
+        muted ? 'bg-red-500 text-white' : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
+      }`}
+    >
+      M
+    </button>
+    <button
+      type="button"
+      onClick={onSolo}
+      title={solo ? 'Buka Solo' : 'Solo'}
+      className={`w-5 h-5 rounded text-[9px] font-black flex items-center justify-center cursor-pointer transition-colors ${
+        solo ? 'bg-accent text-on-accent' : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
+      }`}
+    >
+      S
+    </button>
+  </div>
+);
+
+const MiniVolume: React.FC<{ value: number; onChange: (v: number) => void; title: string }> = ({ value, onChange, title }) => (
+  <div className="flex items-center gap-1.5 flex-1 min-w-0" title={title}>
+    <Volume2 className="w-3 h-3 text-gray-400 shrink-0" />
+    <input
+      type="range"
+      min="0"
+      max="100"
+      value={value}
+      aria-label={title}
+      onChange={(e) => onChange(Number(e.target.value))}
+      className="flex-1 min-w-0 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
+    />
+    <span className="text-[10px] font-mono text-gray-300 w-7 text-right shrink-0">{value}%</span>
+  </div>
+);
+
+const AdsrToggle: React.FC<{ open: boolean; onClick: () => void }> = ({ open, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-expanded={open}
+    className="flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-accent cursor-pointer"
+  >
+    <Activity className="w-3 h-3" />
+    <span>ADSR</span>
+    <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
+  </button>
+);
+
+// Kolom label baris drum: nama + M/S, di bawahnya volume, di bawahnya ADSR (bisa dilipat).
+const DrumLabel = memo(function DrumLabel({
+  id,
+  label,
+  mix,
+  onMix,
+  onAdsr,
+}: {
+  id: string;
+  label: string;
+  mix: DrumMixState;
+  onMix: (id: string, patch: Partial<DrumMixState>) => void;
+  onAdsr: (id: string, patch: Partial<EnvelopeADSR>) => void;
+}) {
+  const [adsrOpen, setAdsrOpen] = useState(false);
+  return (
+    <div className={`${LABEL_W} shrink-0 px-1 py-1 space-y-1`}>
+      <div className="flex items-center justify-between gap-1.5">
+        <span className="text-xs font-semibold text-gray-200 truncate">{label}</span>
+        <MuteSoloButtons
+          muted={mix.muted}
+          solo={mix.solo}
+          onMute={() => onMix(id, { muted: !mix.muted })}
+          onSolo={() => onMix(id, { solo: !mix.solo })}
+        />
+      </div>
+      <div className="flex items-center">
+        <MiniVolume value={mix.volume} onChange={(v) => onMix(id, { volume: v })} title={`Volume ${label}`} />
+      </div>
+      <AdsrToggle open={adsrOpen} onClick={() => setAdsrOpen((o) => !o)} />
+      {adsrOpen && <AdsrMini adsr={mix.adsr} ranges={DRUM_ADSR_RANGES} onChange={(p) => onAdsr(id, p)} />}
+    </div>
+  );
+});
+
+// Kolom label baris akor: nama progresi + nama instrumen (klik untuk ganti), di bawahnya volume + M/S, lalu ADSR.
+const ChordLabel = memo(function ChordLabel({
+  tIdx,
+  track,
+  instName,
+  onUpdateTrack,
+  onUpdateAdsr,
+  onPickInstrument,
+  onRemove,
+}: {
+  tIdx: number;
+  track: ChordTrackState;
+  instName: string;
+  onUpdateTrack: (trackIndex: number, updates: Partial<ChordTrackState>) => void;
+  onUpdateAdsr: (trackIndex: number, patch: Partial<EnvelopeADSR>) => void;
+  onPickInstrument: (trackIndex: number) => void;
+  onRemove: (trackIndex: number) => void;
+}) {
+  const [adsrOpen, setAdsrOpen] = useState(true);
+  return (
+    <div className={`${LABEL_W} shrink-0 px-1 py-1 space-y-1`}>
+      <div className="flex items-start justify-between gap-1">
+        <div className="min-w-0">
+          <span className="text-xs font-semibold text-gray-200 truncate block">{track.label}</span>
+          <button
+            type="button"
+            onClick={() => onPickInstrument(tIdx)}
+            title="Klik untuk mengganti instrumen"
+            className="max-w-full flex items-center gap-0.5 text-[10px] text-accent font-mono hover:text-white cursor-pointer"
+          >
+            <span className="truncate underline decoration-dotted underline-offset-2">{instName}</span>
+            <ChevronDown className="w-3 h-3 shrink-0" />
+          </button>
+        </div>
+        {tIdx > 0 && (
+          <button
+            type="button"
+            onClick={() => onRemove(tIdx)}
+            title={`Hapus ${track.label}`}
+            className="p-0.5 rounded text-gray-500 hover:text-red-400 hover:bg-white/5 cursor-pointer shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-1.5">
+        <MiniVolume value={track.volume} onChange={(v) => onUpdateTrack(tIdx, { volume: v })} title={`Volume ${track.label}`} />
+        <MuteSoloButtons
+          muted={track.muted}
+          solo={track.solo}
+          onMute={() => onUpdateTrack(tIdx, { muted: !track.muted })}
+          onSolo={() => onUpdateTrack(tIdx, { solo: !track.solo })}
+        />
+      </div>
+      <AdsrToggle open={adsrOpen} onClick={() => setAdsrOpen((o) => !o)} />
+      {adsrOpen && <AdsrMini adsr={track.adsr} ranges={CHORD_ADSR_RANGES} onChange={(p) => onUpdateAdsr(tIdx, p)} />}
+    </div>
+  );
+});
+
 const DrumRow = memo(function DrumRow({
   rowIdx,
   id,
@@ -344,11 +539,17 @@ const DrumRow = memo(function DrumRow({
   gridStyle,
   selS1,
   selS2,
+  mix,
+  onMix,
+  onAdsr,
   onPaint,
 }: {
   rowIdx: number;
   id: string;
   label: string;
+  mix: DrumMixState;
+  onMix: (id: string, patch: Partial<DrumMixState>) => void;
+  onAdsr: (id: string, patch: Partial<EnvelopeADSR>) => void;
   row: number[] | undefined;
   steps: number[];
   stepsPerBar: number;
@@ -360,7 +561,7 @@ const DrumRow = memo(function DrumRow({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="w-36 text-xs font-semibold text-gray-300 truncate shrink-0 px-1">{label}</span>
+      <DrumLabel id={id} label={label} mix={mix} onMix={onMix} onAdsr={onAdsr} />
       <div className="grid gap-0.5 flex-1" style={gridStyle} data-rowgrid="" data-row={rowIdx}>
         {steps.map((stepIdx) => (
           <DrumCell
@@ -543,7 +744,15 @@ const ChordRow = memo(function ChordRow({
   getMode,
   onPick,
   onResize,
+  onUpdateTrack,
+  onUpdateAdsr,
+  onPickInstrument,
+  onRemove,
 }: {
+  onUpdateTrack: (trackIndex: number, updates: Partial<ChordTrackState>) => void;
+  onUpdateAdsr: (trackIndex: number, patch: Partial<EnvelopeADSR>) => void;
+  onPickInstrument: (trackIndex: number) => void;
+  onRemove: (trackIndex: number) => void;
   tIdx: number;
   track: ChordTrackState;
   instName: string;
@@ -572,10 +781,15 @@ const ChordRow = memo(function ChordRow({
 
   return (
     <div className="flex items-center gap-2">
-      <div className="w-36 shrink-0 px-1 flex flex-col justify-center">
-        <span className="text-xs font-semibold text-gray-200 truncate">{track.label}</span>
-        <span className="text-[10px] text-accent truncate font-mono">{instName}</span>
-      </div>
+      <ChordLabel
+        tIdx={tIdx}
+        track={track}
+        instName={instName}
+        onUpdateTrack={onUpdateTrack}
+        onUpdateAdsr={onUpdateAdsr}
+        onPickInstrument={onPickInstrument}
+        onRemove={onRemove}
+      />
       <div className="grid gap-0.5 flex-1" style={gridStyle} data-rowgrid="" data-row={tIdx}>
         {steps.map((stepIdx, i) => {
           const posInBar = stepIdx % stepsPerBar;
@@ -678,13 +892,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [drumVolume, setDrumVolume] = useState(85);
   const [chordMasterVolume, setChordMasterVolume] = useState(80);
 
-  // ADSR Drum Mandiri
-  const [drumAttackVal, setDrumAttackVal] = useState(0.002);
-  const [drumDecayVal, setDrumDecayVal] = useState(0.15);
-  const [drumSustainVal, setDrumSustainVal] = useState(0.3);
-  const [drumReleaseVal, setDrumReleaseVal] = useState(0.12);
+  // Mixer per instrumen drum: volume, mute/solo, dan envelope ADSR sendiri.
+  const [drumMix, setDrumMix] = useState<Record<string, DrumMixState>>(makeDefaultDrumMix);
 
-  const [showEnvelopePanel, setShowEnvelopePanel] = useState(false);
+  // Pemilih instrumen akor (indeks track yang sedang diganti) & dropdown volume utama.
+  const [pickerTrack, setPickerTrack] = useState<number | null>(null);
+  const [masterVolOpen, setMasterVolOpen] = useState(false);
+
 
   // 4 Track Progresi Akor Mandiri
   const [chordTracks, setChordTracks] = useState<ChordTrackState[]>([
@@ -813,16 +1027,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   const [drumGrid, setDrumGrid] = useState<{ [key: string]: number[] }>(() => buildDefaultDrumGrid(INITIAL_TS));
 
-  // Sinkronisasi ADSR Drum ke AudioEngine
-  useEffect(() => {
-    if (audioEngine.drumAdsr) {
-      audioEngine.drumAdsr.attack = drumAttackVal;
-      audioEngine.drumAdsr.decay = drumDecayVal;
-      audioEngine.drumAdsr.sustain = drumSustainVal;
-      audioEngine.drumAdsr.release = drumReleaseVal;
-    }
-  }, [drumAttackVal, drumDecayVal, drumSustainVal, drumReleaseVal]);
-
   // Bank SF2 hanya dipakai Chord Pad (drum memakai sample WAV), jadi hanya diunduh untuk pengguna yang
   // sudah membuka editor penuh. Pengguna gratis tidak lagi dipaksa mengunduh berkas besar yang tak terpakai.
   // Status pemuatan dipantau lewat subscribeBank, jadi tetap tampil walau pemuatan sudah dimulai komponen lain
@@ -855,15 +1059,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     };
   }, [isUnlocked8Bar]);
 
-  const updateTrack = (trackIndex: number, updates: Partial<ChordTrackState>) => {
+  const updateTrack = useCallback((trackIndex: number, updates: Partial<ChordTrackState>) => {
     setChordTracks((prev) => {
       const copy = [...prev];
       copy[trackIndex] = { ...copy[trackIndex], ...updates };
       return copy;
     });
-  };
+  }, []);
 
-  const updateTrackAdsr = (trackIndex: number, adsrUpdates: Partial<EnvelopeADSR>) => {
+  const updateTrackAdsr = useCallback((trackIndex: number, adsrUpdates: Partial<EnvelopeADSR>) => {
     setChordTracks((prev) => {
       const copy = [...prev];
       copy[trackIndex] = {
@@ -872,22 +1076,44 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       };
       return copy;
     });
-  };
+  }, []);
 
-  const toggleMute = (trackIndex: number) => {
-    setChordTracks((prev) => {
-      const copy = [...prev];
-      copy[trackIndex] = { ...copy[trackIndex], muted: !copy[trackIndex].muted };
-      return copy;
-    });
-  };
+  // Hapus baris instrumen (dikosongkan & dinonaktifkan; baris 1 tidak bisa dihapus).
+  const removeTrack = useCallback((trackIndex: number) => {
+    try {
+      audioEngine.stopAllChords(0.04);
+    } catch {
+      // Abaikan jika context belum aktif
+    }
+    setChordTracks((prev) =>
+      prev.map((t, i) =>
+        i === trackIndex
+          ? { ...t, enabled: false, muted: false, solo: false, ...emptyTrackData(layoutRef.current.totalSteps) }
+          : t
+      )
+    );
+  }, []);
 
-  const toggleSolo = (trackIndex: number) => {
-    setChordTracks((prev) => {
-      const copy = [...prev];
-      copy[trackIndex] = { ...copy[trackIndex], solo: !copy[trackIndex].solo };
-      return copy;
-    });
+  const updateDrumMix = useCallback((id: string, patch: Partial<DrumMixState>) => {
+    setDrumMix((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
+  }, []);
+
+  const updateDrumAdsr = useCallback((id: string, patch: Partial<EnvelopeADSR>) => {
+    setDrumMix((prev) => ({ ...prev, [id]: { ...prev[id], adsr: { ...prev[id].adsr, ...patch } } }));
+  }, []);
+
+  const openInstrumentPicker = useCallback((trackIndex: number) => setPickerTrack(trackIndex), []);
+
+  // Tambah baris instrumen baru di bawah, lalu langsung buka pemilih instrumennya.
+  const addChordTrack = () => {
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
+    const idx = chordTracks.findIndex((t) => !t.enabled);
+    if (idx === -1) return;
+    updateTrack(idx, { enabled: true });
+    setPickerTrack(idx);
   };
 
   const isTrackAudible = (track: ChordTrackState, allTracks: ChordTrackState[]) => {
@@ -898,7 +1124,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   };
 
   const triggerDrum = (type: DrumInstrument['id']) => {
-    audioEngine.playDrumSound(type, selectedDrumKit, drumVolume / 100);
+    const m = drumMix[type];
+    audioEngine.playDrumSound(type, selectedDrumKit, (drumVolume / 100) * ((m?.volume ?? 100) / 100), m?.adsr);
     setActivePadAnim(type);
     setTimeout(() => setActivePadAnim(null), 150);
   };
@@ -954,7 +1181,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     });
     // Dengarkan kekuatan yang dipasang (hanya saat drum tidak sedang diputar).
     if (next > 0 && L && !L.isDrumLoopActive) {
-      audioEngine.playDrumSound(drumId, L.selectedDrumKit, (L.drumVolume / 100) * DRUM_LEVEL_GAIN[next]);
+      const m = L.drumMix[drumId];
+      audioEngine.playDrumSound(
+        drumId,
+        L.selectedDrumKit,
+        (L.drumVolume / 100) * ((m?.volume ?? 100) / 100) * DRUM_LEVEL_GAIN[next],
+        m?.adsr
+      );
     }
   }, []);
 
@@ -1009,7 +1242,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const sectionRef = useRef<HTMLElement | null>(null);
   const focusInsideRef = useRef(false);
   const modalOpenRef = useRef(false);
-  modalOpenRef.current = editingPadIndex !== null || isExportModalOpen || isExportMenuOpen;
+  modalOpenRef.current = editingPadIndex !== null || pickerTrack !== null || isExportModalOpen || isExportMenuOpen;
   const activeTabRef = useRef<PadTab>(activeTab);
   activeTabRef.current = activeTab;
 
@@ -1443,7 +1676,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     () => ({ gridTemplateColumns: `repeat(${viewSteps}, minmax(0, 1fr))` }),
     [viewSteps]
   );
-  const gridMinWidth = viewSteps * 22 + 150;
+  const gridMinWidth = viewSteps * 22 + 230;
 
   // Pasangan (program, nada) yang dipakai grid akor + semua pad track utama (untuk bermain live).
   const chordWarmPairs = useMemo<Array<[number, number]>>(() => {
@@ -1491,6 +1724,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     isUnlocked8Bar: Boolean(isUnlocked8Bar),
     stepsPerBar,
     drumGrid,
+    drumMix,
     chordTracks,
     padInfo,
     selectedDrumKit,
@@ -1524,8 +1758,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       if (L.isDrumLoopActive) {
         for (const inst of DRUM_INSTRUMENTS) {
           const level = clampLevel(L.drumGrid[inst.id]?.[step]);
-          if (level > 0) {
-            audioEngine.scheduleDrumSound(inst.id, L.selectedDrumKit, (L.drumVolume / 100) * DRUM_LEVEL_GAIN[level], when);
+          if (level > 0 && isDrumAudible(inst.id, L.drumMix)) {
+            const m = L.drumMix[inst.id];
+            audioEngine.scheduleDrumSound(
+              inst.id,
+              L.selectedDrumKit,
+              (L.drumVolume / 100) * (m.volume / 100) * DRUM_LEVEL_GAIN[level],
+              when,
+              m.adsr
+            );
           }
         }
       }
@@ -1880,150 +2121,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           </div>
         </div>
 
-        <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-black/50 border border-white/[0.08]">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2.5 bg-black/40 px-3 py-1.5 rounded-xl border border-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={toggleDrumLoop}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isDrumLoopActive ? 'bg-accent text-on-accent shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  <Disc className="w-3.5 h-3.5" />
-                  <span>{isDrumLoopActive ? 'Stop Drum' : 'Drum Loop'}</span>
-                </button>
-                <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/10">
-                  <Volume2 className="w-3.5 h-3.5 text-gray-400" />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={drumVolume}
-                    onChange={(e) => setDrumVolume(Number(e.target.value))}
-                    className="w-16 sm:w-20 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                  />
-                  <span className="text-[10px] font-mono text-gray-300 w-7 text-right">{drumVolume}%</span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5 bg-black/40 px-3 py-1.5 rounded-xl border border-white/[0.06]">
-                <button
-                  type="button"
-                  onClick={toggleChordLoop}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isChordLoopActive ? 'bg-accent text-on-accent shadow-md' : 'bg-white/5 text-gray-300 hover:bg-white/10'
-                  }`}
-                >
-                  <Music className="w-3.5 h-3.5" />
-                  <span>{isChordLoopActive ? 'Stop Chord' : 'Chord Loop'}</span>
-                </button>
-                <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/10">
-                  <Volume2 className="w-3.5 h-3.5 text-gray-400" />
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={chordMasterVolume}
-                    onChange={(e) => setChordMasterVolume(Number(e.target.value))}
-                    className="w-16 sm:w-20 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                  />
-                  <span className="text-[10px] font-mono text-gray-300 w-7 text-right">{chordMasterVolume}%</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setShowEnvelopePanel(!showEnvelopePanel)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                  showEnvelopePanel
-                    ? 'bg-accent text-on-accent border-accent'
-                    : 'bg-black/40 text-gray-300 border-white/[0.08] hover:border-white/20'
-                }`}
-              >
-                <Activity className="w-3.5 h-3.5" />
-                <span>Envelope ADSR</span>
-              </button>
-            </div>
-
-            <div className="flex items-center gap-2 text-xs">
-              {isUnlocked8Bar ? (
-                <span className="text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/30">
-                  Full 16-Bar Editor Aktif
-                </span>
-              ) : (
-                <button onClick={onUnlockEditor} className="text-accent hover:underline font-semibold cursor-pointer">
-                  Buka 16-Bar →
-                </button>
-              )}
-            </div>
-          </div>
-
-          {showEnvelopePanel && (
-            <div className="pt-3 border-t border-white/10 text-xs space-y-4">
-              {activeTab === 'drum' ? (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
-                    <Activity className="w-3 h-3 text-accent" />
-                    <span>Envelope DRUM KIT ({selectedDrumKit}) — Karakter perkusif</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    <AdsrField label="A (Attack)" kind="time" min={0.001} max={0.1} step={0.001} value={drumAttackVal} onChange={setDrumAttackVal} />
-                    <AdsrField label="D (Decay)" kind="time" min={0.01} max={2} step={0.01} value={drumDecayVal} onChange={setDrumDecayVal} />
-                    <AdsrField label="S (Sustain)" kind="percent" min={0} max={1} step={0.05} value={drumSustainVal} onChange={setDrumSustainVal} />
-                    <AdsrField label="R (Release)" kind="time" min={0.02} max={2} step={0.02} value={drumReleaseVal} onChange={setDrumReleaseVal} />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {chordTracks.map((track, tIdx) => {
-                    if (!track.enabled) return null;
-                    const instName = INSTRUMENTS_128.find((i) => i.id === track.program)?.name || `Instrumen ${track.id}`;
-                    return (
-                      <div key={track.id} className="space-y-2">
-                        <div className="flex items-center gap-2 text-[11px] font-bold text-accent">
-                          <span>Envelope {track.label}: {instName}</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                          <AdsrField label="A (Attack)" kind="time" min={0.005} max={5} step={0.01} value={track.adsr.attack} onChange={(v) => updateTrackAdsr(tIdx, { attack: v })} />
-                          <AdsrField label="D (Decay)" kind="time" min={0.02} max={5} step={0.01} value={track.adsr.decay} onChange={(v) => updateTrackAdsr(tIdx, { decay: v })} />
-                          <AdsrField label="S (Sustain)" kind="percent" min={0} max={1} step={0.05} value={track.adsr.sustain} onChange={(v) => updateTrackAdsr(tIdx, { sustain: v })} />
-                          <AdsrField label="R (Release)" kind="time" min={0.05} max={10} step={0.05} value={track.adsr.release} onChange={(v) => updateTrackAdsr(tIdx, { release: v })} />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs">
-            <div className="flex items-center gap-2 text-accent font-bold">
-              <Repeat className="w-4 h-4" />
-              <span>Wilayah Looping (Bar & Step):</span>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-400">Mulai: Bar</span>
-                <IntField min={1} max={TOTAL_BARS} value={loopStartBar} onChange={setLoopStartBar} ariaLabel="loopStartBar" />
-                <span className="text-gray-400">Step</span>
-                <IntField min={1} max={stepsPerBar} value={loopStartBeat} onChange={setLoopStartBeat} ariaLabel="loopStartBeat" />
-              </div>
-              <span className="text-gray-500">—</span>
-              <div className="flex items-center gap-1.5">
-                <span className="text-gray-400">Sampai: Bar</span>
-                <IntField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={setLoopEndBar} ariaLabel="loopEndBar" />
-                <span className="text-gray-400">Step</span>
-                <IntField min={1} max={stepsPerBar} value={loopEndBeat} onChange={setLoopEndBeat} ariaLabel="loopEndBeat" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-black/30 p-3.5 rounded-xl border border-white/[0.06] space-y-3">
-          {activeTab === 'drum' ? (
+        {activeTab === 'drum' && (
+          <div className="bg-black/30 p-3.5 rounded-xl border border-white/[0.06]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-gray-300">Pilih Drum Kit:</span>
               {DRUM_KITS.map((kit) => (
@@ -2040,170 +2139,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 </button>
               ))}
             </div>
-          ) : (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between flex-wrap gap-2">
-                <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">
-                  Preset Instrumen & Mixer Saluran (4 Progresi Akor)
-                </span>
-                {engineStatus && (
-                  <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1.5 flex-wrap ${
-                      bankState === 'error'
-                        ? 'text-red-300 bg-red-500/10 border-red-500/30'
-                        : 'text-accent bg-accent/10 border-accent/20'
-                    }`}
-                  >
-                    <span>{engineStatus}</span>
-                    {bankState === 'loading' && <span className="text-gray-400">· suara sementara aktif</span>}
-                    {bankState === 'error' && (
-                      <button
-                        type="button"
-                        onClick={() => void audioEngine.retryBank()}
-                        className="underline font-bold cursor-pointer text-red-200 hover:text-white"
-                      >
-                        Coba lagi
-                      </button>
-                    )}
-                  </span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {chordTracks.map((track, tIdx) => {
-                  if (!track.enabled) return null;
-                  return (
-                    <div
-                      key={track.id}
-                      className="flex items-center justify-between gap-2.5 bg-black/50 border border-white/[0.08] rounded-xl px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-xs font-bold text-gray-300 shrink-0">
-                          {tIdx === 0 ? 'Instrumen 1:' : `Instrumen ${track.id}:`}
-                        </span>
-
-                        <select
-                          value={track.program}
-                          onChange={(e) => {
-                            const prg = Number(e.target.value);
-                            if (!isUnlocked8Bar && prg > 7) {
-                              onUnlockEditor();
-                              return;
-                            }
-                            updateTrack(tIdx, { program: prg });
-                          }}
-                          className="bg-black/80 text-white text-xs font-medium px-2 py-1 rounded-lg border border-white/[0.15] focus:border-accent outline-none min-w-0 flex-1 truncate cursor-pointer"
-                        >
-                          {INSTRUMENT_CATEGORIES.map((cat) => {
-                            const isCatLocked = !isUnlocked8Bar && cat !== 'Piano';
-                            return (
-                              <optgroup
-                                key={cat}
-                                label={`${isCatLocked ? '🔒 ' : ''}── ${cat} ──`}
-                                className="bg-surface text-gray-300 font-bold"
-                              >
-                                {INSTRUMENTS_128.filter((i) => i.category === cat).map((inst) => (
-                                  <option
-                                    key={inst.id}
-                                    value={inst.id}
-                                    disabled={isCatLocked}
-                                    className={`text-white font-normal bg-black ${isCatLocked ? 'opacity-40 text-gray-500' : ''}`}
-                                  >
-                                    #{inst.id + 1} {inst.name}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <div className="flex items-center gap-1.5 bg-black/60 px-2 py-1 rounded-lg border border-white/[0.06]">
-                          <Volume2 className="w-3 h-3 text-gray-400" />
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={track.volume}
-                            onChange={(e) => updateTrack(tIdx, { volume: Number(e.target.value) })}
-                            className="w-14 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
-                            title={`Volume ${track.label}: ${track.volume}%`}
-                          />
-                          <span className="text-[10px] font-mono text-gray-300 w-6 text-right">
-                            {track.volume}%
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleMute(tIdx)}
-                          className={`w-6 h-6 rounded text-[10px] font-black transition-colors cursor-pointer flex items-center justify-center ${
-                            track.muted
-                              ? 'bg-red-500 text-white'
-                              : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
-                          }`}
-                          title={track.muted ? 'Buka Mute' : 'Mute Instrumen'}
-                        >
-                          M
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => toggleSolo(tIdx)}
-                          className={`w-6 h-6 rounded text-[10px] font-black transition-colors cursor-pointer flex items-center justify-center ${
-                            track.solo
-                              ? 'bg-accent text-on-accent font-extrabold'
-                              : 'bg-white/5 text-gray-400 hover:text-white border border-white/10'
-                          }`}
-                          title={track.solo ? 'Buka Isolate' : 'Isolate (Solo) Instrumen'}
-                        >
-                          S
-                        </button>
-
-                        {tIdx > 0 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateTrack(tIdx, { enabled: false, ...emptyTrackData(totalSteps) });
-                              stopAllLiveChords();
-                            }}
-                            className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors cursor-pointer"
-                            title={`Hapus ${track.label}`}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {chordTracks.some((t) => !t.enabled) && (
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!isUnlocked8Bar) {
-                        onUnlockEditor();
-                        return;
-                      }
-                      const firstDisabledIdx = chordTracks.findIndex((t) => !t.enabled);
-                      if (firstDisabledIdx !== -1) {
-                        updateTrack(firstDisabledIdx, { enabled: true });
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-dashed border-accent/50 text-accent hover:bg-accent/10 cursor-pointer transition-colors"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Tambah Progresi Instrumen ({chordTracks.filter((t) => t.enabled).length + 1}/4)</span>
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="p-4 rounded-xl bg-black/40 border border-white/[0.06]">
           <div className="flex items-center justify-between mb-3">
@@ -2212,6 +2149,27 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 ? `Live Drum Trigger Pads (${selectedDrumKit})`
                 : `Live Harmonic Chords — #${chordTracks[0].program + 1} ${INSTRUMENTS_128.find((i) => i.id === chordTracks[0].program)?.name || 'Piano'}`}
             </span>
+            {activeTab === 'chord' && engineStatus && (
+              <span
+                className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1.5 flex-wrap ${
+                  bankState === 'error'
+                    ? 'text-red-300 bg-red-500/10 border-red-500/30'
+                    : 'text-accent bg-accent/10 border-accent/20'
+                }`}
+              >
+                <span>{engineStatus}</span>
+                {bankState === 'loading' && <span className="text-gray-400">· suara sementara aktif</span>}
+                {bankState === 'error' && (
+                  <button
+                    type="button"
+                    onClick={() => void audioEngine.retryBank()}
+                    className="underline font-bold cursor-pointer text-red-200 hover:text-white"
+                  >
+                    Coba lagi
+                  </button>
+                )}
+              </span>
+            )}
           </div>
 
           {activeTab === 'drum' ? (
@@ -2288,6 +2246,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   ))}
                 </select>
               </label>
+              <div className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1">
+                <Repeat className="w-3 h-3 text-accent" />
+                <span className="font-bold text-accent">Loop</span>
+                <span>Bar</span>
+                <IntField min={1} max={TOTAL_BARS} value={loopStartBar} onChange={setLoopStartBar} ariaLabel="Loop mulai bar" />
+                <span>Step</span>
+                <IntField min={1} max={stepsPerBar} value={loopStartBeat} onChange={setLoopStartBeat} ariaLabel="Loop mulai step" />
+                <span>—</span>
+                <span>Bar</span>
+                <IntField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={setLoopEndBar} ariaLabel="Loop sampai bar" />
+                <span>Step</span>
+                <IntField min={1} max={stepsPerBar} value={loopEndBeat} onChange={setLoopEndBeat} ariaLabel="Loop sampai step" />
+              </div>
+              {!isUnlocked8Bar && (
+                <button type="button" onClick={onUnlockEditor} className="text-[11px] text-accent hover:underline font-semibold cursor-pointer">
+                  Buka 16-Bar →
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setFollowPlayhead((f) => !f)}
@@ -2445,7 +2421,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           >
             <div className="space-y-2" style={{ minWidth: gridMinWidth }}>
               <div className="flex items-center gap-2">
-                <div className="w-36 shrink-0 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-1">
+                <div className={`${LABEL_W} shrink-0 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-1`}>
                   SEGMEN BAR
                 </div>
                 <div className="grid gap-0.5 flex-1" style={gridStyle}>
@@ -2464,26 +2440,42 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="w-36 shrink-0 flex items-center justify-between bg-black/60 border border-white/10 rounded-xl px-2.5 py-1">
-                  <span className="text-[11px] font-bold text-accent tracking-tight">Titik Putar</span>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={resetToBeginning}
-                      className="p-1 rounded-md bg-white/5 hover:bg-white/15 text-gray-300 transition-colors"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setIsSeqLooping(!isSeqLooping)}
-                      className={`p-1 rounded-md transition-all ${
-                        isSeqLooping ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-white/5 text-gray-500'
-                      }`}
-                    >
-                      <Repeat className="w-3 h-3" />
-                    </button>
-                  </div>
+                <div className={`${LABEL_W} shrink-0 flex items-center gap-1 bg-black/60 border border-white/10 rounded-xl px-1.5 py-1`}>
+                  {(() => {
+                    const playing = activeTab === 'drum' ? isDrumLoopActive : isChordLoopActive;
+                    const partName = activeTab === 'drum' ? 'Drum' : 'Akor';
+                    return (
+                      <button
+                        type="button"
+                        onClick={activeTab === 'drum' ? toggleDrumLoop : toggleChordLoop}
+                        title={`${playing ? 'Hentikan' : 'Putar'} ${partName} (loop)`}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                          playing ? 'bg-accent text-on-accent shadow-md' : 'bg-white/5 text-gray-200 hover:bg-white/10'
+                        }`}
+                      >
+                        {playing ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+                        <span>{playing ? 'Stop' : 'Putar'} {partName}</span>
+                      </button>
+                    );
+                  })()}
+                  <button
+                    type="button"
+                    onClick={resetToBeginning}
+                    title="Mulai dari awal"
+                    className="p-1.5 rounded-md bg-white/5 hover:bg-white/15 text-gray-300 transition-colors cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsSeqLooping(!isSeqLooping)}
+                    title={isSeqLooping ? 'Loop aktif' : 'Loop mati'}
+                    className={`p-1.5 rounded-md transition-all cursor-pointer ${
+                      isSeqLooping ? 'bg-accent/20 text-accent border border-accent/40' : 'bg-white/5 text-gray-500'
+                    }`}
+                  >
+                    <Repeat className="w-3 h-3" />
+                  </button>
                 </div>
 
                 <div className="grid gap-0.5 flex-1" style={gridStyle}>
@@ -2508,6 +2500,42 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 </div>
               </div>
 
+              <div className="flex items-start gap-2">
+                <div className={`${LABEL_W} shrink-0`}>
+                  <button
+                    type="button"
+                    onClick={() => setMasterVolOpen((o) => !o)}
+                    aria-expanded={masterVolOpen}
+                    className="w-full flex items-center justify-between gap-2 bg-black/60 border border-white/10 hover:border-white/25 rounded-xl px-2.5 py-1.5 text-[11px] font-bold text-gray-200 cursor-pointer transition-colors"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <Volume2 className="w-3.5 h-3.5 text-gray-400" />
+                      {activeTab === 'drum' ? 'Volume Drum' : 'Volume Akor'}
+                    </span>
+                    <span className="flex items-center gap-1 font-mono text-accent">
+                      {activeTab === 'drum' ? drumVolume : chordMasterVolume}%
+                      <ChevronDown className={`w-3 h-3 transition-transform ${masterVolOpen ? 'rotate-180' : ''}`} />
+                    </span>
+                  </button>
+                  {masterVolOpen && (
+                    <div className="mt-1 bg-black/60 border border-white/10 rounded-xl px-2.5 py-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={activeTab === 'drum' ? drumVolume : chordMasterVolume}
+                        aria-label={activeTab === 'drum' ? 'Volume drum utama' : 'Volume akor utama'}
+                        onChange={(e) =>
+                          activeTab === 'drum' ? setDrumVolume(Number(e.target.value)) : setChordMasterVolume(Number(e.target.value))
+                        }
+                        className="w-full h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
+                      />
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1" />
+              </div>
+
               {activeTab === 'drum' ? (
                 <div className="space-y-1.5 pt-1">
                   {DRUM_INSTRUMENTS.map((inst, di) => {
@@ -2518,6 +2546,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         rowIdx={di}
                         id={inst.id}
                         label={inst.label}
+                        mix={drumMix[inst.id]}
+                        onMix={updateDrumMix}
+                        onAdsr={updateDrumAdsr}
                         row={drumGrid[inst.id]}
                         steps={windowSteps}
                         stepsPerBar={stepsPerBar}
@@ -2539,6 +2570,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         selS2={activeSel !== null && tIdx >= activeSel.r1 && tIdx <= activeSel.r2 ? activeSel.s2 : -1}
                         getMode={getMode}
                         onResize={resizeChordNote}
+                        onUpdateTrack={updateTrack}
+                        onUpdateAdsr={updateTrackAdsr}
+                        onPickInstrument={openInstrumentPicker}
+                        onRemove={removeTrack}
                         key={track.id}
                         tIdx={tIdx}
                         track={track}
@@ -2553,12 +2588,35 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       />
                     ) : null
                   )}
+                  {chordTracks.some((t) => !t.enabled) && (
+                    <button
+                      type="button"
+                      onClick={addChordTrack}
+                      className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border border-dashed border-accent/50 text-accent text-xs font-bold hover:bg-accent/10 cursor-pointer transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Tambah baris instrumen ({chordTracks.filter((t) => t.enabled).length + 1}/4)</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </div>
       </div>
+
+      <InstrumentPickerModal
+        isOpen={pickerTrack !== null}
+        title={pickerTrack !== null ? chordTracks[pickerTrack]?.label ?? '' : ''}
+        currentProgram={pickerTrack !== null ? chordTracks[pickerTrack]?.program ?? 0 : 0}
+        isUnlocked={Boolean(isUnlocked8Bar)}
+        onSelect={(program) => {
+          if (pickerTrack !== null) updateTrack(pickerTrack, { program });
+          setPickerTrack(null);
+        }}
+        onLockedClick={onUnlockEditor}
+        onClose={() => setPickerTrack(null)}
+      />
 
       {editingPadIndex !== null && (
         <ModalPortal>
@@ -2808,12 +2866,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         bpm={bpm}
         drumGrid={drumGrid}
         chordTracksData={exportChordTracksData}
-        drumAdsr={{
-          attack: drumAttackVal,
-          decay: drumDecayVal,
-          sustain: drumSustainVal,
-          release: drumReleaseVal,
-        }}
+        drumMix={drumMix}
         drumVolume={drumVolume / 100}
         selectedDrumKit={selectedDrumKit}
         onSuccessToast={onSuccessToast}

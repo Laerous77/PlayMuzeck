@@ -9,6 +9,28 @@ import { DRUM_LEVEL_GAIN, DRUM_LEVEL_MIDI, clampLevel } from './padModel';
 
 export type ExportScope = 'drum' | 'chord' | 'both';
 
+// Mixer per instrumen drum (volume 0–100, mute/solo, envelope sendiri).
+export interface DrumMixExport {
+  volume: number;
+  muted?: boolean;
+  solo?: boolean;
+  adsr: EnvelopeADSR;
+}
+
+const DRUM_LABELS: Record<string, string> = {
+  kick: 'Kick',
+  snare: 'Snare',
+  clap: 'Clap',
+  closedhat: 'Closed Hat',
+  openhat: 'Open Hat',
+  tom: 'Tom',
+  splash: 'Splash',
+  ride: 'Ride',
+  perc: 'Percussion',
+  percussion: 'Percussion',
+  fx: 'FX / Impact',
+};
+
 export interface ChordTrackExportData {
   id: number;
   name: string;
@@ -37,6 +59,7 @@ interface ExportPatternModalProps {
   drumGrid: { [key: string]: number[] }; // level kekuatan 0–4 per step
   chordTracksData?: ChordTrackExportData[];
   drumAdsr?: EnvelopeADSR;
+  drumMix?: Record<string, DrumMixExport>;
   drumVolume?: number;
   selectedDrumKit?: string;
   onSuccessToast: (msg: string) => void;
@@ -109,6 +132,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
   drumGrid,
   chordTracksData = [],
   drumAdsr,
+  drumMix,
   drumVolume = 1.0,
   selectedDrumKit = '80s Kit',
   onSuccessToast,
@@ -120,6 +144,15 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
 }) => {
   const scope: ExportScope = exportScope ?? tab;
   const activeDrumAdsr: EnvelopeADSR = drumAdsr ?? DEFAULT_DRUM_ADSR;
+  const anyDrumSolo = Boolean(drumMix && Object.values(drumMix).some((m) => m.solo));
+  // Pengali volume per drum (0 jika di-mute / bukan solo saat ada solo) dan envelope-nya.
+  const drumPartGain = (id: string): number => {
+    const m = drumMix?.[id];
+    if (!m) return 1;
+    if (m.muted || (anyDrumSolo && !m.solo)) return 0;
+    return Math.max(0, Math.min(1, m.volume / 100));
+  };
+  const drumPartAdsr = (id: string): EnvelopeADSR => drumMix?.[id]?.adsr ?? activeDrumAdsr;
   const totalStepsAvailable = totalBars * stepsPerBar;
 
   const tracks: ChordTrackExportData[] = chordTracksData.length > 0
@@ -194,8 +227,10 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
       const noteNumber = DRUM_NOTE_MAP[instId] || 36;
       drumGrid[instId].forEach((rawLevel, step) => {
         const level = clampLevel(rawLevel);
-        if (level > 0 && step >= fromStep && step <= toStep) {
-          events.push({ step: step - fromStep, note: noteNumber, velocity: DRUM_LEVEL_MIDI[level], isDrum: true, durationSteps: 1 });
+        const gain = drumPartGain(instId);
+        if (level > 0 && gain > 0 && step >= fromStep && step <= toStep) {
+          const velocity = Math.max(1, Math.round(DRUM_LEVEL_MIDI[level] * gain));
+          events.push({ step: step - fromStep, note: noteNumber, velocity, isDrum: true, durationSteps: 1 });
         }
       });
     });
@@ -269,7 +304,12 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
         // JIKA BUKAN LOOP: Batasi ekor rilis maksimal 1.0 detik (tanpa padding +0.5s yang memicu hening panjang).
         const tailSec = exportAsLoop
           ? 0
-          : Math.min(1.0, Math.max(0.1, activeDrumAdsr.release, ...activeTracks.map((t) => t.adsr.release)));
+          : Math.min(1.0, Math.max(
+              0.1,
+              activeDrumAdsr.release,
+              ...Object.values(drumMix ?? {}).map((m) => m.adsr.release),
+              ...activeTracks.map((t) => t.adsr.release)
+            ));
 
         const durationSec = musicalDurationSec + tailSec;
         const sampleRate = 44100;
@@ -304,16 +344,17 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
         const renderDrumHitsForStep = (step: number, time: number) => {
           drumParts.forEach((part) => {
             const level = clampLevel(drumGrid[part]?.[step]);
-            if (level > 0) {
+            const partGain = drumPartGain(part);
+            if (level > 0 && partGain > 0) {
               audioEngine.renderDrumHitToDestination(
                 offlineCtx,
                 master,
                 part,
                 selectedDrumKit,
                 time,
-                drumVolume * DRUM_LEVEL_GAIN[level],
+                drumVolume * DRUM_LEVEL_GAIN[level] * partGain,
                 drumBufferByPart[part],
-                activeDrumAdsr
+                drumPartAdsr(part)
               );
             }
           });
@@ -424,13 +465,27 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           )}
 
           {(scope === 'drum' || scope === 'both') && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between text-gray-300 bg-white/[0.02] px-2.5 py-1.5 rounded-lg border border-white/[0.04]">
-              <span className="font-bold text-amber-300">
-                Drum ({selectedDrumKit}):
-              </span>
-              <span className="font-mono text-gray-300 text-[10.5px]">
-                attack = {formatTimeVal(activeDrumAdsr.attack)}, decay = {formatTimeVal(activeDrumAdsr.decay)}, sustain = {(activeDrumAdsr.sustain * 100).toFixed(0)}%, release = {formatTimeVal(activeDrumAdsr.release)}
-              </span>
+            <div className="space-y-1.5">
+              {(drumMix
+                ? Object.keys(drumGrid).filter((id) => drumGrid[id]?.some((v) => clampLevel(v) > 0) && drumPartGain(id) > 0)
+                : ['__all__']
+              ).map((id) => {
+                const adsr = id === '__all__' ? activeDrumAdsr : drumPartAdsr(id);
+                return (
+                  <div
+                    key={id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between text-gray-300 bg-white/[0.02] px-2.5 py-1.5 rounded-lg border border-white/[0.04]"
+                  >
+                    <span className="font-bold text-amber-300">
+                      {id === '__all__' ? `Drum (${selectedDrumKit})` : `${DRUM_LABELS[id] ?? id} (${selectedDrumKit})`}
+                      {id !== '__all__' && drumMix?.[id] ? ` · vol ${Math.round(drumMix[id].volume)}%` : ''}:
+                    </span>
+                    <span className="font-mono text-gray-300 text-[10.5px]">
+                      attack = {formatTimeVal(adsr.attack)}, decay = {formatTimeVal(adsr.decay)}, sustain = {(adsr.sustain * 100).toFixed(0)}%, release = {formatTimeVal(adsr.release)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
