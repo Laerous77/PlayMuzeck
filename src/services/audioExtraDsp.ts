@@ -563,37 +563,114 @@ export function normalizePeak(ch: Channels, targetDb = -1): { channels: Channels
 
 // ───────────────────────── Metronom (render ke berkas) ─────────────────────────
 
+/** Pola subdivisi dalam satu pulsa. `offsets` = posisi klik sebagai pecahan pulsa (0 = jatuh di pulsa). */
+export interface Subdivision { id: string; label: string; hint: string; offsets: number[]; }
+
+const even = (n: number) => Array.from({ length: n }, (_, i) => i / n);
+export const SUBDIVISIONS: Subdivision[] = [
+  { id: 'quarter', label: 'Quarter note (♩)', hint: '1 klik per pulsa', offsets: [0] },
+  { id: 'eighth', label: 'Eighth notes (♪♪)', hint: '2 klik per pulsa', offsets: even(2) },
+  { id: 'triplet', label: 'Eighth-note triplet', hint: '3 klik per pulsa (3:2)', offsets: even(3) },
+  { id: 'sixteenth', label: 'Sixteenth notes', hint: '4 klik per pulsa', offsets: even(4) },
+  { id: 'quintuplet', label: 'Quintuplet', hint: '5 klik per pulsa (5:4)', offsets: even(5) },
+  { id: 'sextuplet', label: 'Sextuplet', hint: '6 klik per pulsa (6:4)', offsets: even(6) },
+  { id: 'swing', label: 'Swing eighths (2:1)', hint: 'Klik ke-2 di 2/3 pulsa, feel shuffle', offsets: [0, 2 / 3] },
+  { id: 'gallop', label: 'Eighth + 2 sixteenths', hint: 'Pola gallop: 1 – – & a', offsets: [0, 0.5, 0.75] },
+  { id: 'revgallop', label: '2 sixteenths + eighth', hint: 'Pola reverse gallop: 1 e &', offsets: [0, 0.25, 0.5] },
+];
+
+/** Birama. `pulses` = jumlah pulsa per bar; BPM mengacu pada satu pulsa (nilai nada di penyebut). */
+export interface TimeSignature { id: string; label: string; pulses: number; accents: Accent[]; }
+/** 0 = senyap, 1 = normal, 2 = aksen. */
+export type Accent = 0 | 1 | 2;
+
+const acc = (n: number, strong: number[]): Accent[] => Array.from({ length: n }, (_, i) => (strong.includes(i) ? 2 : 1) as Accent);
+export const TIME_SIGNATURES: TimeSignature[] = [
+  { id: '2/4', label: '2/4', pulses: 2, accents: acc(2, [0]) },
+  { id: '3/4', label: '3/4 (waltz)', pulses: 3, accents: acc(3, [0]) },
+  { id: '4/4', label: '4/4 (common time)', pulses: 4, accents: acc(4, [0]) },
+  { id: '5/4', label: '5/4 (3+2)', pulses: 5, accents: acc(5, [0, 3]) },
+  { id: '6/8', label: '6/8 (3+3, compound duple)', pulses: 6, accents: acc(6, [0, 3]) },
+  { id: '7/8', label: '7/8 (2+2+3)', pulses: 7, accents: acc(7, [0, 2, 4]) },
+  { id: '9/8', label: '9/8 (3+3+3, compound triple)', pulses: 9, accents: acc(9, [0, 3, 6]) },
+  { id: '12/8', label: '12/8 (3+3+3+3, compound quadruple)', pulses: 12, accents: acc(12, [0, 3, 6, 9]) },
+];
+
+/** Karakter bunyi klik. `accent`/`normal`/`sub` = frekuensi (Hz); `decay` = peluruhan envelope; `noise` = campuran derau (0..1). */
+export interface ClickSound { id: string; label: string; accent: number; normal: number; sub: number; decay: number; noise: number; wave: 'sine' | 'square' | 'triangle'; }
+export const CLICK_SOUNDS: ClickSound[] = [
+  { id: 'beep', label: 'Beep (sine)', accent: 1600, normal: 1000, sub: 700, decay: 90, noise: 0, wave: 'sine' },
+  { id: 'woodblock', label: 'Woodblock', accent: 1150, normal: 820, sub: 620, decay: 160, noise: 0.08, wave: 'triangle' },
+  { id: 'rimshot', label: 'Rimshot / klik tajam', accent: 2400, normal: 1800, sub: 1300, decay: 260, noise: 0.35, wave: 'square' },
+  { id: 'hihat', label: 'Hi-hat (derau)', accent: 7000, normal: 6000, sub: 5000, decay: 320, noise: 0.95, wave: 'sine' },
+  { id: 'cowbell', label: 'Cowbell', accent: 800, normal: 540, sub: 400, decay: 55, noise: 0, wave: 'square' },
+];
+
 export interface MetronomeRenderOptions {
   bpm: number;
+  /** Jumlah pulsa per bar (pembilang birama). */
   beatsPerBar: number;
   bars: number;
-  /** 1 = hanya beat, 2 = per setengah beat, 3 = triplet, 4 = per seperempat beat. */
+  /** Id SUBDIVISIONS. Default 'quarter'. */
+  subdivisionId?: string;
+  /** Kompatibilitas lama: 1 = quarter, 2 = eighth, 3 = triplet, 4 = sixteenth. Diabaikan bila subdivisionId diisi. */
   subdivision?: number;
+  /** Aksen per pulsa (0 senyap, 1 normal, 2 aksen). Default: pulsa 1 = aksen, lainnya normal. */
+  accents?: Accent[];
+  /** Id CLICK_SOUNDS. Default 'beep'. */
+  sound?: string;
   sampleRate?: number;
 }
 
-/** Hasilkan loop klik metronom mono. Beat 1 = nada tinggi, beat lain = sedang, subdivisi = pelan. */
+const LEGACY_SUB = ['quarter', 'eighth', 'triplet', 'sixteenth'];
+export const getSubdivision = (id?: string): Subdivision => SUBDIVISIONS.find((x) => x.id === id) ?? SUBDIVISIONS[0];
+export const getClickSound = (id?: string): ClickSound => CLICK_SOUNDS.find((x) => x.id === id) ?? CLICK_SOUNDS[0];
+
+/** Istilah tempo klasik (Italia) untuk BPM yang diberikan. */
+export function tempoMarking(bpm: number): string {
+  if (bpm < 40) return 'Grave';
+  if (bpm < 60) return 'Largo';
+  if (bpm < 66) return 'Larghetto';
+  if (bpm < 76) return 'Adagio';
+  if (bpm < 108) return 'Andante';
+  if (bpm < 120) return 'Moderato';
+  if (bpm < 156) return 'Allegro';
+  if (bpm < 176) return 'Vivace';
+  if (bpm < 200) return 'Presto';
+  return 'Prestissimo';
+}
+
+/** Hasilkan loop klik metronom mono. Aksen mengikuti pola per pulsa; subdivisi memakai bunyi lebih pelan. */
 export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
   const sr = opts.sampleRate ?? 44100;
-  const sub = Math.max(1, Math.min(4, Math.round(opts.subdivision ?? 1)));
-  const beatSamples = (60 / opts.bpm) * sr;
-  const total = Math.round(beatSamples * opts.beatsPerBar * opts.bars);
+  const sub = getSubdivision(opts.subdivisionId ?? (opts.subdivision !== undefined ? LEGACY_SUB[Math.max(1, Math.min(4, Math.round(opts.subdivision))) - 1] : undefined));
+  const snd = getClickSound(opts.sound);
+  const pulses = Math.max(1, Math.round(opts.beatsPerBar));
+  const accents: Accent[] = Array.from({ length: pulses }, (_, i) => opts.accents?.[i] ?? (i === 0 ? 2 : 1));
+  const pulseSamples = (60 / opts.bpm) * sr;
+  const total = Math.round(pulseSamples * pulses * opts.bars);
   const out = new Float32Array(total);
+  let seed = 1234567; // derau deterministik agar hasil ekspor konsisten
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xffffffff * 2 - 1; };
   const click = (startSample: number, freq: number, amp: number) => {
-    const len = Math.round(0.045 * sr);
+    const len = Math.round(0.06 * sr);
     for (let i = 0; i < len && startSample + i < total; i++) {
       const t = i / sr;
-      const env = Math.exp(-t * 90);
-      out[startSample + i] += Math.sin(2 * Math.PI * freq * t) * env * amp;
+      const env = Math.exp(-t * snd.decay);
+      const ph = 2 * Math.PI * freq * t;
+      const tone = snd.wave === 'sine' ? Math.sin(ph) : snd.wave === 'square' ? Math.sign(Math.sin(ph)) * 0.6 : (2 / Math.PI) * Math.asin(Math.sin(ph));
+      out[startSample + i] += (tone * (1 - snd.noise) + rnd() * snd.noise) * env * amp;
     }
   };
-  const totalTicks = opts.beatsPerBar * opts.bars * sub;
-  for (let k = 0; k < totalTicks; k++) {
-    const start = Math.round((k * beatSamples) / sub);
-    const beatIndex = Math.floor(k / sub);
-    const isBeat = k % sub === 0;
-    if (isBeat) click(start, beatIndex % opts.beatsPerBar === 0 ? 1600 : 1000, 0.8);
-    else click(start, 700, 0.35);
+  for (let p = 0; p < pulses * opts.bars; p++) {
+    const a = accents[p % pulses];
+    sub.offsets.forEach((off, j) => {
+      const start = Math.round((p + off) * pulseSamples);
+      if (j === 0) {
+        if (a === 2) click(start, snd.accent, 0.8);
+        else if (a === 1) click(start, snd.normal, 0.6);
+      } else click(start, snd.sub, 0.3);
+    });
   }
   return out;
 }
@@ -659,17 +736,55 @@ export function freqToNote(freq: number, a4 = 440): NoteInfo {
 }
 
 export interface TuningString { label: string; midi: number; }
-export interface TuningPreset { id: string; name: string; strings: TuningString[]; }
+export interface TuningPreset { id: string; name: string; group: string; strings: TuningString[]; }
 
-const s = (label: string, midi: number): TuningString => ({ label, midi });
+const NOTE_LABELS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const noteLabel = (midi: number) => `${NOTE_LABELS[((midi % 12) + 12) % 12]}${Math.floor(midi / 12) - 1}`;
+/** Buat deret senar dari nomor MIDI (urut dari senar terendah ke tertinggi). */
+const strs = (...midis: number[]): TuningString[] => midis.map((m) => ({ label: noteLabel(m), midi: m }));
+const pre = (id: string, name: string, group: string, ...midis: number[]): TuningPreset => ({ id, name, group, strings: strs(...midis) });
+
 export const TUNING_PRESETS: TuningPreset[] = [
-  { id: 'chromatic', name: 'Kromatik (semua nada / vokal)', strings: [] },
-  { id: 'guitar', name: 'Gitar standar (E A D G B E)', strings: [s('E2', 40), s('A2', 45), s('D3', 50), s('G3', 55), s('B3', 59), s('E4', 64)] },
-  { id: 'guitar-dropd', name: 'Gitar Drop D', strings: [s('D2', 38), s('A2', 45), s('D3', 50), s('G3', 55), s('B3', 59), s('E4', 64)] },
-  { id: 'bass', name: 'Bass 4 senar (E A D G)', strings: [s('E1', 28), s('A1', 33), s('D2', 38), s('G2', 43)] },
-  { id: 'ukulele', name: 'Ukulele (G C E A)', strings: [s('G4', 67), s('C4', 60), s('E4', 64), s('A4', 69)] },
-  { id: 'violin', name: 'Biola (G D A E)', strings: [s('G3', 55), s('D4', 62), s('A4', 69), s('E5', 76)] },
+  { id: 'chromatic', name: 'Kromatik (semua nada / vokal)', group: 'Umum', strings: [] },
+  // Gitar (MIDI: E2=40 A2=45 D3=50 G3=55 B3=59 E4=64)
+  pre('guitar', 'Standar (E A D G B E)', 'Gitar 6 senar', 40, 45, 50, 55, 59, 64),
+  pre('guitar-dropd', 'Drop D (D A D G B E)', 'Gitar 6 senar', 38, 45, 50, 55, 59, 64),
+  pre('guitar-halfdown', 'Half-step down (Eb Ab Db Gb Bb Eb)', 'Gitar 6 senar', 39, 44, 49, 54, 58, 63),
+  pre('guitar-fulldown', 'Whole-step down (D G C F A D)', 'Gitar 6 senar', 38, 43, 48, 53, 57, 62),
+  pre('guitar-dadgad', 'DADGAD (Celtic / fingerstyle)', 'Gitar 6 senar', 38, 45, 50, 55, 57, 62),
+  pre('guitar-opend', 'Open D (D A D F# A D)', 'Gitar 6 senar', 38, 45, 50, 54, 57, 62),
+  pre('guitar-openg', 'Open G (D G D G B D)', 'Gitar 6 senar', 38, 43, 50, 55, 59, 62),
+  pre('guitar-opene', 'Open E (E B E G# B E)', 'Gitar 6 senar', 40, 47, 52, 56, 59, 64),
+  pre('guitar7', 'Gitar 7 senar (B E A D G B E)', 'Gitar lain', 35, 40, 45, 50, 55, 59, 64),
+  pre('guitar-bari', 'Gitar bariton (B E A D F# B)', 'Gitar lain', 35, 40, 45, 50, 54, 59),
+  // Bass
+  pre('bass', 'Bass 4 senar (E A D G)', 'Bass', 28, 33, 38, 43),
+  pre('bass-dropd', 'Bass 4 senar Drop D (D A D G)', 'Bass', 26, 33, 38, 43),
+  pre('bass5', 'Bass 5 senar (B E A D G)', 'Bass', 23, 28, 33, 38, 43),
+  pre('bass6', 'Bass 6 senar (B E A D G C)', 'Bass', 23, 28, 33, 38, 43, 48),
+  // Ukulele & sejenisnya
+  pre('ukulele', 'Ukulele soprano/concert/tenor (G C E A)', 'Ukulele & sejenisnya', 67, 60, 64, 69),
+  pre('ukulele-lowg', 'Ukulele low-G (G C E A, G satu oktaf lebih rendah)', 'Ukulele & sejenisnya', 55, 60, 64, 69),
+  pre('ukulele-bari', 'Ukulele bariton (D G B E)', 'Ukulele & sejenisnya', 50, 55, 59, 64),
+  pre('ukulele-d', 'Ukulele D-tuning (A D F# B)', 'Ukulele & sejenisnya', 69, 62, 66, 71),
+  // Gesek
+  pre('violin', 'Biola / violin (G D A E)', 'Alat gesek', 55, 62, 69, 76),
+  pre('viola', 'Viola (C G D A)', 'Alat gesek', 48, 55, 62, 69),
+  pre('cello', 'Cello (C G D A)', 'Alat gesek', 36, 43, 50, 57),
+  pre('doublebass', 'Kontrabas (E A D G)', 'Alat gesek', 28, 33, 38, 43),
+  // Petik lainnya
+  pre('mandolin', 'Mandolin (G D A E)', 'Alat petik lain', 55, 62, 69, 76),
+  pre('banjo5', 'Banjo 5 senar (G D G B D)', 'Alat petik lain', 67, 50, 55, 59, 62),
+  pre('banjo-tenor', 'Banjo tenor (C G D A)', 'Alat petik lain', 48, 55, 62, 69),
+  pre('charango', 'Charango (G C E A E)', 'Alat petik lain', 67, 72, 76, 69, 76),
+  pre('bouzouki', 'Bouzouki Irlandia (G D A D)', 'Alat petik lain', 43, 50, 57, 62),
 ];
+
+/** Nada terendah di preset (Hz) — dipakai untuk menentukan batas bawah deteksi pitch. */
+export function lowestFreq(preset: TuningPreset, a4 = 440): number | null {
+  if (!preset.strings.length) return null;
+  return Math.min(...preset.strings.map((st) => midiToFreq(st.midi, a4)));
+}
 
 export function midiToFreq(midi: number, a4 = 440): number {
   return a4 * Math.pow(2, (midi - 69) / 12);

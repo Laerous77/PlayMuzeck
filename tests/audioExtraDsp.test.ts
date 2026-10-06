@@ -122,3 +122,52 @@ ok('freqToNote A4=440 -> A4 0c', (() => { const x = D.freqToNote(440); return x.
 ok('freqToNote 261.63 -> C4', (() => { const x = D.freqToNote(261.63); return x.name === 'C' && x.octave === 4; })());
 
 console.log(`\n${pass} pengujian lulus${process.exitCode ? ' (ADA YANG GAGAL)' : ''}`);
+
+// ── Metronom v2 (birama, subdivisi, aksen, suara)
+{
+  const bars = 2, bpm = 120;
+  for (const sub of D.SUBDIVISIONS) {
+    const m = D.renderMetronome({ bpm, beatsPerBar: 4, bars, subdivisionId: sub.id, sampleRate: sr });
+    ok(`Metronom subdivisi ${sub.id}: panjang tepat`, m.length === sr * 4 && D.peakOf([m]) <= 1);
+  }
+  for (const ts of D.TIME_SIGNATURES) ok(`Birama ${ts.id}: jumlah aksen = pulsa`, ts.accents.length === ts.pulses && ts.accents[0] === 2);
+  for (const snd of D.CLICK_SOUNDS) {
+    const m = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivisionId: 'sixteenth', sound: snd.id, sampleRate: sr });
+    ok(`Suara ${snd.id}: tidak clipping & tidak senyap`, D.peakOf([m]) <= 1 && D.peakOf([m]) > 0.1, `peak=${D.peakOf([m]).toFixed(2)}`);
+  }
+  // pulsa dimute -> awal bar tetap senyap
+  const muted = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, accents: [0, 1, 1, 1], sampleRate: sr });
+  ok('Pulsa 1 di-mute = senyap di awal bar', Math.max(...muted.subarray(0, 2000).map(Math.abs)) === 0);
+  // swing: klik kedua di 2/3 pulsa
+  const sw = D.renderMetronome({ bpm: 60, beatsPerBar: 1, bars: 1, subdivisionId: 'swing', accents: [0], sampleRate: sr });
+  const at = (x: Float32Array, a: number, b: number) => Math.max(...x.subarray(a, b).map(Math.abs));
+  ok('Swing: klik di 2/3 pulsa, bukan 1/2', at(sw, Math.round(sr * 2 / 3) + 10, Math.round(sr * 2 / 3) + 400) > 0.05 && at(sw, Math.round(sr / 2) + 10, Math.round(sr / 2) + 400) === 0);
+  // triplet: 3 klik per pulsa -> klik di 1/3
+  const tr = D.renderMetronome({ bpm: 60, beatsPerBar: 1, bars: 1, subdivisionId: 'triplet', accents: [0], sampleRate: sr });
+  ok('Triplet: klik di 1/3 pulsa', at(tr, Math.round(sr / 3) + 10, Math.round(sr / 3) + 400) > 0.05);
+  // kompatibilitas parameter lama
+  const legacy = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivision: 3, sampleRate: sr });
+  const modern = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivisionId: 'triplet', sampleRate: sr });
+  ok('subdivision lama (3) = triplet', legacy.length === modern.length && legacy.every((v, i) => v === modern[i]));
+  ok('Istilah tempo', D.tempoMarking(72) === 'Adagio' && D.tempoMarking(100) === 'Andante' && D.tempoMarking(128) === 'Allegro' && D.tempoMarking(210) === 'Prestissimo');
+}
+
+// ── Tuner v2 (banyak instrumen)
+{
+  const ids = new Set(D.TUNING_PRESETS.map((p) => p.id));
+  ok('Id preset unik', ids.size === D.TUNING_PRESETS.length);
+  ok('Preset tuner >= 25', D.TUNING_PRESETS.length >= 25, `${D.TUNING_PRESETS.length} preset`);
+  const lab = (id: string) => D.TUNING_PRESETS.find((p) => p.id === id)!.strings.map((x) => x.label).join(' ');
+  ok('Label gitar standar', lab('guitar') === 'E2 A2 D3 G3 B3 E4', lab('guitar'));
+  ok('Label bass 5 senar', lab('bass5') === 'B0 E1 A1 D2 G2', lab('bass5'));
+  ok('Label ukulele (re-entrant)', lab('ukulele') === 'G4 C4 E4 A4', lab('ukulele'));
+  ok('Label DADGAD', lab('guitar-dadgad') === 'D2 A2 D3 G3 A3 D4', lab('guitar-dadgad'));
+  ok('Label cello', lab('cello') === 'C2 G2 D3 A3', lab('cello'));
+  ok('Label bouzouki', lab('bouzouki') === 'G2 D3 A3 D4', lab('bouzouki'));
+  ok('Semua preset punya grup', D.TUNING_PRESETS.every((p) => !!p.group));
+  const lf = D.lowestFreq(D.TUNING_PRESETS.find((p) => p.id === 'bass5')!)!;
+  ok('Nada terendah bass 5 senar ≈ 30,87 Hz', Math.abs(lf - 30.87) < 0.05, lf.toFixed(2));
+  ok('lowestFreq kromatik = null', D.lowestFreq(D.TUNING_PRESETS[0]) === null);
+  // B0 (30,87 Hz) harus terdeteksi dengan buffer 8192 bila batas bawah diturunkan
+  for (const rate of [44100, 48000]) { const b = sine(30.87, 0.5, 0.5, rate).subarray(0, 8192); const p = D.detectPitch(b, rate, 25, 1400); ok(`Pitch bass B0 @${rate}`, !!p && Math.abs(1200 * Math.log2(p.freq / 30.87)) < 8, `-> ${p?.freq.toFixed(2)}Hz`); }
+}

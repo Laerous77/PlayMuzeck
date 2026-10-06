@@ -1,27 +1,32 @@
 // src/components/AudioStudio/AudioExtraTools.tsx
 //
-// 7 alat audio tambahan PlayMuzeck (semua diproses di browser, tanpa unggah ke server):
-//  1. Gabung Audio + Fade in/out      5. Hapus Hening + Normalisasi + Stereo ke Mono
-//  2. Deteksi BPM & Kunci Nada        6. Metronom (+ ekspor klik ke berkas)
-//  3. Perekam Suara + Trim            7. Tuner (gitar, bass, ukulele, biola, vokal)
-//  4. Pembuat Nada Dering
+// Alat audio tambahan PlayMuzeck (semua diproses di browser, tanpa unggah ke server).
+// Hanya alat yang TIDAK ada di "Audio Processing Tools Suite" (Trim, Volume, Pitch, Tempo, Reverse,
+// Convert, Compress, Noise Reduction, Vocal Isolator) agar tidak ada fitur kembar. Dikelompokkan per alur kerja:
+//
+//  Susun & Rapikan   : Gabung + Fade in/out  ·  Rapikan (hapus hening, normalisasi LUFS, stereo ke mono)
+//  Rekam & Analisis  : Perekam Suara + Trim  ·  Deteksi BPM & Kunci Nada
+//  Latihan Musik     : Metronom (birama, subdivisi, aksen, ekspor klik)  ·  Tuner (30+ preset instrumen)
+//
+// Catatan: "Pembuat Nada Dering" dihapus karena hanya kombinasi Trim/Cut (di Suite) + Fade (di Gabung & Fade).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Merge, Activity, Mic, BellRing, Eraser, Timer, AudioLines, Upload, Download, Play, Square,
-  Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle,
+  Merge, Activity, Mic, Eraser, Timer, AudioLines, Upload, Download, Play, Square,
+  Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle, Layers, Music, RotateCcw,
 } from 'lucide-react';
 import {
-  audioBufferToWav, downloadBlob, encodeCompressedAudio, exportAudioFile,
+  audioBufferToWav, downloadBlob, exportAudioFile,
 } from '../../services/exporters';
 import {
-  TUNING_PRESETS, applyFade, concatChannels, detectBpm, detectKey, detectPitch, freqToNote,
-  measureLufs, midiToFreq, nearestString, normalizeLoudness, peaksForDisplay, removeSilence,
-  renderMetronome, sliceChannels, toMono, type Channels, type FadeCurve, type TuningPreset,
+  CLICK_SOUNDS, SUBDIVISIONS, TIME_SIGNATURES, TUNING_PRESETS, applyFade, concatChannels, detectBpm, detectKey,
+  detectPitch, freqToNote, getClickSound, getSubdivision, lowestFreq, measureLufs, midiToFreq, nearestString,
+  normalizeLoudness, peaksForDisplay, removeSilence, renderMetronome, sliceChannels, tempoMarking, toMono,
+  type Accent, type Channels, type FadeCurve, type TuningPreset,
 } from '../../services/audioExtraDsp';
 
 // ───────────────────────── Tipe & konstanta ─────────────────────────
 
-export type ExtraToolId = 'merge' | 'bpm' | 'recorder' | 'ringtone' | 'clean' | 'metronome' | 'tuner';
+export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner';
 
 export interface AudioExtraToolsProps {
   /** Tool yang dibuka pertama kali (mis. dari URL /alat-audio/<slug>). */
@@ -38,7 +43,6 @@ export const EXTRA_SLUG_TO_TOOL: Record<string, ExtraToolId> = {
   'deteksi-bpm': 'bpm',
   'deteksi-kunci-nada': 'bpm',
   'rekam-suara': 'recorder',
-  'buat-nada-dering': 'ringtone',
   'hapus-hening-audio': 'clean',
   'normalisasi-volume-audio': 'clean',
   'stereo-ke-mono': 'clean',
@@ -46,15 +50,38 @@ export const EXTRA_SLUG_TO_TOOL: Record<string, ExtraToolId> = {
   'tuner-online': 'tuner',
 };
 
-const TABS: { id: ExtraToolId; label: string; icon: React.ElementType; desc: string; realtime?: boolean }[] = [
-  { id: 'merge', label: 'Gabung & Fade', icon: Merge, desc: 'Gabungkan beberapa audio, crossfade, fade in/out.' },
-  { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu.' },
-  { id: 'recorder', label: 'Perekam', icon: Mic, desc: 'Rekam suara dari mikrofon lalu potong.', realtime: true },
-  { id: 'ringtone', label: 'Nada Dering', icon: BellRing, desc: 'Potong bagian favorit jadi nada dering.' },
-  { id: 'clean', label: 'Bersihkan', icon: Eraser, desc: 'Hapus hening, normalisasi volume, stereo ke mono.' },
-  { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Metronom + unduh klik sebagai berkas.', realtime: true },
-  { id: 'tuner', label: 'Tuner', icon: AudioLines, desc: 'Setel gitar, bass, ukulele, biola, dan vokal.', realtime: true },
+type ToolMeta = { id: ExtraToolId; label: string; icon: React.ElementType; desc: string; realtime?: boolean };
+type GroupMeta = { id: string; label: string; icon: React.ElementType; desc: string; tools: ToolMeta[] };
+
+/** Alat dikelompokkan per alur kerja supaya pengguna tahu harus mulai dari mana. */
+const GROUPS: GroupMeta[] = [
+  {
+    id: 'edit', label: 'Susun & Rapikan', icon: Layers,
+    desc: 'Untuk file audio yang sudah kamu punya: sambung beberapa file, lalu bersihkan hasilnya.',
+    tools: [
+      { id: 'merge', label: 'Gabung & Fade', icon: Merge, desc: 'Gabungkan beberapa audio, crossfade, fade in/out (satu file = fade saja).' },
+      { id: 'clean', label: 'Rapikan Audio', icon: Eraser, desc: 'Hapus jeda hening, samakan loudness (LUFS), ubah stereo ke mono.' },
+    ],
+  },
+  {
+    id: 'record', label: 'Rekam & Analisis', icon: Mic,
+    desc: 'Ambil audio baru dari mikrofon, atau cari tahu tempo dan kunci nada sebuah lagu.',
+    tools: [
+      { id: 'recorder', label: 'Perekam', icon: Mic, desc: 'Rekam suara dari mikrofon, potong awal/akhir, lalu unduh.', realtime: true },
+      { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu.' },
+    ],
+  },
+  {
+    id: 'practice', label: 'Latihan Musik', icon: Music,
+    desc: 'Alat langsung (real-time) untuk berlatih: jaga tempo dan setel instrumen.',
+    tools: [
+      { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Birama, subdivisi, aksen per ketukan, dan ekspor klik ke berkas.', realtime: true },
+      { id: 'tuner', label: 'Tuner', icon: AudioLines, desc: 'Setel gitar, bass, ukulele, alat gesek, banjo, mandolin, dan vokal.', realtime: true },
+    ],
+  },
 ];
+const ALL_TOOLS: ToolMeta[] = GROUPS.flatMap((g) => g.tools);
+const groupOf = (id: ExtraToolId) => GROUPS.find((g) => g.tools.some((t) => t.id === id)) ?? GROUPS[0];
 
 // ───────────────────────── Helper umum ─────────────────────────
 
@@ -494,97 +521,7 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
   );
 };
 
-// ───────────────────────── 4. Pembuat Nada Dering ─────────────────────────
-
-const MAX_RING = 30;
-
-const RingtoneTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
-  const [fileName, setFileName] = useState('');
-  const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
-  const [start, setStart] = useState(0);
-  const [len, setLen] = useState(20);
-  const [fadeIn, setFadeIn] = useState(0.5);
-  const [fadeOut, setFadeOut] = useState(1.5);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
-  const onFiles = async ([f]: File[]) => {
-    setBusy(true); setErr(null); setInfo(null);
-    try {
-      const b = await decodeFile(f);
-      setBuffer(b); setFileName(f.name); setStart(0); setLen(Math.min(20, Math.floor(b.duration)));
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
-    finally { setBusy(false); }
-  };
-  const dur = buffer?.duration ?? 0;
-  const maxLen = Math.max(1, Math.min(MAX_RING, Math.floor(dur)));
-  const effLen = Math.min(len, maxLen);
-  const effStart = Math.min(start, Math.max(0, dur - effLen));
-
-  const ringBuffer = useMemo(() => {
-    if (!buffer) return null;
-    const sr = buffer.sampleRate;
-    let ch = sliceChannels(viewChannels(buffer), sr, effStart, effStart + effLen);
-    ch = applyFade(ch, sr, Math.min(fadeIn, effLen / 2), Math.min(fadeOut, effLen / 2), 'natural');
-    return ch[0].length ? toBuffer(ch, sr) : null;
-  }, [buffer, effStart, effLen, fadeIn, fadeOut]);
-  const peaks = useMemo(() => (buffer ? peaksForDisplay(viewChannels(buffer), 120) : new Float32Array(0)), [buffer]);
-  const name = `PlayMuzeck_NadaDering_${baseName(fileName)}`;
-
-  const downloadM4r = async () => {
-    if (!ringBuffer) return;
-    if (gate && !gate('ringtone')) return;
-    setBusy(true); setErr(null); setInfo(null);
-    try {
-      const r = await encodeCompressedAudio(ringBuffer, 192);
-      if (r.extension === 'm4a') {
-        downloadBlob(r.blob, `${name}.m4r`);
-        setInfo('File .m4r diunduh. Impor ke iPhone lewat Finder/iTunes (kabel) atau GarageBand.');
-        toast?.('Nada dering .m4r diunduh.');
-      } else {
-        setErr(`Browser ini menghasilkan .${r.extension}, bukan AAC (.m4a), jadi tidak bisa dijadikan .m4r. Gunakan MP3 untuk Android, atau buka situs ini di Safari untuk membuat .m4r.`);
-      }
-    } catch { setErr('Gagal membuat berkas .m4r di browser ini.'); }
-    finally { setBusy(false); }
-  };
-
-  return (
-    <Panel title="Pembuat Nada Dering">
-      <p className="text-xs text-gray-400">Pilih lagu milikmu, tentukan bagian terbaik (maksimal {MAX_RING} detik), lalu unduh sebagai nada dering. Pastikan kamu berhak memakai lagu tersebut.</p>
-      <FilePicker label={busy ? 'Membaca…' : buffer ? 'Ganti lagu' : 'Pilih lagu'} onFiles={onFiles} disabled={busy} />
-      <ErrorNote msg={err} />
-      {buffer && (
-        <div className="space-y-3">
-          <Waveform peaks={peaks} from={effStart / dur} to={(effStart + effLen) / dur} />
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <Field label={`Mulai: ${fmtTime(effStart)}`}>
-              <input type="range" min={0} max={Math.max(0, dur - effLen)} step={0.1} value={effStart} onChange={(e) => setStart(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
-            </Field>
-            <Field label={`Panjang: ${effLen.toFixed(0)} dtk`}>
-              <input type="range" min={Math.min(3, maxLen)} max={maxLen} step={1} value={effLen} onChange={(e) => setLen(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
-            </Field>
-            <Field label={`Fade in: ${fadeIn.toFixed(1)} dtk`}>
-              <input type="range" min={0} max={3} step={0.1} value={fadeIn} onChange={(e) => setFadeIn(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
-            </Field>
-            <Field label={`Fade out: ${fadeOut.toFixed(1)} dtk`}>
-              <input type="range" min={0} max={3} step={0.1} value={fadeOut} onChange={(e) => setFadeOut(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
-            </Field>
-          </div>
-          <Preview buffer={ringBuffer} />
-          <div className="space-y-2 rounded-xl border border-accent/30 bg-accent/5 p-3">
-            <p className="text-[11px] text-gray-300"><strong className="text-white">Android:</strong> unduh MP3 lalu pilih sebagai nada dering di Pengaturan. <strong className="text-white">iPhone:</strong> butuh format .m4r.</p>
-            <ExportPanel buffer={ringBuffer} fileName={name} toolId="ringtone" gate={gate} onDone={toast} />
-            <button type="button" onClick={downloadM4r} disabled={busy || !ringBuffer} className={btnGhost}><Download className="w-4 h-4" /><span>Unduh .m4r (iPhone)</span></button>
-            {info && <p className="text-[11px] text-emerald-300">{info}</p>}
-          </div>
-        </div>
-      )}
-    </Panel>
-  );
-};
-
-// ───────────────────────── 5. Bersihkan: hening, normalisasi, mono ─────────────────────────
+// ───────────────────────── Rapikan: hening, normalisasi, mono ─────────────────────────
 
 const LOUDNESS_PRESETS = [
   { id: 'podcast', label: 'Podcast (-16 LUFS)', lufs: -16 },
@@ -687,51 +624,100 @@ const CleanTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: str
   );
 };
 
-// ───────────────────────── 6. Metronom ─────────────────────────
+// ───────────────────────── Metronom ─────────────────────────
+
+const ACCENT_CYCLE: Accent[] = [2, 1, 0];
+const ACCENT_LABEL: Record<Accent, string> = { 2: 'aksen', 1: 'normal', 0: 'senyap' };
+const clampBpm = (n: number) => Math.max(30, Math.min(300, Math.round(n) || 100));
 
 const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
   const [bpm, setBpm] = useState(100);
-  const [beats, setBeats] = useState(4);
-  const [sub, setSub] = useState(1);
+  const [sigId, setSigId] = useState('4/4');
+  const [subId, setSubId] = useState('quarter');
+  const [soundId, setSoundId] = useState('beep');
+  const [vol, setVol] = useState(0.8);
+  const sig = TIME_SIGNATURES.find((t) => t.id === sigId) ?? TIME_SIGNATURES[2];
+  const [accents, setAccents] = useState<Accent[]>(sig.accents);
   const [running, setRunning] = useState(false);
   const [beat, setBeat] = useState(-1);
   const [bars, setBars] = useState(16);
   const [clickBuf, setClickBuf] = useState<AudioBuffer | null>(null);
-  const cfg = useRef({ bpm, beats, sub });
-  cfg.current = { bpm, beats, sub };
+  const sub = getSubdivision(subId);
+  const snd = getClickSound(soundId);
+  const cfg = useRef({ bpm, sig, sub, accents, snd, vol });
+  cfg.current = { bpm, sig, sub, accents, snd, vol };
   const ctxRef = useRef<AudioContext | null>(null);
+  const masterRef = useRef<GainNode | null>(null);
+  const noiseRef = useRef<AudioBuffer | null>(null);
   const timerRef = useRef<number | null>(null);
   const nextRef = useRef(0);
-  const tickRef = useRef(0);
+  const pulseStartRef = useRef(0);
+  const pulseRef = useRef(0);
+  const subRef = useRef(0);
   const tapsRef = useRef<number[]>([]);
+
+  const changeSig = (id: string) => {
+    const t = TIME_SIGNATURES.find((x) => x.id === id) ?? TIME_SIGNATURES[2];
+    setSigId(id); setAccents(t.accents); setClickBuf(null);
+  };
+  const cycleAccent = (i: number) => {
+    setAccents((prev) => prev.map((a, j) => (j === i ? ACCENT_CYCLE[(ACCENT_CYCLE.indexOf(a) + 1) % ACCENT_CYCLE.length] : a)));
+    setClickBuf(null);
+  };
 
   const stop = useCallback(() => {
     if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
-    void ctxRef.current?.close(); ctxRef.current = null;
+    void ctxRef.current?.close(); ctxRef.current = null; masterRef.current = null; noiseRef.current = null;
     setRunning(false); setBeat(-1);
   }, []);
   useEffect(() => stop, [stop]);
+  useEffect(() => { if (masterRef.current) masterRef.current.gain.value = vol; }, [vol]);
+
+  const playClick = (ctx: AudioContext, t: number, freq: number, amp: number, s: typeof snd) => {
+    const master = masterRef.current; if (!master) return;
+    const len = Math.min(0.08, 6.9 / s.decay);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    g.connect(master);
+    if (s.noise < 1) {
+      const osc = ctx.createOscillator(); const og = ctx.createGain();
+      osc.type = s.wave; osc.frequency.value = freq; og.gain.value = 1 - s.noise;
+      osc.connect(og); og.connect(g); osc.start(t); osc.stop(t + len + 0.01);
+    }
+    if (s.noise > 0 && noiseRef.current) {
+      const src = ctx.createBufferSource(); src.buffer = noiseRef.current;
+      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = freq * 0.7;
+      const ng = ctx.createGain(); ng.gain.value = s.noise;
+      src.connect(hp); hp.connect(ng); ng.connect(g); src.start(t); src.stop(t + len + 0.01);
+    }
+  };
 
   const schedule = () => {
     const ctx = ctxRef.current; if (!ctx) return;
     while (nextRef.current < ctx.currentTime + 0.12) {
-      const { bpm: b, beats: n, sub: s } = cfg.current;
-      const k = tickRef.current;
-      const isBeat = k % s === 0;
-      const beatIdx = Math.floor(k / s) % n;
-      const osc = ctx.createOscillator(); const g = ctx.createGain();
-      osc.frequency.value = isBeat ? (beatIdx === 0 ? 1600 : 1000) : 700;
-      const amp = isBeat ? 0.8 : 0.3; const t = nextRef.current;
-      g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-      osc.connect(g); g.connect(ctx.destination); osc.start(t); osc.stop(t + 0.06);
-      if (isBeat) window.setTimeout(() => setBeat(beatIdx), Math.max(0, (t - ctx.currentTime) * 1000));
-      nextRef.current += 60 / b / s; tickRef.current = k + 1;
+      const c = cfg.current; const dur = 60 / c.bpm; const offs = c.sub.offsets;
+      if (subRef.current >= offs.length) subRef.current = 0; // subdivisi diganti di tengah pulsa
+      const t = Math.max(nextRef.current, ctx.currentTime);
+      const pulse = pulseRef.current % c.sig.pulses;
+      const a = c.accents[pulse] ?? 1; const j = subRef.current;
+      if (j === 0) {
+        if (a === 2) playClick(ctx, t, c.snd.accent, 0.8, c.snd);
+        else if (a === 1) playClick(ctx, t, c.snd.normal, 0.6, c.snd);
+        window.setTimeout(() => setBeat(pulse), Math.max(0, (t - ctx.currentTime) * 1000));
+      } else playClick(ctx, t, c.snd.sub, 0.3, c.snd);
+      subRef.current = j + 1;
+      if (subRef.current < offs.length) nextRef.current = pulseStartRef.current + offs[subRef.current] * dur;
+      else { pulseStartRef.current += dur; pulseRef.current += 1; subRef.current = 0; nextRef.current = pulseStartRef.current; }
     }
   };
   const start = () => {
     stop();
     const ctx = new AudioCtx(); void ctx.resume();
-    ctxRef.current = ctx; nextRef.current = ctx.currentTime + 0.05; tickRef.current = 0;
+    const master = ctx.createGain(); master.gain.value = cfg.current.vol; master.connect(ctx.destination);
+    const noise = ctx.createBuffer(1, Math.round(ctx.sampleRate * 0.1), ctx.sampleRate);
+    const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    ctxRef.current = ctx; masterRef.current = master; noiseRef.current = noise;
+    pulseStartRef.current = ctx.currentTime + 0.05; nextRef.current = pulseStartRef.current; pulseRef.current = 0; subRef.current = 0;
     timerRef.current = window.setInterval(schedule, 25);
     setRunning(true);
   };
@@ -740,62 +726,80 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     const taps = tapsRef.current.filter((t) => now - t < 2500); taps.push(now); tapsRef.current = taps;
     if (taps.length >= 2) {
       const iv = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
-      setBpm(Math.max(30, Math.min(300, Math.round(60000 / iv))));
+      setBpm(clampBpm(60000 / iv));
     }
   };
-  const maxBars = Math.max(1, Math.floor(300 / ((60 / bpm) * beats)));
+  const maxBars = Math.max(1, Math.floor(300 / ((60 / bpm) * sig.pulses)));
   const makeFile = () => {
     const b = Math.min(bars, maxBars);
-    const pcm = renderMetronome({ bpm, beatsPerBar: beats, bars: b, subdivision: sub, sampleRate: 44100 });
+    const pcm = renderMetronome({ bpm, beatsPerBar: sig.pulses, bars: b, subdivisionId: subId, accents, sound: soundId, sampleRate: 44100 });
     setClickBuf(toBuffer([pcm], 44100));
   };
+  const unit = sig.id.endsWith('/8') ? '♪ (eighth note)' : '♩ (quarter note)';
 
   return (
     <Panel title="Metronom">
-      <div className="flex items-center justify-center gap-2 py-1" aria-live="off">
-        {Array.from({ length: beats }, (_, i) => (
-          <div key={i} className={`w-5 h-5 rounded-full border transition-all ${running && beat === i ? (i === 0 ? 'bg-accent2 border-accent2 scale-125' : 'bg-accent border-accent scale-125') : 'bg-black/40 border-white/20'}`} />
-        ))}
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center justify-center gap-2 py-1" aria-live="off">
+          {accents.map((a, i) => {
+            const on = running && beat === i;
+            const base = a === 0 ? 'border-dashed border-white/15 bg-transparent opacity-60' : a === 2 ? 'border-accent2 bg-accent2/25 w-6 h-6' : 'border-white/30 bg-black/40';
+            const lit = on ? (a === 2 ? '!bg-accent2 !border-accent2 scale-125' : '!bg-accent !border-accent scale-125') : '';
+            return (
+              <button key={i} type="button" onClick={() => cycleAccent(i)} aria-label={`Pulsa ${i + 1}: ${ACCENT_LABEL[a]}. Klik untuk mengganti.`} title={`Pulsa ${i + 1}: ${ACCENT_LABEL[a]}`}
+                className={`w-5 h-5 rounded-full border transition-all cursor-pointer ${base} ${lit}`} />
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-gray-500 text-center">Klik lingkaran untuk mengganti aksen tiap pulsa: aksen (besar) → normal → senyap (putus-putus).</p>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <Field label={`Tempo: ${bpm} BPM`}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Field label={`Tempo: ${bpm} BPM · ${tempoMarking(bpm)}`} hint={`1 BPM = 1 pulsa = ${unit}`}>
           <input type="range" min={30} max={300} value={bpm} onChange={(e) => setBpm(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
         </Field>
-        <Field label="Ketukan per bar">
-          <select value={beats} onChange={(e) => setBeats(+e.target.value)} className={inputCls}>{[2, 3, 4, 5, 6, 7, 9, 12].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+        <Field label="Birama (time signature)" hint={`${sig.pulses} pulsa per bar`}>
+          <select value={sigId} onChange={(e) => changeSig(e.target.value)} className={inputCls}>{TIME_SIGNATURES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
         </Field>
-        <Field label="Subdivisi">
-          <select value={sub} onChange={(e) => setSub(+e.target.value)} className={inputCls}>
-            <option value={1}>Ketukan saja</option><option value={2}>1/8 (2 per ketuk)</option><option value={3}>Triplet</option><option value={4}>1/16 (4 per ketuk)</option>
-          </select>
+        <Field label="Subdivisi (ritme per pulsa)" hint={sub.hint}>
+          <select value={subId} onChange={(e) => { setSubId(e.target.value); setClickBuf(null); }} className={inputCls}>{SUBDIVISIONS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
         </Field>
-        <Field label="Atur BPM tepat">
-          <input type="number" min={30} max={300} value={bpm} onChange={(e) => setBpm(Math.max(30, Math.min(300, Math.round(+e.target.value) || 100)))} className={inputCls} />
+        <Field label="Atur BPM tepat" hint="Rentang 30–300 BPM">
+          <input type="number" min={30} max={300} value={bpm} onChange={(e) => setBpm(clampBpm(+e.target.value))} className={inputCls} />
+        </Field>
+        <Field label="Bunyi klik">
+          <select value={soundId} onChange={(e) => { setSoundId(e.target.value); setClickBuf(null); }} className={inputCls}>{CLICK_SOUNDS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+        </Field>
+        <Field label={`Volume: ${Math.round(vol * 100)}%`} hint="Hanya untuk pemutaran langsung">
+          <input type="range" min={0} max={1} step={0.05} value={vol} onChange={(e) => setVol(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
         </Field>
       </div>
       <div className="flex flex-wrap gap-2">
         {!running ? <button type="button" onClick={start} className={btnPrimary}><Play className="w-4 h-4" /><span>Mulai</span></button>
           : <button type="button" onClick={stop} className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-black text-sm inline-flex items-center gap-2 cursor-pointer"><Square className="w-4 h-4" /><span>Berhenti</span></button>}
         <button type="button" onClick={tap} className={btnGhost}>Tap tempo</button>
+        <button type="button" onClick={() => { setAccents(sig.accents); setClickBuf(null); }} className={btnGhost}><RotateCcw className="w-4 h-4" /><span>Reset aksen</span></button>
       </div>
       <div className="rounded-xl border border-white/[0.08] bg-black/30 p-3 space-y-3">
         <p className="text-xs font-bold text-white">Unduh klik sebagai berkas</p>
+        <p className="text-[11px] text-gray-400">Memakai pengaturan di atas: {bpm} BPM, {sig.id}, {sub.label}, bunyi {snd.label}.</p>
         <div className="flex flex-wrap items-end gap-3">
           <Field label={`Jumlah bar (maks ${maxBars})`}>
             <input type="number" min={1} max={maxBars} value={Math.min(bars, maxBars)} onChange={(e) => setBars(Math.max(1, Math.min(maxBars, Math.round(+e.target.value) || 1)))} className={inputCls} />
           </Field>
           <button type="button" onClick={makeFile} className={btnGhost}>Buat berkas</button>
         </div>
-        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${beats}-4`} toolId="metronome" gate={gate} onDone={toast} /></>)}
+        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${sig.id.replace('/', '-')}`} toolId="metronome" gate={gate} onDone={toast} /></>)}
       </div>
     </Panel>
   );
 };
 
-// ───────────────────────── 7. Tuner ─────────────────────────
+// ───────────────────────── Tuner ─────────────────────────
+
+const PRESET_GROUPS = Array.from(new Set(TUNING_PRESETS.map((p) => p.group)));
 
 const TunerTool: React.FC = () => {
-  const [preset, setPreset] = useState<TuningPreset>(TUNING_PRESETS[1]);
+  const [preset, setPreset] = useState<TuningPreset>(TUNING_PRESETS.find((p) => p.id === 'guitar') ?? TUNING_PRESETS[1]);
   const [a4, setA4] = useState(440);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -806,6 +810,7 @@ const TunerTool: React.FC = () => {
   const recent = useRef<number[]>([]);
   const lastGood = useRef(0);
   const a4Ref = useRef(a4); a4Ref.current = a4;
+  const presetRef = useRef(preset); presetRef.current = preset;
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current); rafRef.current = null;
@@ -821,7 +826,7 @@ const TunerTool: React.FC = () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       const ctx = new AudioCtx(); void ctx.resume();
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 8192; // cukup panjang untuk senar bass (E1 ≈ 41 Hz)
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 8192; // cukup panjang untuk bass 5 senar (B0 ≈ 31 Hz)
       ctx.createMediaStreamSource(stream).connect(analyser);
       streamRef.current = stream; ctxRef.current = ctx; setRunning(true);
       const buf = new Float32Array(analyser.fftSize);
@@ -830,7 +835,9 @@ const TunerTool: React.FC = () => {
         rafRef.current = requestAnimationFrame(loop);
         if (now - last < 80) return; last = now;
         analyser.getFloatTimeDomainData(buf);
-        const p = detectPitch(buf, ctx.sampleRate, 35, 1400);
+        // batas bawah deteksi mengikuti senar terendah preset (mis. B0 pada bass 5 senar)
+        const lf = lowestFreq(presetRef.current, a4Ref.current);
+        const p = detectPitch(buf, ctx.sampleRate, lf ? Math.max(22, lf * 0.8) : 35, 1400);
         if (p && p.clarity > 0.85) {
           const r = recent.current; r.push(p.freq); if (r.length > 5) r.shift();
           const sorted = [...r].sort((x, y) => x - y); const med = sorted[Math.floor(sorted.length / 2)];
@@ -862,13 +869,20 @@ const TunerTool: React.FC = () => {
   return (
     <Panel title="Tuner">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Mode">
-          <select value={preset.id} onChange={(e) => setPreset(TUNING_PRESETS.find((p) => p.id === e.target.value)!)} className={inputCls}>
-            {TUNING_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <Field label="Instrumen & stem" hint={`${TUNING_PRESETS.length - 1} preset, atau pilih Kromatik untuk vokal / alat lain`}>
+          <select value={preset.id} onChange={(e) => { setPreset(TUNING_PRESETS.find((p) => p.id === e.target.value)!); recent.current = []; }} className={inputCls}>
+            {PRESET_GROUPS.map((g) => (
+              <optgroup key={g} label={g}>
+                {TUNING_PRESETS.filter((p) => p.group === g).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </optgroup>
+            ))}
           </select>
         </Field>
         <Field label={`Acuan A4: ${a4} Hz`}>
-          <input type="range" min={430} max={450} value={a4} onChange={(e) => setA4(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
+          <div className="flex items-center gap-2">
+            <input type="range" min={430} max={450} value={a4} onChange={(e) => setA4(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
+            <button type="button" onClick={() => setA4(440)} disabled={a4 === 440} className={btnGhost}>440</button>
+          </div>
         </Field>
       </div>
       {!running ? <button type="button" onClick={start} className={btnPrimary}><Mic className="w-4 h-4" /><span>Mulai tuner</span></button>
@@ -887,13 +901,13 @@ const TunerTool: React.FC = () => {
       </div>
       {preset.strings.length > 0 && (
         <div className="flex flex-wrap gap-2 justify-center">
-          {preset.strings.map((s) => (
-            <button key={s.label} type="button" onClick={() => playRef(s.midi)} title="Dengarkan nada acuan"
-              className={`px-3 py-2 rounded-xl text-sm font-black border cursor-pointer ${ns?.string.label === s.label && reading ? 'border-accent bg-accent/15 text-white' : 'border-white/[0.12] text-gray-300'}`}>{s.label}</button>
+          {preset.strings.map((s, i) => (
+            <button key={`${s.label}-${i}`} type="button" onClick={() => playRef(s.midi)} title="Dengarkan nada acuan"
+              className={`px-3 py-2 rounded-xl text-sm font-black border cursor-pointer ${ns?.string.midi === s.midi && reading ? 'border-accent bg-accent/15 text-white' : 'border-white/[0.12] text-gray-300'}`}>{s.label}</button>
           ))}
         </div>
       )}
-      <p className="text-[11px] text-gray-500">Tips: mainkan satu senar saja, di ruangan tenang, dekatkan perangkat ke sumber suara. Ketuk nama senar untuk mendengar nada acuannya.</p>
+      <p className="text-[11px] text-gray-500">Tips: mainkan satu senar saja, di ruangan tenang, dekatkan perangkat ke sumber suara. Ketuk nama senar untuk mendengar nada acuannya. Urutan senar di atas dari yang terendah ke tertinggi kecuali alat re-entrant (ukulele, banjo).</p>
     </Panel>
   );
 };
@@ -905,24 +919,38 @@ export const AudioExtraTools: React.FC<AudioExtraToolsProps> = ({ initialTool = 
   const [visited, setVisited] = useState<Set<ExtraToolId>>(new Set([initialTool]));
   const select = (id: ExtraToolId) => { setActive(id); setVisited((v) => new Set(v).add(id)); };
   const show = (id: ExtraToolId) => (active === id ? '' : 'hidden');
-  const mounted = (id: ExtraToolId) => (TABS.find((t) => t.id === id)?.realtime ? active === id : visited.has(id));
+  const mounted = (id: ExtraToolId) => (ALL_TOOLS.find((t) => t.id === id)?.realtime ? active === id : visited.has(id));
+  const group = groupOf(active);
+  const tool = ALL_TOOLS.find((t) => t.id === active);
 
   return (
     <div className="space-y-4">
-      <div role="tablist" aria-label="Audio tools tambahan" className="flex flex-wrap gap-2">
-        {TABS.map((t) => (
+      <div role="tablist" aria-label="Kelompok alat tambahan" className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {GROUPS.map((g) => {
+          const on = g.id === group.id;
+          return (
+            <button key={g.id} role="tab" aria-selected={on} type="button" onClick={() => select(g.tools[0].id)}
+              className={`text-left px-3.5 py-3 rounded-2xl border cursor-pointer transition-all ${on ? 'bg-accent/15 border-accent text-white' : 'bg-black/40 border-white/[0.1] text-gray-300 hover:border-accent/50'}`}>
+              <span className="flex items-center gap-2 text-sm font-black"><g.icon className={`w-4 h-4 ${on ? 'text-accent' : ''}`} />{g.label}</span>
+              <span className="mt-1 block text-[11px] leading-snug text-gray-400">{g.tools.map((t) => t.label).join(' · ')}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-xs text-gray-400">{group.desc}</p>
+      <div role="tablist" aria-label={`Alat di ${group.label}`} className="flex flex-wrap gap-2">
+        {group.tools.map((t) => (
           <button key={t.id} role="tab" aria-selected={active === t.id} type="button" onClick={() => select(t.id)}
             className={`px-3 py-2 rounded-xl text-xs font-black inline-flex items-center gap-2 border cursor-pointer transition-all ${active === t.id ? 'bg-accent text-on-accent border-accent' : 'bg-black/40 text-gray-300 border-white/[0.1] hover:border-accent/50'}`}>
             <t.icon className="w-4 h-4" /><span>{t.label}</span>
           </button>
         ))}
       </div>
-      <p className="text-[11px] text-gray-400">{TABS.find((t) => t.id === active)?.desc} Semua diproses di perangkatmu.</p>
+      <p className="text-[11px] text-gray-400">{tool?.desc} Semua diproses di perangkatmu.</p>
       {mounted('merge') && <div className={show('merge')}><MergeFadeTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('bpm') && <div className={show('bpm')}><BpmKeyTool toast={onSuccessToast} /></div>}
-      {mounted('recorder') && <div className={show('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('ringtone') && <div className={show('ringtone')}><RingtoneTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('clean') && <div className={show('clean')}><CleanTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('recorder') && <div className={show('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('bpm') && <div className={show('bpm')}><BpmKeyTool toast={onSuccessToast} /></div>}
       {mounted('metronome') && <div className={show('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('tuner') && <div className={show('tuner')}><TunerTool /></div>}
     </div>
