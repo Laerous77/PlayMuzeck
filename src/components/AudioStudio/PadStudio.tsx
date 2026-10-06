@@ -1294,7 +1294,499 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     return levelFromOffset(e.clientX - (r.left + r.width / 2), e.clientY - (r.top + r.height / 2), r.width / 2, r.height / 2);
   };
 
-  // Ditulis ulang di bawah (butuh liveTargets); lihat triggerChordByIndex setelah liveTargets.
+
+  // ---------------------------------------------------------------------------
+  // MODE EDIT / PILIH, KEKUATAN DRUM, PANJANG AKOR BARU
+  // ---------------------------------------------------------------------------
+  const [editMode, setEditMode] = useState<'edit' | 'select'>('edit');
+  const modeRef = useRef<'edit' | 'select'>('edit');
+  modeRef.current = editMode;
+  const getMode = useCallback(() => modeRef.current, []);
+
+  // Popover pemilih kekuatan drum (pp / p / f / ff), muncul saat pad drum diklik.
+  const [drumPicker, setDrumPicker] = useState<{ drumId: string; stepIdx: number; x: number; y: number } | null>(null);
+  const closeDrumPicker = useCallback(() => setDrumPicker(null), []);
+
+  // Panjang default akor yang baru dipasang (dalam step).
+  const [newChordLen, setNewChordLen] = useState<number>(INITIAL_STEPS_PER_BAR);
+  const newChordLenRef = useRef(newChordLen);
+  newChordLenRef.current = newChordLen;
+
+  // Klik pad drum -> buka popover kekuatan (kosong maupun terisi).
+  const paintDrumStep = useCallback((drumId: string, stepIndex: number, el: HTMLElement) => {
+    const spb = layoutRef.current.stepsPerBar;
+    if (!gateRef.current.isUnlocked8Bar && Math.floor(stepIndex / spb) > 0) {
+      gateRef.current.onUnlockEditor();
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    setDrumPicker({ drumId, stepIdx: stepIndex, x: r.left + r.width / 2, y: r.bottom });
+  }, []);
+
+  // Pasang kekuatan pada pad (0 = hapus) lalu bunyikan pratinjau bila drum tidak sedang diputar.
+  const setDrumLevel = useCallback((drumId: string, stepIndex: number, level: number) => {
+    const L = liveRef.current;
+    const next = clampLevel(level);
+    setDrumGrid((prev) => {
+      const row = [...(prev[drumId] || Array(layoutRef.current.totalSteps).fill(0))];
+      row[stepIndex] = next;
+      return { ...prev, [drumId]: row };
+    });
+    if (next > 0 && L && !L.isDrumLoopActive) {
+      const m = L.drumMix[drumId];
+      audioEngine.playDrumSound(
+        drumId,
+        L.selectedDrumKit,
+        (L.drumVolume / 100) * ((m?.volume ?? 100) / 100) * DRUM_LEVEL_GAIN[next],
+        m?.adsr
+      );
+    }
+  }, []);
+
+  // Pilih akor di sebuah sel: kosong → buat not baru (panjang default), blok → ganti akor, "-" → hapus not.
+  const setTrackChordStep = useCallback((trackIndex: number, stepIndex: number, padIdx: number) => {
+    const barIndex = Math.floor(stepIndex / layoutRef.current.stepsPerBar);
+    if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
+      gateRef.current.onUnlockEditor();
+      return;
+    }
+    setChordTracks((prev) => {
+      const copy = [...prev];
+      const t = copy[trackIndex];
+      let data: { steps: number[]; lens: number[] };
+      if (padIdx < 0) {
+        data = removeNote(t.steps, t.lens, stepIndex);
+      } else if (t.steps[stepIndex] >= 0) {
+        const steps = [...t.steps];
+        steps[stepIndex] = padIdx;
+        data = { steps, lens: t.lens };
+      } else {
+        data = insertNote(t.steps, t.lens, stepIndex, padIdx, newChordLenRef.current);
+      }
+      copy[trackIndex] = { ...t, ...data };
+      return copy;
+    });
+  }, []);
+
+  const resizeChordNote = useCallback((trackIndex: number, start: number, newLen: number) => {
+    setChordTracks((prev) => {
+      const t = prev[trackIndex];
+      if (!t || t.steps[start] < 0) return prev;
+      const next = resizeNote(t.steps, t.lens, start, newLen);
+      if (next.lens[start] === t.lens[start]) return prev;
+      const copy = [...prev];
+      copy[trackIndex] = { ...t, lens: next.lens };
+      return copy;
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // SELEKSI, SALIN, POTONG, TEMPEL, DUPLIKAT, HAPUS
+  // ---------------------------------------------------------------------------
+  const [sel, setSel] = useState<SelRect | null>(null);
+  const activeSel = sel && sel.tab === activeTab ? sel : null;
+  const selRef = useRef<SelRect | null>(null);
+  selRef.current = activeSel;
+  const anchorRef = useRef<{ r: number; s: number } | null>(null);
+  const [clips, setClips] = useState<{ drum: DrumClip | null; chord: ChordClip | null }>({ drum: null, chord: null });
+  const clipsRef = useRef(clips);
+  clipsRef.current = clips;
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const focusInsideRef = useRef(false);
+  const modalOpenRef = useRef(false);
+  modalOpenRef.current = editingPadIndex !== null || pickerTrack !== null || isExportModalOpen || isExportMenuOpen;
+  const activeTabRef = useRef<PadTab>(activeTab);
+  activeTabRef.current = activeTab;
+
+  const rowCountOf = (tab: PadTab) => (tab === 'drum' ? DRUM_INSTRUMENTS.length : 4);
+
+  // Rect seleksi; untuk akor, awal rect digeser ke awal not yang menutupi step itu supaya not utuh terpilih.
+  const buildRect = (tab: PadTab, a: { r: number; s: number }, b: { r: number; s: number }): SelRect => {
+    const rect = makeRect(tab, a, b);
+    if (tab === 'chord') {
+      const tracks = liveRef.current?.chordTracks ?? [];
+      let s1 = rect.s1;
+      for (let i = rect.r1; i <= rect.r2; i++) {
+        const t = tracks[i];
+        if (!t) continue;
+        const cs = noteStartCovering(t.steps, t.lens, rect.s1);
+        if (cs >= 0 && cs < s1) s1 = cs;
+      }
+      rect.s1 = s1;
+    }
+    return rect;
+  };
+
+  // Ubah koordinat pointer menjadi (baris, step) dari geometri baris grid (blok akor tidak mengganggu).
+  const pointToCell = (x: number, y: number): { r: number; s: number } | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const rowEl = el?.closest<HTMLElement>('[data-rowgrid]');
+    if (!rowEl) return null;
+    const rect = rowEl.getBoundingClientRect();
+    const v = viewRef.current;
+    const count = v.count * v.stepsPerBar;
+    const frac = (x - rect.left) / rect.width;
+    const s = v.start * v.stepsPerBar + Math.max(0, Math.min(count - 1, Math.floor(frac * count)));
+    return { r: Number(rowEl.dataset.row), s };
+  };
+
+  const handleGridPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const selecting = modeRef.current === 'select' || e.shiftKey;
+    if (!selecting) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const cell = pointToCell(e.clientX, e.clientY);
+    if (!cell) return;
+    const tab = activeTabRef.current;
+    const anchor = e.shiftKey && selRef.current && anchorRef.current ? anchorRef.current : cell;
+    anchorRef.current = anchor;
+    setSel(buildRect(tab, anchor, cell));
+    e.preventDefault();
+    const move = (ev: PointerEvent) => {
+      const c = pointToCell(ev.clientX, ev.clientY);
+      if (c && anchorRef.current) setSel(buildRect(tab, anchorRef.current, c));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  // Klik label BAR = pilih seluruh bar itu (Shift+klik = perluas).
+  const selectBar = (barIdx: number, extend: boolean) => {
+    const tab = activeTabRef.current;
+    const S = layoutRef.current.stepsPerBar;
+    let s1 = barIdx * S;
+    let s2 = s1 + S - 1;
+    const prev = selRef.current;
+    if (extend && prev) {
+      s1 = Math.min(s1, prev.s1);
+      s2 = Math.max(s2, prev.s2);
+    }
+    anchorRef.current = { r: 0, s: s1 };
+    setSel({ tab, r1: 0, r2: rowCountOf(tab) - 1, s1, s2 });
+  };
+
+  const buildClip = (rect: SelRect): SeqClip | null => {
+    const L = liveRef.current;
+    if (!L) return null;
+    const rows = rect.r2 - rect.r1 + 1;
+    const width = rect.s2 - rect.s1 + 1;
+    if (rect.tab === 'drum') {
+      const data: number[][] = [];
+      for (let r = 0; r < rows; r++) {
+        const id = DRUM_INSTRUMENTS[rect.r1 + r]?.id;
+        const row = (id && L.drumGrid[id]) || [];
+        data.push(Array.from({ length: width }, (_, i) => clampLevel(row[rect.s1 + i])));
+      }
+      return { kind: 'drum', rows, width, data };
+    }
+    const data: ChordClip['data'] = [];
+    for (let r = 0; r < rows; r++) {
+      const t = L.chordTracks[rect.r1 + r];
+      data.push(
+        Array.from({ length: width }, (_, i) => {
+          const st = rect.s1 + i;
+          return t && t.steps[st] >= 0 ? { pad: t.steps[st], len: t.lens[st] || 1 } : null;
+        })
+      );
+    }
+    return { kind: 'chord', rows, width, data };
+  };
+
+  const copySelection = (): boolean => {
+    const rect = selRef.current;
+    if (!rect) return false;
+    const clip = buildClip(rect);
+    if (!clip) return false;
+    const next = { ...clipsRef.current, [clip.kind]: clip } as typeof clips;
+    clipsRef.current = next;
+    setClips(next);
+    return true;
+  };
+
+  const deleteSelection = () => {
+    const rect = selRef.current;
+    if (!rect) return;
+    if (rect.tab === 'drum') {
+      setDrumGrid((prev) => {
+        const out = { ...prev };
+        for (let r = rect.r1; r <= rect.r2; r++) {
+          const id = DRUM_INSTRUMENTS[r]?.id;
+          if (!id) continue;
+          const row = [...(prev[id] || [])];
+          for (let s = rect.s1; s <= rect.s2; s++) row[s] = 0;
+          out[id] = row;
+        }
+        return out;
+      });
+    } else {
+      setChordTracks((prev) =>
+        prev.map((t, ti) => {
+          if (ti < rect.r1 || ti > rect.r2 || !t.enabled) return t;
+          const steps = [...t.steps];
+          const lens = [...t.lens];
+          for (let s = rect.s1; s <= rect.s2; s++) {
+            steps[s] = -1;
+            lens[s] = 0;
+          }
+          return { ...t, steps, lens };
+        })
+      );
+    }
+  };
+
+  const cutSelection = () => {
+    if (copySelection()) deleteSelection();
+  };
+
+  // Tempel `clip` dengan pojok kiri-atas di (baris r0, step s0). Mengembalikan area yang ditempel.
+  const pasteClip = (clip: SeqClip, r0: number, s0: number): SelRect | null => {
+    const { totalSteps: total, stepsPerBar: spb } = layoutRef.current;
+    if (s0 >= total) {
+      onSuccessToast('Tidak ada ruang untuk menempel di sini (sudah di ujung grid).');
+      return null;
+    }
+    const lastStep = Math.min(total - 1, s0 + clip.width - 1);
+    if (!gateRef.current.isUnlocked8Bar && Math.floor(lastStep / spb) > 0) {
+      gateRef.current.onUnlockEditor();
+      return null;
+    }
+    const rowsMax = clip.kind === 'drum' ? DRUM_INSTRUMENTS.length : 4;
+    const rowsUsed = Math.min(clip.rows, rowsMax - r0);
+    if (rowsUsed <= 0) return null;
+
+    if (clip.kind === 'drum') {
+      setDrumGrid((prev) => {
+        const out = { ...prev };
+        for (let r = 0; r < rowsUsed; r++) {
+          const id = DRUM_INSTRUMENTS[r0 + r].id;
+          const row = [...(prev[id] || Array(total).fill(0))];
+          for (let i = 0; i < clip.width && s0 + i < total; i++) row[s0 + i] = clip.data[r][i];
+          out[id] = row;
+        }
+        return out;
+      });
+    } else {
+      setChordTracks((prev) =>
+        prev.map((t, ti) => {
+          const r = ti - r0;
+          if (r < 0 || r >= rowsUsed || !t.enabled) return t;
+          let steps = [...t.steps];
+          let lens = [...t.lens];
+          // Not yang menutupi titik tempel dipotong; area tujuan dikosongkan (mode "timpa").
+          const cs = noteStartCovering(steps, lens, s0);
+          if (cs >= 0 && cs < s0) lens[cs] = s0 - cs;
+          for (let s = s0; s <= lastStep; s++) {
+            steps[s] = -1;
+            lens[s] = 0;
+          }
+          for (let i = 0; i < clip.width && s0 + i < total; i++) {
+            const cell = clip.data[r][i];
+            if (cell) ({ steps, lens } = insertNote(steps, lens, s0 + i, cell.pad, cell.len));
+          }
+          return { ...t, steps, lens };
+        })
+      );
+    }
+    return { tab: clip.kind, r1: r0, r2: r0 + rowsUsed - 1, s1: s0, s2: lastStep };
+  };
+
+  const pasteSelection = () => {
+    const clip = clipsRef.current[activeTabRef.current];
+    if (!clip) return;
+    const rect = selRef.current;
+    const res = pasteClip(clip, rect ? rect.r1 : 0, rect ? rect.s1 : playheadStepRef.current);
+    if (res) {
+      anchorRef.current = { r: res.r1, s: res.s1 };
+      setSel(res);
+    }
+  };
+
+  // Duplikat: salin pilihan lalu tempel TEPAT setelahnya; pilihan pindah ke hasil, jadi bisa diulang beruntun.
+  const duplicateSelection = () => {
+    const rect = selRef.current;
+    if (!rect) return;
+    const clip = buildClip(rect);
+    if (!clip) return;
+    const res = pasteClip(clip, rect.r1, rect.s2 + 1);
+    if (res) {
+      anchorRef.current = { r: res.r1, s: res.s1 };
+      setSel(res);
+    }
+  };
+
+  const selectAll = () => {
+    const tab = activeTabRef.current;
+    anchorRef.current = { r: 0, s: 0 };
+    setSel({ tab, r1: 0, r2: rowCountOf(tab) - 1, s1: 0, s2: layoutRef.current.totalSteps - 1 });
+  };
+
+  const clearSelection = () => setSel(null);
+
+  // Panjang not akor yang sedang terpilih (untuk kolom angka panjang).
+  const selectedNoteInfo = useMemo(() => {
+    if (!activeSel || activeSel.tab !== 'chord') return { count: 0, len: 1 };
+    let count = 0;
+    let len = 1;
+    for (let r = activeSel.r1; r <= activeSel.r2; r++) {
+      const t = chordTracks[r];
+      if (!t || !t.enabled) continue;
+      for (let s = activeSel.s1; s <= activeSel.s2; s++) {
+        if (t.steps[s] >= 0) {
+          if (count === 0) len = t.lens[s] || 1;
+          count++;
+        }
+      }
+    }
+    return { count, len };
+  }, [activeSel, chordTracks]);
+
+  const setSelectedNotesLength = (newLen: number) => {
+    const rect = selRef.current;
+    if (!rect || rect.tab !== 'chord') return;
+    setChordTracks((prev) =>
+      prev.map((t, ti) => {
+        if (ti < rect.r1 || ti > rect.r2 || !t.enabled) return t;
+        let data = { steps: t.steps, lens: t.lens };
+        for (let s = rect.s1; s <= rect.s2; s++) {
+          if (data.steps[s] >= 0) data = resizeNote(data.steps, data.lens, s, newLen);
+        }
+        return { ...t, lens: data.lens };
+      })
+    );
+  };
+
+  // Pintasan keyboard (aktif hanya saat pengguna terakhir berinteraksi di dalam Pad Studio dan tidak ada popup).
+  const opsRef = useRef({
+    copy: copySelection,
+    cut: cutSelection,
+    paste: pasteSelection,
+    del: deleteSelection,
+    dup: duplicateSelection,
+    all: selectAll,
+    clear: clearSelection,
+  });
+  opsRef.current = {
+    copy: copySelection,
+    cut: cutSelection,
+    paste: pasteSelection,
+    del: deleteSelection,
+    dup: duplicateSelection,
+    all: selectAll,
+    clear: clearSelection,
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!focusInsideRef.current || modalOpenRef.current) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      const inGrid = Boolean(t?.closest?.('[data-rowgrid]'));
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (tag === 'SELECT' && !inGrid) || t?.isContentEditable) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
+      const ops = opsRef.current;
+      if (mod && k === 'c') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.copy();
+        }
+      } else if (mod && k === 'x') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.cut();
+        }
+      } else if (mod && k === 'v') {
+        e.preventDefault();
+        ops.paste();
+      } else if (mod && k === 'd') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.dup();
+        }
+      } else if (mod && k === 'a') {
+        e.preventDefault();
+        ops.all();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.del();
+        }
+      } else if (e.key === 'Escape') {
+        ops.clear();
+      }
+    };
+    const onDown = (e: PointerEvent) => {
+      focusInsideRef.current = Boolean(sectionRef.current?.contains(e.target as Node));
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, true);
+    };
+  }, []);
+
+  const handleSeekStep = (targetStep: number) => {
+    const barIdx = Math.floor(targetStep / stepsPerBar);
+    if (!isUnlocked8Bar && barIdx > 0) {
+      onUnlockEditor();
+      return;
+    }
+    audioEngine.getAudioContext().resume();
+    stepRef.current = targetStep;
+    visualQueueRef.current = [];
+    paintPlayhead(targetStep);
+  };
+
+  const resetToBeginning = () => {
+    const startStep = Math.max(0, (loopStartBar - 1) * stepsPerBar + (loopStartBeat - 1));
+    stepRef.current = startStep;
+    visualQueueRef.current = [];
+    paintPlayhead(startStep);
+  };
+
+  const toggleDrumLoop = () => {
+    audioEngine.getAudioContext().resume();
+    setIsDrumLoopActive(!isDrumLoopActive);
+  };
+
+  const preparingChordsRef = useRef(false);
+  const toggleChordLoop = async () => {
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
+    if (preparingChordsRef.current) return;
+    audioEngine.getAudioContext().resume();
+    if (isChordLoopActive) {
+      stopAllLiveChords();
+      setIsChordLoopActive(false);
+      return;
+    }
+    // Panaskan sample akor sebelum mulai, tapi JANGAN membuat pengguna menunggu:
+    // - Bank sudah siap: tunggu paling lama 350 ms (biasanya cukup), sisanya jalan di latar belakang.
+    // - Bank belum siap: langsung mulai. Engine membunyikan suara sintesis sementara dan otomatis
+    //   pindah ke sample SF2 begitu bank selesai dimuat (sebelumnya tombol putar menunggu seluruh unduhan).
+    preparingChordsRef.current = true;
+    try {
+      if (audioEngine.isLoaded) {
+        const warm = audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
+        await Promise.race([warm, new Promise<void>((r) => window.setTimeout(r, 350))]);
+      } else {
+        void audioEngine.initBank();
+        void audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
+      }
+    } finally {
+      preparingChordsRef.current = false;
+    }
+    setIsChordLoopActive(true);
+  };
+
   // Track yang dibunyikan pad live: satu track pilihan, atau semua track aktif (berlapis).
   const liveTargets = useMemo<number[]>(() => {
     const enabled = chordTracks.map((t, i) => (t.enabled ? i : -1)).filter((i) => i >= 0);
