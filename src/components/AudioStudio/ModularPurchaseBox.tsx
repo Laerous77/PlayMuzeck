@@ -133,8 +133,8 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     },
     {
       key: 'audioToolsSuite',
-      title: 'Audio Tools Suite (9 Tools Studio)',
-      description: 'Akses tanpa batas harian untuk seluruh 9 utilitas audio studio.',
+      title: 'Audio Tools Suite (15 Tools Studio)',
+      description: 'Akses tanpa batas harian untuk seluruh 15 alat audio studio.',
       price: pricing.products.audioToolsSuite,
       isOwned: isToolsOwned,
       icon: Wrench,

@@ -26,7 +26,7 @@ export const InfoTip: React.FC<{ label: string; children: React.ReactNode }> = (
   }, [open]);
 
   return (
-    <span ref={wrapRef} className="relative inline-flex">
+    <span ref={wrapRef} data-quota-free className="relative inline-flex">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -75,3 +75,35 @@ export const NUM_FIELD_CLS = 'w-20 bg-black/80 border border-white/15 rounded px
 /** Pil pilihan (format unduhan, dll.). */
 export const pillCls = (on: boolean) =>
   `px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${on ? 'bg-accent text-on-accent shadow' : 'bg-black/60 text-gray-400 hover:text-white'}`;
+
+// ───────────────────────── Penjaga kuota ─────────────────────────
+// Dipakai ke-15 alat: bila jatah gratis harian alat habis, SEMUA kontrol di panel alat (tombol, slider, kolom isian,
+// pemilih berkas, pilihan format, dst.) tidak bekerja dan mengarahkan pengguna ke Harga & Lisensi.
+// Elemen bertanda `data-quota-free` (ikon info, tombol beli) dikecualikan.
+let lastBlockedAt = 0;
+export const quotaGuardProps = (locked: boolean, onBlocked: () => void): Record<string, unknown> => {
+  if (!locked) return {};
+  const free = (t: EventTarget | null) => typeof Element !== 'undefined' && t instanceof Element && !!t.closest('[data-quota-free]');
+  const stop = (e: React.SyntheticEvent) => { e.preventDefault(); e.stopPropagation(); };
+  const fire = () => {
+    const now = Date.now();
+    if (now - lastBlockedAt < 400) return; // satu aksi pengguna = satu pengalihan
+    lastBlockedAt = now;
+    onBlocked();
+  };
+  const swallow = (e: React.SyntheticEvent) => { if (!free(e.target)) stop(e); };
+  const redirect = (e: React.SyntheticEvent) => { if (free(e.target)) return; stop(e); fire(); };
+  return {
+    onPointerDownCapture: swallow,
+    onMouseDownCapture: swallow,
+    onTouchStartCapture: (e: React.SyntheticEvent) => { if (!free(e.target)) e.stopPropagation(); },
+    onClickCapture: redirect,
+    onChangeCapture: swallow,
+    onInputCapture: swallow,
+    onKeyDownCapture: (e: React.KeyboardEvent) => {
+      if (free(e.target)) return;
+      if (['Tab', 'Shift', 'Control', 'Alt', 'Meta', 'Escape'].includes(e.key)) return;
+      redirect(e);
+    },
+  };
+};

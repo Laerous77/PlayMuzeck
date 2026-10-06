@@ -107,10 +107,10 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     handleNavigateToPricing('audioToolsSuite');
     const toolsItem = {
       id: `audio-tools-${Date.now()}`,
-      title: 'Audio Tools Suite (9 Tools Studio)',
+      title: 'Audio Tools Suite (15 Tools Studio)',
       category: 'audio',
       price: 20000,
-      description: 'Akses penuh permanen tanpa batasan kuota harian untuk seluruh 9 utilitas studio audio.',
+      description: 'Akses penuh permanen tanpa batasan kuota harian untuk seluruh 15 alat studio audio.',
       itemTypeKey: 'audioToolsSuite',
     } as any;
 
@@ -354,6 +354,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
           <AudioToolsSuite
             entitlements={entitlements}
             onUnlockEditor={handleUnlockAudioTools}
+            onQuotaExhausted={() => handleNavigateToPricing('audioToolsSuite')}
             onSuccessToast={onSuccessToast}
             isActive={activeSection === 'tools'}
             initialTool={initialTool}
@@ -378,4 +379,3 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     </div>
   );
 };
-

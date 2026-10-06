@@ -18,7 +18,6 @@ import {
   AudioLines,
   Timer,
   Mic,
-  Sparkles,
   Play,
   Pause,
   Download,
@@ -33,9 +32,9 @@ import {
   X,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
-import { InfoTip, FORMAT_INFO } from './toolsShared';
-import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, type ExtraToolId } from './AudioExtraTools';
-import { consumeExtraQuota, remainingExtraQuota } from '../../services/extraToolsQuota';
+import { InfoTip, FORMAT_INFO, BTN_DOWNLOAD, BTN_PRIMARY, PANEL_CLS, quotaGuardProps } from './toolsShared';
+import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, type ExtraToolId, type QuotaGate } from './AudioExtraTools';
+import { DAILY_FREE_QUOTA, refreshQuota, refundReservation, remainingQuota, reserveQuota, subscribeQuota, type Reservation } from '../../services/toolQuota';
 import {
   exportAudioFile,
   audioBufferToWav,
@@ -63,6 +62,8 @@ interface AudioToolsSuiteProps {
   entitlements: AudioEntitlements;
   onUnlockEditor: () => void;
   onSuccessToast: (msg: string) => void;
+  /** Dipanggil saat jatah gratis harian sebuah alat habis dan pengguna menekan tombol di alat itu: arahkan ke Harga & Lisensi. Bawaan: onUnlockEditor. */
+  onQuotaExhausted?: () => void;
   /** Harga Audio Tools Suite (Rp), diambil dari sumber harga yang sama dengan keranjang. */
   toolsPrice?: number;
   /** false saat seksi Audio Tools disembunyikan (tetap ter-mount agar berkas & hasil proses tidak hilang). */
@@ -146,7 +147,7 @@ interface ToolGroup {
 
 const TOOL_GROUPS: ToolGroup[] = [
   { id: 'cut', label: 'Potong & Susun', icon: Scissors, desc: 'Ubah struktur audio: potong bagian, sambung beberapa file, atau balik urutannya.', tools: ['trim', 'merge', 'reverse'] },
-  { id: 'sound', label: 'Perbaiki Suara', icon: Sparkles, desc: 'Bersihkan dan seimbangkan suara: volume, jeda hening, loudness, mono, dan noise.', tools: ['volume', 'clean', 'noise_reduction'] },
+  { id: 'sound', label: 'Perbaiki Suara', icon: Eraser, desc: 'Bersihkan dan seimbangkan suara: volume, jeda hening, loudness, mono, dan noise.', tools: ['volume', 'clean', 'noise_reduction'] },
   { id: 'music', label: 'Nada, Tempo & Vokal', icon: Music, desc: 'Olah unsur musik: ubah nada, ubah kecepatan, atau pisahkan vokal dari musik.', tools: ['pitch', 'tempo', 'vocal_separator'] },
   { id: 'format', label: 'Format & Ukuran', icon: RefreshCw, desc: 'Ganti format file (termasuk ekstrak audio dari video) atau perkecil ukurannya.', tools: ['convert', 'compress'] },
   { id: 'record', label: 'Rekam & Analisis', icon: Mic, desc: 'Ambil audio baru dari mikrofon, atau cari tahu tempo dan kunci nada sebuah lagu.', tools: ['recorder', 'bpm'] },
@@ -183,9 +184,7 @@ const LIVE_TOOLS: ToolType[] = ['volume', 'pitch', 'tempo'];
 /** Tool yang hasilnya dihitung sekali lalu diputar dari file hasil. */
 const STATIC_RESULT_TOOLS: ToolType[] = ['trim', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator'];
 
-const DAILY_FREE_QUOTA = 2;
 const RESULT_TTL_MS = 5 * 60 * 1000;
-const QUOTA_PREFIX = 'muzeck_daily_quota_';
 
 const INITIAL_TOOL_STATE: ToolExecutionState = {
   isProcessing: false,
@@ -204,53 +203,15 @@ function makeInitialStates(): Record<ToolType, ToolExecutionState> {
 }
 
 // ---------------------------------------------------------------------------
-// Kuota harian (tanggal lokal, bukan UTC, supaya reset tepat tengah malam lokal)
+// Kuota harian: satu sumber (services/extraToolsQuota.ts) untuk ke-15 alat, 2x gratis per alat per hari
 // ---------------------------------------------------------------------------
 
-function localDateKey(): string {
-  const d = new Date();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-
-function defaultQuota(): Record<ToolType, number> {
+function readQuota(isOwned = false): Record<ToolType, number> {
   const q = {} as Record<ToolType, number>;
   TOOLS.forEach((t) => {
-    q[t.id] = DAILY_FREE_QUOTA;
+    q[t.id] = remainingQuota(t.id, isOwned);
   });
   return q;
-}
-
-function readQuota(): Record<ToolType, number> {
-  const q = defaultQuota();
-  try {
-    const key = QUOTA_PREFIX + localDateKey();
-    // bersihkan kuota hari-hari sebelumnya
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k && k.startsWith(QUOTA_PREFIX) && k !== key) localStorage.removeItem(k);
-    }
-    const raw = localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      TOOLS.forEach((t) => {
-        const v = Number(parsed?.[t.id]);
-        if (Number.isFinite(v)) q[t.id] = Math.max(0, Math.min(DAILY_FREE_QUOTA, Math.floor(v)));
-      });
-    }
-  } catch {
-    /* localStorage tidak tersedia: pakai default */
-  }
-  return q;
-}
-
-function writeQuota(q: Record<ToolType, number>) {
-  try {
-    localStorage.setItem(QUOTA_PREFIX + localDateKey(), JSON.stringify(q));
-  } catch {
-    /* abaikan */
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +438,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   entitlements,
   onUnlockEditor,
   onSuccessToast,
+  onQuotaExhausted,
   toolsPrice = 20000,
   isActive = true,
   initialTool = null,
@@ -494,6 +456,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const [selectedExtra, setSelectedExtra] = useState<ExtraToolId | null>(initialTool && isExtraId(initialTool) ? initialTool : null);
   const [extraTick, setExtraTick] = useState(0);
   const extraSessionRef = useRef<Set<string>>(new Set());
+  const paidExtraRef = useRef<Set<string>>(new Set());
+  const extraResRef = useRef<Map<string, Reservation>>(new Map());
+  const pageNonce = useMemo(() => Math.random().toString(36).slice(2, 10), []);
+  const goPricingRef = useRef<(toolId?: UnifiedToolId) => void | Promise<void>>(() => undefined);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [decodedBuffer, setDecodedBuffer] = useState<AudioBuffer | null>(null);
@@ -524,7 +490,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const currentToolQuota = isToolsOwned ? Infinity : quotaMap[selectedTool] ?? DAILY_FREE_QUOTA;
   // Kuota yang ditampilkan di header: mengikuti alat aktif (bawaan atau tambahan). `extraTick` memicu render ulang setelah pemakaian.
   void extraTick;
-  const activeQuota = isToolsOwned ? Infinity : selectedExtra ? remainingExtraQuota(selectedExtra) : currentToolQuota;
+  const activeQuota = isToolsOwned ? Infinity : selectedExtra ? remainingQuota(selectedExtra) : currentToolQuota;
   const activeToolId: UnifiedToolId = selectedExtra ?? selectedTool;
   const activeGroup = TOOL_GROUPS.find((g) => g.tools.includes(activeToolId)) ?? TOOL_GROUPS[0];
 
@@ -775,14 +741,25 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     return () => clearInterval(id);
   }, [clearToolResult, stopPlayback]);
 
-  // Segarkan kuota saat tab kembali aktif / pindah tool
+  // Kuota dicatat di server: ambil saat dibuka, saat pindah alat, saat tab aktif lagi, dan saat status kepemilikan/akun berubah.
   useEffect(() => {
-    setQuotaMap(readQuota());
-  }, [selectedTool]);
+    const off = subscribeQuota(() => {
+      setQuotaMap(readQuota());
+      setExtraTick((t) => t + 1);
+    });
+    return off;
+  }, []);
   useEffect(() => {
-    const onFocus = () => setQuotaMap(readQuota());
+    void refreshQuota();
+  }, [selectedTool, selectedExtra, entitlements]);
+  useEffect(() => {
+    const onFocus = () => void refreshQuota();
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
+    };
   }, []);
 
   // Cleanup saat unmount
@@ -795,13 +772,27 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     };
   }, []);
 
-  const deductQuota = (tool: ToolType) => {
-    if (isToolsOwned) return;
-    const q = readQuota();
-    q[tool] = Math.max(0, (q[tool] ?? DAILY_FREE_QUOTA) - 1);
-    writeQuota(q);
-    setQuotaMap(q);
+  /** Jatah gratis alat ini habis: arahkan ke Harga & Lisensi (dengan pemberitahuan singkat, tanpa spam). */
+  const lastPricingRef = useRef(0);
+  const goPricing = async (toolId?: UnifiedToolId) => {
+    const now = Date.now();
+    if (now - lastPricingRef.current < 600) return;
+    lastPricingRef.current = now;
+    if (toolId && !isToolsOwned) {
+      // Pastikan ke server dulu (mis. hari sudah berganti sejak data terakhir diambil): bila jatah ternyata ada, jangan arahkan.
+      await refreshQuota();
+      if (remainingQuota(toolId) > 0) {
+        toastRef.current(`Jatah gratis ${toolInfo(toolId).name} tersedia lagi. Silakan coba sekali lagi.`);
+        return;
+      }
+    }
+    if (toolId) {
+      toastRef.current(`Jatah gratis ${toolInfo(toolId).name} hari ini sudah habis (${DAILY_FREE_QUOTA}x/hari). Lanjutkan dengan memilih Audio Tools Suite di Harga & Lisensi.`);
+    }
+    (onQuotaExhausted ?? onUnlockEditor)();
   };
+
+  goPricingRef.current = goPricing;
 
   // ---- Muat berkas --------------------------------------------------------
 
@@ -957,7 +948,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     setQuotaMap(q);
     const needsCharge = !isToolsOwned && !(targetTool === 'compress' && compressChargedRef.current);
     if (needsCharge && (q[targetTool] ?? 0) <= 0) {
-      onUnlockEditor();
+      goPricing(targetTool);
       return;
     }
 
@@ -972,6 +963,22 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     if (live.current.selectedTool === targetTool) stopPlayback();
     revokeStateUrls(toolStatesRef.current[targetTool]);
     setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE, isProcessing: true, progress: 0 } }));
+
+    // Jatah dipesan di SERVER sebelum pekerjaan dimulai (hasil dihitung sekali per proses; kompresi sekali per berkas).
+    let reservation: Reservation | null = null;
+    if (needsCharge) {
+      reservation = await reserveQuota(targetTool, targetTool === 'compress' ? `compress:${myLoad}:${pageNonce}` : undefined);
+      if (isStale()) {
+        void refundReservation(targetTool, reservation);
+        return;
+      }
+      if (!reservation.allowed) {
+        setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE } }));
+        setQuotaMap(readQuota());
+        goPricing(targetTool);
+        return;
+      }
+    }
 
     let lastPct = -1;
     const dspOpts: DspOptions = {
@@ -1044,11 +1051,10 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           URL.revokeObjectURL(vocalUrls.vocal);
           URL.revokeObjectURL(vocalUrls.instrumental);
         }
+        void refundReservation(targetTool, reservation); // hasil dibuang: jatah dikembalikan
         return;
       }
 
-      // Kuota dikurangi tepat sekali setelah proses benar-benar sukses.
-      if (needsCharge) deductQuota(targetTool);
       if (targetTool === 'compress') compressChargedRef.current = true;
 
       setToolStates((prev) => ({
@@ -1065,6 +1071,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       }));
       onSuccessToast(`${TOOLS.find((t) => t.id === targetTool)?.name} selesai diproses.`);
     } catch (err) {
+      void refundReservation(targetTool, reservation); // proses gagal / dibatalkan: jatah dikembalikan
       if (err instanceof DspError && err.code === 'CANCELLED') return;
       if (isStale()) return;
       console.error(err);
@@ -1123,13 +1130,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     const sig = isLive ? liveParamSig(tool) : '';
     const alreadyCharged = isLive && chargedSigRef.current[tool] === sig;
 
-    if (isLive && !isToolsOwned && !alreadyCharged) {
-      const q = readQuota();
-      setQuotaMap(q);
-      if ((q[tool] ?? 0) <= 0) {
-        onUnlockEditor();
-        return;
-      }
+    if (isLive && !isToolsOwned && !alreadyCharged && remainingQuota(tool) <= 0) {
+      goPricing(tool);
+      return;
     }
 
     if (tool === 'convert' && blockedFormat && selectedExportFormat === blockedFormat) {
@@ -1147,6 +1150,20 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     setErrorMsg(null);
     setIsExporting(true);
     setExportProgress(0);
+
+    // Pengaturan live (volume/pitch/tempo): jatah dipesan di SERVER saat unduh; pengaturan yang sama tidak dihitung dua kali.
+    let liveRes: Reservation | null = null;
+    let liveDone = false;
+    if (isLive && !isToolsOwned && !alreadyCharged) {
+      liveRes = await reserveQuota(tool, `${sig}|${pageNonce}`);
+      if (!liveRes.allowed) {
+        setIsExporting(false);
+        setQuotaMap(readQuota());
+        goPricing(tool);
+        return;
+      }
+    }
+
     let lastPct = -1;
     const dspOpts: DspOptions = {
       isCancelled: stale,
@@ -1265,12 +1282,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         onProgress: (pct) => setExportProgress(Math.round(pct)),
       });
 
-      if (isLive && !isToolsOwned && !alreadyCharged) {
-        deductQuota(tool);
-        chargedSigRef.current[tool] = sig;
-      } else if (isLive && !alreadyCharged) {
-        chargedSigRef.current[tool] = sig;
-      }
+      if (isLive && !alreadyCharged) chargedSigRef.current[tool] = sig;
+      liveDone = true;
       onSuccessToast(exported.note ? `Berkas diunduh. ${exported.note}` : `Berkas ${fmt} berhasil diunduh.`);
     } catch (err) {
       if (err instanceof DspError && err.code === 'CANCELLED') return;
@@ -1281,6 +1294,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           : `Gagal mengekspor berkas ${fmt}. Coba format lain.`
       );
     } finally {
+      if (liveRes && !liveDone) void refundReservation(tool, liveRes); // ekspor gagal / dibatalkan: jatah dikembalikan
       setIsExporting(false);
       setExportProgress(0);
     }
@@ -1292,21 +1306,42 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   /**
    * Pintu kuota untuk 6 alat tambahan: aturannya sama dengan alat bawaan (2x gratis per hari per alat, lalu berbayar).
-   * `sessionKey` dipakai alat real-time (metronom, tuner): satu sesi halaman dihitung satu penggunaan.
+   * `sessionKey` menandai satu "penggunaan": pemanggilan berikutnya dengan kunci yang sama (mis. mengunduh hasil yang
+   * sama dalam format lain, atau memulai ulang metronom/tuner di halaman yang sama) tidak memakan jatah lagi.
    */
-  const gateExtra = useCallback(
-    (toolId: ExtraToolId, sessionKey?: string) => {
-      const sKey = sessionKey ? `${toolId}:${sessionKey}` : null;
-      if (sKey && extraSessionRef.current.has(sKey)) return true;
-      const ok = consumeExtraQuota(toolId, isToolsOwned);
-      setExtraTick((t) => t + 1);
-      if (!ok) {
-        toastRef.current(`Jatah gratis ${toolInfo(toolId).name} hari ini habis (${DAILY_FREE_QUOTA}x/hari). Beli Audio Tools untuk pemakaian tanpa batas.`);
-      } else if (sKey) {
-        extraSessionRef.current.add(sKey);
-      }
-      return ok;
-    },
+  const extraGate: QuotaGate = useMemo(
+    () => ({
+      use: async (toolId, sessionKey) => {
+        if (isToolsOwned) return true;
+        const sKey = sessionKey ? `${toolId}:${sessionKey}` : null;
+        if (sKey && extraSessionRef.current.has(sKey)) return true;
+        // Dipesan di SERVER. useKey memuat nonce halaman: "sesi" metronom/tuner dihitung per pembukaan halaman, bukan per hari.
+        const res = await reserveQuota(toolId, sKey ? `${sKey}|${pageNonce}` : undefined);
+        if (!res.allowed) {
+          goPricingRef.current(toolId);
+          return false;
+        }
+        paidExtraRef.current.add(toolId);
+        if (sKey) extraSessionRef.current.add(sKey);
+        extraResRef.current.set(sKey ?? `${toolId}:last`, res);
+        return true;
+      },
+      has: (toolId, sessionKey) => (sessionKey ? extraSessionRef.current.has(`${toolId}:${sessionKey}`) : false),
+      exhausted: (toolId) => !isToolsOwned && remainingQuota(toolId) <= 0,
+      refund: (toolId, sessionKey) => {
+        if (isToolsOwned) return;
+        const sKey = sessionKey ? `${toolId}:${sessionKey}` : null;
+        const k = sKey ?? `${toolId}:last`;
+        const res = extraResRef.current.get(k) ?? null;
+        extraResRef.current.delete(k);
+        if (sKey) extraSessionRef.current.delete(sKey);
+        void refundReservation(toolId, res);
+      },
+      // Terkunci: jatah habis dan alat ini belum dipakai di sesi halaman ini (hasil yang sudah dibayar tetap bisa diunduh).
+      locked: (toolId) => !isToolsOwned && remainingQuota(toolId) <= 0 && !paidExtraRef.current.has(toolId),
+      blocked: (toolId) => goPricingRef.current(toolId),
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [isToolsOwned]
   );
 
@@ -1326,6 +1361,15 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     !isToolsOwned &&
     currentToolQuota <= 0 &&
     !(selectedTool === 'compress' && compressChargedRef.current);
+
+  // Jatah gratis alat bawaan yang aktif sudah habis, dan belum ada hasil yang sudah "dibayar" dengan jatah itu
+  // (hasil yang baru jadi / kompresi yang sudah dihitung / pengaturan live yang sudah diunduh tetap boleh diputar & diunduh).
+  const hasPaidWork = isLiveTool
+    ? liveAlreadyCharged
+    : Boolean(currentToolState.resultBuffer || currentToolState.vocalBuffers || currentToolState.isProcessing) ||
+      (selectedTool === 'compress' && compressChargedRef.current);
+  const panelLocked = !isToolsOwned && !selectedExtra && currentToolQuota <= 0 && !hasPaidWork;
+  const guardBuiltin = quotaGuardProps(panelLocked, () => goPricing(selectedTool));
 
   const predictedPeak = sourcePeak * Math.pow(10, dynamicGainDb / 20);
   const clipWarning = selectedTool === 'volume' && dynamicGainDb > 0 && predictedPeak > 1;
@@ -1399,7 +1443,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {!selectedExtra && (
             <button
               type="button"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => (panelLocked ? goPricing(selectedTool) : fileInputRef.current?.click())}
               disabled={isLoadingFile}
               className="h-9 px-3.5 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
             >
@@ -1501,11 +1545,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         </div>
 
         {/* Panel alat tambahan (6 alat; punya pemilih berkas sendiri) */}
-        <ExtraToolPanel active={selectedExtra} gate={gateExtra} onSuccessToast={onSuccessToast} />
+        <ExtraToolPanel active={selectedExtra} gate={extraGate} onSuccessToast={onSuccessToast} />
 
         {/* Panel Kontrol (9 alat bawaan, memakai tombol Unggah Berkas) */}
         {!selectedExtra && (
-        <div className="p-4 sm:p-5 rounded-xl bg-black/40 border border-white/[0.06] space-y-4">
+        <div className={PANEL_CLS} {...guardBuiltin}>
           <div className="flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <h4 className="text-sm font-bold text-white">{toolMeta.name}</h4>
@@ -1948,8 +1992,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   (staticNeedsPurchase ? (
                     <button
                       type="button"
+                      data-quota-free
                       onClick={onUnlockEditor}
-                      className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
+                      className={BTN_PRIMARY}
                     >
                       <Lock className="w-3.5 h-3.5" />
                       <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
@@ -1959,7 +2004,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       type="button"
                       onClick={() => executeProcessForTool(selectedTool)}
                       disabled={isProcessing}
-                      className="px-5 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md disabled:opacity-50"
+                      className={BTN_PRIMARY}
                     >
                       {isProcessing ? (
                         <>
@@ -2028,8 +2073,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                     {liveNeedsPurchase ? (
                       <button
                         type="button"
+                        data-quota-free
                         onClick={onUnlockEditor}
-                        className="px-4 py-2 rounded-xl bg-accent hover:bg-accent/80 text-on-accent text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-md"
+                        className={BTN_PRIMARY}
                       >
                         <Lock className="w-3.5 h-3.5" />
                         <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
@@ -2039,7 +2085,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                         type="button"
                         onClick={() => handleDownloadFile()}
                         disabled={isExporting}
-                        className="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-neutral-950 text-xs font-black flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                        className={BTN_DOWNLOAD}
                       >
                         {isExporting ? (
                           <>

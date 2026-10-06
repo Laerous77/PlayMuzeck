@@ -5,7 +5,7 @@
 // Hanya alat yang TIDAK ada di 9 alat bawaan Suite (Trim, Volume, Pitch, Tempo, Reverse, Convert,
 // Compress, Noise Reduction, Vocal Isolator):
 //   Gabung + Fade · Rapikan (hening/LUFS/mono) · Perekam + Trim · BPM & Kunci · Metronom · Tuner
-// Kuota: sama dengan alat bawaan, 2x gratis per hari per alat, lalu berbayar (diatur lewat prop `gate`).
+// Kuota: sama dengan alat bawaan, 2x gratis per hari per alat, lalu diarahkan ke Harga & Lisensi (diatur lewat prop `gate`).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Merge, Activity, Mic, Eraser, Timer, AudioLines, Upload, Download, Play, Square,
@@ -15,7 +15,7 @@ import {
   audioBufferToWav, downloadBlob, exportAudioFile,
 } from '../../services/exporters';
 import {
-  BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, INPUT_CLS, InfoTip, NUM_FIELD_CLS, PANEL_CLS, SLIDER_CLS, pillCls,
+  BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, INPUT_CLS, InfoTip, NUM_FIELD_CLS, PANEL_CLS, SLIDER_CLS, pillCls, quotaGuardProps,
 } from './toolsShared';
 import {
   CLICK_SOUNDS, SUBDIVISIONS, TIME_SIGNATURES, TUNING_PRESETS, applyFade, concatChannels, detectBpm, detectKey,
@@ -28,12 +28,27 @@ import {
 
 export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner';
 
+/** Pintu kuota harian (2x gratis per alat per hari) yang disediakan AudioToolsSuite. */
+export interface QuotaGate {
+  /** Pakai satu "penggunaan" (unduh hasil, analisis, atau mulai sesi real-time). false = kuota habis (pengguna sudah diarahkan ke Harga & Lisensi).
+   *  `sessionKey`: pemanggilan berikutnya dengan kunci yang sama tidak menambah pemakaian. */
+  use: (toolId: ExtraToolId, sessionKey?: string) => Promise<boolean>;
+  /** Sudahkah `sessionKey` ini dihitung sebagai satu penggunaan? */
+  has: (toolId: ExtraToolId, sessionKey?: string) => boolean;
+  /** Kembalikan jatah bila proses gagal setelah jatah terpakai. */
+  refund: (toolId: ExtraToolId, sessionKey?: string) => void;
+  /** Panel alat dikunci: jatah habis dan belum ada pemakaian sah di sesi ini. */
+  locked: (toolId: ExtraToolId) => boolean;
+  /** Jatah hari ini habis (tanpa melihat sesi). */
+  exhausted: (toolId: ExtraToolId) => boolean;
+  /** Arahkan pengguna ke Harga & Lisensi. */
+  blocked: (toolId: ExtraToolId) => void;
+}
+
 export interface AudioExtraToolsProps {
   /** Tool yang dibuka pertama kali (mis. dari URL /alat-audio/<slug>). */
   initialTool?: ExtraToolId;
-  /** Dipanggil sebelum satu "penggunaan" (unduh hasil, analisis, atau mulai sesi real-time). Kembalikan false untuk memblokir (kuota harian habis).
-   *  `sessionKey`: pemanggilan berikutnya dengan kunci yang sama di sesi halaman yang sama tidak menambah pemakaian. */
-  gate?: (toolId: ExtraToolId, sessionKey?: string) => boolean;
+  gate?: QuotaGate;
   onSuccessToast?: (msg: string) => void;
 }
 
@@ -150,7 +165,9 @@ const ErrorNote: React.FC<{ msg: string | null }> = ({ msg }) =>
 
 const FilePicker: React.FC<{
   label: string; multiple?: boolean; disabled?: boolean; onFiles: (f: File[]) => void;
-}> = ({ label, multiple, disabled, onFiles }) => {
+  /** Dipanggil sebelum dialog berkas dibuka; kembalikan false untuk membatalkan (mis. kuota habis). */
+  onBeforePick?: () => boolean;
+}> = ({ label, multiple, disabled, onFiles, onBeforePick }) => {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
@@ -158,7 +175,7 @@ const FilePicker: React.FC<{
         ref={ref} type="file" accept="audio/*,video/*" multiple={multiple} className="hidden"
         onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ''; if (f.length) onFiles(f); }}
       />
-      <button type="button" disabled={disabled} onClick={() => ref.current?.click()} className={btnGhost}>
+      <button type="button" disabled={disabled} onClick={() => { if (onBeforePick && !onBeforePick()) return; ref.current?.click(); }} className={btnGhost}>
         <Upload className="w-4 h-4 text-accent" />
         <span>{label}</span>
       </button>
@@ -190,6 +207,7 @@ const Preview: React.FC<{ buffer: AudioBuffer | null }> = ({ buffer }) => {
   return url ? <audio controls src={url} className="w-full" /> : null;
 };
 
+let exportSeq = 0;
 const ExportPanel: React.FC<{
   buffer: AudioBuffer | null; fileName: string; toolId: ExtraToolId;
   gate?: AudioExtraToolsProps['gate']; onDone?: (m: string) => void; sessionKey?: string;
@@ -199,15 +217,21 @@ const ExportPanel: React.FC<{
   const [pct, setPct] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Satu hasil = satu penggunaan: mengunduh hasil yang sama dalam format lain tidak memakan jatah lagi.
+  const resultKey = useMemo(() => `r${++exportSeq}`, [buffer]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!buffer) return null;
   const run = async () => {
-    if (gate && !gate(toolId, sessionKey)) return;
+    if (busy) return;
+    const key = sessionKey ?? resultKey;
+    const wasPaid = gate?.has(toolId, key) ?? false;
     setBusy(true); setErr(null); setNote(null); setPct(0);
+    if (gate && !(await gate.use(toolId, key))) { setBusy(false); return; } // jatah dipesan di server
     try {
       const r = await exportAudioFile(buffer, fileName, fmt, { mp3Kbps: 192, onProgress: setPct });
       if (r.note) setNote(r.note);
       onDone?.(`Berkas ${r.actualFormat} berhasil diunduh.`);
     } catch (e) {
+      if (!wasPaid) gate?.refund(toolId, key); // ekspor gagal: jatah dikembalikan
       setErr(e instanceof Error ? e.message : 'Gagal mengekspor berkas.');
     } finally { setBusy(false); }
   };
@@ -344,7 +368,7 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
   const [res, setRes] = useState<{ bpm: ReturnType<typeof detectBpm>; key: ReturnType<typeof detectKey>; seconds: number } | null>(null);
 
   const onFiles = async ([file]: File[]) => {
-    if (gate && !gate('bpm')) return; // 1 analisis = 1 penggunaan
+    if (gate && !(await gate.use('bpm'))) return; // 1 analisis = 1 penggunaan (dipesan di server)
     setBusy(true); setErr(null); setRes(null); setFileName(file.name);
     try {
       const buf = await decodeFile(file);
@@ -352,9 +376,9 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
       const ch = viewChannels(buf);
       const bpm = detectBpm(ch, buf.sampleRate);
       const key = detectKey(ch, buf.sampleRate);
-      if (!bpm && !key) setErr('Tidak ada pola yang bisa dianalisis. Pastikan berkas cukup panjang (minimal ±5 detik) dan tidak senyap.');
+      if (!bpm && !key) { gate?.refund('bpm'); setErr('Tidak ada pola yang bisa dianalisis. Pastikan berkas cukup panjang (minimal ±5 detik) dan tidak senyap.'); }
       else setRes({ bpm, key, seconds: buf.duration });
-    } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal menganalisis.'); }
+    } catch (e) { gate?.refund('bpm'); setErr(e instanceof Error ? e.message : 'Gagal menganalisis.'); }
     finally { setBusy(false); }
   };
 
@@ -369,7 +393,8 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
 
   return (
     <Panel title="BPM & Kunci" info={['Pilih lagu, dan hasilnya langsung dianalisis.', 'Hasil berupa perkiraan otomatis. Lagu dengan tempo berubah-ubah atau modulasi bisa kurang akurat.']}>
-      <FilePicker label={busy ? 'Menganalisis…' : 'Pilih lagu untuk dianalisis'} onFiles={onFiles} disabled={busy} />
+      <FilePicker label={busy ? 'Menganalisis…' : 'Pilih lagu untuk dianalisis'} onFiles={onFiles} disabled={busy}
+        onBeforePick={() => { if (gate?.exhausted('bpm')) { gate.blocked('bpm'); return false; } return true; }} />
       <ErrorNote msg={err} />
       {res && (
         <div className="space-y-3">
@@ -703,10 +728,16 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
       else { pulseStartRef.current += dur; pulseRef.current += 1; subRef.current = 0; nextRef.current = pulseStartRef.current; }
     }
   };
-  const start = () => {
-    if (gate && !gate('metronome', 'session')) return; // 1 sesi (sampai halaman dimuat ulang) = 1 penggunaan
-    stop();
+  const startingRef = useRef(false);
+  const start = async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    // AudioContext dibuat & di-resume SEKARANG (masih di dalam gestur klik) karena Safari menolak resume setelah menunggu jaringan.
     const ctx = new AudioCtx(); void ctx.resume();
+    let allowed = true;
+    try { allowed = !gate || (await gate.use('metronome', 'session')); } finally { startingRef.current = false; } // 1 sesi (sampai halaman dimuat ulang) = 1 penggunaan, dipesan di server
+    if (!allowed) { void ctx.close(); return; }
+    stop();
     const master = ctx.createGain(); master.gain.value = cfg.current.vol; master.connect(ctx.destination);
     const noise = ctx.createBuffer(1, Math.round(ctx.sampleRate * 0.1), ctx.sampleRate);
     const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
@@ -833,7 +864,8 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
   const start = async () => {
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr('Browser ini belum mendukung akses mikrofon.'); return; }
-    if (gate && !gate('tuner', 'session')) return; // 1 sesi (sampai halaman dimuat ulang) = 1 penggunaan
+    const wasPaid = gate?.has('tuner', 'session') ?? false;
+    if (gate && !(await gate.use('tuner', 'session'))) return; // 1 sesi (sampai halaman dimuat ulang) = 1 penggunaan
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       const ctx = new AudioCtx(); void ctx.resume();
@@ -858,6 +890,7 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
       rafRef.current = requestAnimationFrame(loop);
     } catch (e) {
       stop();
+      if (!wasPaid) gate?.refund('tuner', 'session'); // mikrofon gagal dibuka: jatah dikembalikan
       setErr((e as DOMException)?.name === 'NotAllowedError' ? 'Izin mikrofon ditolak. Izinkan akses mikrofon di pengaturan browser.' : 'Gagal mengakses mikrofon.');
     }
   };
@@ -936,15 +969,17 @@ export const ExtraToolPanel: React.FC<{ active: ExtraToolId | null; gate?: Audio
   const [visited, setVisited] = useState<Set<ExtraToolId>>(new Set());
   useEffect(() => { if (active) setVisited((v) => (v.has(active) ? v : new Set(v).add(active))); }, [active]);
   const show = (id: ExtraToolId) => (active === id ? '' : 'hidden');
+  // Jatah gratis habis: semua kontrol di panel alat mengarahkan ke Harga & Lisensi.
+  const guard = (id: ExtraToolId) => quotaGuardProps(Boolean(gate?.locked(id)), () => gate?.blocked(id));
   const mounted = (id: ExtraToolId) => (EXTRA_TOOL_META.find((t) => t.id === id)?.realtime ? active === id : visited.has(id) || active === id);
   return (
     <div className={active ? '' : 'hidden'}>
-      {mounted('merge') && <div className={show('merge')}><MergeFadeTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('clean') && <div className={show('clean')}><CleanTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('recorder') && <div className={show('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('bpm') && <div className={show('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('metronome') && <div className={show('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('tuner') && <div className={show('tuner')}><TunerTool gate={gate} /></div>}
+      {mounted('merge') && <div className={show('merge')} {...guard('merge')}><MergeFadeTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('clean') && <div className={show('clean')} {...guard('clean')}><CleanTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('recorder') && <div className={show('recorder')} {...guard('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('bpm') && <div className={show('bpm')} {...guard('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('metronome') && <div className={show('metronome')} {...guard('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('tuner') && <div className={show('tuner')} {...guard('tuner')}><TunerTool gate={gate} /></div>}
     </div>
   );
 };
