@@ -5,6 +5,7 @@ import { generateMidiFile, exportAudioFile, downloadBlob } from '../../services/
 import { audioEngine, EnvelopeADSR } from '../../services/audioEngine';
 import { ModalPortal } from './ModalPortal';
 import { IntField } from './NumberFields';
+import { DRUM_LEVEL_GAIN, DRUM_LEVEL_MIDI, clampLevel } from './padModel';
 
 export type ExportScope = 'drum' | 'chord' | 'both';
 
@@ -13,6 +14,8 @@ export interface ChordTrackExportData {
   name: string;
   program: number;
   notesPerStep: number[][];
+  // Panjang tiap not dalam step (indeks = step awal not). Jika kosong, akor ditahan sampai akor berikutnya.
+  stepLens?: number[];
   volume: number;
   adsr: EnvelopeADSR;
   enabled: boolean;
@@ -31,7 +34,7 @@ interface ExportPatternModalProps {
   // Birama untuk meta-event berkas MIDI.
   timeSignature?: { num: number; den: number };
   bpm: number;
-  drumGrid: { [key: string]: boolean[] };
+  drumGrid: { [key: string]: number[] }; // level kekuatan 0–4 per step
   chordTracksData?: ChordTrackExportData[];
   drumAdsr?: EnvelopeADSR;
   drumVolume?: number;
@@ -73,6 +76,12 @@ const DRUM_NOTE_MAP: { [key: string]: number } = {
 
 // Jumlah step sampai kejadian akor berikutnya di track yang sama (maks. `maxSteps`).
 // Dipakai agar akor ditahan sampai akor berikutnya, bukan dipotong pendek seperti nada drum.
+const chordHoldSteps = (track: ChordTrackExportData, step: number, maxSteps: number): number => {
+  const explicit = track.stepLens?.[step];
+  if (explicit && explicit > 0) return Math.max(1, Math.min(explicit, maxSteps));
+  return stepsUntilNextChord(track.notesPerStep, step, maxSteps);
+};
+
 const stepsUntilNextChord = (notesPerStep: number[][], step: number, maxSteps: number): number => {
   let d = 1;
   while (d < maxSteps && step + d < notesPerStep.length && !(notesPerStep[step + d] && notesPerStep[step + d].length > 0)) {
@@ -183,9 +192,10 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
     const events: GenericMidiEvent[] = [];
     Object.keys(drumGrid).forEach((instId) => {
       const noteNumber = DRUM_NOTE_MAP[instId] || 36;
-      drumGrid[instId].forEach((isActive, step) => {
-        if (isActive && step >= fromStep && step <= toStep) {
-          events.push({ step: step - fromStep, note: noteNumber, velocity: 105, isDrum: true, durationSteps: 1 });
+      drumGrid[instId].forEach((rawLevel, step) => {
+        const level = clampLevel(rawLevel);
+        if (level > 0 && step >= fromStep && step <= toStep) {
+          events.push({ step: step - fromStep, note: noteNumber, velocity: DRUM_LEVEL_MIDI[level], isDrum: true, durationSteps: 1 });
         }
       });
     });
@@ -201,7 +211,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             step: step - fromStep,
             note,
             velocity: Math.round(95 * track.volume),
-            durationSteps: Math.min(stepsUntilNextChord(track.notesPerStep, step, stepsPerBar * 2), toStep - step + 1),
+            durationSteps: Math.min(chordHoldSteps(track, step, totalStepsAvailable), toStep - step + 1),
             channel: channelIdx,
           });
         });
@@ -293,14 +303,15 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
 
         const renderDrumHitsForStep = (step: number, time: number) => {
           drumParts.forEach((part) => {
-            if (drumGrid[part]?.[step]) {
+            const level = clampLevel(drumGrid[part]?.[step]);
+            if (level > 0) {
               audioEngine.renderDrumHitToDestination(
                 offlineCtx,
                 master,
                 part,
                 selectedDrumKit,
                 time,
-                drumVolume,
+                drumVolume * DRUM_LEVEL_GAIN[level],
                 drumBufferByPart[part],
                 activeDrumAdsr
               );
@@ -323,9 +334,9 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
               activeTracks.forEach((track) => {
                 const notes = track.notesPerStep[globalStep];
                 if (notes && notes.length > 0) {
-                  // Tahan akor sampai akor berikutnya (maks. 2 bar) dan jangan melewati akhir rentang ekspor.
+                  // Tahan akor sesuai panjang not-nya dan jangan melewati akhir rentang ekspor.
                   const holdSteps = Math.min(
-                    stepsUntilNextChord(track.notesPerStep, globalStep, stepsPerBar * 2),
+                    chordHoldSteps(track, globalStep, totalStepsAvailable),
                     rangeStepCount - localStep
                   );
                   const holdSec = holdSteps * stepSec;

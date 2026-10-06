@@ -19,6 +19,13 @@ import {
   ChevronRight,
   Drum,
   Layers,
+  Copy,
+  Scissors,
+  ClipboardPaste,
+  CopyPlus,
+  Trash2,
+  Pencil,
+  BoxSelect,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -36,6 +43,26 @@ import {
 import { ExportPatternModal, ChordTrackExportData } from './ExportPatternModal';
 import { ModalPortal } from './ModalPortal';
 import { AdsrField, IntField } from './NumberFields';
+import {
+  DRUM_LEVEL_MAX,
+  DRUM_LEVEL_LABEL,
+  DRUM_LEVEL_GAIN,
+  DRUM_LEVEL_CELL_CLASS,
+  clampLevel,
+  emptyTrackData,
+  listNotes,
+  noteStartCovering,
+  insertNote,
+  removeNote,
+  resizeNote,
+  remapTrackData,
+  makeRect,
+  ChordNote,
+  SelRect,
+  SeqClip,
+  DrumClip,
+  ChordClip,
+} from './padModel';
 
 interface PadStudioProps {
   entitlements: AudioEntitlements;
@@ -149,12 +176,13 @@ function remapSteps<T>(src: T[], oldS: number, newS: number, fill: T): T[] {
 }
 
 // Pola drum bawaan yang menyesuaikan birama (kick di ketukan awal, snare di ketukan "backbeat", hat tiap 1/8).
-function buildDefaultDrumGrid(ts: TimeSignatureDef): { [key: string]: boolean[] } {
+// Nilai = level kekuatan 0–4 (kick/snare "keras", hi-hat "normal").
+function buildDefaultDrumGrid(ts: TimeSignatureDef): { [key: string]: number[] } {
   const S = stepsPerBarOf(ts);
   const total = S * TOTAL_BARS;
-  const grid: { [key: string]: boolean[] } = {};
+  const grid: { [key: string]: number[] } = {};
   DRUM_INSTRUMENTS.forEach((inst) => {
-    grid[inst.id] = Array(total).fill(false);
+    grid[inst.id] = Array(total).fill(0);
   });
   const starts: number[] = [];
   let acc = 0;
@@ -168,30 +196,25 @@ function buildDefaultDrumGrid(ts: TimeSignatureDef): { [key: string]: boolean[] 
   for (let bar = 0; bar < DEFAULT_PATTERN_BARS; bar++) {
     const base = bar * S;
     kickGroups.forEach((g) => {
-      grid.kick[base + starts[g]] = true;
+      grid.kick[base + starts[g]] = 3;
     });
     snareGroups.forEach((g) => {
-      grid.snare[base + starts[g]] = true;
+      grid.snare[base + starts[g]] = 3;
     });
-    for (let i = 0; i < S; i += 2) grid.closedhat[base + i] = true;
+    for (let i = 0; i < S; i += 2) grid.closedhat[base + i] = 2;
   }
   return grid;
 }
 
-// Progresi akor bawaan: satu akor di awal tiap bar, 4 bar pertama.
-function buildDefaultChordSteps(ts: TimeSignatureDef): number[] {
+// Progresi akor bawaan: satu akor di awal tiap bar (panjang 1 bar), 4 bar pertama.
+function buildDefaultChordSteps(ts: TimeSignatureDef): { steps: number[]; lens: number[] } {
   const S = stepsPerBarOf(ts);
-  const arr: number[] = Array(S * TOTAL_BARS).fill(-1);
-  for (let bar = 0; bar < DEFAULT_PATTERN_BARS; bar++) arr[bar * S] = bar;
-  return arr;
-}
-
-// Berapa step sebuah akor ditahan: sampai akor berikutnya di track yang sama (maks. `limit` step).
-function holdStepsFor(steps: number[], step: number, limit: number): number {
-  const maxSteps = Math.max(1, limit);
-  let d = 1;
-  while (d < maxSteps && step + d < steps.length && steps[step + d] < 0) d++;
-  return d;
+  const data = emptyTrackData(S * TOTAL_BARS);
+  for (let bar = 0; bar < DEFAULT_PATTERN_BARS; bar++) {
+    data.steps[bar * S] = bar;
+    data.lens[bar * S] = S;
+  }
+  return data;
 }
 
 // ---------------------------------------------------------------------------
@@ -263,7 +286,7 @@ interface LiveSeqState {
   isSeqLooping: boolean;
   isUnlocked8Bar: boolean;
   stepsPerBar: number;
-  drumGrid: { [key: string]: boolean[] };
+  drumGrid: { [key: string]: number[] };
   chordTracks: ChordTrackState[];
   padInfo: PadInfo[];
   selectedDrumKit: string;
@@ -275,36 +298,43 @@ interface LiveSeqState {
   loopEndBeat: number;
 }
 
+const SEL_CLASS = 'outline outline-2 outline-sky-300 -outline-offset-2';
+
 const DrumCell = memo(function DrumCell({
   drumId,
   stepIdx,
-  active,
+  level,
+  selected,
   beat,
-  onToggle,
+  onPaint,
 }: {
   drumId: string;
   stepIdx: number;
-  active: boolean;
+  level: number;
+  selected: boolean;
   beat: boolean;
-  onToggle: (drumId: string, stepIdx: number) => void;
+  onPaint: (drumId: string, stepIdx: number) => void;
 }) {
   return (
     <button
       type="button"
       data-step={stepIdx}
-      onClick={() => onToggle(drumId, stepIdx)}
+      data-level={level}
+      title={`Kekuatan: ${DRUM_LEVEL_LABEL[level]}`}
+      onClick={() => onPaint(drumId, stepIdx)}
       className={`h-7 rounded-xs transition-colors relative flex items-center justify-center cursor-pointer ${
-        active
-          ? 'bg-accent text-on-accent font-bold shadow-xs'
+        level > 0
+          ? `${DRUM_LEVEL_CELL_CLASS[level]} text-on-accent font-bold`
           : beat
           ? 'bg-black/35 hover:bg-black/70 border border-white/[0.09]'
           : 'bg-black/60 hover:bg-black/90 border border-white/[0.05]'
-      }`}
+      } ${selected ? SEL_CLASS : ''}`}
     />
   );
 });
 
 const DrumRow = memo(function DrumRow({
+  rowIdx,
   id,
   label,
   row,
@@ -312,29 +342,35 @@ const DrumRow = memo(function DrumRow({
   stepsPerBar,
   beatMask,
   gridStyle,
-  onToggle,
+  selS1,
+  selS2,
+  onPaint,
 }: {
+  rowIdx: number;
   id: string;
   label: string;
-  row: boolean[] | undefined;
+  row: number[] | undefined;
   steps: number[];
   stepsPerBar: number;
   beatMask: boolean[];
   gridStyle: React.CSSProperties;
-  onToggle: (drumId: string, stepIdx: number) => void;
+  selS1: number; // -1 = baris ini tidak terpilih
+  selS2: number;
+  onPaint: (drumId: string, stepIdx: number) => void;
 }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-36 text-xs font-semibold text-gray-300 truncate shrink-0 px-1">{label}</span>
-      <div className="grid gap-0.5 flex-1" style={gridStyle}>
+      <div className="grid gap-0.5 flex-1" style={gridStyle} data-rowgrid="" data-row={rowIdx}>
         {steps.map((stepIdx) => (
           <DrumCell
             key={stepIdx}
             drumId={id}
             stepIdx={stepIdx}
-            active={Boolean(row?.[stepIdx])}
+            level={clampLevel(row?.[stepIdx])}
+            selected={selS1 >= 0 && stepIdx >= selS1 && stepIdx <= selS2}
             beat={Boolean(beatMask[stepIdx % stepsPerBar])}
-            onToggle={onToggle}
+            onPaint={onPaint}
           />
         ))}
       </div>
@@ -342,58 +378,152 @@ const DrumRow = memo(function DrumRow({
   );
 });
 
+// Sel kosong (tempat memilih akor). Sel yang tertutup blok not dirender sebagai penampung kosong.
 const ChordCell = memo(function ChordCell({
   trackIdx,
   stepIdx,
+  col,
   posInBar,
   beat,
-  padIdx,
-  isAssigned,
-  fullName,
+  covered,
+  selected,
   options,
   onPick,
 }: {
   trackIdx: number;
   stepIdx: number;
+  col: number;
   posInBar: number;
   beat: boolean;
-  padIdx: number;
-  isAssigned: boolean;
-  fullName: string;
+  covered: boolean;
+  selected: boolean;
   options: React.ReactNode;
   onPick: (trackIdx: number, stepIdx: number, padIdx: number) => void;
 }) {
-  const shortName = isAssigned ? fullName.replace(/\s+/g, '') : '-';
+  const style = { gridColumn: col, gridRow: 1 } as const;
+  if (covered) return <div data-step={stepIdx} style={style} className="h-20 pointer-events-none" />;
   return (
     <div
       data-step={stepIdx}
-      className={`h-20 rounded-lg p-1 flex flex-col justify-between items-center transition-colors relative ${
-        isAssigned
-          ? 'bg-accent/20 border border-accent text-white shadow-xs'
+      style={style}
+      className={`h-20 rounded-lg p-1 flex flex-col justify-between items-center transition-colors relative border ${
+        selected
+          ? `bg-white/15 border-white/30 ${SEL_CLASS}`
           : beat
-          ? 'bg-black/35 border border-white/[0.09] hover:border-white/20'
-          : 'bg-black/60 border border-white/[0.05] hover:border-white/20'
+          ? 'bg-black/35 border-white/[0.09] hover:border-white/20'
+          : 'bg-black/60 border-white/[0.05] hover:border-white/20'
       }`}
     >
       <span className="text-[10px] text-gray-400 font-mono font-bold">{posInBar + 1}</span>
       <div className="w-full flex-1 flex flex-col items-center justify-center relative">
-        <span
-          className={`text-[11px] font-black tracking-tight leading-none text-center px-0.5 w-full overflow-hidden ${
-            isAssigned ? 'text-accent' : 'text-gray-500'
-          }`}
-          title={isAssigned ? fullName : '-'}
-        >
-          {shortName}
-        </span>
+        <span className="text-[11px] font-black text-gray-500">-</span>
         <select
-          value={padIdx}
+          value={-1}
           onChange={(e) => onPick(trackIdx, stepIdx, Number(e.target.value))}
           className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          aria-label={`Pasang akor di step ${posInBar + 1}`}
         >
           {options}
         </select>
       </div>
-      <div className={`w-1.5 h-1.5 rounded-full mb-0.5 ${isAssigned ? 'bg-accent' : 'bg-transparent'}`} />
+      <div className="w-1.5 h-1.5 mb-0.5" />
+    </div>
+  );
+});
+
+// Blok not akor: membentang sepanjang `note.len` step. Tepi kanan bisa diseret untuk memanjangkan/memendekkan.
+const ChordBlock = memo(function ChordBlock({
+  trackIdx,
+  note,
+  winStart,
+  viewSteps,
+  posInBar,
+  fullName,
+  selected,
+  options,
+  getMode,
+  onPick,
+  onResize,
+}: {
+  trackIdx: number;
+  note: ChordNote;
+  winStart: number;
+  viewSteps: number;
+  posInBar: number;
+  fullName: string;
+  selected: boolean;
+  options: React.ReactNode;
+  getMode: () => 'edit' | 'select';
+  onPick: (trackIdx: number, stepIdx: number, padIdx: number) => void;
+  onResize: (trackIdx: number, start: number, newLen: number) => void;
+}) {
+  const winEnd = winStart + viewSteps - 1;
+  const noteEnd = note.start + note.len - 1;
+  const clippedL = note.start < winStart;
+  const clippedR = noteEnd > winEnd;
+  const visStart = Math.max(note.start, winStart);
+  const visEnd = Math.min(noteEnd, winEnd);
+
+  const onHandleDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (getMode() === 'select' || e.shiftKey) return; // biarkan gestur seleksi yang bekerja
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const grid = e.currentTarget.closest('[data-rowgrid]') as HTMLElement | null;
+    if (!grid) return;
+    const move = (ev: PointerEvent) => {
+      const r = grid.getBoundingClientRect();
+      const frac = (ev.clientX - r.left) / r.width;
+      const step = winStart + Math.max(0, Math.min(viewSteps - 1, Math.floor(frac * viewSteps)));
+      onResize(trackIdx, note.start, step - note.start + 1);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  return (
+    <div
+      data-block=""
+      style={{ gridColumn: `${visStart - winStart + 1} / span ${visEnd - visStart + 1}`, gridRow: 1 }}
+      className={`relative z-[2] h-20 border border-accent bg-accent/25 text-white p-1 flex flex-col justify-between items-center overflow-hidden ${
+        clippedL ? 'rounded-l-none border-l-0' : 'rounded-l-lg'
+      } ${clippedR ? 'rounded-r-none border-r-0' : 'rounded-r-lg'} ${selected ? SEL_CLASS : ''}`}
+    >
+      <span className="text-[10px] text-gray-300 font-mono font-bold self-start">
+        {clippedL ? '◂' : posInBar + 1}
+      </span>
+      <div className="w-full flex-1 flex items-center justify-center relative min-w-0">
+        <span className="text-[11px] font-black tracking-tight leading-none text-accent px-1 truncate" title={fullName}>
+          {fullName.replace(/\s+/g, '')}
+        </span>
+        <select
+          value={note.pad}
+          onChange={(e) => onPick(trackIdx, note.start, Number(e.target.value))}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+          aria-label="Ganti akor"
+        >
+          {options}
+        </select>
+      </div>
+      <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+        {note.len > 1 && <span className="text-[9px] font-mono text-gray-300">{note.len}</span>}
+      </div>
+      {!clippedR && (
+        <div
+          onPointerDown={onHandleDown}
+          title="Seret untuk mengubah panjang akor"
+          className="absolute top-0 right-0 h-full w-3 cursor-ew-resize touch-none bg-accent/40 hover:bg-accent/80 flex items-center justify-center"
+        >
+          <div className="w-0.5 h-5 rounded bg-black/50" />
+        </div>
+      )}
     </div>
   );
 });
@@ -408,7 +538,11 @@ const ChordRow = memo(function ChordRow({
   stepsPerBar,
   beatMask,
   gridStyle,
+  selS1,
+  selS2,
+  getMode,
   onPick,
+  onResize,
 }: {
   tIdx: number;
   track: ChordTrackState;
@@ -419,38 +553,86 @@ const ChordRow = memo(function ChordRow({
   stepsPerBar: number;
   beatMask: boolean[];
   gridStyle: React.CSSProperties;
+  selS1: number;
+  selS2: number;
+  getMode: () => 'edit' | 'select';
   onPick: (trackIdx: number, stepIdx: number, padIdx: number) => void;
+  onResize: (trackIdx: number, start: number, newLen: number) => void;
 }) {
+  const winStart = steps[0] ?? 0;
+  const winEnd = steps[steps.length - 1] ?? 0;
+  const notes = useMemo(() => listNotes(track.steps, track.lens), [track.steps, track.lens]);
+  const visible = notes.filter((n) => n.start <= winEnd && n.start + n.len - 1 >= winStart);
+  const coveredMask = new Array<boolean>(steps.length).fill(false);
+  visible.forEach((n) => {
+    const a = Math.max(n.start, winStart);
+    const b = Math.min(n.start + n.len - 1, winEnd);
+    for (let s = a; s <= b; s++) coveredMask[s - winStart] = true;
+  });
+
   return (
     <div className="flex items-center gap-2">
       <div className="w-36 shrink-0 px-1 flex flex-col justify-center">
         <span className="text-xs font-semibold text-gray-200 truncate">{track.label}</span>
         <span className="text-[10px] text-accent truncate font-mono">{instName}</span>
       </div>
-      <div className="grid gap-0.5 flex-1" style={gridStyle}>
-        {steps.map((stepIdx) => {
-          const assigned = track.steps[stepIdx] ?? -1;
-          const info = assigned >= 0 ? padInfo[assigned] : undefined;
+      <div className="grid gap-0.5 flex-1" style={gridStyle} data-rowgrid="" data-row={tIdx}>
+        {steps.map((stepIdx, i) => {
           const posInBar = stepIdx % stepsPerBar;
           return (
             <ChordCell
               key={stepIdx}
               trackIdx={tIdx}
               stepIdx={stepIdx}
+              col={i + 1}
               posInBar={posInBar}
               beat={Boolean(beatMask[posInBar])}
-              padIdx={assigned}
-              isAssigned={Boolean(info)}
-              fullName={info?.displayName ?? '-'}
+              covered={coveredMask[i]}
+              selected={selS1 >= 0 && stepIdx >= selS1 && stepIdx <= selS2}
               options={options}
               onPick={onPick}
             />
           );
         })}
+        {visible.map((n) => (
+          <ChordBlock
+            key={n.start}
+            trackIdx={tIdx}
+            note={n}
+            winStart={winStart}
+            viewSteps={steps.length}
+            posInBar={n.start % stepsPerBar}
+            fullName={padInfo[n.pad]?.displayName ?? '?'}
+            selected={selS1 >= 0 && n.start >= selS1 && n.start <= selS2}
+            options={options}
+            getMode={getMode}
+            onPick={onPick}
+            onResize={onResize}
+          />
+        ))}
       </div>
     </div>
   );
 });
+
+const ToolBtn: React.FC<{
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  title?: string;
+}> = ({ icon: Icon, label, onClick, disabled, title }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={disabled}
+    title={title}
+    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-white/5 hover:bg-white/15 text-gray-200 border border-white/10 transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
+  >
+    <Icon className="w-3 h-3" />
+    <span>{label}</span>
+  </button>
+);
 
 interface ChordTrackState {
   id: number;
@@ -461,7 +643,8 @@ interface ChordTrackState {
   muted: boolean;
   solo: boolean;
   adsr: EnvelopeADSR;
-  steps: number[];
+  steps: number[]; // indeks pad akor yang dimulai di step ini (-1 = kosong)
+  lens: number[]; // panjang not (step) yang dimulai di step ini (0 = kosong)
 }
 
 export const PadStudio: React.FC<PadStudioProps> = ({
@@ -514,7 +697,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.02, decay: 0.25, sustain: 0.65, release: 0.35 },
-      steps: buildDefaultChordSteps(INITIAL_TS),
+      ...buildDefaultChordSteps(INITIAL_TS),
     },
     {
       id: 2,
@@ -525,7 +708,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.05, decay: 0.4, sustain: 0.8, release: 0.9 },
-      steps: Array(INITIAL_TOTAL_STEPS).fill(-1),
+      ...emptyTrackData(INITIAL_TOTAL_STEPS),
     },
     {
       id: 3,
@@ -536,7 +719,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.1, decay: 0.5, sustain: 0.75, release: 1.2 },
-      steps: Array(INITIAL_TOTAL_STEPS).fill(-1),
+      ...emptyTrackData(INITIAL_TOTAL_STEPS),
     },
     {
       id: 4,
@@ -547,7 +730,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.03, decay: 0.3, sustain: 0.7, release: 0.8 },
-      steps: Array(INITIAL_TOTAL_STEPS).fill(-1),
+      ...emptyTrackData(INITIAL_TOTAL_STEPS),
     },
   ]);
 
@@ -628,7 +811,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     octaveOffset: 0,
   });
 
-  const [drumGrid, setDrumGrid] = useState<{ [key: string]: boolean[] }>(() => buildDefaultDrumGrid(INITIAL_TS));
+  const [drumGrid, setDrumGrid] = useState<{ [key: string]: number[] }>(() => buildDefaultDrumGrid(INITIAL_TS));
 
   // Sinkronisasi ADSR Drum ke AudioEngine
   useEffect(() => {
@@ -735,20 +918,47 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setTimeout(() => setActivePadAnim(null), 250);
   };
 
-  const toggleDrumStep = useCallback((drumId: string, stepIndex: number) => {
+  // ---------------------------------------------------------------------------
+  // MODE EDIT / PILIH, KEKUATAN DRUM, PANJANG AKOR BARU
+  // ---------------------------------------------------------------------------
+  const [editMode, setEditMode] = useState<'edit' | 'select'>('edit');
+  const modeRef = useRef<'edit' | 'select'>('edit');
+  modeRef.current = editMode;
+  const getMode = useCallback(() => modeRef.current, []);
+
+  // Kekuatan yang dipasang saat pad drum diklik: 'cycle' = putar 0→1→2→3→4→0, angka = pasang level itu
+  // (klik lagi pada level yang sama untuk menghapus).
+  const [drumBrush, setDrumBrush] = useState<'cycle' | 1 | 2 | 3 | 4>(3);
+  const drumBrushRef = useRef(drumBrush);
+  drumBrushRef.current = drumBrush;
+
+  // Panjang default akor yang baru dipasang (dalam step).
+  const [newChordLen, setNewChordLen] = useState<number>(INITIAL_STEPS_PER_BAR);
+  const newChordLenRef = useRef(newChordLen);
+  newChordLenRef.current = newChordLen;
+
+  const paintDrumStep = useCallback((drumId: string, stepIndex: number) => {
     const spb = layoutRef.current.stepsPerBar;
-    const barIndex = Math.floor(stepIndex / spb);
-    if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
+    if (!gateRef.current.isUnlocked8Bar && Math.floor(stepIndex / spb) > 0) {
       gateRef.current.onUnlockEditor();
       return;
     }
+    const L = liveRef.current;
+    const cur = clampLevel(L?.drumGrid[drumId]?.[stepIndex]);
+    const brush = drumBrushRef.current;
+    const next = brush === 'cycle' ? (cur + 1) % (DRUM_LEVEL_MAX + 1) : cur === brush ? 0 : brush;
     setDrumGrid((prev) => {
-      const row = [...(prev[drumId] || Array(layoutRef.current.totalSteps).fill(false))];
-      row[stepIndex] = !row[stepIndex];
+      const row = [...(prev[drumId] || Array(layoutRef.current.totalSteps).fill(0))];
+      row[stepIndex] = next;
       return { ...prev, [drumId]: row };
     });
+    // Dengarkan kekuatan yang dipasang (hanya saat drum tidak sedang diputar).
+    if (next > 0 && L && !L.isDrumLoopActive) {
+      audioEngine.playDrumSound(drumId, L.selectedDrumKit, (L.drumVolume / 100) * DRUM_LEVEL_GAIN[next]);
+    }
   }, []);
 
+  // Pilih akor di sebuah sel: kosong → buat not baru (panjang default), blok → ganti akor, "-" → hapus not.
   const setTrackChordStep = useCallback((trackIndex: number, stepIndex: number, padIdx: number) => {
     const barIndex = Math.floor(stepIndex / layoutRef.current.stepsPerBar);
     if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
@@ -757,11 +967,383 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }
     setChordTracks((prev) => {
       const copy = [...prev];
-      const stepsCopy = [...copy[trackIndex].steps];
-      stepsCopy[stepIndex] = stepsCopy[stepIndex] === padIdx ? -1 : padIdx;
-      copy[trackIndex] = { ...copy[trackIndex], steps: stepsCopy };
+      const t = copy[trackIndex];
+      let data: { steps: number[]; lens: number[] };
+      if (padIdx < 0) {
+        data = removeNote(t.steps, t.lens, stepIndex);
+      } else if (t.steps[stepIndex] >= 0) {
+        const steps = [...t.steps];
+        steps[stepIndex] = padIdx;
+        data = { steps, lens: t.lens };
+      } else {
+        data = insertNote(t.steps, t.lens, stepIndex, padIdx, newChordLenRef.current);
+      }
+      copy[trackIndex] = { ...t, ...data };
       return copy;
     });
+  }, []);
+
+  const resizeChordNote = useCallback((trackIndex: number, start: number, newLen: number) => {
+    setChordTracks((prev) => {
+      const t = prev[trackIndex];
+      if (!t || t.steps[start] < 0) return prev;
+      const next = resizeNote(t.steps, t.lens, start, newLen);
+      if (next.lens[start] === t.lens[start]) return prev;
+      const copy = [...prev];
+      copy[trackIndex] = { ...t, lens: next.lens };
+      return copy;
+    });
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // SELEKSI, SALIN, POTONG, TEMPEL, DUPLIKAT, HAPUS
+  // ---------------------------------------------------------------------------
+  const [sel, setSel] = useState<SelRect | null>(null);
+  const activeSel = sel && sel.tab === activeTab ? sel : null;
+  const selRef = useRef<SelRect | null>(null);
+  selRef.current = activeSel;
+  const anchorRef = useRef<{ r: number; s: number } | null>(null);
+  const [clips, setClips] = useState<{ drum: DrumClip | null; chord: ChordClip | null }>({ drum: null, chord: null });
+  const clipsRef = useRef(clips);
+  clipsRef.current = clips;
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const focusInsideRef = useRef(false);
+  const modalOpenRef = useRef(false);
+  modalOpenRef.current = editingPadIndex !== null || isExportModalOpen || isExportMenuOpen;
+  const activeTabRef = useRef<PadTab>(activeTab);
+  activeTabRef.current = activeTab;
+
+  const rowCountOf = (tab: PadTab) => (tab === 'drum' ? DRUM_INSTRUMENTS.length : 4);
+
+  // Rect seleksi; untuk akor, awal rect digeser ke awal not yang menutupi step itu supaya not utuh terpilih.
+  const buildRect = (tab: PadTab, a: { r: number; s: number }, b: { r: number; s: number }): SelRect => {
+    const rect = makeRect(tab, a, b);
+    if (tab === 'chord') {
+      const tracks = liveRef.current?.chordTracks ?? [];
+      let s1 = rect.s1;
+      for (let i = rect.r1; i <= rect.r2; i++) {
+        const t = tracks[i];
+        if (!t) continue;
+        const cs = noteStartCovering(t.steps, t.lens, rect.s1);
+        if (cs >= 0 && cs < s1) s1 = cs;
+      }
+      rect.s1 = s1;
+    }
+    return rect;
+  };
+
+  // Ubah koordinat pointer menjadi (baris, step) dari geometri baris grid (blok akor tidak mengganggu).
+  const pointToCell = (x: number, y: number): { r: number; s: number } | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    const rowEl = el?.closest<HTMLElement>('[data-rowgrid]');
+    if (!rowEl) return null;
+    const rect = rowEl.getBoundingClientRect();
+    const v = viewRef.current;
+    const count = v.count * v.stepsPerBar;
+    const frac = (x - rect.left) / rect.width;
+    const s = v.start * v.stepsPerBar + Math.max(0, Math.min(count - 1, Math.floor(frac * count)));
+    return { r: Number(rowEl.dataset.row), s };
+  };
+
+  const handleGridPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const selecting = modeRef.current === 'select' || e.shiftKey;
+    if (!selecting) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const cell = pointToCell(e.clientX, e.clientY);
+    if (!cell) return;
+    const tab = activeTabRef.current;
+    const anchor = e.shiftKey && selRef.current && anchorRef.current ? anchorRef.current : cell;
+    anchorRef.current = anchor;
+    setSel(buildRect(tab, anchor, cell));
+    e.preventDefault();
+    const move = (ev: PointerEvent) => {
+      const c = pointToCell(ev.clientX, ev.clientY);
+      if (c && anchorRef.current) setSel(buildRect(tab, anchorRef.current, c));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
+  // Klik label BAR = pilih seluruh bar itu (Shift+klik = perluas).
+  const selectBar = (barIdx: number, extend: boolean) => {
+    const tab = activeTabRef.current;
+    const S = layoutRef.current.stepsPerBar;
+    let s1 = barIdx * S;
+    let s2 = s1 + S - 1;
+    const prev = selRef.current;
+    if (extend && prev) {
+      s1 = Math.min(s1, prev.s1);
+      s2 = Math.max(s2, prev.s2);
+    }
+    anchorRef.current = { r: 0, s: s1 };
+    setSel({ tab, r1: 0, r2: rowCountOf(tab) - 1, s1, s2 });
+  };
+
+  const buildClip = (rect: SelRect): SeqClip | null => {
+    const L = liveRef.current;
+    if (!L) return null;
+    const rows = rect.r2 - rect.r1 + 1;
+    const width = rect.s2 - rect.s1 + 1;
+    if (rect.tab === 'drum') {
+      const data: number[][] = [];
+      for (let r = 0; r < rows; r++) {
+        const id = DRUM_INSTRUMENTS[rect.r1 + r]?.id;
+        const row = (id && L.drumGrid[id]) || [];
+        data.push(Array.from({ length: width }, (_, i) => clampLevel(row[rect.s1 + i])));
+      }
+      return { kind: 'drum', rows, width, data };
+    }
+    const data: ChordClip['data'] = [];
+    for (let r = 0; r < rows; r++) {
+      const t = L.chordTracks[rect.r1 + r];
+      data.push(
+        Array.from({ length: width }, (_, i) => {
+          const st = rect.s1 + i;
+          return t && t.steps[st] >= 0 ? { pad: t.steps[st], len: t.lens[st] || 1 } : null;
+        })
+      );
+    }
+    return { kind: 'chord', rows, width, data };
+  };
+
+  const copySelection = (): boolean => {
+    const rect = selRef.current;
+    if (!rect) return false;
+    const clip = buildClip(rect);
+    if (!clip) return false;
+    const next = { ...clipsRef.current, [clip.kind]: clip } as typeof clips;
+    clipsRef.current = next;
+    setClips(next);
+    return true;
+  };
+
+  const deleteSelection = () => {
+    const rect = selRef.current;
+    if (!rect) return;
+    if (rect.tab === 'drum') {
+      setDrumGrid((prev) => {
+        const out = { ...prev };
+        for (let r = rect.r1; r <= rect.r2; r++) {
+          const id = DRUM_INSTRUMENTS[r]?.id;
+          if (!id) continue;
+          const row = [...(prev[id] || [])];
+          for (let s = rect.s1; s <= rect.s2; s++) row[s] = 0;
+          out[id] = row;
+        }
+        return out;
+      });
+    } else {
+      setChordTracks((prev) =>
+        prev.map((t, ti) => {
+          if (ti < rect.r1 || ti > rect.r2 || !t.enabled) return t;
+          const steps = [...t.steps];
+          const lens = [...t.lens];
+          for (let s = rect.s1; s <= rect.s2; s++) {
+            steps[s] = -1;
+            lens[s] = 0;
+          }
+          return { ...t, steps, lens };
+        })
+      );
+    }
+  };
+
+  const cutSelection = () => {
+    if (copySelection()) deleteSelection();
+  };
+
+  // Tempel `clip` dengan pojok kiri-atas di (baris r0, step s0). Mengembalikan area yang ditempel.
+  const pasteClip = (clip: SeqClip, r0: number, s0: number): SelRect | null => {
+    const { totalSteps: total, stepsPerBar: spb } = layoutRef.current;
+    if (s0 >= total) {
+      onSuccessToast('Tidak ada ruang untuk menempel di sini (sudah di ujung grid).');
+      return null;
+    }
+    const lastStep = Math.min(total - 1, s0 + clip.width - 1);
+    if (!gateRef.current.isUnlocked8Bar && Math.floor(lastStep / spb) > 0) {
+      gateRef.current.onUnlockEditor();
+      return null;
+    }
+    const rowsMax = clip.kind === 'drum' ? DRUM_INSTRUMENTS.length : 4;
+    const rowsUsed = Math.min(clip.rows, rowsMax - r0);
+    if (rowsUsed <= 0) return null;
+
+    if (clip.kind === 'drum') {
+      setDrumGrid((prev) => {
+        const out = { ...prev };
+        for (let r = 0; r < rowsUsed; r++) {
+          const id = DRUM_INSTRUMENTS[r0 + r].id;
+          const row = [...(prev[id] || Array(total).fill(0))];
+          for (let i = 0; i < clip.width && s0 + i < total; i++) row[s0 + i] = clip.data[r][i];
+          out[id] = row;
+        }
+        return out;
+      });
+    } else {
+      setChordTracks((prev) =>
+        prev.map((t, ti) => {
+          const r = ti - r0;
+          if (r < 0 || r >= rowsUsed || !t.enabled) return t;
+          let steps = [...t.steps];
+          let lens = [...t.lens];
+          // Not yang menutupi titik tempel dipotong; area tujuan dikosongkan (mode "timpa").
+          const cs = noteStartCovering(steps, lens, s0);
+          if (cs >= 0 && cs < s0) lens[cs] = s0 - cs;
+          for (let s = s0; s <= lastStep; s++) {
+            steps[s] = -1;
+            lens[s] = 0;
+          }
+          for (let i = 0; i < clip.width && s0 + i < total; i++) {
+            const cell = clip.data[r][i];
+            if (cell) ({ steps, lens } = insertNote(steps, lens, s0 + i, cell.pad, cell.len));
+          }
+          return { ...t, steps, lens };
+        })
+      );
+    }
+    return { tab: clip.kind, r1: r0, r2: r0 + rowsUsed - 1, s1: s0, s2: lastStep };
+  };
+
+  const pasteSelection = () => {
+    const clip = clipsRef.current[activeTabRef.current];
+    if (!clip) return;
+    const rect = selRef.current;
+    const res = pasteClip(clip, rect ? rect.r1 : 0, rect ? rect.s1 : playheadStepRef.current);
+    if (res) {
+      anchorRef.current = { r: res.r1, s: res.s1 };
+      setSel(res);
+    }
+  };
+
+  // Duplikat: salin pilihan lalu tempel TEPAT setelahnya; pilihan pindah ke hasil, jadi bisa diulang beruntun.
+  const duplicateSelection = () => {
+    const rect = selRef.current;
+    if (!rect) return;
+    const clip = buildClip(rect);
+    if (!clip) return;
+    const res = pasteClip(clip, rect.r1, rect.s2 + 1);
+    if (res) {
+      anchorRef.current = { r: res.r1, s: res.s1 };
+      setSel(res);
+    }
+  };
+
+  const selectAll = () => {
+    const tab = activeTabRef.current;
+    anchorRef.current = { r: 0, s: 0 };
+    setSel({ tab, r1: 0, r2: rowCountOf(tab) - 1, s1: 0, s2: layoutRef.current.totalSteps - 1 });
+  };
+
+  const clearSelection = () => setSel(null);
+
+  // Panjang not akor yang sedang terpilih (untuk kolom angka panjang).
+  const selectedNoteInfo = useMemo(() => {
+    if (!activeSel || activeSel.tab !== 'chord') return { count: 0, len: 1 };
+    let count = 0;
+    let len = 1;
+    for (let r = activeSel.r1; r <= activeSel.r2; r++) {
+      const t = chordTracks[r];
+      if (!t || !t.enabled) continue;
+      for (let s = activeSel.s1; s <= activeSel.s2; s++) {
+        if (t.steps[s] >= 0) {
+          if (count === 0) len = t.lens[s] || 1;
+          count++;
+        }
+      }
+    }
+    return { count, len };
+  }, [activeSel, chordTracks]);
+
+  const setSelectedNotesLength = (newLen: number) => {
+    const rect = selRef.current;
+    if (!rect || rect.tab !== 'chord') return;
+    setChordTracks((prev) =>
+      prev.map((t, ti) => {
+        if (ti < rect.r1 || ti > rect.r2 || !t.enabled) return t;
+        let data = { steps: t.steps, lens: t.lens };
+        for (let s = rect.s1; s <= rect.s2; s++) {
+          if (data.steps[s] >= 0) data = resizeNote(data.steps, data.lens, s, newLen);
+        }
+        return { ...t, lens: data.lens };
+      })
+    );
+  };
+
+  // Pintasan keyboard (aktif hanya saat pengguna terakhir berinteraksi di dalam Pad Studio dan tidak ada popup).
+  const opsRef = useRef({
+    copy: copySelection,
+    cut: cutSelection,
+    paste: pasteSelection,
+    del: deleteSelection,
+    dup: duplicateSelection,
+    all: selectAll,
+    clear: clearSelection,
+  });
+  opsRef.current = {
+    copy: copySelection,
+    cut: cutSelection,
+    paste: pasteSelection,
+    del: deleteSelection,
+    dup: duplicateSelection,
+    all: selectAll,
+    clear: clearSelection,
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!focusInsideRef.current || modalOpenRef.current) return;
+      const t = e.target as HTMLElement | null;
+      const tag = t?.tagName;
+      const inGrid = Boolean(t?.closest?.('[data-rowgrid]'));
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (tag === 'SELECT' && !inGrid) || t?.isContentEditable) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const k = e.key.toLowerCase();
+      const ops = opsRef.current;
+      if (mod && k === 'c') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.copy();
+        }
+      } else if (mod && k === 'x') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.cut();
+        }
+      } else if (mod && k === 'v') {
+        e.preventDefault();
+        ops.paste();
+      } else if (mod && k === 'd') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.dup();
+        }
+      } else if (mod && k === 'a') {
+        e.preventDefault();
+        ops.all();
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selRef.current) {
+          e.preventDefault();
+          ops.del();
+        }
+      } else if (e.key === 'Escape') {
+        ops.clear();
+      }
+    };
+    const onDown = (e: PointerEvent) => {
+      focusInsideRef.current = Boolean(sectionRef.current?.contains(e.target as Node));
+    };
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('pointerdown', onDown, true);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onDown, true);
+    };
   }, []);
 
   const handleSeekStep = (targetStep: number) => {
@@ -941,8 +1523,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const scheduleStep = (L: LiveSeqState, step: number, when: number, stepSec: number, stepsLeft: number) => {
       if (L.isDrumLoopActive) {
         for (const inst of DRUM_INSTRUMENTS) {
-          if (L.drumGrid[inst.id]?.[step]) {
-            audioEngine.scheduleDrumSound(inst.id, L.selectedDrumKit, L.drumVolume / 100, when);
+          const level = clampLevel(L.drumGrid[inst.id]?.[step]);
+          if (level > 0) {
+            audioEngine.scheduleDrumSound(inst.id, L.selectedDrumKit, (L.drumVolume / 100) * DRUM_LEVEL_GAIN[level], when);
           }
         }
       }
@@ -954,8 +1537,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           const info = L.padInfo[padIdx];
           if (!info) continue;
           const effectiveVol = (track.volume / 100) * (L.chordMasterVolume / 100);
-          // Akor ditahan sampai akor berikutnya di track ini (maks. 2 bar, tidak melewati akhir loop).
-          const holdSteps = holdStepsFor(track.steps, step, Math.min(L.stepsPerBar * 2, stepsLeft));
+          // Akor ditahan sesuai panjang not-nya (tidak melewati akhir wilayah loop).
+          const holdSteps = Math.max(1, Math.min(track.lens[step] || 1, stepsLeft));
           audioEngine.scheduleChordEvent({
             trackKey: `t${track.id}`,
             midiNotes: info.midiNotes,
@@ -1066,14 +1649,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     stopAllLiveChords();
 
     if (activeTab === 'drum') {
-      const cleared: { [key: string]: boolean[] } = {};
+      const cleared: { [key: string]: number[] } = {};
       DRUM_INSTRUMENTS.forEach((inst) => {
-        cleared[inst.id] = Array(totalSteps).fill(false);
+        cleared[inst.id] = Array(totalSteps).fill(0);
       });
       setDrumGrid(cleared);
     } else {
       setChordTracks((prev) =>
-        prev.map((t) => ({ ...t, steps: Array(totalSteps).fill(-1) }))
+        prev.map((t) => ({ ...t, ...emptyTrackData(totalSteps) }))
       );
     }
     onSuccessToast('Grid berhasil dibersihkan.');
@@ -1135,13 +1718,17 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }
 
     setDrumGrid((prev) => {
-      const out: { [key: string]: boolean[] } = {};
+      const out: { [key: string]: number[] } = {};
       DRUM_INSTRUMENTS.forEach((inst) => {
-        out[inst.id] = remapSteps<boolean>(prev[inst.id] || [], oldS, newS, false);
+        out[inst.id] = remapSteps<number>(prev[inst.id] || [], oldS, newS, 0);
       });
       return out;
     });
-    setChordTracks((prev) => prev.map((t) => ({ ...t, steps: remapSteps<number>(t.steps, oldS, newS, -1) })));
+    setChordTracks((prev) =>
+      prev.map((t) => ({ ...t, ...remapTrackData(t.steps, t.lens, oldS, newS, TOTAL_BARS) }))
+    );
+    setSel(null);
+    setNewChordLen(newS);
 
     setTimeSigId(nextId);
     setLoopStartBar(1);
@@ -1170,6 +1757,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         name: instDef?.name || `Instrumen ${t.id}`,
         program: t.program,
         notesPerStep: t.steps.map((pIdx) => (pIdx >= 0 && padInfo[pIdx] ? padInfo[pIdx].midiNotes : [])),
+        stepLens: t.lens,
         volume: effVol,
         adsr: t.adsr,
         enabled: t.enabled,
@@ -1181,7 +1769,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   }, [isExportModalOpen, chordTracks, padInfo, chordMasterVolume]);
 
   return (
-    <section id="pad-studio-section" className="w-full">
+    <section id="pad-studio-section" ref={sectionRef} className="w-full">
       <div className="rounded-2xl bg-surface border border-white/[0.08] p-5 sm:p-7 shadow-xl relative overflow-hidden space-y-6">
         <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 pb-5 border-b border-white/[0.08]">
           <div className="space-y-1">
@@ -1577,7 +2165,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              updateTrack(tIdx, { enabled: false, steps: Array(totalSteps).fill(-1) });
+                              updateTrack(tIdx, { enabled: false, ...emptyTrackData(totalSteps) });
                               stopAllLiveChords();
                             }}
                             className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors cursor-pointer"
@@ -1731,7 +2319,130 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </div>
           </div>
 
-          <div ref={sequencerScrollRef} className="overflow-x-auto pt-2 pb-4 px-3 no-scrollbar">
+          <div className="flex flex-col gap-2 rounded-xl bg-black/40 border border-white/[0.06] p-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center bg-black/60 border border-white/10 rounded-lg p-0.5" role="tablist" aria-label="Mode editor">
+                {([
+                  { id: 'edit', label: 'Edit', Icon: Pencil, tip: 'Klik sel untuk memasang / mengubah' },
+                  { id: 'select', label: 'Pilih', Icon: BoxSelect, tip: 'Seret untuk memilih area (Shift+seret di mode Edit)' },
+                ] as const).map(({ id, label, Icon, tip }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={editMode === id}
+                    title={tip}
+                    onClick={() => setEditMode(id)}
+                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                      editMode === id ? 'bg-accent text-on-accent shadow' : 'text-gray-300 hover:bg-white/10'
+                    }`}
+                  >
+                    <Icon className="w-3 h-3" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-1">
+                <ToolBtn icon={Copy} label="Salin" title="Ctrl+C" onClick={copySelection} disabled={!activeSel} />
+                <ToolBtn icon={Scissors} label="Potong" title="Ctrl+X" onClick={cutSelection} disabled={!activeSel} />
+                <ToolBtn icon={ClipboardPaste} label="Tempel" title="Ctrl+V — ditempel di awal pilihan (atau di playhead)" onClick={pasteSelection} disabled={!clips[activeTab]} />
+                <ToolBtn icon={CopyPlus} label="Duplikat" title="Ctrl+D — salin lalu tempel tepat setelah pilihan" onClick={duplicateSelection} disabled={!activeSel} />
+                <ToolBtn icon={Trash2} label="Hapus" title="Delete" onClick={deleteSelection} disabled={!activeSel} />
+              </div>
+
+              <span className="text-[10px] font-mono text-gray-400 ml-auto">
+                {activeSel
+                  ? `${activeSel.r2 - activeSel.r1 + 1} baris × ${activeSel.s2 - activeSel.s1 + 1} step terpilih`
+                  : 'Belum ada pilihan'}
+              </span>
+            </div>
+
+            {activeTab === 'drum' ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-bold text-gray-300 mr-1">Kekuatan:</span>
+                <button
+                  type="button"
+                  onClick={() => setDrumBrush('cycle')}
+                  title="Tiap klik menaikkan kekuatan: kosong → pelan → normal → keras → maksimum → kosong"
+                  className={`px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer ${
+                    drumBrush === 'cycle' ? 'bg-white/20 text-white border-white/40' : 'bg-black/50 text-gray-300 border-white/10 hover:border-white/25'
+                  }`}
+                >
+                  Siklus
+                </button>
+                {([1, 2, 3, 4] as const).map((lv) => (
+                  <button
+                    key={lv}
+                    type="button"
+                    onClick={() => setDrumBrush(lv)}
+                    title={`${DRUM_LEVEL_LABEL[lv]} — klik lagi pada pad dengan kekuatan sama untuk menghapus`}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-bold border transition-colors cursor-pointer ${
+                      drumBrush === lv ? 'bg-white/20 text-white border-white/40' : 'bg-black/50 text-gray-300 border-white/10 hover:border-white/25'
+                    }`}
+                  >
+                    <span className={`inline-block w-3.5 h-3.5 rounded-sm ${DRUM_LEVEL_CELL_CLASS[lv]}`} />
+                    <span>{lv === 4 ? 'Maks' : DRUM_LEVEL_LABEL[lv]}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-300">
+                  Panjang akor baru
+                  <select
+                    value={newChordLen}
+                    onChange={(e) => setNewChordLen(Number(e.target.value))}
+                    className="bg-black/70 border border-white/15 rounded-md px-1.5 py-1 font-mono text-accent focus:outline-none cursor-pointer"
+                  >
+                    {Array.from(new Set([1, 2, 4, 8, stepsPerBar, stepsPerBar * 2, stepsPerBar * 4, newChordLen]))
+                      .filter((n) => n >= 1 && n <= totalSteps)
+                      .sort((a, b) => a - b)
+                      .map((n) => (
+                        <option key={n} value={n} className="bg-black text-white">
+                          {n} step{n % stepsPerBar === 0 ? ` (${n / stepsPerBar} bar)` : ''}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-300">
+                  Panjang akor terpilih
+                  <IntField
+                    value={selectedNoteInfo.len}
+                    min={1}
+                    max={totalSteps}
+                    onChange={setSelectedNotesLength}
+                    disabled={selectedNoteInfo.count === 0}
+                    ariaLabel="Panjang akor terpilih (step)"
+                  />
+                  <span className="font-mono text-gray-500 font-normal">step{selectedNoteInfo.count > 1 ? ` (${selectedNoteInfo.count} akor)` : ''}</span>
+                </label>
+              </div>
+            )}
+
+            <p className="text-[10px] text-gray-500 leading-relaxed">
+              {activeTab === 'drum'
+                ? 'Pilih kekuatan lalu klik pad. Warna makin pekat = makin keras. '
+                : 'Seret pegangan di tepi kanan blok akor untuk memanjang/memendekkan. '}
+              Klik label BAR untuk memilih satu bar. Mode Pilih (atau Shift+seret) untuk memilih area; Ctrl+C / X / V / D untuk salin, potong, tempel, duplikat; Delete untuk hapus.
+            </p>
+          </div>
+
+          <div
+            ref={sequencerScrollRef}
+            className="overflow-x-auto pt-2 pb-4 px-3 no-scrollbar"
+            style={editMode === 'select' ? { touchAction: 'none' } : undefined}
+            onPointerDown={handleGridPointerDown}
+            onMouseDownCapture={(e) => {
+              if ((modeRef.current === 'select' || e.shiftKey) && (e.target as HTMLElement).closest('[data-rowgrid]')) e.preventDefault();
+            }}
+            onClickCapture={(e) => {
+              if ((modeRef.current === 'select' || e.shiftKey) && (e.target as HTMLElement).closest('[data-rowgrid]')) {
+                e.stopPropagation();
+                e.preventDefault();
+              }
+            }}
+          >
             <div className="space-y-2" style={{ minWidth: gridMinWidth }}>
               <div className="flex items-center gap-2">
                 <div className="w-36 shrink-0 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-1">
@@ -1742,7 +2453,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     <div
                       key={barIdx}
                       style={{ gridColumn: `span ${stepsPerBar} / span ${stepsPerBar}` }}
-                      className="py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-surface text-accent border-accent/30"
+                      onClick={(e) => selectBar(barIdx, e.shiftKey)}
+                      title="Klik untuk memilih seluruh bar ini (Shift+klik = perluas)"
+                      className="py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-surface text-accent border-accent/30 cursor-pointer hover:bg-accent/10 select-none"
                     >
                       BAR {barIdx + 1}
                     </div>
@@ -1797,25 +2510,35 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
               {activeTab === 'drum' ? (
                 <div className="space-y-1.5 pt-1">
-                  {DRUM_INSTRUMENTS.map((inst) => (
-                    <DrumRow
-                      key={inst.id}
-                      id={inst.id}
-                      label={inst.label}
-                      row={drumGrid[inst.id]}
-                      steps={windowSteps}
-                      stepsPerBar={stepsPerBar}
-                      beatMask={beatInfo.isBeatStart}
-                      gridStyle={gridStyle}
-                      onToggle={toggleDrumStep}
-                    />
-                  ))}
+                  {DRUM_INSTRUMENTS.map((inst, di) => {
+                    const inSel = activeSel !== null && di >= activeSel.r1 && di <= activeSel.r2;
+                    return (
+                      <DrumRow
+                        key={inst.id}
+                        rowIdx={di}
+                        id={inst.id}
+                        label={inst.label}
+                        row={drumGrid[inst.id]}
+                        steps={windowSteps}
+                        stepsPerBar={stepsPerBar}
+                        beatMask={beatInfo.isBeatStart}
+                        gridStyle={gridStyle}
+                        selS1={inSel ? activeSel!.s1 : -1}
+                        selS2={inSel ? activeSel!.s2 : -1}
+                        onPaint={paintDrumStep}
+                      />
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="space-y-2 pt-1">
                   {chordTracks.map((track, tIdx) =>
                     track.enabled ? (
                       <ChordRow
+                        selS1={activeSel !== null && tIdx >= activeSel.r1 && tIdx <= activeSel.r2 ? activeSel.s1 : -1}
+                        selS2={activeSel !== null && tIdx >= activeSel.r1 && tIdx <= activeSel.r2 ? activeSel.s2 : -1}
+                        getMode={getMode}
+                        onResize={resizeChordNote}
                         key={track.id}
                         tIdx={tIdx}
                         track={track}
