@@ -14,10 +14,12 @@ import {
 import { PitchDetectTool, VocalRangeTool } from './VoiceTools';
 import { PitchMatchTool } from './PitchMatchTool';
 import {
-  CLICK_SOUNDS, SUBDIVISIONS, TIME_SIGNATURES, TUNING_PRESETS, applyFade, concatChannels, detectBpm, detectKey,
-  detectPitch, freqToNote, getClickSound, getSubdivision, lowestFreq, measureLufs, midiToFreq, nearestString,
-  normalizeLoudness, peaksForDisplay, removeSilence, renderMetronome, sliceChannels, tempoMarking, toMono,
-  type Accent, type Channels, type FadeCurve, type TuningPreset,
+  CLICK_GAIN, CLICK_SOUNDS, DENOMINATORS, MAX_NUMERATOR, TEMPO_REFS, TUNING_PRESETS, accentsFromGroups, applyFade,
+  barSeconds, clickSample, concatChannels, defaultGrouping, detectBpm, detectKey, detectPitch, freqToNote,
+  getClickSound, groupingsFor, lowestFreq, makeTimeSignature, measureLufs, midiToFreq, nearestString,
+  normalizeLoudness, peaksForDisplay, pulseSeconds, removeSilence, renderMetronome, sliceChannels, subdivisionsFor,
+  tempoMarking, toMono,
+  type Accent, type Channels, type ClickKind, type FadeCurve, type TempoRef, type TuningPreset,
 } from '../../services/audioExtraDsp';
 
 export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner' | 'pitch_detect' | 'vocal_range' | 'pitch_match';
@@ -63,7 +65,7 @@ export const EXTRA_TOOL_META: ExtraToolMeta[] = [
   { id: 'clean', label: 'Rapikan Audio', icon: Eraser, desc: 'Hapus jeda hening, samakan loudness (LUFS), ubah stereo ke mono' },
   { id: 'recorder', label: 'Perekam', icon: Mic, desc: 'Rekam suara dari mikrofon, potong awal/akhir, lalu unduh', realtime: true },
   { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu' },
-  { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Birama, subdivisi, aksen per ketukan, dan ekspor klik ke berkas', realtime: true },
+  { id: 'metronome', label: 'Metronom', icon: Timer, desc: 'Birama lengkap, subdivisi sampai 1/64, aksen per ketukan, bunyi metronom asli, dan ekspor klik ke berkas', realtime: true },
   { id: 'tuner', label: 'Tuner', icon: AudioLines, desc: 'Setel gitar, bass, ukulele, alat gesek, banjo, mandolin, dan vokal', realtime: true },
   { id: 'pitch_detect', label: 'Deteksi Nada Suara', icon: Music2, desc: 'Rekam suaramu, deteksi nada vokal langsung, lihat ringkasan nada dan kunci', realtime: true },
   { id: 'vocal_range', label: 'Tes Vocal Range', icon: Ruler, desc: 'Ukur jangkauan suara, jenis suara, dan wilayah nyaman, lengkap contoh lagu', realtime: true },
@@ -616,26 +618,39 @@ const CleanTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: str
 const ACCENT_CYCLE: Accent[] = [2, 1, 0];
 const ACCENT_LABEL: Record<Accent, string> = { 2: 'aksen', 1: 'normal', 0: 'senyap' };
 const clampBpm = (n: number) => Math.max(30, Math.min(300, Math.round(n) || 100));
+const QUICK_SIGS = ['2/4', '3/4', '4/4', '5/4', '6/4', '2/2', '3/8', '5/8', '6/8', '7/8', '9/8', '12/8'];
+const DEN_NAME: Record<number, string> = { 1: 'not penuh', 2: 'setengah', 4: 'seperempat', 8: 'seperdelapan', 16: 'seperenambelas', 32: 'sepertigapuluhdua', 64: 'seperenampuluhempat' };
+const SOUND_GROUPS = Array.from(new Set(CLICK_SOUNDS.map((s) => s.group)));
+const SUB_GROUPS = (list: ReturnType<typeof subdivisionsFor>) => Array.from(new Set(list.map((s) => s.group)));
 
 const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
   const [bpm, setBpm] = useState(100);
-  const [sigId, setSigId] = useState('4/4');
+  const [num, setNum] = useState(4);
+  const [den, setDen] = useState(4);
+  const [groupId, setGroupId] = useState(() => defaultGrouping(4).join('+'));
   const [subId, setSubId] = useState('1');
-  const [soundId, setSoundId] = useState('beep');
+  const [soundId, setSoundId] = useState('mechanical');
+  const [tempoRef, setTempoRef] = useState<TempoRef>('quarter');
   const [vol, setVol] = useState(0.8);
-  const sig = TIME_SIGNATURES.find((t) => t.id === sigId) ?? TIME_SIGNATURES[2];
-  const [accents, setAccents] = useState<Accent[]>(sig.accents);
+  const [accents, setAccents] = useState<Accent[]>(() => makeTimeSignature(4, 4).accents);
   const [running, setRunning] = useState(false);
   const [beat, setBeat] = useState(-1);
   const [bars, setBars] = useState(16);
   const [clickBuf, setClickBuf] = useState<AudioBuffer | null>(null);
-  const sub = getSubdivision(subId);
+
+  const subs = useMemo(() => subdivisionsFor(den), [den]);
+  const sub = subs.find((s) => s.id === subId) ?? subs[0];
   const snd = getClickSound(soundId);
-  const cfg = useRef({ bpm, sig, sub, accents, snd, vol });
-  cfg.current = { bpm, sig, sub, accents, snd, vol };
+  const groupOpts = useMemo(() => groupingsFor(num), [num]);
+  const refOpts = TEMPO_REFS.filter((r) => r.id !== 'group3' || num % 3 === 0);
+  const effRef: TempoRef = refOpts.some((r) => r.id === tempoRef) ? tempoRef : 'quarter';
+  const barSec = barSeconds(bpm, num, den, effRef);
+
+  const cfg = useRef({ bpm, num, den, tempoRef: effRef, sub, accents, soundId, vol });
+  cfg.current = { bpm, num, den, tempoRef: effRef, sub, accents, soundId, vol };
   const ctxRef = useRef<AudioContext | null>(null);
   const masterRef = useRef<GainNode | null>(null);
-  const noiseRef = useRef<AudioBuffer | null>(null);
+  const bufRef = useRef<Map<string, AudioBuffer>>(new Map());
   const timerRef = useRef<number | null>(null);
   const nextRef = useRef(0);
   const pulseStartRef = useRef(0);
@@ -643,9 +658,15 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
   const subRef = useRef(0);
   const tapsRef = useRef<number[]>([]);
 
-  const changeSig = (id: string) => {
-    const t = TIME_SIGNATURES.find((x) => x.id === id) ?? TIME_SIGNATURES[2];
-    setSigId(id); setAccents(t.accents); setClickBuf(null);
+  const applySig = (n: number, d: number, groups?: number[]) => {
+    const g = groups ?? defaultGrouping(n);
+    setNum(n); setDen(d); setGroupId(g.join('+')); setAccents(accentsFromGroups(g, n)); setClickBuf(null);
+    if (!subdivisionsFor(d).some((s) => s.id === subId)) setSubId('1');
+    if (tempoRef === 'group3' && n % 3 !== 0) setTempoRef('quarter');
+  };
+  const changeGrouping = (id: string) => {
+    const o = groupOpts.find((x) => x.id === id); if (!o) return;
+    setGroupId(id); setAccents(accentsFromGroups(o.groups, num)); setClickBuf(null);
   };
   const cycleAccent = (i: number) => {
     setAccents((prev) => prev.map((a, j) => (j === i ? ACCENT_CYCLE[(ACCENT_CYCLE.indexOf(a) + 1) % ACCENT_CYCLE.length] : a)));
@@ -657,44 +678,50 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     if (ctxRef.current && ctxRef.current.state !== 'closed') {
       void ctxRef.current.close().catch(() => {});
     }
-    ctxRef.current = null; masterRef.current = null; noiseRef.current = null;
+    ctxRef.current = null; masterRef.current = null; bufRef.current = new Map();
     setRunning(false); setBeat(-1);
   }, []);
   useEffect(() => stop, [stop]);
   useEffect(() => { if (masterRef.current) masterRef.current.gain.value = vol; }, [vol]);
 
-  const playClick = (ctx: AudioContext, t: number, freq: number, amp: number, s: typeof snd) => {
-    const master = masterRef.current; if (!master) return;
-    const len = Math.min(0.08, 6.9 / s.decay);
-    const g = ctx.createGain();
-    g.gain.setValueAtTime(amp, t); g.gain.exponentialRampToValueAtTime(0.001, t + len);
-    g.connect(master);
-    if (s.noise < 1) {
-      const osc = ctx.createOscillator(); const og = ctx.createGain();
-      osc.type = s.wave; osc.frequency.value = freq; og.gain.value = 1 - s.noise;
-      osc.connect(og); og.connect(g); osc.start(t); osc.stop(t + len + 0.01);
+  // Sampel klik hasil sintesis (sama persis dengan yang masuk ke berkas unduhan).
+  const bufferFor = (ctx: AudioContext, sid: string, kind: ClickKind): AudioBuffer => {
+    const key = `${sid}|${kind}`;
+    let b = bufRef.current.get(key);
+    if (!b) {
+      const pcm = clickSample(sid, kind, ctx.sampleRate);
+      b = ctx.createBuffer(1, pcm.length, ctx.sampleRate);
+      b.copyToChannel(pcm as Float32Array<ArrayBuffer>, 0);
+      bufRef.current.set(key, b);
     }
-    if (s.noise > 0 && noiseRef.current) {
-      const src = ctx.createBufferSource(); src.buffer = noiseRef.current;
-      const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = freq * 0.7;
-      const ng = ctx.createGain(); ng.gain.value = s.noise;
-      src.connect(hp); hp.connect(ng); ng.connect(g); src.start(t); src.stop(t + len + 0.01);
-    }
+    return b;
+  };
+  const playClick = (ctx: AudioContext, dest: AudioNode, t: number, kind: ClickKind, sid: string) => {
+    const src = ctx.createBufferSource(); src.buffer = bufferFor(ctx, sid, kind);
+    const g = ctx.createGain(); g.gain.value = CLICK_GAIN[kind];
+    src.connect(g); g.connect(dest); src.start(t);
+  };
+  const makeMaster = (ctx: AudioContext, volume: number) => {
+    const master = ctx.createGain(); master.gain.value = volume;
+    const lim = ctx.createDynamicsCompressor();
+    lim.threshold.value = -4; lim.knee.value = 3; lim.ratio.value = 12; lim.attack.value = 0.001; lim.release.value = 0.05;
+    master.connect(lim); lim.connect(ctx.destination);
+    return master;
   };
 
   const schedule = () => {
-    const ctx = ctxRef.current; if (!ctx) return;
+    const ctx = ctxRef.current; const master = masterRef.current; if (!ctx || !master) return;
     while (nextRef.current < ctx.currentTime + 0.12) {
-      const c = cfg.current; const dur = 60 / c.bpm; const offs = c.sub.offsets;
+      const c = cfg.current; const dur = pulseSeconds(c.bpm, c.den, c.tempoRef); const offs = c.sub.offsets;
       if (subRef.current >= offs.length) subRef.current = 0;
       const t = Math.max(nextRef.current, ctx.currentTime);
-      const pulse = pulseRef.current % c.sig.pulses;
+      const pulse = pulseRef.current % c.num;
       const a = c.accents[pulse] ?? 1; const j = subRef.current;
       if (j === 0) {
-        if (a === 2) playClick(ctx, t, c.snd.accent, 0.8, c.snd);
-        else if (a === 1) playClick(ctx, t, c.snd.normal, 0.6, c.snd);
+        if (a === 2) playClick(ctx, master, t, 'accent', c.soundId);
+        else if (a === 1) playClick(ctx, master, t, 'beat', c.soundId);
         window.setTimeout(() => setBeat(pulse), Math.max(0, (t - ctx.currentTime) * 1000));
-      } else playClick(ctx, t, c.snd.sub, 0.3, c.snd);
+      } else playClick(ctx, master, t, 'sub', c.soundId);
       subRef.current = j + 1;
       if (subRef.current < offs.length) nextRef.current = pulseStartRef.current + offs[subRef.current] * dur;
       else { pulseStartRef.current += dur; pulseRef.current += 1; subRef.current = 0; nextRef.current = pulseStartRef.current; }
@@ -709,13 +736,22 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     try { allowed = !gate || (await gate.use('metronome', 'session')); } catch {}
     if (!allowed) { void ctx.close(); return; }
 
-    const master = ctx.createGain(); master.gain.value = cfg.current.vol; master.connect(ctx.destination);
-    const noise = ctx.createBuffer(1, Math.round(ctx.sampleRate * 0.1), ctx.sampleRate);
-    const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-    ctxRef.current = ctx; masterRef.current = master; noiseRef.current = noise;
+    const master = makeMaster(ctx, cfg.current.vol);
+    ctxRef.current = ctx; masterRef.current = master; bufRef.current = new Map();
     pulseStartRef.current = ctx.currentTime + 0.05; nextRef.current = pulseStartRef.current; pulseRef.current = 0; subRef.current = 0;
     timerRef.current = window.setInterval(schedule, 25);
     setRunning(true);
+  };
+
+  // Dengarkan contoh bunyi (aksen, ketukan, subdivisi) tanpa memulai metronom.
+  const audition = () => {
+    if (running) return;
+    const ctx = new AudioCtx(); void ctx.resume();
+    const master = makeMaster(ctx, cfg.current.vol);
+    const seq: ClickKind[] = ['accent', 'beat', 'beat', 'sub', 'beat', 'sub'];
+    const t0 = ctx.currentTime + 0.05;
+    seq.forEach((k, i) => playClick(ctx, master, t0 + i * 0.32, k, cfg.current.soundId));
+    window.setTimeout(() => { void ctx.close().catch(() => {}); }, 2600);
   };
 
   const tap = () => {
@@ -727,10 +763,10 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     }
   };
 
-  const maxBars = Math.max(1, Math.floor(300 / ((60 / bpm) * sig.pulses)));
+  const maxBars = Math.max(1, Math.floor(300 / barSec));
   const makeFile = () => {
     const b = Math.min(bars, maxBars);
-    const pcm = renderMetronome({ bpm, beatsPerBar: sig.pulses, bars: b, subdivisionId: subId, accents, sound: soundId, sampleRate: 44100 });
+    const pcm = renderMetronome({ bpm, beatsPerBar: num, denominator: den, tempoRef: effRef, bars: b, subdivisionId: sub.id, accents, sound: soundId, sampleRate: 44100 });
     setClickBuf(toBuffer([pcm], 44100));
   };
   const [bpmText, setBpmText] = useState(String(bpm));
@@ -739,9 +775,10 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     const n = Number(bpmText);
     if (Number.isFinite(n) && bpmText.trim() !== '') setBpm(clampBpm(n)); else setBpmText(String(bpm));
   };
+  const refHint = refOpts.find((r) => r.id === effRef)?.hint;
 
   return (
-    <Panel title="Metronom" info={['Atur tempo, birama, jumlah klik per ketukan, dan unduh klik ke berkas.']}>
+    <Panel title="Metronom" info={['Atur tempo, birama (pembilang 1–32, penyebut 1–64), pengelompokan aksen, klik per ketukan sampai 1/64 (termasuk triol, kuintol, septol), bunyi klik, lalu unduh ke berkas.']}>
       <div className="flex flex-wrap items-center justify-center gap-2 py-1" aria-live="off">
         {accents.map((a, i) => {
           const on = running && beat === i;
@@ -769,15 +806,58 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
         <input type="range" min={30} max={300} value={bpm} onChange={(e) => setBpm(+e.target.value)} className={sliderCls} aria-label="Tempo (BPM)" />
       </div>
 
+      <div className="space-y-2">
+        <p className="text-xs font-bold text-gray-300">Birama</p>
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Birama populer">
+          {QUICK_SIGS.map((id) => {
+            const [n, d] = id.split('/').map(Number);
+            const sel = n === num && d === den;
+            return (
+              <button key={id} type="button" onClick={() => applySig(n, d)} aria-pressed={sel}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer ${sel ? 'border-accent bg-accent/15 text-white' : 'border-white/[0.1] text-gray-300'}`}>{id}</button>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Field label="Birama" hint={`${sig.pulses} pulsa per bar`}>
-          <select value={sigId} onChange={(e) => changeSig(e.target.value)} className={inputCls}>{TIME_SIGNATURES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
+        <Field label="Pembilang (pulsa per bar)" hint={`${num}/${den} · 1 bar = ${barSec.toFixed(2)} detik`}>
+          <select value={num} onChange={(e) => applySig(+e.target.value, den)} className={inputCls}>
+            {Array.from({ length: MAX_NUMERATOR }, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
         </Field>
+        <Field label="Penyebut (nilai not)" hint={`1 pulsa = not ${DEN_NAME[den]}`}>
+          <select value={den} onChange={(e) => applySig(num, +e.target.value)} className={inputCls}>
+            {DENOMINATORS.map((d) => <option key={d} value={d}>{d} — {DEN_NAME[d]}</option>)}
+          </select>
+        </Field>
+        <Field label="Pengelompokan aksen" hint="Aksen jatuh di awal tiap kelompok">
+          <select value={groupId} onChange={(e) => changeGrouping(e.target.value)} className={inputCls}>
+            {groupOpts.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+            {!groupOpts.some((o) => o.id === groupId) && <option value={groupId}>Kustom</option>}
+          </select>
+        </Field>
+        <Field label="Acuan BPM" hint={refHint}>
+          <select value={effRef} onChange={(e) => { setTempoRef(e.target.value as TempoRef); setClickBuf(null); }} className={inputCls}>
+            {refOpts.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <Field label="Klik per ketukan" hint={sub.hint}>
-          <select value={subId} onChange={(e) => { setSubId(e.target.value); setClickBuf(null); }} className={inputCls}>{SUBDIVISIONS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+          <select value={sub.id} onChange={(e) => { setSubId(e.target.value); setClickBuf(null); }} className={inputCls}>
+            {SUB_GROUPS(subs).map((g) => (
+              <optgroup key={g} label={g}>{subs.filter((x) => x.group === g).map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>
+            ))}
+          </select>
         </Field>
-        <Field label="Bunyi klik">
-          <select value={soundId} onChange={(e) => { setSoundId(e.target.value); setClickBuf(null); }} className={inputCls}>{CLICK_SOUNDS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
+        <Field label="Bunyi klik" hint={snd.hint}>
+          <select value={soundId} onChange={(e) => { setSoundId(e.target.value); setClickBuf(null); }} className={inputCls}>
+            {SOUND_GROUPS.map((g) => (
+              <optgroup key={g} label={g}>{CLICK_SOUNDS.filter((x) => x.group === g).map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</optgroup>
+            ))}
+          </select>
         </Field>
         <Field label={`Volume: ${Math.round(vol * 100)}%`}>
           <input type="range" min={0} max={1} step={0.05} value={vol} onChange={(e) => setVol(+e.target.value)} className={sliderCls} />
@@ -786,7 +866,8 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
       <div className="flex flex-wrap gap-2">
         {!running ? <button type="button" onClick={start} className={btnPrimary}><Play className="w-3.5 h-3.5 fill-on-accent" /><span>Mulai</span></button>
           : <button type="button" onClick={stop} className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-md"><Square className="w-3.5 h-3.5" /><span>Berhenti</span></button>}
-        <button type="button" onClick={() => { setAccents(sig.accents); setClickBuf(null); }} className={btnGhost}><RotateCcw className="w-3.5 h-3.5" /><span>Reset aksen</span></button>
+        <button type="button" onClick={audition} disabled={running} className={btnGhost}><span>Dengar contoh bunyi</span></button>
+        <button type="button" onClick={() => { const o = groupOpts.find((x) => x.id === groupId); setAccents(accentsFromGroups(o ? o.groups : defaultGrouping(num), num)); setClickBuf(null); }} className={btnGhost}><RotateCcw className="w-3.5 h-3.5" /><span>Reset aksen</span></button>
       </div>
       <div className={`${CARD_CLS} space-y-3 text-xs`}>
         <p className="font-bold text-gray-300">Unduh klik sebagai berkas</p>
@@ -796,7 +877,7 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
           </Field>
           <button type="button" onClick={makeFile} className={btnGhost}>Buat berkas</button>
         </div>
-        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${sig.id.replace('/', '-')}`} toolId="metronome" gate={gate} onDone={toast} sessionKey="session" /></>)}
+        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${num}-${den}`} toolId="metronome" gate={gate} onDone={toast} sessionKey="session" /></>)}
       </div>
     </Panel>
   );

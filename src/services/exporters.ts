@@ -679,7 +679,9 @@ export function generateMidiFile(
   }>,
   trackName: string = 'PlayMuzeck Pattern',
   programNumber: number = 0,
-  programNumber2?: number
+  programNumber2?: number,
+  // Birama untuk meta-event MIDI (default 4/4). 1 step = 1/16 not (selaras dengan grid Pad Studio).
+  timeSignature: { num: number; den: number } = { num: 4, den: 4 }
 ): Blob {
   const division = 480;
   const ticksPerStep = division / 4;
@@ -741,7 +743,10 @@ export function generateMidiFile(
     mpqn & 0xff
   );
 
-  trackBytes.push(0x00, 0xff, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08);
+  // Meta-event birama: nn = pembilang, dd = log2(penyebut), cc = clock per metronom klik, bb = 32nd per seperempat.
+  const tsNum = Math.max(1, Math.min(255, Math.round(timeSignature.num) || 4));
+  const tsDen = [1, 2, 4, 8, 16, 32].includes(timeSignature.den) ? timeSignature.den : 4;
+  trackBytes.push(0x00, 0xff, 0x58, 0x04, tsNum, Math.round(Math.log2(tsDen)), 0x18, 0x08);
 
   trackBytes.push(0x00, 0xc0 | 0, programNumber & 0x7f);
 

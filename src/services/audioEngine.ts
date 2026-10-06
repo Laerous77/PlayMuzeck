@@ -272,7 +272,24 @@ interface ActiveVoice {
   stopAtTime: number;
   // 'primary'    = Progresi Akor 1 (instrumen utama)
   // 'progresi2'  = Progresi Akor 2 (opsional, independen dari progresi 1)
-  group: 'primary' | 'progresi2';
+  // 'seq'        = voice akor dari Live Sequencer (PadStudio), dijadwalkan oleh scheduleChordEvent
+  group: 'primary' | 'progresi2' | 'seq';
+}
+
+// Buffer hasil decode SATU sample SF2. Dipakai bersama oleh semua nada yang memakai sample yang sama
+// (nada berbeda hanya beda playbackRate), jadi tidak ada salinan buffer per nada lagi.
+interface SharedSampleBuffer {
+  buffer: AudioBuffer;
+  normalizationGain: number;
+  bytes: number;
+}
+
+// Satu "kejadian akor" di sequencer: semua nadanya lewat satu GainNode grup supaya bisa dipotong
+// (choke) serentak saat akor berikutnya di track yang sama masuk, seperti perilaku track DAW.
+interface SeqChordGroup {
+  gain: GainNode;
+  voices: Set<ActiveVoice>;
+  release: number;
 }
 
 interface SampleBufferMetadata {
@@ -346,7 +363,26 @@ class AudioEngine {
   // Sample drum yang terbukti tidak ada / gagal didekode. Tanpa ini, setiap ketukan drum yang
   // sample-nya hilang memicu fetch jaringan baru (penyebab lag di sequencer).
   private drumMissing = new Set<string>();
-  private activeVoices: ActiveVoice[] = [];
+  private activeVoices: Set<ActiveVoice> = new Set();
+
+  // -------------------------------------------------------------------
+  // OPTIMASI MEMORI & STABILITAS (sequencer 4 track akor)
+  // - sampleBufferCache : 1 buffer per SAMPLE SF2 (bukan per nada). Sebelumnya tiap kombinasi
+  //   program+nada menyalin buffer penuh, jadi memori membengkak dan tab bisa crash di HP.
+  // - missingSampleKeys : nada tanpa sample dicatat supaya tidak dicari ulang tiap ketukan.
+  // - seqGroups / chordBus : voice akor sequencer lewat bus + kompresor master yang sama dengan drum
+  //   (sebelumnya langsung ke destination tanpa limiter -> mudah clipping/pecah).
+  // -------------------------------------------------------------------
+  private sampleBufferCache: Map<object, SharedSampleBuffer> = new Map();
+  private sampleBufferBytes = 0;
+  private missingSampleKeys: Set<string> = new Set();
+  private static readonly SAMPLE_CACHE_MAX_BYTES = 160 * 1024 * 1024;
+  private static readonly MAX_LIVE_VOICES = 96;
+  private chordBus: GainNode | null = null;
+  private seqGroups: Map<string, SeqChordGroup> = new Map();
+  private warmQueue: Array<[number, number]> = [];
+  private warmQueued: Set<string> = new Set();
+  private warmTimer: number | null = null;
 
   // Envelope Pengguna Default — khusus CHORD (dipakai playChordNotes &
   // renderChordNoteToDestination default).
@@ -405,7 +441,13 @@ class AudioEngine {
   public getAudioContext(): AudioContext {
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      this.ctx = new AudioCtx();
+      try {
+        // 'balanced' = buffer audio sedikit lebih besar dari 'interactive' -> lebih tahan hitch saat
+        // thread utama sibuk, tapi pad live tetap terasa responsif.
+        this.ctx = new AudioCtx({ latencyHint: 'balanced' });
+      } catch {
+        this.ctx = new AudioCtx();
+      }
 
       this.compressor = this.ctx.createDynamicsCompressor();
       this.compressor.threshold.setValueAtTime(-4, this.ctx.currentTime);
@@ -523,17 +565,13 @@ class AudioEngine {
   // yang sengaja diberi durasi tahan lebih panjang, dan sebaliknya). Kalau
   // `group` tidak diisi, semua voice dihentikan seperti sebelumnya (dipakai
   // untuk tombol Stop/Clear Grid global).
-  public stopAllChords(customFadeSec?: number, group?: 'primary' | 'progresi2') {
-    if (!this.ctx || this.activeVoices.length === 0) return;
+  public stopAllChords(customFadeSec?: number, group?: 'primary' | 'progresi2' | 'seq') {
+    if (!this.ctx || this.activeVoices.size === 0) return;
     const now = this.ctx.currentTime;
     const fadeSec = customFadeSec !== undefined ? customFadeSec : Math.max(0.04, this.adsr.release);
 
-    const remaining: ActiveVoice[] = [];
     this.activeVoices.forEach((voice) => {
-      if (group && voice.group !== group) {
-        remaining.push(voice);
-        return;
-      }
+      if (group && voice.group !== group) return;
       try {
         voice.gain.gain.cancelScheduledValues(now);
         voice.gain.gain.setValueAtTime(Math.max(0.0001, voice.gain.gain.value), now);
@@ -541,9 +579,22 @@ class AudioEngine {
         voice.gain.gain.exponentialRampToValueAtTime(0.0001, now + fadeSec);
         voice.source.stop(now + fadeSec + 0.02);
       } catch {}
+      this.activeVoices.delete(voice); // aman: menghapus saat iterasi Set diizinkan
     });
 
-    this.activeVoices = remaining;
+    if (!group || group === 'seq') {
+      const groups = Array.from(this.seqGroups.values());
+      this.seqGroups.clear();
+      if (groups.length > 0) {
+        window.setTimeout(() => {
+          groups.forEach((g) => {
+            try {
+              g.gain.disconnect();
+            } catch {}
+          });
+        }, (fadeSec + 0.15) * 1000);
+      }
+    }
   }
 
   // -------------------------------------------------------------------
@@ -652,6 +703,7 @@ class AudioEngine {
             onProgress?.('Mengurai struktur gelombang akustik...');
             await new Promise((r) => setTimeout(r, 0)); // beri waktu repaint sebelum parsing sinkron
             this.soundfontInstance = new SoundFont2(bytes);
+            this.resetSampleCaches();
             this.isLoaded = true;
             this.loadedSoundfontPath = path;
             onProgress?.(SOUND_BANK_READY_MESSAGE);
@@ -742,6 +794,7 @@ class AudioEngine {
     if (this.bufferCache[cacheKey]) {
       return this.bufferCache[cacheKey];
     }
+    if (this.missingSampleKeys.has(cacheKey)) return null;
 
     try {
       const ctx = this.getAudioContext();
@@ -749,13 +802,19 @@ class AudioEngine {
         (p: any) => p.header.preset === programNumber && (p.header.bank === 0 || p.header.bank === undefined)
       ) || this.soundfontInstance.presets.find((p: any) => p.header.preset === programNumber) || this.soundfontInstance.presets[0];
 
-      if (!preset || !preset.zones) return null;
+      if (!preset || !preset.zones) {
+        this.missingSampleKeys.add(cacheKey);
+        return null;
+      }
 
       const pZone: any = preset.zones.find(
         (z: any) => !z.keyRange || (midiNote >= z.keyRange.lo && midiNote <= z.keyRange.hi)
       ) || preset.zones[0];
 
-      if (!pZone) return null;
+      if (!pZone) {
+        this.missingSampleKeys.add(cacheKey);
+        return null;
+      }
 
       const inst: any = pZone.instrument;
       let sample: any = null;
@@ -775,7 +834,10 @@ class AudioEngine {
         sample = pZone.sample;
       }
 
-      if (!sample || !sample.data) return null;
+      if (!sample || !sample.data) {
+        this.missingSampleKeys.add(cacheKey);
+        return null;
+      }
 
       // -------------------------------------------------------------
       // RESOLUSI PITCH SF2 YANG AKURAT
@@ -909,25 +971,36 @@ class AudioEngine {
         isLooping = rangeLooksValid;
       }
 
-      let isUnnormalized = false;
-      const checkLimit = Math.min(120, sampleData.length);
-      for (let i = 0; i < checkLimit; i++) {
-        if (Math.abs(sampleData[i]) > 1.2) {
-          isUnnormalized = true;
-          break;
+      // Buffer dibuat SEKALI per sample SF2 lalu dibagi ke semua nada yang memakainya.
+      let shared = this.sampleBufferCache.get(sample);
+      if (!shared) {
+        let isUnnormalized = false;
+        const checkLimit = Math.min(120, sampleData.length);
+        for (let i = 0; i < checkLimit; i++) {
+          if (Math.abs(sampleData[i]) > 1.2) {
+            isUnnormalized = true;
+            break;
+          }
         }
+
+        const divider = isUnnormalized ? 32768.0 : 1.0;
+        const audioBuf = ctx.createBuffer(1, sampleData.length, sampleRate);
+        const channel = audioBuf.getChannelData(0);
+        for (let i = 0; i < sampleData.length; i++) {
+          channel[i] = sampleData[i] / divider;
+        }
+
+        shared = {
+          buffer: audioBuf,
+          normalizationGain: this.computeLoudnessNormalizationGain(channel),
+          bytes: sampleData.length * 4,
+        };
+        this.sampleBufferCache.set(sample, shared);
+        this.sampleBufferBytes += shared.bytes;
       }
 
-      const normalized = new Float32Array(sampleData.length);
-      const divider = isUnnormalized ? 32768.0 : 1.0;
-      for (let i = 0; i < sampleData.length; i++) {
-        normalized[i] = sampleData[i] / divider;
-      }
-
-      const audioBuf = ctx.createBuffer(1, normalized.length, sampleRate);
-      audioBuf.getChannelData(0).set(normalized);
-
-      const normalizationGain = this.computeLoudnessNormalizationGain(normalized);
+      const audioBuf = shared.buffer;
+      const normalizationGain = shared.normalizationGain;
 
       const result: SampleBufferMetadata = {
         buffer: audioBuf,
@@ -943,6 +1016,7 @@ class AudioEngine {
       this.bufferCache[cacheKey] = result;
       return result;
     } catch {
+      this.missingSampleKeys.add(cacheKey);
       return null;
     }
   }
@@ -1005,7 +1079,15 @@ class AudioEngine {
           src.start(now);
           src.stop(totalStop);
 
-          this.activeVoices.push({ source: src, gain, stopAtTime: totalStop, group });
+          const voice: ActiveVoice = { source: src, gain, stopAtTime: totalStop, group };
+          this.activeVoices.add(voice);
+          src.onended = () => {
+            this.activeVoices.delete(voice);
+            try {
+              src.disconnect();
+              gain.disconnect();
+            } catch {}
+          };
         }
       });
     }
@@ -1062,7 +1144,22 @@ class AudioEngine {
   ) {
     const meta = this.getSampleMetadata(midiNote, programNumber);
     if (!meta) return;
+    this.createChordVoice(ctx, destination, meta, midiNote, startTime, holdSec, volume, adsr);
+  }
 
+  // Bangun satu voice akor (BufferSource + envelope ADSR) dan jadwalkan start/stop-nya.
+  // Dipakai bersama oleh ekspor offline (renderChordNoteToDestination) dan live sequencer
+  // (scheduleChordEvent), jadi suara live dan hasil ekspor tetap identik.
+  private createChordVoice(
+    ctx: BaseAudioContext,
+    destination: AudioNode,
+    meta: SampleBufferMetadata,
+    midiNote: number,
+    startTime: number,
+    holdSec: number,
+    volume: number,
+    adsr: EnvelopeADSR
+  ): { src: AudioBufferSourceNode; gain: GainNode; stopAt: number } {
     const a = Math.max(0.005, adsr.attack);
     const d = Math.max(0.01, adsr.decay);
     const s = Math.max(0.0, Math.min(1.0, adsr.sustain));
@@ -1095,9 +1192,187 @@ class AudioEngine {
     src.connect(gain);
     gain.connect(destination);
 
-    const totalStop = holdUntil + r + 0.05;
+    const stopAt = holdUntil + r + 0.05;
     src.start(startTime);
-    src.stop(totalStop);
+    src.stop(stopAt);
+    return { src, gain, stopAt };
+  }
+
+  // -------------------------------------------------------------------
+  // CACHE SAMPLE: pemanasan (prewarm), pengintipan, dan reset
+  // -------------------------------------------------------------------
+  private resetSampleCaches() {
+    this.bufferCache = {};
+    this.sampleBufferCache.clear();
+    this.sampleBufferBytes = 0;
+    this.missingSampleKeys.clear();
+    this.warmQueue = [];
+    this.warmQueued.clear();
+  }
+
+  // Ambil metadata HANYA dari cache (tidak pernah memproses sample). Aman dipanggil dari scheduler
+  // yang berjalan tiap 25 ms: tidak ada kerja berat di jalur waktu-kritis.
+  public peekSampleMetadata(midiNote: number, programNumber: number): SampleBufferMetadata | null {
+    return this.bufferCache[`${programNumber}_${midiNote}`] ?? null;
+  }
+
+  // Proses sample (program, nada) di muka secara BERTAHAP dan menyerahkan thread ke UI di sela-selanya,
+  // supaya saat playback tidak ada lagi pemrosesan sample di tengah ketukan (penyebab patah-patah).
+  // Mengembalikan true jika semua sampel siap.
+  public async prewarmChordSamples(
+    pairs: Array<[number, number]>,
+    opts?: { shouldAbort?: () => boolean; onProgress?: (done: number, total: number) => void }
+  ): Promise<boolean> {
+    const ready = await this.ensureBankLoaded();
+    if (!ready) return false;
+
+    const unique: Array<[number, number]> = [];
+    const seen = new Set<string>();
+    for (const [program, note] of pairs) {
+      const key = `${program}_${note}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push([program, note]);
+    }
+
+    // Terlalu banyak memori terpakai? Mulai bersih (di sini aman: sebelum/ di luar ketukan yang kritis).
+    if (this.sampleBufferBytes > AudioEngine.SAMPLE_CACHE_MAX_BYTES) {
+      this.resetSampleCaches();
+    }
+
+    const todo = unique.filter(([program, note]) => {
+      const key = `${program}_${note}`;
+      return !this.bufferCache[key] && !this.missingSampleKeys.has(key);
+    });
+
+    const total = todo.length;
+    let done = 0;
+    let sliceStart = performance.now();
+    for (const [program, note] of todo) {
+      if (opts?.shouldAbort?.()) return false;
+      this.getSampleMetadata(note, program);
+      done++;
+      opts?.onProgress?.(done, total);
+      // Maksimal ~8 ms kerja berturut-turut sebelum memberi napas ke main thread.
+      if (performance.now() - sliceStart > 8) {
+        await new Promise<void>((r) => setTimeout(r, 0));
+        sliceStart = performance.now();
+      }
+    }
+    return true;
+  }
+
+  // Antre pemanasan di latar belakang untuk nada yang belum ada di cache (satu per tugas timer).
+  private queueBackgroundWarm(midiNote: number, programNumber: number) {
+    const key = `${programNumber}_${midiNote}`;
+    if (this.warmQueued.has(key) || this.missingSampleKeys.has(key)) return;
+    this.warmQueued.add(key);
+    this.warmQueue.push([programNumber, midiNote]);
+    if (this.warmTimer !== null) return;
+    const run = () => {
+      this.warmTimer = null;
+      const next = this.warmQueue.shift();
+      if (!next) return;
+      this.getSampleMetadata(next[1], next[0]);
+      this.warmQueued.delete(`${next[0]}_${next[1]}`);
+      if (this.warmQueue.length > 0) this.warmTimer = window.setTimeout(run, 0);
+    };
+    this.warmTimer = window.setTimeout(run, 0);
+  }
+
+  // -------------------------------------------------------------------
+  // LIVE SEQUENCER AKOR
+  // -------------------------------------------------------------------
+  // Bus akor: satu GainNode yang tersambung ke kompresor master (sama seperti drum).
+  public getChordBus(): GainNode {
+    const ctx = this.getAudioContext();
+    if (!this.chordBus) {
+      const g = ctx.createGain();
+      g.gain.value = 1.0;
+      g.connect(this.compressor || ctx.destination);
+      this.chordBus = g;
+    }
+    return this.chordBus;
+  }
+
+  // Jadwalkan SATU akor (semua nadanya) pada waktu AudioContext `when`.
+  // - Hanya memakai sample yang sudah ada di cache (tidak ada pemrosesan berat di scheduler);
+  //   yang belum ada diantre dipanaskan di latar belakang dan dilewati sekali ini saja.
+  // - Akor sebelumnya di track yang sama dipotong halus saat akor baru masuk (choke).
+  // - Jumlah voice dibatasi supaya CPU/memori tidak meledak.
+  public scheduleChordEvent(opts: {
+    trackKey: string;
+    midiNotes: number[];
+    program: number;
+    when: number;
+    holdSec: number;
+    volume: number;
+    adsr: EnvelopeADSR;
+  }) {
+    const ctx = this.getAudioContext();
+    const t = Math.max(opts.when, ctx.currentTime);
+
+    const resolved: Array<{ note: number; meta: SampleBufferMetadata }> = [];
+    for (const note of opts.midiNotes) {
+      const meta = this.peekSampleMetadata(note, opts.program);
+      if (meta) {
+        resolved.push({ note, meta });
+      } else if (this.soundfontInstance) {
+        this.queueBackgroundWarm(note, opts.program);
+      }
+    }
+    if (resolved.length === 0) return;
+
+    // Choke akor sebelumnya pada track yang sama.
+    const prev = this.seqGroups.get(opts.trackKey);
+    if (prev) {
+      const tc = Math.max(0.015, Math.min(0.12, prev.release * 0.25));
+      try {
+        prev.gain.gain.cancelScheduledValues(t);
+        prev.gain.gain.setTargetAtTime(0, t, tc);
+      } catch {}
+      const stopAt = t + tc * 7;
+      prev.voices.forEach((v) => {
+        try {
+          v.source.stop(Math.min(v.stopAtTime, stopAt));
+        } catch {}
+      });
+    }
+
+    const groupGain = ctx.createGain();
+    groupGain.gain.value = 1.0;
+    groupGain.connect(this.getChordBus());
+    const rec: SeqChordGroup = { gain: groupGain, voices: new Set(), release: Math.max(0.04, opts.adsr.release) };
+    this.seqGroups.set(opts.trackKey, rec);
+
+    for (const { note, meta } of resolved) {
+      if (this.activeVoices.size >= AudioEngine.MAX_LIVE_VOICES) break;
+      const { src, gain, stopAt } = this.createChordVoice(ctx, groupGain, meta, note, t, opts.holdSec, opts.volume, opts.adsr);
+      const voice: ActiveVoice = { source: src, gain, stopAtTime: stopAt, group: 'seq' };
+      this.activeVoices.add(voice);
+      rec.voices.add(voice);
+      src.onended = () => {
+        this.activeVoices.delete(voice);
+        rec.voices.delete(voice);
+        try {
+          src.disconnect();
+          gain.disconnect();
+        } catch {}
+        if (rec.voices.size === 0) {
+          try {
+            rec.gain.disconnect();
+          } catch {}
+          if (this.seqGroups.get(opts.trackKey) === rec) this.seqGroups.delete(opts.trackKey);
+        }
+      };
+    }
+
+    if (rec.voices.size === 0) {
+      try {
+        rec.gain.disconnect();
+      } catch {}
+      if (this.seqGroups.get(opts.trackKey) === rec) this.seqGroups.delete(opts.trackKey);
+    }
   }
 
   // Pastikan bank SF2 sudah termuat sebelum dipakai (dipanggil dari alur

@@ -72,22 +72,182 @@ export const DRUM_KITS = [
   'Hiphop',
 ];
 
-export const STEPS_PER_BAR = 4;
 export const TOTAL_BARS = 16;
-export const TOTAL_STEPS = STEPS_PER_BAR * TOTAL_BARS;
+
+// ---------------------------------------------------------------------------
+// BIRAMA (TIME SIGNATURE)
+// Grid memakai resolusi 1/16 not: 1 step = 1/16. BPM dihitung per not seperempat (1 seperempat = 4 step).
+// Jumlah step per bar = jumlah semua `groups`. `groups` = panjang tiap kelompok ketukan (dalam step) dan
+// dipakai untuk penanda ketukan di grid serta pola drum bawaan.
+//   4/4  -> [4,4,4,4]  = 16 step      3/4 -> [4,4,4] = 12 step     6/8 -> [6,6] = 12 step
+//   7/8  -> [4,4,6]    = 14 step      5/4 -> 5 x 4  = 20 step
+// ---------------------------------------------------------------------------
+export interface TimeSignatureDef {
+  id: string;
+  label: string;
+  num: number;
+  den: number;
+  groups: number[];
+}
+
+export const TIME_SIGNATURES: TimeSignatureDef[] = [
+  { id: '2/4', label: '2/4', num: 2, den: 4, groups: [4, 4] },
+  { id: '3/4', label: '3/4', num: 3, den: 4, groups: [4, 4, 4] },
+  { id: '4/4', label: '4/4', num: 4, den: 4, groups: [4, 4, 4, 4] },
+  { id: '5/4', label: '5/4', num: 5, den: 4, groups: [4, 4, 4, 4, 4] },
+  { id: '2/2', label: '2/2', num: 2, den: 2, groups: [8, 8] },
+  { id: '3/8', label: '3/8', num: 3, den: 8, groups: [6] },
+  { id: '5/8', label: '5/8', num: 5, den: 8, groups: [4, 6] },
+  { id: '6/8', label: '6/8', num: 6, den: 8, groups: [6, 6] },
+  { id: '7/8', label: '7/8', num: 7, den: 8, groups: [4, 4, 6] },
+  { id: '9/8', label: '9/8', num: 9, den: 8, groups: [6, 6, 6] },
+  { id: '12/8', label: '12/8', num: 12, den: 8, groups: [6, 6, 6, 6] },
+];
+
+const getTimeSig = (id: string): TimeSignatureDef => TIME_SIGNATURES.find((t) => t.id === id) ?? TIME_SIGNATURES[2];
+const stepsPerBarOf = (ts: TimeSignatureDef): number => ts.groups.reduce((a, b) => a + b, 0);
+
+const INITIAL_TS = getTimeSig('4/4');
+const INITIAL_STEPS_PER_BAR = stepsPerBarOf(INITIAL_TS);
+const INITIAL_TOTAL_STEPS = INITIAL_STEPS_PER_BAR * TOTAL_BARS;
+const DEFAULT_PATTERN_BARS = 4; // pola bawaan mengisi 4 bar pertama
+const DEFAULT_LOOP_END_BAR = 4;
+
+// Jumlah bar yang digambar sekaligus (dipilih supaya sel tetap cukup lebar dan DOM tetap kecil).
+const defaultBarsPerView = (stepsPerBar: number) => Math.max(1, Math.min(8, Math.round(32 / stepsPerBar)));
+const BARS_PER_VIEW_OPTIONS = [1, 2, 3, 4, 6, 8];
 
 const INSTRUMENT_CATEGORIES = Array.from(new Set(INSTRUMENTS_128.map((inst) => inst.category)));
+
+// Penanda ketukan di dalam satu bar: step mana yang awal kelompok ketukan, dan nomor ketukannya.
+function buildBeatInfo(ts: TimeSignatureDef): { isBeatStart: boolean[]; beatNumber: number[] } {
+  const S = stepsPerBarOf(ts);
+  const isBeatStart: boolean[] = Array(S).fill(false);
+  const beatNumber: number[] = Array(S).fill(0);
+  let acc = 0;
+  ts.groups.forEach((g, i) => {
+    isBeatStart[acc] = true;
+    beatNumber[acc] = i + 1;
+    acc += g;
+  });
+  return { isBeatStart, beatNumber };
+}
+
+// Pindahkan isi grid ke birama baru: tiap bar disalin step demi step (yang melebihi panjang bar baru terpotong).
+function remapSteps<T>(src: T[], oldS: number, newS: number, fill: T): T[] {
+  const out: T[] = Array(newS * TOTAL_BARS).fill(fill);
+  const n = Math.min(oldS, newS);
+  for (let bar = 0; bar < TOTAL_BARS; bar++) {
+    for (let i = 0; i < n; i++) {
+      const v = src[bar * oldS + i];
+      if (v !== undefined) out[bar * newS + i] = v;
+    }
+  }
+  return out;
+}
+
+// Pola drum bawaan yang menyesuaikan birama (kick di ketukan awal, snare di ketukan "backbeat", hat tiap 1/8).
+function buildDefaultDrumGrid(ts: TimeSignatureDef): { [key: string]: boolean[] } {
+  const S = stepsPerBarOf(ts);
+  const total = S * TOTAL_BARS;
+  const grid: { [key: string]: boolean[] } = {};
+  DRUM_INSTRUMENTS.forEach((inst) => {
+    grid[inst.id] = Array(total).fill(false);
+  });
+  const starts: number[] = [];
+  let acc = 0;
+  ts.groups.forEach((g) => {
+    starts.push(acc);
+    acc += g;
+  });
+  const n = ts.groups.length;
+  const kickGroups = n >= 4 ? [0, 2] : [0];
+  const snareGroups = n >= 4 ? [1, 3] : n === 3 ? [1, 2] : n === 2 ? [1] : [];
+  for (let bar = 0; bar < DEFAULT_PATTERN_BARS; bar++) {
+    const base = bar * S;
+    kickGroups.forEach((g) => {
+      grid.kick[base + starts[g]] = true;
+    });
+    snareGroups.forEach((g) => {
+      grid.snare[base + starts[g]] = true;
+    });
+    for (let i = 0; i < S; i += 2) grid.closedhat[base + i] = true;
+  }
+  return grid;
+}
+
+// Progresi akor bawaan: satu akor di awal tiap bar, 4 bar pertama.
+function buildDefaultChordSteps(ts: TimeSignatureDef): number[] {
+  const S = stepsPerBarOf(ts);
+  const arr: number[] = Array(S * TOTAL_BARS).fill(-1);
+  for (let bar = 0; bar < DEFAULT_PATTERN_BARS; bar++) arr[bar * S] = bar;
+  return arr;
+}
+
+// Berapa step sebuah akor ditahan: sampai akor berikutnya di track yang sama (maks. `limit` step).
+function holdStepsFor(steps: number[], step: number, limit: number): number {
+  const maxSteps = Math.max(1, limit);
+  let d = 1;
+  while (d < maxSteps && step + d < steps.length && steps[step + d] < 0) d++;
+  return d;
+}
 
 // ---------------------------------------------------------------------------
 // OPTIMASI PERFORMA SEQUENCER
 // - Sel grid dibuat komponen ter-memo: mengubah satu sel hanya me-render ulang satu sel itu,
 //   dan ketukan berjalan TIDAK me-render ulang grid sama sekali (playhead digambar lewat atribut DOM).
+// - Hanya bar yang sedang tampil (jendela) yang digambar di DOM, bukan semua 16 bar.
 // - Suara dijadwalkan dengan jam AudioContext (lookahead), bukan setInterval per ketukan.
+// - Detak scheduler berjalan di Web Worker supaya tidak ikut tertahan saat UI sibuk / tab di latar.
 // ---------------------------------------------------------------------------
-const STEP_INDEXES: number[] = Array.from({ length: TOTAL_STEPS }, (_, i) => i);
-const GRID_STYLE: React.CSSProperties = { gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` };
 const SCHEDULER_TICK_MS = 25; // seberapa sering scheduler memeriksa
-const LOOKAHEAD_SEC = 0.12; // seberapa jauh ke depan suara dijadwalkan
+const LOOKAHEAD_SEC = 0.22; // seberapa jauh ke depan suara dijadwalkan (lebih panjang = lebih tahan hitch)
+
+// Pencatat waktu berbasis Web Worker (tidak ikut macet saat main thread sibuk). Jatuh ke setInterval
+// biasa jika Worker tidak tersedia. Mengembalikan fungsi untuk menghentikannya.
+function startTicker(cb: () => void, ms: number): () => void {
+  let fallbackId: number | undefined;
+  const startFallback = () => {
+    if (fallbackId === undefined) fallbackId = window.setInterval(cb, ms);
+  };
+  let worker: Worker | null = null;
+  let url: string | null = null;
+  try {
+    url = URL.createObjectURL(
+      new Blob([`let t=0;onmessage=function(e){clearInterval(t);if(e.data==='start'){t=setInterval(function(){postMessage(0)},${ms})}}`], {
+        type: 'text/javascript',
+      })
+    );
+    worker = new Worker(url);
+    worker.onmessage = () => cb();
+    worker.onerror = () => {
+      worker?.terminate();
+      worker = null;
+      startFallback();
+    };
+    worker.postMessage('start');
+  } catch {
+    worker = null;
+    startFallback();
+  }
+  return () => {
+    if (worker) {
+      try {
+        worker.postMessage('stop');
+      } catch {}
+      worker.terminate();
+      worker = null;
+    }
+    if (url) {
+      URL.revokeObjectURL(url);
+      url = null;
+    }
+    if (fallbackId !== undefined) {
+      window.clearInterval(fallbackId);
+      fallbackId = undefined;
+    }
+  };
+}
 
 interface PadInfo {
   midiNotes: number[];
@@ -100,6 +260,7 @@ interface LiveSeqState {
   isChordLoopActive: boolean;
   isSeqLooping: boolean;
   isUnlocked8Bar: boolean;
+  stepsPerBar: number;
   drumGrid: { [key: string]: boolean[] };
   chordTracks: ChordTrackState[];
   padInfo: PadInfo[];
@@ -116,11 +277,13 @@ const DrumCell = memo(function DrumCell({
   drumId,
   stepIdx,
   active,
+  beat,
   onToggle,
 }: {
   drumId: string;
   stepIdx: number;
   active: boolean;
+  beat: boolean;
   onToggle: (drumId: string, stepIdx: number) => void;
 }) {
   return (
@@ -131,6 +294,8 @@ const DrumCell = memo(function DrumCell({
       className={`h-7 rounded-xs transition-colors relative flex items-center justify-center cursor-pointer ${
         active
           ? 'bg-accent text-on-accent font-bold shadow-xs'
+          : beat
+          ? 'bg-black/35 hover:bg-black/70 border border-white/[0.09]'
           : 'bg-black/60 hover:bg-black/90 border border-white/[0.05]'
       }`}
     />
@@ -141,19 +306,34 @@ const DrumRow = memo(function DrumRow({
   id,
   label,
   row,
+  steps,
+  stepsPerBar,
+  beatMask,
+  gridStyle,
   onToggle,
 }: {
   id: string;
   label: string;
   row: boolean[] | undefined;
+  steps: number[];
+  stepsPerBar: number;
+  beatMask: boolean[];
+  gridStyle: React.CSSProperties;
   onToggle: (drumId: string, stepIdx: number) => void;
 }) {
   return (
     <div className="flex items-center gap-2">
       <span className="w-36 text-xs font-semibold text-gray-300 truncate shrink-0 px-1">{label}</span>
-      <div className="grid grid-cols-64 gap-0.5 flex-1" style={GRID_STYLE}>
-        {STEP_INDEXES.map((stepIdx) => (
-          <DrumCell key={stepIdx} drumId={id} stepIdx={stepIdx} active={Boolean(row?.[stepIdx])} onToggle={onToggle} />
+      <div className="grid gap-0.5 flex-1" style={gridStyle}>
+        {steps.map((stepIdx) => (
+          <DrumCell
+            key={stepIdx}
+            drumId={id}
+            stepIdx={stepIdx}
+            active={Boolean(row?.[stepIdx])}
+            beat={Boolean(beatMask[stepIdx % stepsPerBar])}
+            onToggle={onToggle}
+          />
         ))}
       </div>
     </div>
@@ -163,6 +343,8 @@ const DrumRow = memo(function DrumRow({
 const ChordCell = memo(function ChordCell({
   trackIdx,
   stepIdx,
+  posInBar,
+  beat,
   padIdx,
   isAssigned,
   fullName,
@@ -171,6 +353,8 @@ const ChordCell = memo(function ChordCell({
 }: {
   trackIdx: number;
   stepIdx: number;
+  posInBar: number;
+  beat: boolean;
   padIdx: number;
   isAssigned: boolean;
   fullName: string;
@@ -184,10 +368,12 @@ const ChordCell = memo(function ChordCell({
       className={`h-20 rounded-lg p-1 flex flex-col justify-between items-center transition-colors relative ${
         isAssigned
           ? 'bg-accent/20 border border-accent text-white shadow-xs'
+          : beat
+          ? 'bg-black/35 border border-white/[0.09] hover:border-white/20'
           : 'bg-black/60 border border-white/[0.05] hover:border-white/20'
       }`}
     >
-      <span className="text-[10px] text-gray-400 font-mono font-bold">#{stepIdx + 1}</span>
+      <span className="text-[10px] text-gray-400 font-mono font-bold">{posInBar + 1}</span>
       <div className="w-full flex-1 flex flex-col items-center justify-center relative">
         <span
           className={`text-[11px] font-black tracking-tight leading-none text-center px-0.5 w-full overflow-hidden ${
@@ -216,6 +402,10 @@ const ChordRow = memo(function ChordRow({
   instName,
   padInfo,
   options,
+  steps,
+  stepsPerBar,
+  beatMask,
+  gridStyle,
   onPick,
 }: {
   tIdx: number;
@@ -223,6 +413,10 @@ const ChordRow = memo(function ChordRow({
   instName: string;
   padInfo: PadInfo[];
   options: React.ReactNode;
+  steps: number[];
+  stepsPerBar: number;
+  beatMask: boolean[];
+  gridStyle: React.CSSProperties;
   onPick: (trackIdx: number, stepIdx: number, padIdx: number) => void;
 }) {
   return (
@@ -231,15 +425,18 @@ const ChordRow = memo(function ChordRow({
         <span className="text-xs font-semibold text-gray-200 truncate">{track.label}</span>
         <span className="text-[10px] text-accent truncate font-mono">{instName}</span>
       </div>
-      <div className="grid grid-cols-64 gap-0.5 flex-1" style={GRID_STYLE}>
-        {STEP_INDEXES.map((stepIdx) => {
-          const assigned = track.steps[stepIdx];
+      <div className="grid gap-0.5 flex-1" style={gridStyle}>
+        {steps.map((stepIdx) => {
+          const assigned = track.steps[stepIdx] ?? -1;
           const info = assigned >= 0 ? padInfo[assigned] : undefined;
+          const posInBar = stepIdx % stepsPerBar;
           return (
             <ChordCell
               key={stepIdx}
               trackIdx={tIdx}
               stepIdx={stepIdx}
+              posInBar={posInBar}
+              beat={Boolean(beatMask[posInBar])}
               padIdx={assigned}
               isAssigned={Boolean(info)}
               fullName={info?.displayName ?? '-'}
@@ -274,14 +471,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [activeTab, setActiveTab] = useState<PadTab>('drum');
   const [bpm, setBpm] = useState(115);
 
+  // Birama & jendela tampilan grid
+  const [timeSigId, setTimeSigId] = useState<string>(INITIAL_TS.id);
+  const timeSig = getTimeSig(timeSigId);
+  const stepsPerBar = stepsPerBarOf(timeSig);
+  const totalSteps = stepsPerBar * TOTAL_BARS;
+  const beatInfo = useMemo(() => buildBeatInfo(timeSig), [timeSigId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [barsPerView, setBarsPerView] = useState<number>(defaultBarsPerView(INITIAL_STEPS_PER_BAR));
+  const [viewStartBar, setViewStartBar] = useState<number>(0);
+  const [followPlayhead, setFollowPlayhead] = useState(true);
+
   const [isDrumLoopActive, setIsDrumLoopActive] = useState(false);
   const [isChordLoopActive, setIsChordLoopActive] = useState(false);
   const [isSeqLooping, setIsSeqLooping] = useState(true);
 
   const [loopStartBar, setLoopStartBar] = useState<number>(1);
   const [loopStartBeat, setLoopStartBeat] = useState<number>(1);
-  const [loopEndBar, setLoopEndBar] = useState<number>(TOTAL_BARS);
-  const [loopEndBeat, setLoopEndBeat] = useState<number>(STEPS_PER_BAR);
+  const [loopEndBar, setLoopEndBar] = useState<number>(DEFAULT_LOOP_END_BAR);
+  const [loopEndBeat, setLoopEndBeat] = useState<number>(INITIAL_STEPS_PER_BAR);
 
   const [drumVolume, setDrumVolume] = useState(85);
   const [chordMasterVolume, setChordMasterVolume] = useState(80);
@@ -305,14 +512,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.02, decay: 0.25, sustain: 0.65, release: 0.35 },
-      steps: (() => {
-        const arr = Array(TOTAL_STEPS).fill(-1);
-        arr[0] = 0;
-        arr[4] = 1;
-        arr[8] = 2;
-        arr[12] = 3;
-        return arr;
-      })(),
+      steps: buildDefaultChordSteps(INITIAL_TS),
     },
     {
       id: 2,
@@ -323,7 +523,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.05, decay: 0.4, sustain: 0.8, release: 0.9 },
-      steps: Array(TOTAL_STEPS).fill(-1),
+      steps: Array(INITIAL_TOTAL_STEPS).fill(-1),
     },
     {
       id: 3,
@@ -334,7 +534,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.1, decay: 0.5, sustain: 0.75, release: 1.2 },
-      steps: Array(TOTAL_STEPS).fill(-1),
+      steps: Array(INITIAL_TOTAL_STEPS).fill(-1),
     },
     {
       id: 4,
@@ -345,7 +545,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       muted: false,
       solo: false,
       adsr: { attack: 0.03, decay: 0.3, sustain: 0.7, release: 0.8 },
-      steps: Array(TOTAL_STEPS).fill(-1),
+      steps: Array(INITIAL_TOTAL_STEPS).fill(-1),
     },
   ]);
 
@@ -369,6 +569,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const paintedElsRef = useRef<HTMLElement[]>([]);
   const gateRef = useRef({ isUnlocked8Bar: Boolean(isUnlocked8Bar), onUnlockEditor });
   gateRef.current = { isUnlocked8Bar: Boolean(isUnlocked8Bar), onUnlockEditor };
+  // Ukuran grid terbaru untuk callback ber-memo (useCallback dengan deps kosong) dan scheduler.
+  const layoutRef = useRef({ stepsPerBar, totalSteps });
+  layoutRef.current = { stepsPerBar, totalSteps };
+  // Jendela tampilan terbaru untuk loop penggambar playhead.
+  const viewRef = useRef({ start: viewStartBar, count: barsPerView, stepsPerBar, follow: followPlayhead });
+  viewRef.current = { start: viewStartBar, count: barsPerView, stepsPerBar, follow: followPlayhead };
 
   // Tandai kolom ketukan yang sedang berbunyi langsung di DOM (tanpa render ulang React).
   const paintPlayhead = (step: number) => {
@@ -381,35 +587,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     paintedElsRef.current = els;
   };
 
-  // Bus Gain khusus live playback 4 track akor
-  const chordBusGainRef = useRef<GainNode | null>(null);
-
-  const getChordBusNode = (ctx: AudioContext): GainNode => {
-    if (!chordBusGainRef.current) {
-      const g = ctx.createGain();
-      g.gain.value = 1.0;
-      g.connect(ctx.destination);
-      chordBusGainRef.current = g;
-    }
-    return chordBusGainRef.current;
-  };
-
+  // Voice akor sequencer dikelola AudioEngine (bus + kompresor master, batas voice, choke per track).
   const stopAllLiveChords = () => {
     try {
-      const ctx = audioEngine.getAudioContext();
-      if (chordBusGainRef.current) {
-        const now = ctx.currentTime;
-        chordBusGainRef.current.gain.cancelScheduledValues(now);
-        chordBusGainRef.current.gain.setValueAtTime(chordBusGainRef.current.gain.value, now);
-        chordBusGainRef.current.gain.linearRampToValueAtTime(0.0001, now + 0.04);
-
-        const newGain = ctx.createGain();
-        newGain.gain.value = 1.0;
-        newGain.connect(ctx.destination);
-        chordBusGainRef.current = newGain;
-      }
       audioEngine.stopAllChords(0.04);
-      audioEngine.stopAllChords(0.04, 'progresi2');
     } catch {
       // Abaikan jika context belum aktif
     }
@@ -444,18 +625,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     octaveOffset: 0,
   });
 
-  const [drumGrid, setDrumGrid] = useState<{ [key: string]: boolean[] }>(() => {
-    const initial: { [key: string]: boolean[] } = {};
-    DRUM_INSTRUMENTS.forEach((inst) => {
-      initial[inst.id] = Array(TOTAL_STEPS).fill(false);
-    });
-    initial['kick'][0] = true;
-    initial['kick'][4] = true;
-    initial['snare'][2] = true;
-    initial['snare'][6] = true;
-    for (let i = 0; i < 8; i++) initial['closedhat'][i] = true;
-    return initial;
-  });
+  const [drumGrid, setDrumGrid] = useState<{ [key: string]: boolean[] }>(() => buildDefaultDrumGrid(INITIAL_TS));
 
   // Sinkronisasi ADSR Drum ke AudioEngine
   useEffect(() => {
@@ -544,20 +714,21 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   };
 
   const toggleDrumStep = useCallback((drumId: string, stepIndex: number) => {
-    const barIndex = Math.floor(stepIndex / STEPS_PER_BAR);
+    const spb = layoutRef.current.stepsPerBar;
+    const barIndex = Math.floor(stepIndex / spb);
     if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
       gateRef.current.onUnlockEditor();
       return;
     }
     setDrumGrid((prev) => {
-      const row = [...(prev[drumId] || Array(TOTAL_STEPS).fill(false))];
+      const row = [...(prev[drumId] || Array(layoutRef.current.totalSteps).fill(false))];
       row[stepIndex] = !row[stepIndex];
       return { ...prev, [drumId]: row };
     });
   }, []);
 
   const setTrackChordStep = useCallback((trackIndex: number, stepIndex: number, padIdx: number) => {
-    const barIndex = Math.floor(stepIndex / STEPS_PER_BAR);
+    const barIndex = Math.floor(stepIndex / layoutRef.current.stepsPerBar);
     if (!gateRef.current.isUnlocked8Bar && barIndex > 0) {
       gateRef.current.onUnlockEditor();
       return;
@@ -572,7 +743,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   }, []);
 
   const handleSeekStep = (targetStep: number) => {
-    const barIdx = Math.floor(targetStep / STEPS_PER_BAR);
+    const barIdx = Math.floor(targetStep / stepsPerBar);
     if (!isUnlocked8Bar && barIdx > 0) {
       onUnlockEditor();
       return;
@@ -584,7 +755,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   };
 
   const resetToBeginning = () => {
-    const startStep = Math.max(0, (loopStartBar - 1) * STEPS_PER_BAR + (loopStartBeat - 1));
+    const startStep = Math.max(0, (loopStartBar - 1) * stepsPerBar + (loopStartBeat - 1));
     stepRef.current = startStep;
     visualQueueRef.current = [];
     paintPlayhead(startStep);
@@ -595,16 +766,31 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setIsDrumLoopActive(!isDrumLoopActive);
   };
 
-  const toggleChordLoop = () => {
+  const preparingChordsRef = useRef(false);
+  const toggleChordLoop = async () => {
     if (!isUnlocked8Bar) {
       onUnlockEditor();
       return;
     }
+    if (preparingChordsRef.current) return;
     audioEngine.getAudioContext().resume();
     if (isChordLoopActive) {
       stopAllLiveChords();
+      setIsChordLoopActive(false);
+      return;
     }
-    setIsChordLoopActive(!isChordLoopActive);
+    // Siapkan semua sample akor yang dipakai SEBELUM mulai, supaya tidak ada pemrosesan di tengah ketukan.
+    preparingChordsRef.current = true;
+    const statusTimer = window.setTimeout(() => setEngineStatus('Menyiapkan suara akor...'), 150);
+    try {
+      await audioEngine.prewarmChordSamples(chordWarmPairs);
+    } catch {
+      // Lanjut saja: scheduler melewati nada yang belum siap, bukan berhenti.
+    }
+    window.clearTimeout(statusTimer);
+    setEngineStatus('');
+    preparingChordsRef.current = false;
+    setIsChordLoopActive(true);
   };
 
   const isAnySeqActive = isDrumLoopActive || isChordLoopActive;
@@ -634,6 +820,58 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     [padInfo]
   );
 
+  // Jendela tampilan: hanya bar yang terlihat yang digambar ke DOM.
+  const viewSteps = barsPerView * stepsPerBar;
+  const windowSteps = useMemo<number[]>(
+    () => Array.from({ length: viewSteps }, (_, i) => viewStartBar * stepsPerBar + i),
+    [viewStartBar, viewSteps, stepsPerBar]
+  );
+  const windowBars = useMemo<number[]>(
+    () => Array.from({ length: barsPerView }, (_, i) => viewStartBar + i),
+    [viewStartBar, barsPerView]
+  );
+  const gridStyle = useMemo<React.CSSProperties>(
+    () => ({ gridTemplateColumns: `repeat(${viewSteps}, minmax(0, 1fr))` }),
+    [viewSteps]
+  );
+  const gridMinWidth = viewSteps * 22 + 150;
+
+  // Pasangan (program, nada) yang dipakai grid akor + semua pad track utama (untuk bermain live).
+  const chordWarmPairs = useMemo<Array<[number, number]>>(() => {
+    const pairs: Array<[number, number]> = [];
+    chordTracks.forEach((t, idx) => {
+      if (!t.enabled) return;
+      const used = new Set<number>();
+      t.steps.forEach((v) => {
+        if (v >= 0) used.add(v);
+      });
+      if (idx === 0) padInfo.forEach((_, i) => used.add(i));
+      used.forEach((pi) => {
+        padInfo[pi]?.midiNotes.forEach((n) => pairs.push([t.program, n]));
+      });
+    });
+    return pairs;
+  }, [chordTracks, padInfo]);
+  const chordWarmKey = useMemo(
+    () => Array.from(new Set(chordWarmPairs.map((p) => `${p[0]}:${p[1]}`))).sort().join(','),
+    [chordWarmPairs]
+  );
+
+  // Panaskan sample akor di latar belakang setiap kali instrumen/akor yang dipakai berubah (ditunda 250 ms
+  // supaya tidak berulang-ulang saat pengguna sedang mengedit).
+  useEffect(() => {
+    if (chordWarmPairs.length === 0) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      audioEngine.prewarmChordSamples(chordWarmPairs, { shouldAbort: () => cancelled }).catch(() => {});
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chordWarmKey]);
+
   // Cermin state terbaru untuk scheduler: scheduler membaca dari sini, jadi TIDAK perlu dibuat ulang
   // setiap grid/track/volume/tempo berubah (sebelumnya interval dihentikan & dibuat ulang tiap edit).
   liveRef.current = {
@@ -642,6 +880,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     isChordLoopActive,
     isSeqLooping,
     isUnlocked8Bar: Boolean(isUnlocked8Bar),
+    stepsPerBar,
     drumGrid,
     chordTracks,
     padInfo,
@@ -661,7 +900,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Live Sequencer: scheduler Web Audio dengan lookahead.
   // Suara dijadwalkan di jam AudioContext (presisi tinggi) beberapa milidetik ke depan, jadi ritme tetap
-  // rata walau thread utama sedang sibuk menggambar UI (penting di HP).
+  // rata walau thread utama sedang sibuk menggambar UI (penting di HP). Detaknya datang dari Web Worker.
   useEffect(() => {
     if (!isAnySeqActive) return;
     const ctx = audioEngine.getAudioContext();
@@ -669,9 +908,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     visualQueueRef.current = [];
     let stopped = false;
     let finishTimer: number | undefined;
-    let timerId: number | undefined;
+    let stopTicker: (() => void) | undefined;
 
-    const scheduleStep = (L: LiveSeqState, step: number, when: number, stepSec: number) => {
+    // `stepsLeft` = sisa step sampai akhir wilayah loop, dipakai membatasi lama tahan akor.
+    const scheduleStep = (L: LiveSeqState, step: number, when: number, stepSec: number, stepsLeft: number) => {
       if (L.isDrumLoopActive) {
         for (const inst of DRUM_INSTRUMENTS) {
           if (L.drumGrid[inst.id]?.[step]) {
@@ -680,18 +920,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         }
       }
       if (L.isChordLoopActive) {
-        const chordBus = getChordBusNode(ctx);
-        const holdSec = stepSec * 1.5;
         for (const track of L.chordTracks) {
           if (!isTrackAudible(track, L.chordTracks)) continue;
           const padIdx = track.steps[step];
-          if (padIdx < 0) continue;
+          if (padIdx === undefined || padIdx < 0) continue;
           const info = L.padInfo[padIdx];
           if (!info) continue;
           const effectiveVol = (track.volume / 100) * (L.chordMasterVolume / 100);
-          for (const note of info.midiNotes) {
-            audioEngine.renderChordNoteToDestination(ctx, chordBus, note, track.program, when, holdSec, effectiveVol, track.adsr);
-          }
+          // Akor ditahan sampai akor berikutnya di track ini (maks. 2 bar, tidak melewati akhir loop).
+          const holdSteps = holdStepsFor(track.steps, step, Math.min(L.stepsPerBar * 2, stepsLeft));
+          audioEngine.scheduleChordEvent({
+            trackKey: `t${track.id}`,
+            midiNotes: info.midiNotes,
+            program: track.program,
+            when,
+            holdSec: holdSteps * stepSec,
+            volume: effectiveVol,
+            adsr: track.adsr,
+          });
         }
       }
       visualQueueRef.current.push({ step, time: when });
@@ -701,7 +947,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       if (stopped) return;
       const L = liveRef.current;
       if (!L) return;
-      const stepSec = 60 / L.bpm / 2;
+      const S = L.stepsPerBar;
+      const stepSec = 60 / L.bpm / 4; // 1 step = 1/16 not; BPM per not seperempat
 
       // Tab sempat di-background / thread macet lama: lewati ketukan yang terlewat, jangan menumpuk sekaligus.
       if (nextTimeRef.current < ctx.currentTime - 0.1) {
@@ -710,13 +957,16 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
       while (nextTimeRef.current < ctx.currentTime + LOOKAHEAD_SEC) {
         const step = stepRef.current;
-        scheduleStep(L, step, nextTimeRef.current, stepSec);
+        const maxSteps = L.isUnlocked8Bar ? S * TOTAL_BARS : S;
+        const rawEndStep = Math.min(maxSteps - 1, (L.loopEndBar - 1) * S + (L.loopEndBeat - 1));
+        const rawStartStep = Math.max(0, (L.loopStartBar - 1) * S + (L.loopStartBeat - 1));
+        const configuredEndStep = Math.max(0, rawEndStep);
+        const configuredStartStep = Math.min(rawStartStep, configuredEndStep);
+
+        scheduleStep(L, step, nextTimeRef.current, stepSec, Math.max(1, configuredEndStep - step + 1));
         nextTimeRef.current += stepSec;
 
-        const maxSteps = L.isUnlocked8Bar ? TOTAL_STEPS : STEPS_PER_BAR;
         const nextStep = step + 1;
-        const configuredStartStep = Math.max(0, (L.loopStartBar - 1) * STEPS_PER_BAR + (L.loopStartBeat - 1));
-        const configuredEndStep = Math.min(maxSteps - 1, (L.loopEndBar - 1) * STEPS_PER_BAR + (L.loopEndBeat - 1));
         const activeLoopTarget = nextStep > configuredEndStep ? configuredStartStep : nextStep;
 
         if (nextStep >= maxSteps || step >= configuredEndStep) {
@@ -725,7 +975,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           } else {
             // Selesai (tanpa loop): berhenti setelah ketukan terakhir benar-benar selesai berbunyi.
             stopped = true;
-            if (timerId !== undefined) window.clearInterval(timerId);
+            stopTicker?.();
             stepRef.current = 0;
             const waitMs = Math.max(0, (nextTimeRef.current - ctx.currentTime) * 1000) + 30;
             finishTimer = window.setTimeout(() => {
@@ -744,7 +994,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     };
 
     tick();
-    timerId = window.setInterval(tick, SCHEDULER_TICK_MS);
+    stopTicker = startTicker(tick, SCHEDULER_TICK_MS);
+    if (stopped) stopTicker();
 
     // Penanda playhead mengikuti jam audio (bukan jam timer), digambar sekali per frame.
     let raf = 0;
@@ -753,14 +1004,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const now = ctx.currentTime;
       let latest = -1;
       while (q.length && q[0].time <= now) latest = q.shift()!.step;
-      if (latest >= 0 && latest !== playheadStepRef.current) paintPlayhead(latest);
+      if (latest >= 0 && latest !== playheadStepRef.current) {
+        // Ikuti playhead: kalau keluar dari jendela tampilan, balik halaman ke bar-nya.
+        const v = viewRef.current;
+        if (v.follow) {
+          const bar = Math.floor(latest / v.stepsPerBar);
+          if (bar < v.start || bar >= v.start + v.count) {
+            setViewStartBar(Math.max(0, Math.min(TOTAL_BARS - v.count, bar)));
+          }
+        }
+        paintPlayhead(latest);
+      }
       raf = requestAnimationFrame(paintLoop);
     };
     raf = requestAnimationFrame(paintLoop);
 
     return () => {
       stopped = true;
-      if (timerId !== undefined) window.clearInterval(timerId);
+      stopTicker?.();
       if (finishTimer !== undefined) window.clearTimeout(finishTimer);
       cancelAnimationFrame(raf);
     };
@@ -772,7 +1033,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   useEffect(() => {
     paintPlayhead(playheadStepRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, enabledKey]);
+  }, [activeTab, enabledKey, viewStartBar, barsPerView, timeSigId]);
 
   const handleClearGrid = () => {
     stopAllLiveChords();
@@ -780,12 +1041,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     if (activeTab === 'drum') {
       const cleared: { [key: string]: boolean[] } = {};
       DRUM_INSTRUMENTS.forEach((inst) => {
-        cleared[inst.id] = Array(TOTAL_STEPS).fill(false);
+        cleared[inst.id] = Array(totalSteps).fill(false);
       });
       setDrumGrid(cleared);
     } else {
       setChordTracks((prev) =>
-        prev.map((t) => ({ ...t, steps: Array(TOTAL_STEPS).fill(-1) }))
+        prev.map((t) => ({ ...t, steps: Array(totalSteps).fill(-1) }))
       );
     }
     onSuccessToast('Grid berhasil dibersihkan.');
@@ -814,11 +1075,60 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     onSuccessToast('Formula akor berhasil diperbarui.');
   };
 
-  const scrollByBar = (direction: 1 | -1) => {
-    const el = sequencerScrollRef.current;
-    if (!el) return;
-    const barWidth = el.scrollWidth / TOTAL_BARS;
-    el.scrollBy({ left: barWidth * direction, behavior: 'smooth' });
+  // Geser jendela tampilan grid per bar (menggantikan scroll horizontal 1560px).
+  const shiftView = (direction: 1 | -1) => {
+    setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - barsPerView, v + direction)));
+  };
+
+  const changeBarsPerView = (n: number) => {
+    setBarsPerView(n);
+    setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - n, v)));
+  };
+
+  // Ganti birama: hentikan pemutaran, pindahkan isi grid ke panjang bar baru, reset wilayah loop.
+  const changeTimeSignature = (nextId: string) => {
+    if (nextId === timeSigId) return;
+    const next = getTimeSig(nextId);
+    const oldS = stepsPerBar;
+    const newS = stepsPerBarOf(next);
+
+    setIsDrumLoopActive(false);
+    setIsChordLoopActive(false);
+    stopAllLiveChords();
+    stepRef.current = 0;
+    visualQueueRef.current = [];
+    playheadStepRef.current = 0;
+
+    let trimmed = false;
+    if (newS < oldS) {
+      const isCut = (idx: number) => idx % oldS >= newS;
+      trimmed =
+        Object.values(drumGrid).some((row) => row.some((v, i) => v && isCut(i))) ||
+        chordTracks.some((t) => t.steps.some((v, i) => v >= 0 && isCut(i)));
+    }
+
+    setDrumGrid((prev) => {
+      const out: { [key: string]: boolean[] } = {};
+      DRUM_INSTRUMENTS.forEach((inst) => {
+        out[inst.id] = remapSteps<boolean>(prev[inst.id] || [], oldS, newS, false);
+      });
+      return out;
+    });
+    setChordTracks((prev) => prev.map((t) => ({ ...t, steps: remapSteps<number>(t.steps, oldS, newS, -1) })));
+
+    setTimeSigId(nextId);
+    setLoopStartBar(1);
+    setLoopStartBeat(1);
+    setLoopEndBeat(newS);
+    const nextBarsPerView = defaultBarsPerView(newS);
+    setBarsPerView(nextBarsPerView);
+    setViewStartBar(0);
+
+    onSuccessToast(
+      trimmed
+        ? `Birama diganti ke ${next.label}. Sebagian not di luar panjang bar baru terpotong.`
+        : `Birama diganti ke ${next.label} (${newS} step per bar).`
+    );
   };
 
   // Dihitung hanya saat modal ekspor terbuka (sebelumnya dihitung ulang di SETIAP render).
@@ -885,6 +1195,22 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
+            </div>
+
+            <div className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0">
+              <span className="text-xs font-bold text-gray-400 mr-0.5">BIRAMA</span>
+              <select
+                value={timeSigId}
+                onChange={(e) => changeTimeSignature(e.target.value)}
+                title="Birama. BPM dihitung per not seperempat; 1 step = 1/16 not."
+                className="bg-transparent font-mono font-black text-sm text-accent focus:outline-none cursor-pointer"
+              >
+                {TIME_SIGNATURES.map((ts) => (
+                  <option key={ts.id} value={ts.id} className="bg-black text-white">
+                    {ts.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <button
@@ -1157,7 +1483,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3 bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-xs">
             <div className="flex items-center gap-2 text-accent font-bold">
               <Repeat className="w-4 h-4" />
-              <span>Wilayah Looping (Bar & Beat):</span>
+              <span>Wilayah Looping (Bar & Step):</span>
             </div>
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-1.5">
@@ -1170,13 +1496,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={(e) => setLoopStartBar(Math.max(1, Math.min(TOTAL_BARS, Number(e.target.value) || 1)))}
                   className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
-                <span className="text-gray-400">Beat</span>
+                <span className="text-gray-400">Step</span>
                 <input
                   type="number"
                   min={1}
-                  max={STEPS_PER_BAR}
+                  max={stepsPerBar}
                   value={loopStartBeat}
-                  onChange={(e) => setLoopStartBeat(Math.max(1, Math.min(STEPS_PER_BAR, Number(e.target.value) || 1)))}
+                  onChange={(e) => setLoopStartBeat(Math.max(1, Math.min(stepsPerBar, Number(e.target.value) || 1)))}
                   className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
               </div>
@@ -1191,13 +1517,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={(e) => setLoopEndBar(Math.max(1, Math.min(TOTAL_BARS, Number(e.target.value) || 1)))}
                   className="w-12 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
-                <span className="text-gray-400">Beat</span>
+                <span className="text-gray-400">Step</span>
                 <input
                   type="number"
                   min={1}
-                  max={STEPS_PER_BAR}
+                  max={stepsPerBar}
                   value={loopEndBeat}
-                  onChange={(e) => setLoopEndBeat(Math.max(1, Math.min(STEPS_PER_BAR, Number(e.target.value) || 1)))}
+                  onChange={(e) => setLoopEndBeat(Math.max(1, Math.min(stepsPerBar, Number(e.target.value) || 1)))}
                   className="w-10 bg-black/80 rounded-lg border border-white/15 px-2 py-1 text-xs font-mono text-white text-center outline-none focus:border-accent"
                 />
               </div>
@@ -1332,7 +1658,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                           <button
                             type="button"
                             onClick={() => {
-                              updateTrack(tIdx, { enabled: false, steps: Array(TOTAL_STEPS).fill(-1) });
+                              updateTrack(tIdx, { enabled: false, steps: Array(totalSteps).fill(-1) });
                               stopAllLiveChords();
                             }}
                             className="p-1 rounded text-gray-400 hover:text-red-400 hover:bg-white/5 transition-colors cursor-pointer"
@@ -1433,39 +1759,71 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         </div>
 
         <div className="space-y-2 pt-1">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
               {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
             </h4>
-            <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-lg p-0.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[10px] font-mono text-gray-400">
+                Bar {viewStartBar + 1}–{viewStartBar + barsPerView} / {TOTAL_BARS} • {timeSig.label}
+              </span>
+              <label className="flex items-center gap-1 text-[10px] text-gray-400">
+                Tampil
+                <select
+                  value={barsPerView}
+                  onChange={(e) => changeBarsPerView(Number(e.target.value))}
+                  className="bg-black/60 border border-white/10 rounded-md px-1 py-0.5 font-mono text-accent focus:outline-none cursor-pointer"
+                >
+                  {BARS_PER_VIEW_OPTIONS.map((n) => (
+                    <option key={n} value={n} className="bg-black text-white">
+                      {n} bar
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
-                onClick={() => scrollByBar(-1)}
-                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors"
+                onClick={() => setFollowPlayhead((f) => !f)}
+                title="Halaman grid otomatis mengikuti playhead saat diputar"
+                className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-colors ${
+                  followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10'
+                }`}
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                Ikuti
               </button>
-              <button
-                type="button"
-                onClick={() => scrollByBar(1)}
-                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors"
-              >
-                <ChevronRight className="w-3.5 h-3.5" />
-              </button>
+              <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-lg p-0.5">
+                <button
+                  type="button"
+                  onClick={() => shiftView(-1)}
+                  disabled={viewStartBar <= 0}
+                  className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => shiftView(1)}
+                  disabled={viewStartBar >= TOTAL_BARS - barsPerView}
+                  className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           </div>
 
-          <div ref={sequencerScrollRef} className="overflow-x-auto pt-2 pb-4 px-3 no-scrollbar scroll-smooth">
-            <div className="min-w-[1560px] space-y-2">
+          <div ref={sequencerScrollRef} className="overflow-x-auto pt-2 pb-4 px-3 no-scrollbar">
+            <div className="space-y-2" style={{ minWidth: gridMinWidth }}>
               <div className="flex items-center gap-2">
                 <div className="w-36 shrink-0 text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-1">
                   SEGMEN BAR
                 </div>
-                <div className="grid grid-cols-64 gap-0.5 flex-1" style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}>
-                  {Array.from({ length: TOTAL_BARS }).map((_, barIdx) => (
+                <div className="grid gap-0.5 flex-1" style={gridStyle}>
+                  {windowBars.map((barIdx) => (
                     <div
                       key={barIdx}
-                      className="col-span-4 py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-surface text-accent border-accent/30"
+                      style={{ gridColumn: `span ${stepsPerBar} / span ${stepsPerBar}` }}
+                      className="py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-surface text-accent border-accent/30"
                     >
                       BAR {barIdx + 1}
                     </div>
@@ -1496,30 +1854,42 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-64 gap-0.5 flex-1" style={{ gridTemplateColumns: `repeat(${TOTAL_STEPS}, minmax(0, 1fr))` }}>
-                  {Array.from({ length: TOTAL_STEPS }).map((_, idx) => (
-                    <button
-                      key={idx}
-                      type="button"
-                      data-step={idx}
-                      data-seek="1"
-                      onClick={() => handleSeekStep(idx)}
-                      className={`h-8 rounded-xs text-xs font-mono font-bold transition-colors flex items-center justify-center ${
-                        idx % 4 === 0
-                          ? 'bg-white/15 text-white hover:bg-white/30'
-                          : 'bg-black/50 text-gray-400 hover:bg-white/10'
-                      }`}
-                    >
-                      {idx + 1}
-                    </button>
-                  ))}
+                <div className="grid gap-0.5 flex-1" style={gridStyle}>
+                  {windowSteps.map((idx) => {
+                    const pos = idx % stepsPerBar;
+                    const isBeat = beatInfo.isBeatStart[pos];
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        data-step={idx}
+                        data-seek="1"
+                        onClick={() => handleSeekStep(idx)}
+                        className={`h-8 rounded-xs text-xs font-mono font-bold transition-colors flex items-center justify-center ${
+                          isBeat ? 'bg-white/15 text-white hover:bg-white/30' : 'bg-black/50 text-gray-500 hover:bg-white/10'
+                        }`}
+                      >
+                        {isBeat ? beatInfo.beatNumber[pos] : '·'}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
               {activeTab === 'drum' ? (
                 <div className="space-y-1.5 pt-1">
                   {DRUM_INSTRUMENTS.map((inst) => (
-                    <DrumRow key={inst.id} id={inst.id} label={inst.label} row={drumGrid[inst.id]} onToggle={toggleDrumStep} />
+                    <DrumRow
+                      key={inst.id}
+                      id={inst.id}
+                      label={inst.label}
+                      row={drumGrid[inst.id]}
+                      steps={windowSteps}
+                      stepsPerBar={stepsPerBar}
+                      beatMask={beatInfo.isBeatStart}
+                      gridStyle={gridStyle}
+                      onToggle={toggleDrumStep}
+                    />
                   ))}
                 </div>
               ) : (
@@ -1533,6 +1903,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         instName={INSTRUMENTS_128.find((i) => i.id === track.program)?.name || 'Piano'}
                         padInfo={padInfo}
                         options={chordOptions}
+                        steps={windowSteps}
+                        stepsPerBar={stepsPerBar}
+                        beatMask={beatInfo.isBeatStart}
+                        gridStyle={gridStyle}
                         onPick={setTrackChordStep}
                       />
                     ) : null
@@ -1788,7 +2162,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         tab={activeTab}
         exportScope={exportScope}
         totalBars={TOTAL_BARS}
-        stepsPerBar={STEPS_PER_BAR}
+        stepsPerBar={stepsPerBar}
+        timeSignature={{ num: timeSig.num, den: timeSig.den }}
         bpm={bpm}
         drumGrid={drumGrid}
         chordTracksData={exportChordTracksData}

@@ -516,54 +516,171 @@ export function normalizePeak(ch: Channels, targetDb = -1): { channels: Channels
   return { channels: out, gainDb };
 }
 
-export interface Subdivision { id: string; label: string; hint: string; offsets: number[]; }
+// ════════════════════════════════════════════════════════════════════════════
+// METRONOM
+//
+// Semua di sini murni DSP (tanpa Web Audio), jadi bunyi di pratinjau langsung
+// (AudioExtraTools) dan bunyi di berkas yang diunduh (renderMetronome) berasal
+// dari sampel yang SAMA persis.
+// ════════════════════════════════════════════════════════════════════════════
 
-const even = (n: number) => Array.from({ length: n }, (_, i) => i / n);
-export const SUBDIVISIONS: Subdivision[] = [1, 2, 3, 4, 5, 6].map((n) => ({
-  id: String(n),
-  label: n === 1 ? '1 klik per ketukan' : `${n} klik per ketukan`,
-  hint: n === 1 ? 'Hanya klik utama' : `Klik utama + ${n - 1} klik pelan di antara ketukan`,
-  offsets: even(n),
-}));
-
-export interface TimeSignature { id: string; label: string; pulses: number; accents: Accent[]; }
 export type Accent = 0 | 1 | 2;
+export type ClickKind = 'accent' | 'beat' | 'sub';
 
-const acc = (n: number, strong: number[]): Accent[] => Array.from({ length: n }, (_, i) => (strong.includes(i) ? 2 : 1) as Accent);
-const ts = (id: string, pulses: number, strong: number[]): TimeSignature => ({ id, label: id, pulses, accents: acc(pulses, strong) });
-export const TIME_SIGNATURES: TimeSignature[] = [
-  ts('2/4', 2, [0]),
-  ts('3/4', 3, [0]),
-  ts('4/4', 4, [0]),
-  ts('5/4', 5, [0, 3]),
-  ts('6/8', 6, [0, 3]),
-  ts('7/8', 7, [0, 2, 4]),
-  ts('9/8', 9, [0, 3, 6]),
-  ts('12/8', 12, [0, 3, 6, 9]),
-];
-
-export interface ClickSound { id: string; label: string; accent: number; normal: number; sub: number; decay: number; noise: number; wave: 'sine' | 'square' | 'triangle'; }
-export const CLICK_SOUNDS: ClickSound[] = [
-  { id: 'beep', label: 'Beep (sine)', accent: 1600, normal: 1000, sub: 700, decay: 90, noise: 0, wave: 'sine' },
-  { id: 'woodblock', label: 'Woodblock', accent: 1150, normal: 820, sub: 620, decay: 160, noise: 0.08, wave: 'triangle' },
-  { id: 'rimshot', label: 'Rimshot / klik tajam', accent: 2400, normal: 1800, sub: 1300, decay: 260, noise: 0.35, wave: 'square' },
-  { id: 'hihat', label: 'Hi-hat (derau)', accent: 7000, normal: 6000, sub: 5000, decay: 320, noise: 0.95, wave: 'sine' },
-  { id: 'cowbell', label: 'Cowbell', accent: 800, normal: 540, sub: 400, decay: 55, noise: 0, wave: 'square' },
-];
-
-export interface MetronomeRenderOptions {
-  bpm: number;
-  beatsPerBar: number;
-  bars: number;
-  subdivisionId?: string;
-  subdivision?: number;
-  accents?: Accent[];
-  sound?: string;
-  sampleRate?: number;
+// ── Subdivisi ───────────────────────────────────────────────────────────────
+// Satu ketukan (pulsa) dibagi n klik. Nilai not-nya bergantung pada penyebut birama:
+// pulsa 1/4 dibagi 4 = 1/16, dibagi 16 = 1/64, dibagi 3 = triol 1/8, dst.
+export interface Subdivision {
+  id: string;          // = String(count), supaya kompatibel dengan versi lama ('1'..'6')
+  count: number;       // jumlah klik per ketukan
+  label: string;
+  hint: string;
+  group: string;       // untuk <optgroup>
+  offsets: number[];   // posisi tiap klik di dalam ketukan (0..1)
 }
 
-export const getSubdivision = (id?: string): Subdivision => SUBDIVISIONS.find((x) => x.id === id) ?? SUBDIVISIONS[0];
-export const getClickSound = (id?: string): ClickSound => CLICK_SOUNDS.find((x) => x.id === id) ?? CLICK_SOUNDS[0];
+export const MAX_NOTE_VALUE = 64; // 1/64 — setara resolusi grid DAW
+const SUB_COUNTS = [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16, 20, 24, 32, 64];
+const even = (n: number) => Array.from({ length: n }, (_, i) => i / n);
+
+type SubKind = 'lurus' | 'triol' | 'kuintol' | 'septol';
+function subKind(n: number): SubKind {
+  let m = n; while (m % 2 === 0) m /= 2;
+  return m === 1 ? 'lurus' : m === 3 ? 'triol' : m === 5 ? 'kuintol' : 'septol';
+}
+const SUB_GROUP: Record<SubKind, string> = { lurus: 'Lurus (1/4, 1/8, 1/16 … 1/64)', triol: 'Triol', kuintol: 'Kuintol', septol: 'Septol' };
+
+/** Nilai not (penyebut) hasil pembagian pulsa berpenyebut `den` menjadi `n` klik. */
+export function subNoteValue(n: number, den: number): number {
+  return den * Math.pow(2, Math.floor(Math.log2(n)));
+}
+
+function buildSubdivision(n: number, den?: number): Subdivision {
+  const kind = subKind(n);
+  const hint = n === 1 ? 'Hanya klik utama' : `Klik utama + ${n - 1} klik pelan di antara ketukan`;
+  let label: string;
+  if (den === undefined) label = n === 1 ? '1 klik per ketukan' : `${n} klik per ketukan`;
+  else if (n === 1) label = `Hanya ketukan (1/${den})`;
+  else {
+    const nv = subNoteValue(n, den);
+    const kindTxt = kind === 'lurus' ? '' : ` ${kind}`;
+    label = `1/${nv}${kindTxt} — ${n} klik per ketukan`;
+  }
+  return { id: String(n), count: n, label, hint, group: SUB_GROUP[kind], offsets: even(n) };
+}
+
+/** Daftar generik (tidak bergantung penyebut). Dipertahankan demi kompatibilitas. */
+export const SUBDIVISIONS: Subdivision[] = SUB_COUNTS.map((n) => buildSubdivision(n));
+
+/** Subdivisi yang tersedia untuk penyebut tertentu, lengkap dengan nama nilai not (maks 1/64). */
+export function subdivisionsFor(den: number): Subdivision[] {
+  return SUB_COUNTS.filter((n) => subNoteValue(n, den) <= MAX_NOTE_VALUE).map((n) => buildSubdivision(n, den));
+}
+
+export const getSubdivision = (id?: string, den?: number): Subdivision => {
+  const n = SUB_COUNTS.find((c) => String(c) === id) ?? 1;
+  return buildSubdivision(n, den);
+};
+
+// ── Birama ──────────────────────────────────────────────────────────────────
+export const DENOMINATORS = [1, 2, 4, 8, 16, 32, 64] as const;
+export const MAX_NUMERATOR = 32;
+
+export interface TimeSignature { id: string; label: string; pulses: number; denominator: number; accents: Accent[]; }
+
+const FIXED_GROUPING: Record<number, number[]> = {
+  1: [1], 2: [2], 3: [3], 4: [4], 5: [3, 2], 6: [3, 3], 7: [2, 2, 3], 8: [4, 4], 9: [3, 3, 3],
+  10: [3, 3, 2, 2], 11: [3, 3, 3, 2], 12: [3, 3, 3, 3], 13: [3, 3, 3, 2, 2], 14: [3, 3, 3, 3, 2],
+  15: [3, 3, 3, 3, 3], 16: [4, 4, 4, 4],
+};
+
+/** Pengelompokan ketukan bawaan: 4/4 → [4], 6/8 → [3,3], 7/8 → [2,2,3], 5/4 → [3,2], dst. */
+export function defaultGrouping(num: number): number[] {
+  const n = Math.max(1, Math.round(num));
+  if (FIXED_GROUPING[n]) return [...FIXED_GROUPING[n]];
+  if (n % 4 === 0) return Array(n / 4).fill(4);
+  const threes = Math.floor(n / 3), r = n % 3;
+  if (r === 0) return Array(threes).fill(3);
+  if (r === 1) return [...Array(threes - 1).fill(3), 2, 2];
+  return [...Array(threes).fill(3), 2];
+}
+
+export interface GroupingOption { id: string; label: string; groups: number[]; }
+
+function compositions23(n: number): number[][] {
+  const res: number[][] = [];
+  const rec = (left: number, cur: number[]) => {
+    if (left === 0) { res.push(cur); return; }
+    if (left >= 2) rec(left - 2, [...cur, 2]);
+    if (left >= 3) rec(left - 3, [...cur, 3]);
+  };
+  rec(n, []);
+  return res;
+}
+
+/** Semua pilihan pengelompokan aksen yang masuk akal untuk jumlah pulsa `num`. */
+export function groupingsFor(num: number): GroupingOption[] {
+  const n = Math.max(1, Math.round(num));
+  const opts: GroupingOption[] = [];
+  const seen = new Set<string>();
+  const add = (groups: number[], label?: string) => {
+    const id = groups.join('+');
+    if (seen.has(id)) return;
+    seen.add(id);
+    opts.push({ id, groups, label: label ?? (groups.length === 1 ? `${n} (aksen hanya di ketukan 1)` : groups.join(' + ')) });
+  };
+  const def = defaultGrouping(n);
+  add(def, def.length === 1 ? `${n} (aksen hanya di ketukan 1)` : `${def.join(' + ')} (bawaan)`);
+  if (n >= 4 && n <= 12) for (const g of compositions23(n)) add(g);
+  if (n % 4 === 0 && n > 4) add(Array(n / 4).fill(4));
+  if (n % 3 === 0 && n > 3) add(Array(n / 3).fill(3));
+  if (n % 2 === 0 && n > 2) add(Array(n / 2).fill(2));
+  if (n > 1) { add([n]); add(Array(n).fill(1), 'Semua ketukan beraksen'); }
+  return opts;
+}
+
+export function accentsFromGroups(groups: number[], pulses: number): Accent[] {
+  const out: Accent[] = Array.from({ length: pulses }, () => 1 as Accent);
+  let pos = 0;
+  for (const g of groups) { if (pos < pulses) out[pos] = 2; pos += Math.max(1, g); }
+  if (pulses > 0) out[0] = 2;
+  return out;
+}
+
+export function makeTimeSignature(num: number, den: number, groups?: number[]): TimeSignature {
+  const n = Math.max(1, Math.min(MAX_NUMERATOR, Math.round(num)));
+  const d = (DENOMINATORS as readonly number[]).includes(den) ? den : 4;
+  return { id: `${n}/${d}`, label: `${n}/${d}`, pulses: n, denominator: d, accents: accentsFromGroups(groups ?? defaultGrouping(n), n) };
+}
+
+/** Birama populer (pintasan). Birama lain tetap bisa dipilih lewat pembilang 1–32 & penyebut 1–64. */
+export const TIME_SIGNATURES: TimeSignature[] = [
+  [2, 4], [3, 4], [4, 4], [5, 4], [6, 4], [7, 4], [2, 2], [3, 2], [4, 2],
+  [3, 8], [5, 8], [6, 8], [7, 8], [9, 8], [10, 8], [11, 8], [12, 8], [13, 8], [15, 8],
+  [5, 16], [7, 16], [9, 16], [12, 16],
+].map(([n, d]) => makeTimeSignature(n, d));
+
+// ── Tempo ───────────────────────────────────────────────────────────────────
+// 'quarter' : BPM = not seperempat (standar DAW: Ableton, Logic, FL Studio, Cubase).
+// 'pulse'   : BPM = satu pulsa (not penyebut), seperti metronom mekanik klasik.
+// 'group3'  : BPM = tiga pulsa (♩. pada 6/8, 9/8, 12/8 — kebiasaan birama majemuk).
+export type TempoRef = 'quarter' | 'pulse' | 'group3';
+export const TEMPO_REFS: { id: TempoRef; label: string; hint: string }[] = [
+  { id: 'quarter', label: 'Not seperempat ♩ (standar DAW)', hint: 'BPM dihitung per not seperempat, sama seperti di DAW' },
+  { id: 'pulse', label: 'Satu pulsa (not penyebut)', hint: 'BPM dihitung per klik utama, seperti metronom mekanik' },
+  { id: 'group3', label: 'Tiga pulsa (♩. birama majemuk)', hint: 'BPM dihitung per kelompok 3 pulsa, cocok untuk 6/8, 9/8, 12/8' },
+];
+
+export function pulseSeconds(bpm: number, den: number, ref: TempoRef = 'quarter'): number {
+  const q = 60 / Math.max(1, bpm);
+  if (ref === 'pulse') return q;
+  if (ref === 'group3') return q / 3;
+  return q * (4 / den);
+}
+
+export function barSeconds(bpm: number, num: number, den: number, ref: TempoRef = 'quarter'): number {
+  return pulseSeconds(bpm, den, ref) * num;
+}
 
 export function tempoMarking(bpm: number): string {
   if (bpm < 40) return 'Grave';
@@ -578,38 +695,281 @@ export function tempoMarking(bpm: number): string {
   return 'Prestissimo';
 }
 
+// ── Bunyi klik ──────────────────────────────────────────────────────────────
+// Bukan lagi "beep" osilator polos. Tiap bunyi dibangun dengan sintesis modal
+// (gabungan resonansi teredam bernada tidak harmonis seperti benda kayu/logam
+// asli) + letupan derau tersaring untuk transien benturan, lalu dirender jadi
+// sampel PCM. Aksen, ketukan biasa, dan subdivisi memakai sampel berbeda,
+// bukan sekadar nada yang digeser.
+
+interface ModeDef { f: number; tau: number; a: number }
+interface NoiseDef { type: 'bp' | 'hp' | 'lp'; f: number; q?: number; tau: number; a: number; delay?: number }
+interface SweepDef { f0: number; f1: number; fTau: number; tau: number; a: number }
+interface MetalDef { freqs: number[]; tau: number; tau2?: number; mix2?: number; a: number; filter: { type: 'bp' | 'hp' | 'lp'; f: number; q?: number } }
+interface VoiceSpec { len: number; modes?: ModeDef[]; noises?: NoiseDef[]; sweep?: SweepDef; metal?: MetalDef }
+
+export interface ClickSound {
+  id: string;
+  label: string;
+  hint: string;
+  group: string;
+  seed: number;
+  build: (kind: ClickKind) => VoiceSpec;
+}
+
+const pick = <T,>(k: ClickKind, accent: T, beat: T, sub: T): T => (k === 'accent' ? accent : k === 'beat' ? beat : sub);
+
+const hatSpec = (k: ClickKind): VoiceSpec => {
+  const tau = pick(k, 0.075, 0.03, 0.016);
+  return {
+    len: pick(k, 0.32, 0.16, 0.1),
+    metal: { freqs: [205.3, 304.4, 369.6, 522.7, 540, 800], tau, a: 1, filter: { type: 'hp', f: pick(k, 6800, 7300, 8000), q: 0.8 } },
+    noises: [{ type: 'hp', f: 9000, q: 0.7, tau: tau * 0.8, a: 0.55 }],
+  };
+};
+
+export const CLICK_SOUNDS: ClickSound[] = [
+  {
+    id: 'mechanical', label: 'Metronom mekanik (tok-tak)', group: 'Metronom & kayu', seed: 11,
+    hint: 'Bunyi benturan kayu metronom pendulum klasik',
+    build: (k) => {
+      const p = pick(k, 1.22, 1, 1.55), d = pick(k, 1, 1, 0.55);
+      return {
+        len: pick(k, 0.2, 0.2, 0.1),
+        modes: [
+          { f: 820 * p, tau: 0.014 * d, a: 1 }, { f: 1370 * p, tau: 0.010 * d, a: 0.8 },
+          { f: 2180 * p, tau: 0.007 * d, a: 0.55 }, { f: 3290 * p, tau: 0.005 * d, a: 0.35 },
+          { f: 165 * pick(k, 1, 1, 2), tau: 0.03 * d, a: 0.65 },
+        ],
+        noises: [{ type: 'bp', f: 2800 * p, q: 0.8, tau: 0.0018, a: 1.2 }],
+      };
+    },
+  },
+  {
+    id: 'woodblock', label: 'Woodblock', group: 'Metronom & kayu', seed: 23,
+    hint: 'Blok kayu berongga, hangat dan jelas',
+    build: (k) => {
+      const p = pick(k, 1.26, 1, 1.5), d = pick(k, 1, 1, 0.5);
+      return {
+        len: pick(k, 0.22, 0.22, 0.1),
+        modes: [{ f: 1040 * p, tau: 0.024 * d, a: 1 }, { f: 1640 * p, tau: 0.016 * d, a: 0.45 }, { f: 2870 * p, tau: 0.009 * d, a: 0.28 }],
+        noises: [{ type: 'bp', f: 3500 * p, q: 0.9, tau: 0.0015, a: 0.5 }],
+      };
+    },
+  },
+  {
+    id: 'claves', label: 'Claves', group: 'Metronom & kayu', seed: 37,
+    hint: 'Dua batang kayu keras, nyaring dan menembus musik',
+    build: (k) => {
+      const p = pick(k, 1.12, 1, 1.3), d = pick(k, 1, 1, 0.5);
+      return {
+        len: pick(k, 0.3, 0.3, 0.12),
+        modes: [{ f: 2500 * p, tau: 0.04 * d, a: 1 }, { f: 4950 * p, tau: 0.018 * d, a: 0.3 }, { f: 7600 * p, tau: 0.008 * d, a: 0.12 }],
+        noises: [{ type: 'bp', f: 5000 * p, q: 1, tau: 0.001, a: 0.6 }],
+      };
+    },
+  },
+  {
+    id: 'rimshot', label: 'Rimshot / sidestick', group: 'Perkusi', seed: 41,
+    hint: 'Pukulan pinggir snare, tajam dan kering',
+    build: (k) => {
+      const p = pick(k, 1.15, 1, 1.4), d = pick(k, 1, 1, 0.6);
+      return {
+        len: pick(k, 0.24, 0.24, 0.11),
+        modes: [{ f: 480 * p, tau: 0.02 * d, a: 0.7 }, { f: 1250 * p, tau: 0.012 * d, a: 0.4 }, { f: 3900 * p, tau: 0.005 * d, a: 0.3 }],
+        noises: [{ type: 'bp', f: 1900 * p, q: 0.7, tau: 0.008 * d, a: 1 }, { type: 'hp', f: 5000, tau: 0.004, a: 0.35 }],
+      };
+    },
+  },
+  {
+    id: 'cowbell', label: 'Cowbell', group: 'Perkusi', seed: 53,
+    hint: 'Cowbell ala drum machine klasik',
+    build: (k) => {
+      const p = pick(k, 1.26, 1, 1.5);
+      return {
+        len: pick(k, 0.4, 0.4, 0.12),
+        metal: { freqs: [540 * p, 800 * p], tau: 0.012, tau2: pick(k, 0.09, 0.09, 0.03), mix2: 0.55, a: 1, filter: { type: 'bp', f: 1800 * p, q: 0.9 } },
+      };
+    },
+  },
+  {
+    id: 'hihat', label: 'Hi-hat', group: 'Perkusi', seed: 67,
+    hint: 'Hi-hat tertutup; aksen sedikit lebih terbuka',
+    build: hatSpec,
+  },
+  {
+    id: 'drumkit', label: 'Drum kit (kick & hi-hat)', group: 'Perkusi', seed: 79,
+    hint: 'Aksen = bass drum, ketukan = hi-hat, subdivisi = hi-hat pelan',
+    build: (k) => (k === 'accent'
+      ? { len: 0.32, sweep: { f0: 160, f1: 52, fTau: 0.035, tau: 0.11, a: 1 }, noises: [{ type: 'bp', f: 3000, q: 0.8, tau: 0.002, a: 0.35 }] }
+      : hatSpec(k)),
+  },
+  {
+    id: 'clap', label: 'Tepukan tangan (clap)', group: 'Perkusi', seed: 83,
+    hint: 'Tepuk tangan ala drum machine',
+    build: (k) => {
+      const p = pick(k, 1.15, 1, 1.25);
+      const delays = k === 'sub' ? [0, 0.008] : [0, 0.009, 0.018, 0.027];
+      const last = delays[delays.length - 1];
+      return {
+        len: pick(k, 0.24, 0.24, 0.1),
+        noises: [
+          ...delays.map((delay) => ({ type: 'bp' as const, f: 1300 * p, q: 1, tau: 0.0025, a: 0.9, delay })),
+          { type: 'bp' as const, f: 1300 * p, q: 1, tau: k === 'sub' ? 0.014 : 0.03, a: 0.8, delay: last },
+        ],
+      };
+    },
+  },
+  {
+    id: 'beep', label: 'Beep elektronik (digital)', group: 'Elektronik', seed: 97,
+    hint: 'Bunyi bip metronom digital',
+    build: (k) => {
+      const f = pick(k, 1600, 1000, 700);
+      return { len: 0.09, modes: [{ f, tau: 0.014, a: 1 }, { f: f * 2, tau: 0.006, a: 0.15 }] };
+    },
+  },
+];
+
+export const getClickSound = (id?: string): ClickSound => CLICK_SOUNDS.find((x) => x.id === id) ?? CLICK_SOUNDS[0];
+
+/** Level relatif tiap jenis klik saat dicampur (sampel sendiri dinormalkan ke puncak 1). */
+export const CLICK_GAIN: Record<ClickKind, number> = { accent: 0.9, beat: 0.7, sub: 0.38 };
+
+function makeRng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return (s / 0xffffffff) * 2 - 1; };
+}
+
+function biquad(x: Float32Array, type: 'bp' | 'hp' | 'lp', f: number, q: number, sr: number): Float32Array {
+  const w0 = (2 * Math.PI * Math.min(f, sr * 0.45)) / sr;
+  const cosw = Math.cos(w0), alpha = Math.sin(w0) / (2 * q);
+  let b0: number, b1: number, b2: number;
+  if (type === 'lp') { b0 = (1 - cosw) / 2; b1 = 1 - cosw; b2 = b0; }
+  else if (type === 'hp') { b0 = (1 + cosw) / 2; b1 = -(1 + cosw); b2 = b0; }
+  else { b0 = alpha; b1 = 0; b2 = -alpha; }
+  const a0 = 1 + alpha, a1 = -2 * cosw, a2 = 1 - alpha;
+  const y = new Float32Array(x.length);
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < x.length; i++) {
+    const v = (b0 * x[i] + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0;
+    x2 = x1; x1 = x[i]; y2 = y1; y1 = v; y[i] = v;
+  }
+  return y;
+}
+
+function renderVoice(spec: VoiceSpec, sr: number, seed: number): Float32Array {
+  const n = Math.max(8, Math.round(spec.len * sr));
+  const out = new Float32Array(n);
+  const rng = makeRng(seed);
+
+  for (const m of spec.modes ?? []) {
+    if (m.f >= sr * 0.48) continue;
+    const w = (2 * Math.PI * m.f) / sr, k = Math.exp(-1 / (m.tau * sr));
+    let env = m.a;
+    for (let i = 0; i < n; i++) { out[i] += env * Math.sin(w * i); env *= k; }
+  }
+
+  if (spec.sweep) {
+    const s = spec.sweep, ke = Math.exp(-1 / (s.tau * sr)), kf = Math.exp(-1 / (s.fTau * sr));
+    let env = s.a, fd = s.f0 - s.f1, ph = 0;
+    for (let i = 0; i < n; i++) { ph += (2 * Math.PI * (s.f1 + fd)) / sr; out[i] += env * Math.sin(ph); env *= ke; fd *= kf; }
+  }
+
+  if (spec.metal) {
+    const mt = spec.metal;
+    const raw = new Float32Array(n);
+    for (const f0 of mt.freqs) {
+      // persegi band-limited (deret harmonik ganjil) agar tidak alias
+      for (let h = 1; f0 * h < sr * 0.45; h += 2) {
+        const w = (2 * Math.PI * f0 * h) / sr, amp = 1 / h;
+        for (let i = 0; i < n; i++) raw[i] += amp * Math.sin(w * i);
+      }
+    }
+    const filtered = biquad(raw, mt.filter.type, mt.filter.f, mt.filter.q ?? 0.8, sr);
+    const k1 = Math.exp(-1 / (mt.tau * sr)), k2 = mt.tau2 ? Math.exp(-1 / (mt.tau2 * sr)) : 0;
+    const mix = mt.tau2 ? (mt.mix2 ?? 0.5) : 0;
+    let e1 = 1, e2 = 1;
+    for (let i = 0; i < n; i++) { out[i] += mt.a * filtered[i] * ((1 - mix) * e1 + mix * e2); e1 *= k1; if (k2) e2 *= k2; }
+  }
+
+  for (const nz of spec.noises ?? []) {
+    const d = Math.round((nz.delay ?? 0) * sr);
+    const len = n - d;
+    if (len <= 0) continue;
+    const raw = new Float32Array(len);
+    for (let i = 0; i < len; i++) raw[i] = rng();
+    const f = biquad(raw, nz.type, nz.f, nz.q ?? 0.8, sr);
+    const k = Math.exp(-1 / (nz.tau * sr));
+    let env = nz.a;
+    for (let i = 0; i < len; i++) { out[d + i] += env * f[i]; env *= k; }
+  }
+
+  // Sentuhan awal ~0,15 ms (hindari klik DC) & penutup 4 ms (hindari klik akhir).
+  const att = Math.max(1, Math.round(0.00015 * sr));
+  for (let i = 0; i < att && i < n; i++) out[i] *= i / att;
+  const rel = Math.min(n, Math.round(0.004 * sr));
+  for (let i = 0; i < rel; i++) out[n - 1 - i] *= i / rel;
+
+  let peak = 0;
+  for (let i = 0; i < n; i++) { const a = Math.abs(out[i]); if (a > peak) peak = a; }
+  if (peak > 0) { const g = 1 / peak; for (let i = 0; i < n; i++) out[i] *= g; }
+  return out;
+}
+
+const sampleCache = new Map<string, Float32Array>();
+
+/** Sampel PCM satu klik (puncak = 1). Di-cache; JANGAN diubah isinya. */
+export function clickSample(soundId: string | undefined, kind: ClickKind, sr: number): Float32Array {
+  const snd = getClickSound(soundId);
+  const key = `${snd.id}|${kind}|${sr}`;
+  let s = sampleCache.get(key);
+  if (!s) {
+    s = renderVoice(snd.build(kind), sr, snd.seed * 31 + (kind === 'accent' ? 1 : kind === 'beat' ? 2 : 3));
+    sampleCache.set(key, s);
+  }
+  return s;
+}
+
+// ── Render ke berkas ────────────────────────────────────────────────────────
+export interface MetronomeRenderOptions {
+  bpm: number;
+  beatsPerBar: number;       // pembilang
+  bars: number;
+  denominator?: number;      // penyebut birama (bawaan 4)
+  tempoRef?: TempoRef;       // acuan BPM (bawaan 'quarter')
+  subdivisionId?: string;
+  subdivision?: number;
+  accents?: Accent[];
+  sound?: string;
+  sampleRate?: number;
+}
+
 export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
   const sr = opts.sampleRate ?? 44100;
   const sub = getSubdivision(opts.subdivisionId ?? (opts.subdivision !== undefined ? String(Math.max(1, Math.min(6, Math.round(opts.subdivision)))) : undefined));
   const snd = getClickSound(opts.sound);
   const pulses = Math.max(1, Math.round(opts.beatsPerBar));
   const accents: Accent[] = Array.from({ length: pulses }, (_, i) => opts.accents?.[i] ?? (i === 0 ? 2 : 1));
-  const pulseSamples = (60 / opts.bpm) * sr;
+  const pulseSamples = pulseSeconds(opts.bpm, opts.denominator ?? 4, opts.tempoRef ?? 'quarter') * sr;
   const total = Math.round(pulseSamples * pulses * opts.bars);
   const out = new Float32Array(total);
-  let seed = 1234567;
-  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0xffffffff * 2 - 1; };
-  const click = (startSample: number, freq: number, amp: number) => {
-    const len = Math.round(0.06 * sr);
-    for (let i = 0; i < len && startSample + i < total; i++) {
-      const t = i / sr;
-      const env = Math.exp(-t * snd.decay);
-      const ph = 2 * Math.PI * freq * t;
-      const tone = snd.wave === 'sine' ? Math.sin(ph) : snd.wave === 'square' ? Math.sign(Math.sin(ph)) * 0.6 : (2 / Math.PI) * Math.asin(Math.sin(ph));
-      const v = out[startSample + i] + (tone * (1 - snd.noise) + rnd() * snd.noise) * env * amp;
-      out[startSample + i] = v > 1 ? 1 : v < -1 ? -1 : v;
-    }
+
+  const put = (start: number, kind: ClickKind) => {
+    const s = clickSample(snd.id, kind, sr), g = CLICK_GAIN[kind];
+    for (let i = 0; i < s.length && start + i < total; i++) out[start + i] += s[i] * g;
   };
   for (let p = 0; p < pulses * opts.bars; p++) {
     const a = accents[p % pulses];
     sub.offsets.forEach((off, j) => {
       const start = Math.round((p + off) * pulseSamples);
-      if (j === 0) {
-        if (a === 2) click(start, snd.accent, 0.8);
-        else if (a === 1) click(start, snd.normal, 0.6);
-      } else click(start, snd.sub, 0.3);
+      if (j === 0) { if (a === 2) put(start, 'accent'); else if (a === 1) put(start, 'beat'); }
+      else put(start, 'sub');
     });
   }
+  // Klik rapat (mis. 1/64) bisa menumpuk: skala turun bersama-sama, bukan dipotong (tanpa distorsi).
+  let peak = 0;
+  for (let i = 0; i < total; i++) { const a = Math.abs(out[i]); if (a > peak) peak = a; }
+  if (peak > 0.98) { const g = 0.98 / peak; for (let i = 0; i < total; i++) out[i] *= g; }
   return out;
 }
 

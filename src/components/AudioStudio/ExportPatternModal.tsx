@@ -24,7 +24,10 @@ interface ExportPatternModalProps {
   tab: 'drum' | 'chord';
   exportScope?: ExportScope;
   totalBars?: number;
+  // Jumlah step (1/16 not) per bar. Mengikuti birama di Pad Studio (4/4 = 16, 3/4 = 12, 6/8 = 12, dst.).
   stepsPerBar?: number;
+  // Birama untuk meta-event berkas MIDI.
+  timeSignature?: { num: number; den: number };
   bpm: number;
   drumGrid: { [key: string]: boolean[] };
   chordTracksData?: ChordTrackExportData[];
@@ -66,6 +69,16 @@ const DRUM_NOTE_MAP: { [key: string]: number } = {
   fx: 39,
 };
 
+// Jumlah step sampai kejadian akor berikutnya di track yang sama (maks. `maxSteps`).
+// Dipakai agar akor ditahan sampai akor berikutnya, bukan dipotong pendek seperti nada drum.
+const stepsUntilNextChord = (notesPerStep: number[][], step: number, maxSteps: number): number => {
+  let d = 1;
+  while (d < maxSteps && step + d < notesPerStep.length && !(notesPerStep[step + d] && notesPerStep[step + d].length > 0)) {
+    d++;
+  }
+  return Math.min(d, maxSteps);
+};
+
 const formatTimeVal = (sec: number): string => {
   return sec < 1 ? `${Math.round(sec * 1000)}ms` : `${sec.toFixed(2)}s`;
 };
@@ -79,7 +92,8 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
   tab,
   exportScope,
   totalBars = 16,
-  stepsPerBar = 4,
+  stepsPerBar = 16,
+  timeSignature,
   bpm,
   drumGrid,
   chordTracksData = [],
@@ -185,7 +199,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             step: step - fromStep,
             note,
             velocity: Math.round(95 * track.volume),
-            durationSteps: 2,
+            durationSteps: Math.min(stepsUntilNextChord(track.notesPerStep, step, stepsPerBar * 2), toStep - step + 1),
             channel: channelIdx,
           });
         });
@@ -221,7 +235,8 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           combinedEvents,
           title,
           programs[0] ?? 0,
-          programs[1]
+          programs[1],
+          timeSignature
         );
 
         const cleanName = fileName.replace(/[^\w\s.-]/gi, '').trim() || 'PlayMuzeck_Pattern';
@@ -233,7 +248,8 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           if (!ready) throw new Error('Bank sampel (SoundFont) gagal dimuat.');
         }
 
-        const stepSec = 60 / bpm / 2;
+        // 1 step = 1/16 not; BPM dihitung per not seperempat (sama dengan scheduler live di Pad Studio).
+        const stepSec = 60 / bpm / 4;
         const totalSteps = rangeStepCount * effectiveRepeatCount;
         const musicalDurationSec = totalSteps * stepSec;
 
@@ -302,10 +318,15 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             }
 
             if (scope === 'chord' || scope === 'both') {
-              const holdSec = stepSec * 1.8;
               activeTracks.forEach((track) => {
                 const notes = track.notesPerStep[globalStep];
                 if (notes && notes.length > 0) {
+                  // Tahan akor sampai akor berikutnya (maks. 2 bar) dan jangan melewati akhir rentang ekspor.
+                  const holdSteps = Math.min(
+                    stepsUntilNextChord(track.notesPerStep, globalStep, stepsPerBar * 2),
+                    rangeStepCount - localStep
+                  );
+                  const holdSec = holdSteps * stepSec;
                   notes.forEach((note) => {
                     audioEngine.renderChordNoteToDestination(
                       offlineCtx,
@@ -483,7 +504,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
                     />
                   </div>
                   <div className="flex-1">
-                    <span className="text-[9px] text-gray-500 block">Beat</span>
+                    <span className="text-[9px] text-gray-500 block">Step</span>
                     <input
                       type="number"
                       min={1}
@@ -513,7 +534,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
                     />
                   </div>
                   <div className="flex-1">
-                    <span className="text-[9px] text-gray-500 block">Beat</span>
+                    <span className="text-[9px] text-gray-500 block">Step</span>
                     <input
                       type="number"
                       min={1}
