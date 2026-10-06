@@ -1,0 +1,14 @@
+import { consumeExtraQuota, remainingExtraQuota } from '../src/services/extraToolsQuota.ts';
+const mem = new Map<string, string>();
+const fake = { get length() { return mem.size; }, key: (i: number) => [...mem.keys()][i] ?? null, getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => { mem.set(k, v); }, removeItem: (k: string) => { mem.delete(k); } };
+let bad = 0; const ok = (n: string, c: boolean) => { console.log(c ? 'ok  ' : 'GAGAL', n); if (!c) bad++; };
+ok('jatah awal 2', remainingExtraQuota('merge', false, fake) === 2);
+ok('pakai #1', consumeExtraQuota('merge', false, fake) === true);
+ok('pakai #2', consumeExtraQuota('merge', false, fake) === true);
+ok('pakai #3 ditolak', consumeExtraQuota('merge', false, fake) === false);
+ok('alat lain tidak terpengaruh', consumeExtraQuota('bpm', false, fake) === true);
+ok('pemilik modul = tanpa batas', consumeExtraQuota('merge', true, fake) === true && remainingExtraQuota('merge', true, fake) === Infinity);
+mem.set('pm_extra_quota_2000-01-01_merge', '2'); consumeExtraQuota('merge', false, fake);
+ok('kunci hari lama dibersihkan', ![...mem.keys()].some((k) => k.includes('2000-01-01')));
+ok('tanpa localStorage tidak memblokir', consumeExtraQuota('merge', false, null) === true);
+if (bad) process.exitCode = 1;
