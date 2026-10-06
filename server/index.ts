@@ -222,7 +222,7 @@ app.use(createPaymentRouter({
   stripProductSuffix: (id) => stripProductSuffix(id),
   getDonationTiers: () => DONATION_FRAME_TIERS,
 }));
-app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin }));
+app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, getDonationTiers: () => DONATION_FRAME_TIERS }));
 
 const OWN_ONLY_MSG = 'Kamu hanya bisa mengubah audio/kuis buatanmu sendiri.';
 const adminEmailOf = (req: express.Request): string | null => (req as any).adminEmail ? String((req as any).adminEmail).toLowerCase() : null;

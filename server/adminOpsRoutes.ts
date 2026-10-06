@@ -6,15 +6,19 @@
 // 4. Manajemen Pengguna (users) & Pengiriman Email Balasan ke Pengguna via Resend
 
 import { Router, Request, Response, RequestHandler } from 'express';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import bcrypt from 'bcryptjs';
 import { SUPER_ADMIN_EMAIL } from './db';
 import { sendMailStrict } from './emailService';
+
+interface DonationTier { min: number; frameId: string }
 
 interface Deps {
   pool: Pool;
   requireAdmin: RequestHandler;
   requireSuperAdmin: RequestHandler;
+  /** Tier bingkai donasi (sama dengan yang dipakai jalur donasi asli). Opsional: ada fallback bawaan. */
+  getDonationTiers?: () => DonationTier[];
 }
 
 const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || ''));
@@ -22,8 +26,250 @@ const MANUAL_STATUSES = ['pending', 'paid', 'failed', 'cancelled'];
 const INQUIRY_STATUSES = ['baru', 'proses', 'selesai'];
 const USER_ROLES = ['user', 'admin'];
 
-export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin }: Deps): Router {
+// ---------------------------------------------------------------------------
+// Akses produk untuk pesanan yang diubah lewat admin
+//
+// Dulu admin hanya mengubah status/fulfilled di payment_orders. Akses sebenarnya hidup di
+// user_collections (dan bingkai donasi + tabel donations), jadi pesanan "Berhasil" buatan
+// admin tidak memberi akses apa pun, dan pesanan yang dibatalkan tidak mencabut apa pun.
+//
+// Di sini akses diturunkan dari pesanan lewat satu fungsi perencana (planOrder) yang dipakai
+// untuk MEMBERI akses (paid) maupun MENCABUTNYA (paid -> status lain, atau pesanan dihapus).
+// Mencabut selalu menyisakan item yang masih ditanggung pesanan lunas lain milik user yang sama.
+// ---------------------------------------------------------------------------
+const AUDIO_BUNDLE = ['fullMaster', 'loopVersion', 'separatedStems', 'sheetMusic', 'fullEditor8Bar', 'audioToolsSuite'];
+const AUDIO_KEY_SET = new Set(AUDIO_BUNDLE);
+const GLOBAL_AUDIO_KEYS = new Set(['fullEditor8Bar', 'audioToolsSuite']); // berlaku untuk semua lagu
+const GLOBAL_ITEM_ID = 'global';
+const AUDIO_KEY_ALIASES: Record<string, string> = {
+  master: 'fullMaster', loop: 'loopVersion', stems: 'separatedStems', stem: 'separatedStems',
+  sheet: 'sheetMusic', partitur: 'sheetMusic', editor: 'fullEditor8Bar', fullEditor: 'fullEditor8Bar',
+  full16BarEditor: 'fullEditor8Bar', tools: 'audioToolsSuite', audioTools: 'audioToolsSuite',
+};
+const normalizeAudioKey = (k: unknown) => {
+  const raw = String(k || '');
+  return AUDIO_KEY_ALIASES[raw] || raw;
+};
+const stripProductSuffix = (id: string) =>
+  id.replace(/[-_:](fullMaster|loopVersion|separatedStems|sheetMusic|fullEditor8Bar|audioToolsSuite|all|bundle)$/i, '');
+
+const DEFAULT_DONATION_TIERS: DonationTier[] = [
+  { min: 100000, frameId: 'frame-sultan' },
+  { min: 50000, frameId: 'frame-warp' },
+  { min: 25000, frameId: 'frame-neon' },
+  { min: 10000, frameId: 'frame-coffee' },
+];
+
+/** Sama dengan resolveAudioKeys di jalur checkout, untuk item berbentuk keranjang. */
+function resolveCartAudioKeys(item: any): string[] | null {
+  for (const field of ['bundleKeys', 'productKeys', 'includedKeys', 'unownedKeys', 'includes', 'bundleItems']) {
+    const list = item?.[field];
+    if (Array.isArray(list)) {
+      const keys = list
+        .map((x: any) => normalizeAudioKey(typeof x === 'string' ? x : x?.itemTypeKey || x?.key))
+        .filter((k: string) => AUDIO_KEY_SET.has(k));
+      if (keys.length) return Array.from(new Set(keys));
+    }
+  }
+  const raw = String(item?.itemTypeKey || '');
+  const key = normalizeAudioKey(raw);
+  if (AUDIO_KEY_SET.has(key)) return [key];
+  const haystack = `${raw} ${item?.id || ''} ${item?.cartItemId || ''}`;
+  if (raw === 'all' || /bundle|lengkap/i.test(haystack)) return AUDIO_BUNDLE;
+  return null;
+}
+
+interface Grant { category: string; id: string; typeKey: string }
+interface OrderRow { order_id: string; user_email: string; kind: string; gross_amount: any; items: any }
+interface Plan { grants: Grant[]; donation: { amount: number } | null }
+
+/** Kunci pembanding antar-pesanan. Editor/Audio Tools = per jenis (id lagu tidak relevan); deck/topik = per id. */
+function grantKey(g: Grant): string {
+  if (g.category === 'audio' && GLOBAL_AUDIO_KEYS.has(g.typeKey)) return `audio|*|${g.typeKey}`;
+  if (g.category === 'quiz' || g.category === 'topic') return `${g.category}|${g.id}`;
+  return `${g.category}|${g.id}|${g.typeKey}`;
+}
+
+const parseItems = (raw: any): any[] => {
+  try {
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+
+const need = (v: unknown, what: string): string => {
+  const s = String(v ?? '').trim();
+  if (!s) throw new Error(`Data pesanan tidak lengkap: ${what} kosong.`);
+  return s;
+};
+
+/** Susun daftar akses yang SEHARUSNYA dimiliki dari satu pesanan (tanpa menulis apa pun). */
+async function planOrder(client: PoolClient, order: OrderRow, tiers: DonationTier[]): Promise<Plan> {
+  const grants: Grant[] = [];
+  let donation: Plan['donation'] = null;
+
+  if (order.kind === 'donation') {
+    const amount = Number(order.gross_amount) || 0;
+    if (amount > 0) {
+      donation = { amount };
+      const tier = tiers.find((t) => amount >= t.min);
+      if (tier) grants.push({ category: 'frame', id: tier.frameId, typeKey: 'donation' });
+    }
+    return { grants, donation };
+  }
+
+  const topicDecks = async (topicId: string) => {
+    const { rows } = await client.query('SELECT id, badge FROM decks WHERE topic_id = $1', [topicId]);
+    return rows.map((d: any) => {
+      const b = typeof d.badge === 'string' ? d.badge.trim() : '';
+      return { category: 'quiz', id: String(d.id), typeKey: b ? `theme:${b}` : 'quizDeck' } as Grant;
+    });
+  };
+
+  for (const it of parseItems(order.items)) {
+    if (!it) continue;
+
+    // ---- pesanan manual dari form admin ----
+    if (it.kind) {
+      if (it.kind === 'audio') {
+        const trackId = need(it.trackId, 'lagu');
+        const keys: string[] = it.bundle ? AUDIO_BUNDLE : (it.keys || []).map(normalizeAudioKey).filter((k: string) => AUDIO_KEY_SET.has(k));
+        if (!keys.length) throw new Error('Data pesanan tidak lengkap: jenis produk audio kosong.');
+        for (const k of keys) {
+          grants.push({ category: 'audio', id: GLOBAL_AUDIO_KEYS.has(k) ? GLOBAL_ITEM_ID : trackId, typeKey: k });
+        }
+      } else if (it.kind === 'editor8Bar') {
+        grants.push({ category: 'audio', id: GLOBAL_ITEM_ID, typeKey: 'fullEditor8Bar' });
+      } else if (it.kind === 'audioTools') {
+        grants.push({ category: 'audio', id: GLOBAL_ITEM_ID, typeKey: 'audioToolsSuite' });
+      } else if (it.kind === 'quizCreator') {
+        grants.push({ category: 'feature', id: 'quiz-creator-suite', typeKey: 'quizCreatorSuite' });
+      } else if (it.kind === 'deck') {
+        grants.push({ category: 'quiz', id: need(it.deckId, 'deck'), typeKey: 'quizDeck' });
+      } else if (it.kind === 'topic') {
+        const topicId = need(it.topicId, 'topik');
+        grants.push({ category: 'topic', id: topicId, typeKey: 'topic' }, ...(await topicDecks(topicId)));
+      } else {
+        throw new Error(`Jenis produk tidak dikenal: ${String(it.kind)}`);
+      }
+      continue;
+    }
+
+    // ---- item keranjang dari checkout asli (INV-MUZ-...) ----
+    if (it.itemTypeKey === 'quizCreatorSuite' || /quiz.?(creator|editor)/i.test(String(it.id || ''))) {
+      grants.push({ category: 'feature', id: 'quiz-creator-suite', typeKey: 'quizCreatorSuite' });
+      continue;
+    }
+    const audioKeys = resolveCartAudioKeys(it);
+    if (it.category === 'audio' || audioKeys) {
+      if (!audioKeys) throw new Error(`Produk audio tidak dikenali (itemTypeKey="${it.itemTypeKey ?? ''}", id="${it.id ?? ''}").`);
+      const trackId = stripProductSuffix(String(it.trackId || it.id));
+      for (const k of audioKeys) {
+        grants.push({ category: 'audio', id: GLOBAL_AUDIO_KEYS.has(k) && !it.trackId && !it.id ? GLOBAL_ITEM_ID : trackId, typeKey: k });
+      }
+    } else if (it.category === 'deck') {
+      const badge = typeof it.badge === 'string' ? it.badge.trim() : '';
+      grants.push({ category: 'quiz', id: String(it.deckId || it.id), typeKey: badge ? `theme:${badge}` : 'quizDeck' });
+    } else if (it.category === 'topic') {
+      const topicId = String(it.topicId || it.id);
+      grants.push({ category: 'topic', id: topicId, typeKey: 'topic' }, ...(await topicDecks(topicId)));
+    } else if (it.category && it.id) {
+      grants.push({ category: String(it.category), id: String(it.id), typeKey: String(it.itemTypeKey || '') });
+    }
+  }
+  return { grants, donation };
+}
+
+/** Pakai email persis seperti di tabel users (foreign key peka huruf besar/kecil); buat barisnya bila belum ada. */
+async function ensureUserEmail(client: PoolClient, email: string): Promise<string> {
+  const found = await client.query('SELECT email FROM users WHERE lower(email) = lower($1) LIMIT 1', [email]);
+  if (found.rows[0]) return String(found.rows[0].email);
+  await client.query(
+    `INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
+    [`usr_${Date.now()}`, email, email.split('@')[0]]
+  );
+  return email;
+}
+
+/** MEMBERI akses dari pesanan (idempotent). Mengembalikan jumlah akses yang dicatat. */
+async function grantOrderAccess(client: PoolClient, order: OrderRow, tiers: DonationTier[]): Promise<number> {
+  const plan = await planOrder(client, order, tiers);
+  const email = await ensureUserEmail(client, String(order.user_email).trim());
+
+  for (const g of plan.grants) {
+    await client.query(
+      `INSERT INTO public.user_collections (user_email, item_category, item_id, item_type_key)
+       VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+      [email, g.category, g.id, g.typeKey]
+    );
+  }
+  if (plan.donation) {
+    // id sama dengan jalur donasi asli (don_<orderId>) supaya tidak pernah dobel.
+    await client.query(
+      `INSERT INTO donations (id, user_email, amount) VALUES ($1, $2, $3)
+       ON CONFLICT (id) DO UPDATE SET amount = EXCLUDED.amount`,
+      [`don_${order.order_id}`, email, plan.donation.amount]
+    );
+  }
+  return plan.grants.length + (plan.donation ? 1 : 0);
+}
+
+/**
+ * MENCABUT akses yang diberikan pesanan ini, kecuali yang masih ditanggung pesanan lunas lain
+ * milik user yang sama. Mengembalikan jumlah akses yang dicabut.
+ */
+async function revokeOrderAccess(client: PoolClient, order: OrderRow, tiers: DonationTier[]): Promise<number> {
+  const plan = await planOrder(client, order, tiers);
+
+  const others = await client.query(
+    `SELECT order_id, user_email, kind, gross_amount, items FROM payment_orders
+      WHERE lower(user_email) = lower($1) AND status = 'paid' AND order_id <> $2`,
+    [order.user_email, order.order_id]
+  );
+  const covered = new Set<string>();
+  for (const o of others.rows) {
+    try {
+      for (const g of (await planOrder(client, o, tiers)).grants) covered.add(grantKey(g));
+    } catch (e) {
+      // Pesanan lain yang datanya rusak tidak boleh menggagalkan pencabutan; anggap tidak menanggung apa pun.
+      console.error('[admin] revoke: pesanan lain tidak terbaca:', o.order_id, e);
+    }
+  }
+
+  let revoked = 0;
+  for (const g of plan.grants) {
+    if (covered.has(grantKey(g))) continue;
+    let r;
+    if (g.category === 'audio' && GLOBAL_AUDIO_KEYS.has(g.typeKey)) {
+      r = await client.query(
+        `DELETE FROM public.user_collections WHERE lower(user_email) = lower($1) AND item_category = 'audio' AND item_type_key = $2`,
+        [order.user_email, g.typeKey]
+      );
+    } else if (g.category === 'quiz' || g.category === 'topic') {
+      r = await client.query(
+        `DELETE FROM public.user_collections WHERE lower(user_email) = lower($1) AND item_category = $2 AND item_id = $3`,
+        [order.user_email, g.category, g.id]
+      );
+    } else {
+      r = await client.query(
+        `DELETE FROM public.user_collections
+          WHERE lower(user_email) = lower($1) AND item_category = $2 AND item_id = $3 AND item_type_key = $4`,
+        [order.user_email, g.category, g.id, g.typeKey]
+      );
+    }
+    revoked += r.rowCount || 0;
+  }
+  if (plan.donation) {
+    await client.query('DELETE FROM donations WHERE id = $1', [`don_${order.order_id}`]);
+  }
+  return revoked;
+}
+
+export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, getDonationTiers }: Deps): Router {
   const router = Router();
+  const tiers = (): DonationTier[] => (getDonationTiers ? getDonationTiers() : DEFAULT_DONATION_TIERS);
 
   // ============================================================
   // 1. PAYMENT ORDERS & BUYERS
@@ -173,52 +419,120 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin }: 
     const { user_email, kind, status, gross_amount, items } = req.body || {};
     const email = String(user_email || '').trim().toLowerCase();
     if (!isValidEmail(email)) return res.status(400).json({ error: 'Email pengguna tidak valid.' });
+    const finalStatus = status || 'paid';
+    if (!MANUAL_STATUSES.includes(finalStatus)) return res.status(400).json({ error: 'Status tidak valid.' });
+    const finalKind = kind || 'cart';
+    if (finalKind !== 'cart' && finalKind !== 'donation') return res.status(400).json({ error: 'Jenis pesanan tidak valid.' });
+    const amount = Number(gross_amount) || 0;
+    if (finalKind === 'donation' && amount <= 0) return res.status(400).json({ error: 'Nominal donasi harus lebih dari 0.' });
 
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
       const orderId = `man_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-      const amount = Number(gross_amount) || 0;
-      await pool.query(
+      const storedItems = finalKind === 'cart' ? items || [] : [];
+      await client.query(
         `INSERT INTO payment_orders (order_id, user_email, kind, gross_amount, items, status, fulfilled)
          VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7)`,
-        [orderId, email, kind || 'cart', amount, JSON.stringify(items || []), status || 'paid', status === 'paid']
+        [orderId, email, finalKind, amount, JSON.stringify(storedItems), finalStatus, finalStatus === 'paid']
       );
-      res.status(201).json({ success: true, order_id: orderId });
+      // "paid" = akses benar-benar diberikan (produk, atau bingkai + catatan donasi), bukan cuma label.
+      let granted = 0;
+      if (finalStatus === 'paid') {
+        granted = await grantOrderAccess(
+          client,
+          { order_id: orderId, user_email: email, kind: finalKind, gross_amount: amount, items: storedItems },
+          tiers()
+        );
+      }
+      await client.query('COMMIT');
+      res.status(201).json({ success: true, order_id: orderId, granted });
     } catch (err: any) {
+      try { await client.query('ROLLBACK'); } catch { /* abaikan */ }
+      console.error('[admin] buat pesanan manual:', err);
       res.status(500).json({ error: err?.message || 'Gagal membuat pesanan.' });
+    } finally {
+      client.release();
     }
   });
 
   router.patch('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
     const { status, gross_amount } = req.body || {};
+    if (status !== undefined && !MANUAL_STATUSES.includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
+    if (status === undefined && gross_amount === undefined) return res.status(400).json({ error: 'Tidak ada perubahan.' });
+
+    const client = await pool.connect();
     try {
+      await client.query('BEGIN');
+      // Kunci baris supaya dua perubahan status serentak tidak saling menimpa akses.
+      const cur = await client.query('SELECT * FROM payment_orders WHERE order_id = $1 FOR UPDATE', [req.params.id]);
+      const before = cur.rows[0];
+      if (!before) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: 'Pesanan tidak ditemukan.' });
+      }
+
       const sets: string[] = [];
       const vals: any[] = [];
       if (status !== undefined) {
-        if (!MANUAL_STATUSES.includes(status)) return res.status(400).json({ error: 'Status tidak valid.' });
         vals.push(status);
         sets.push(`status = $${vals.length}`);
-        if (status === 'paid') sets.push('fulfilled = TRUE');
-        if (status === 'cancelled') sets.push('fulfilled = FALSE');
+        // fulfilled hanya TRUE untuk pesanan lunas; status lain berarti akses tidak (lagi) diberikan.
+        sets.push(`fulfilled = ${status === 'paid' ? 'TRUE' : 'FALSE'}`);
       }
       if (gross_amount !== undefined) {
         vals.push(Number(gross_amount) || 0);
         sets.push(`gross_amount = $${vals.length}`);
       }
-      if (!sets.length) return res.status(400).json({ error: 'Tidak ada perubahan.' });
       vals.push(req.params.id);
-      await pool.query(`UPDATE payment_orders SET ${sets.join(', ')} WHERE order_id = $${vals.length}`, vals);
-      res.json({ success: true });
+      await client.query(`UPDATE payment_orders SET ${sets.join(', ')} WHERE order_id = $${vals.length}`, vals);
+
+      const after = { ...before, status: status ?? before.status, gross_amount: gross_amount !== undefined ? Number(gross_amount) || 0 : before.gross_amount };
+      const wasPaid = before.status === 'paid';
+      const isPaid = after.status === 'paid';
+      const donationAmountChanged = before.kind === 'donation' && Number(before.gross_amount) !== Number(after.gross_amount);
+
+      let granted = 0;
+      let revoked = 0;
+      if (wasPaid && (!isPaid || donationAmountChanged)) {
+        // Lunas -> status lain (atau nominal donasi berubah, mungkin pindah tier): cabut dulu yang lama.
+        revoked = await revokeOrderAccess(client, before, tiers());
+      }
+      // Memilih "Berhasil" lagi pada pesanan yang sudah lunas juga memastikan aksesnya lengkap
+      // (idempotent): ini cara memperbaiki pesanan lama yang tercatat lunas tapi aksesnya tak pernah masuk.
+      if (isPaid && (!wasPaid || donationAmountChanged || status === 'paid')) {
+        granted = await grantOrderAccess(client, after, tiers());
+      }
+
+      await client.query('COMMIT');
+      res.json({ success: true, granted, revoked });
     } catch (err: any) {
+      try { await client.query('ROLLBACK'); } catch { /* abaikan */ }
+      console.error('[admin] ubah pesanan:', err);
       res.status(500).json({ error: err?.message || 'Gagal memperbarui pesanan.' });
+    } finally {
+      client.release();
     }
   });
 
   router.delete('/api/admin/payment-orders/:id', requireAdmin, requireSuperAdmin, async (req: Request, res: Response) => {
+    const client = await pool.connect();
     try {
-      await pool.query('DELETE FROM payment_orders WHERE order_id = $1', [req.params.id]);
-      res.json({ success: true });
+      await client.query('BEGIN');
+      const cur = await client.query('SELECT * FROM payment_orders WHERE order_id = $1 FOR UPDATE', [req.params.id]);
+      const order = cur.rows[0];
+      let revoked = 0;
+      // Menghapus pesanan lunas = akses dari pesanan itu ikut dicabut (kecuali ditanggung pesanan lunas lain).
+      if (order && order.status === 'paid') revoked = await revokeOrderAccess(client, order, tiers());
+      await client.query('DELETE FROM payment_orders WHERE order_id = $1', [req.params.id]);
+      await client.query('COMMIT');
+      res.json({ success: true, revoked });
     } catch (err: any) {
+      try { await client.query('ROLLBACK'); } catch { /* abaikan */ }
+      console.error('[admin] hapus pesanan:', err);
       res.status(500).json({ error: err?.message || 'Gagal menghapus pesanan.' });
+    } finally {
+      client.release();
     }
   });
 
