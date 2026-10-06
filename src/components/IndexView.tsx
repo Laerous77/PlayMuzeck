@@ -76,6 +76,7 @@ const QUIZ_POINTS = [
   { title: 'Belasan topik trivia', desc: 'Sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya.' },
   { title: '3 starter deck bawaan', desc: 'Siap main begitu masuk. Deck topik tambahan tersedia di Perpustakaan.' },
   { title: 'Bisa dipasang & dimainkan luring', desc: 'Pasang sebagai PWA atau unduh berkas standalone. Multiplayer online tetap butuh internet.' },
+  { title: 'Leaderboard 4 periode', desc: 'Peringkat pemain harian, mingguan, bulanan, dan sepanjang waktu. Lihat posisimu dan kejar yang di atas.' },
 ];
 
 const ECOSYSTEM = [

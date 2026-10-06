@@ -20,6 +20,8 @@ import {
   sendVerificationEmail,
   sendPasswordResetEmail,
 } from '../emailService';
+import { isDeliverableEmail } from './emailCheck';
+import { verifyTurnstile } from './turnstile';
 
 // Ekspor kembali sendMailStrict agar kompatibel dengan modul lain (seperti accountDeletion dan index.ts)
 export { sendMailStrict };
@@ -28,6 +30,9 @@ const APP_URL = (process.env.APP_URL || 'http://localhost:5173').replace(/\/+$/,
 const IS_PROD = process.env.NODE_ENV === 'production';
 const SESSION_COOKIE = 'muzeck_sid';
 const SESSION_DAYS = 30;
+// Cookie pengikat: dipasang di browser yang dipakai mendaftar. Link verifikasi hanya boleh langsung
+// membuat sesi + mempertahankan password kalau dibuka di browser yang sama (anti pre-hijack akun).
+const SIGNUP_COOKIE = 'muzeck_signup';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -77,7 +82,7 @@ const SUSPENDED_MSG = 'Akun kamu sedang ditangguhkan. Hubungi admin untuk inform
 type Purpose = 'verify_email' | 'reset_password';
 
 /** Buat token sekali pakai. Maks 5 per jam per user per tujuan (anti spam email). */
-async function issueToken(userId: string, purpose: Purpose, ttlMin: number): Promise<string | null> {
+async function issueToken(userId: string, purpose: Purpose, ttlMin: number, bindingHash: string | null = null): Promise<string | null> {
   const { rows } = await pool.query(
     `SELECT count(*)::int AS n FROM auth_tokens
       WHERE user_id=$1 AND purpose=$2 AND created_at > now() - interval '1 hour'`,
@@ -87,23 +92,32 @@ async function issueToken(userId: string, purpose: Purpose, ttlMin: number): Pro
   await pool.query(`UPDATE auth_tokens SET used_at=now() WHERE user_id=$1 AND purpose=$2 AND used_at IS NULL`, [userId, purpose]);
   const raw = newSecret();
   await pool.query(
-    `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at)
-     VALUES ($1, $2, $3, now() + make_interval(mins => $4))`,
-    [userId, purpose, sha256(raw), ttlMin]
+    `INSERT INTO auth_tokens (user_id, purpose, token_hash, expires_at, binding_hash)
+     VALUES ($1, $2, $3, now() + make_interval(mins => $4), $5)`,
+    [userId, purpose, sha256(raw), ttlMin, bindingHash]
   );
   return raw;
 }
 
 /** Pakai token secara atomik: sekali pakai, belum kedaluwarsa. */
-async function consumeToken(raw: string, purpose: Purpose): Promise<string | null> {
+async function consumeToken(raw: string, purpose: Purpose): Promise<{ userId: string; bindingHash: string | null } | null> {
   const { rows } = await pool.query(
     `UPDATE auth_tokens SET used_at=now()
       WHERE token_hash=$1 AND purpose=$2 AND used_at IS NULL AND expires_at > now()
-      RETURNING user_id`,
+      RETURNING user_id, binding_hash`,
     [sha256(raw), purpose]
   );
-  return rows[0]?.user_id ?? null;
+  if (!rows[0]) return null;
+  return { userId: rows[0].user_id, bindingHash: rows[0].binding_hash ? String(rows[0].binding_hash).trim() : null };
 }
+
+const signupCookieOpts = {
+  httpOnly: true,
+  secure: IS_PROD,
+  sameSite: 'lax' as const,
+  maxAge: 24 * 3600_000,
+  path: '/api/auth',
+};
 
 async function startSession(req: Request, res: Response, userId: string) {
   const raw = newSecret();
@@ -189,6 +203,15 @@ r.post('/signup', strict, wrap(async (req, res) => {
   }
   const { name, email, password } = p.data;
 
+  if (!(await verifyTurnstile(req.body?.cfToken, req.ip))) {
+    return res.status(400).json({ error: 'CAPTCHA_FAILED', message: 'Verifikasi "saya bukan robot" gagal. Muat ulang halaman lalu coba lagi.' });
+  }
+  // Tolak domain yang tidak bisa menerima email (mis. ferfer.gmail.com) dan email sekali pakai.
+  // Pesan ini tidak membocorkan apakah akun sudah ada.
+  if (!(await isDeliverableEmail(email))) {
+    return res.status(400).json({ error: 'INVALID_EMAIL', message: 'Domain email ini tidak bisa menerima pesan. Pakai email aktif milikmu (Gmail, Outlook, Yahoo, dll).' });
+  }
+
   const hash = await argon2.hash(password, { type: argon2.argon2id });
   const existing = (await pool.query(`SELECT id, email_verified_at FROM users WHERE lower(email)=$1`, [email])).rows[0];
 
@@ -210,8 +233,10 @@ r.post('/signup', strict, wrap(async (req, res) => {
     return res.json(GENERIC_SIGNUP);
   }
 
-  const token = await issueToken(userId, 'verify_email', 60 * 24);
+  const nonce = newSecret();
+  const token = await issueToken(userId, 'verify_email', 60 * 24, sha256(nonce));
   if (token) {
+    res.cookie(SIGNUP_COOKIE, nonce, signupCookieOpts);
     const verifyUrl = `${APP_URL}/verify-email?token=${token}`;
     void sendVerificationEmail(email, verifyUrl);
   }
@@ -221,9 +246,32 @@ r.post('/signup', strict, wrap(async (req, res) => {
 r.post('/verify-email', strict, wrap(async (req, res) => {
   const t = tokenSchema.safeParse(req.body?.token);
   if (!t.success) return res.status(400).json({ error: 'TOKEN_INVALID' });
-  const userId = await consumeToken(t.data, 'verify_email');
-  if (!userId) return res.status(400).json({ error: 'TOKEN_INVALID', message: 'Link tidak valid atau sudah kedaluwarsa.' });
+  const consumed = await consumeToken(t.data, 'verify_email');
+  if (!consumed) return res.status(400).json({ error: 'TOKEN_INVALID', message: 'Link tidak valid atau sudah kedaluwarsa.' });
+  const { userId, bindingHash } = consumed;
+
+  const prev = (await pool.query(`SELECT email_verified_at FROM users WHERE id=$1`, [userId])).rows[0];
+  if (!prev) return res.status(400).json({ error: 'TOKEN_INVALID', message: 'Link tidak valid atau sudah kedaluwarsa.' });
+
+  // Anti pre-hijack: penyerang bisa mendaftar memakai email korban + password milik penyerang.
+  // Kalau korban mengeklik link, akun tidak boleh jatuh ke penyerang. Jadi password hanya dipertahankan
+  // bila link dibuka di browser yang sama dengan browser pendaftaran. Kalau tidak, email tetap
+  // diverifikasi tetapi password dikosongkan dan pemilik email membuat password baru lewat "Lupa kata sandi".
+  const cookie = req.cookies?.[SIGNUP_COOKIE];
+  const sameBrowser = !!bindingHash && typeof cookie === 'string' && cookie.length > 0 && sha256(cookie) === bindingHash;
+
+  if (!prev.email_verified_at && !sameBrowser) {
+    await pool.query(`UPDATE users SET email_verified_at = now(), password_hash = NULL WHERE id=$1 AND email_verified_at IS NULL`, [userId]);
+    await pool.query(`DELETE FROM sessions WHERE user_id=$1`, [userId]);
+    res.clearCookie(SIGNUP_COOKIE, { path: '/api/auth' });
+    return res.status(409).json({
+      error: 'VERIFIED_PASSWORD_RESET_REQUIRED',
+      message: 'Email kamu berhasil diverifikasi. Karena link dibuka di perangkat/browser yang berbeda dari saat mendaftar, demi keamanan kata sandi direset. Klik "Lupa kata sandi" untuk membuat kata sandi baru, lalu masuk.',
+    });
+  }
+
   await pool.query(`UPDATE users SET email_verified_at = COALESCE(email_verified_at, now()) WHERE id=$1`, [userId]);
+  res.clearCookie(SIGNUP_COOKIE, { path: '/api/auth' });
   await startSession(req, res, userId);
   res.json({ user: await publicUser(userId) });
 }));
@@ -233,7 +281,11 @@ r.post('/resend-verification', mailLimit, wrap(async (req, res) => {
   if (e.success) {
     const u = (await pool.query(`SELECT id FROM users WHERE lower(email)=$1 AND email_verified_at IS NULL`, [e.data])).rows[0];
     if (u) {
-      const token = await issueToken(u.id, 'verify_email', 60 * 24);
+      // Ikat ke browser yang sama bila cookie pendaftaran masih ada; kalau tidak, link tetap sah
+      // tetapi saat dipakai password dikosongkan (lihat /verify-email).
+      const sc = req.cookies?.[SIGNUP_COOKIE];
+      const binding = typeof sc === 'string' && sc ? sha256(sc) : null;
+      const token = await issueToken(u.id, 'verify_email', 60 * 24, binding);
       if (token) {
         const verifyUrl = `${APP_URL}/verify-email?token=${token}`;
         void sendVerificationEmail(e.data, verifyUrl);
@@ -285,6 +337,9 @@ r.post('/login', strict, wrap(async (req, res) => {
 
 // ---------- LUPA / RESET PASSWORD ----------
 r.post('/forgot-password', mailLimit, wrap(async (req, res) => {
+  if (!(await verifyTurnstile(req.body?.cfToken, req.ip))) {
+    return res.status(400).json({ error: 'CAPTCHA_FAILED', message: 'Verifikasi "saya bukan robot" gagal. Muat ulang halaman lalu coba lagi.' });
+  }
   const e = emailSchema.safeParse(req.body?.email);
   if (e.success) {
     const u = (await pool.query(`SELECT id FROM users WHERE lower(email)=$1`, [e.data])).rows[0];
@@ -307,8 +362,9 @@ r.post('/reset-password', strict, wrap(async (req, res) => {
     const msg = p.error.issues[0]?.message || 'Kata sandi baru belum memenuhi standar keamanan.';
     return res.status(400).json({ error: 'INVALID_INPUT', message: msg });
   }
-  const userId = await consumeToken(p.data.token, 'reset_password');
-  if (!userId) return res.status(400).json({ error: 'TOKEN_INVALID', message: 'Link tidak valid atau sudah kedaluwarsa.' });
+  const consumed = await consumeToken(p.data.token, 'reset_password');
+  if (!consumed) return res.status(400).json({ error: 'TOKEN_INVALID', message: 'Link tidak valid atau sudah kedaluwarsa.' });
+  const userId = consumed.userId;
 
   const hash = await argon2.hash(p.data.password, { type: argon2.argon2id });
   await pool.query(

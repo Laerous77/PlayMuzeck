@@ -64,11 +64,11 @@ async function call<T = any>(url: string, body?: object): Promise<ApiResult<T>> 
 }
 
 export const authApi = {
-  signup: (name: string, email: string, password: string) => call('/api/auth/signup', { name, email, password }),
+  signup: (name: string, email: string, password: string, cfToken?: string) => call('/api/auth/signup', { name, email, password, cfToken }),
   verifyEmail: (token: string) => call<{ user: AuthUser }>('/api/auth/verify-email', { token }),
   resendVerification: (email: string) => call('/api/auth/resend-verification', { email }),
   login: (email: string, password: string) => call<{ user: AuthUser }>('/api/auth/login', { email, password }),
-  forgotPassword: (email: string) => call('/api/auth/forgot-password', { email }),
+  forgotPassword: (email: string, cfToken?: string) => call('/api/auth/forgot-password', { email, cfToken }),
   resetPassword: (token: string, password: string) => call('/api/auth/reset-password', { token, password }),
   google: (credential: string) => call<{ user: AuthUser }>('/api/auth/google', { credential }),
   me: () => call<{ user: AuthUser }>('/api/auth/me'),

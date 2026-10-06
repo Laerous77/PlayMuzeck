@@ -18,6 +18,7 @@ import {
 import { UserSession } from '../../types';
 import { authApi } from '../../services/authToken';
 import { GoogleSignInButton } from '../GoogleSignInButton';
+import { TurnstileWidget, turnstileSiteKey } from '../TurnstileWidget';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 
@@ -68,6 +69,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [needsVerify, setNeedsVerify] = useState(false);
   const [signupDone, setSignupDone] = useState(false);
+  const [cfToken, setCfToken] = useState('');
+  const [cfReset, setCfReset] = useState(0);
+  const captchaOn = Boolean(turnstileSiteKey());
 
   // State untuk melihat/menyembunyikan kata sandi (View / Hide password)
   const [showPassword, setShowPassword] = useState(false);
@@ -151,9 +155,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setErrorMsg('Masukkan alamat surel (email) yang valid.');
       return;
     }
+    if (captchaOn && !cfToken) {
+      setErrorMsg('Selesaikan verifikasi "saya bukan robot" dulu.');
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const r = await authApi.forgotPassword(email.trim());
+      const r = await authApi.forgotPassword(email.trim(), cfToken || undefined);
+      setCfReset((n) => n + 1);
       if (!r.ok) {
         setErrorMsg(r.data?.message || 'Gagal memproses permintaan reset kata sandi.');
         return;
@@ -223,10 +232,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
     }
 
+    if (authMode === 'signup' && captchaOn && !cfToken) {
+      setErrorMsg('Selesaikan verifikasi "saya bukan robot" dulu.');
+      return;
+    }
     setIsSubmitting(true);
     try {
       if (authMode === 'signup') {
-        const r = await authApi.signup(name.trim(), email.trim(), password);
+        const r = await authApi.signup(name.trim(), email.trim(), password, cfToken || undefined);
+        setCfReset((n) => n + 1);
         if (!r.ok) {
           if (r.data?.error === 'EMAIL_NOT_VERIFIED') setNeedsVerify(true);
           setErrorMsg(r.data?.message || 'Gagal mendaftar. Coba lagi.');
@@ -370,6 +384,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     />
                   </div>
                 </div>
+                <TurnstileWidget onToken={setCfToken} resetKey={cfReset} />
                 <button
                   type="submit"
                   disabled={isSubmitting}
@@ -684,6 +699,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                         </div>
                       </div>
                     )}
+
+                    {authMode === 'signup' && <TurnstileWidget onToken={setCfToken} resetKey={cfReset} />}
 
                     <button
                       type="submit"

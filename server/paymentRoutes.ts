@@ -478,7 +478,9 @@ export function createPaymentRouter(deps: PaymentDeps): express.Router {
     const { order_id, status_code, gross_amount, signature_key } = req.body || {};
     if (!SERVER_KEY || !order_id) return res.sendStatus(400);
     const expected = crypto.createHash('sha512').update(`${order_id}${status_code}${gross_amount}${SERVER_KEY}`).digest('hex');
-    if (expected !== String(signature_key || '')) return res.sendStatus(403);
+    const sigA = Buffer.from(expected, 'utf8');
+    const sigB = Buffer.from(String(signature_key || ''), 'utf8');
+    if (sigA.length !== sigB.length || !crypto.timingSafeEqual(sigA, sigB)) return res.sendStatus(403);
     try {
       await refreshPaymentStatus(String(order_id));
     } catch (e) {

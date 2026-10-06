@@ -7,7 +7,8 @@
 
 import { Router, Request, Response, RequestHandler } from 'express';
 import type { Pool, PoolClient } from 'pg';
-import bcrypt from 'bcryptjs';
+import argon2 from 'argon2';
+import { isDeliverableEmail } from './auth/emailCheck';
 import crypto from 'crypto';
 import { SUPER_ADMIN_EMAIL } from './db';
 import { sendMailStrict } from './emailService';
@@ -651,13 +652,14 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
       const { email, name, role, password } = req.body || {};
       const cleanEmail = String(email || '').trim().toLowerCase();
       if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: 'Alamat email tidak valid.' });
+      if (!(await isDeliverableEmail(cleanEmail))) return res.status(400).json({ error: 'Domain email ini tidak bisa menerima pesan.' });
       // PERBAIKAN: minimal 8 karakter (dulu 4) dan maksimal 72 byte (batas bcrypt), selaras dengan pendaftaran biasa.
       if (password && (String(password).length < 8 || Buffer.byteLength(String(password)) > 72)) {
         return res.status(400).json({ error: 'Kata sandi 8-72 karakter.' });
       }
       const exists = await pool.query('SELECT 1 FROM users WHERE LOWER(email) = $1', [cleanEmail]);
       if (exists.rows.length) return res.status(409).json({ error: 'Email ini sudah terdaftar.' });
-      const hash = password ? await bcrypt.hash(String(password), 10) : null;
+      const hash = password ? await argon2.hash(String(password), { type: argon2.argon2id }) : null;
       const id = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       await pool.query(
         `INSERT INTO users (id, email, name, role, password_hash, last_seen, email_verified_at) VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
@@ -700,7 +702,7 @@ export function createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, ge
         if (String(password).length < 8 || Buffer.byteLength(String(password)) > 72) {
           return res.status(400).json({ error: 'Kata sandi 8-72 karakter.' });
         }
-        vals.push(await bcrypt.hash(String(password), 10));
+        vals.push(await argon2.hash(String(password), { type: argon2.argon2id }));
         sets.push(`password_hash = $${vals.length}`);
         // Ganti sandi = reset hitungan gagal login & kunci akun.
         sets.push('failed_logins = 0', 'locked_until = NULL');

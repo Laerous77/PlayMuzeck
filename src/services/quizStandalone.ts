@@ -858,6 +858,17 @@ export function generateStandaloneQuizHtml(
       });
     }
 
+    // Escape semua teks dinamis (judul deck, soal, pilihan, nama pemain, penjelasan) sebelum masuk ke innerHTML
+    // supaya deck buatan pengguna tidak bisa menjalankan script di file yang diunduh orang lain.
+    function esc(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function renderFramesList() {
       const box = document.getElementById('frames-grid');
       box.innerHTML = '';
@@ -1090,9 +1101,9 @@ export function generateStandaloneQuizHtml(
       }
       box.innerHTML = list.map((h, i) => {
         return '<button type="button" onclick="openHistoryDetail(' + i + ')" style="width:100%; text-align:left; cursor:pointer; padding:14px 16px; border-radius:16px; background: rgba(0,0,0,0.45); border: 1px solid var(--border); margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; gap:10px; color:#fff;">' +
-          '<div><div style="font-size:13px; font-weight:800; color:#fff;">' + h.deckTitle + '</div>' +
-          '<div style="font-size:11px; color:var(--muted); margin-top:2px;">' + h.mode.toUpperCase() + (h.vsBot ? ' vs BOT' : '') + ' • ' + h.date + ' • Lihat Jawaban ➔</div></div>' +
-          '<div style="font-size:16px; font-weight:900; color:#10B981; font-family:monospace; flex-shrink:0;">' + h.score + '/' + h.total + '</div></button>';
+          '<div><div style="font-size:13px; font-weight:800; color:#fff;">' + esc(h.deckTitle) + '</div>' +
+          '<div style="font-size:11px; color:var(--muted); margin-top:2px;">' + esc(h.mode.toUpperCase()) + (h.vsBot ? ' vs BOT' : '') + ' • ' + esc(h.date) + ' • Lihat Jawaban ➔</div></div>' +
+          '<div style="font-size:16px; font-weight:900; color:#10B981; font-family:monospace; flex-shrink:0;">' + esc(h.score) + '/' + esc(h.total) + '</div></button>';
       }).join('');
     }
 
@@ -1107,19 +1118,19 @@ export function generateStandaloneQuizHtml(
       const box = document.getElementById('history-list');
       const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
       let html = '<button class="btn-back" onclick="renderHistory()">← Kembali ke Daftar</button>';
-      html += '<h3 style="font-size:15px; font-weight:900; margin-bottom:4px;">' + h.deckTitle + '</h3>';
-      html += '<p style="font-size:11px; color:var(--muted); margin-bottom:16px;">' + h.mode.toUpperCase() + ' • ' + h.date + ' • Skor ' + h.score + '/' + h.total + '</p>';
+      html += '<h3 style="font-size:15px; font-weight:900; margin-bottom:4px;">' + esc(h.deckTitle) + '</h3>';
+      html += '<p style="font-size:11px; color:var(--muted); margin-bottom:16px;">' + esc(h.mode.toUpperCase()) + ' • ' + esc(h.date) + ' • Skor ' + esc(h.score) + '/' + esc(h.total) + '</p>';
       html += h.answers.map(a => {
         return '<div style="padding:12px 14px; border-radius:14px; margin-bottom:10px; background:' + (a.isCorrect ? 'rgba(16,185,129,0.1)' : 'rgba(252,18,18,0.1)') + '; border:1px solid ' + (a.isCorrect ? 'rgba(16,185,129,0.3)' : 'rgba(252,18,18,0.3)') + ';">' +
-          '<div style="font-size:11px; font-weight:800; color:var(--muted); margin-bottom:6px;">Soal ' + a.number + (a.player ? ' • ' + a.player : '') + (a.isCorrect ? ' • ✅ Benar' : ' • ❌ Salah') + '</div>' +
-          '<div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:8px;">' + a.question + '</div>' +
+          '<div style="font-size:11px; font-weight:800; color:var(--muted); margin-bottom:6px;">Soal ' + esc(a.number) + (a.player ? ' • ' + esc(a.player) : '') + (a.isCorrect ? ' • ✅ Benar' : ' • ❌ Salah') + '</div>' +
+          '<div style="font-size:13px; font-weight:700; color:#fff; margin-bottom:8px;">' + esc(a.question) + '</div>' +
           (a.options || []).map((opt, oi) => {
             const isSel = oi === a.selectedIndex;
             const isCorr = oi === a.correctIndex;
             const c = isCorr ? '#10B981' : (isSel ? '#FC1212' : '#888');
-            return '<div style="font-size:11px; color:' + c + '; font-weight:' + (isCorr || isSel ? '800' : '400') + '; margin-bottom:3px;">' + letters[oi] + '. ' + opt + (isCorr ? ' ✓' : '') + (isSel && !isCorr ? ' (pilihan Anda)' : '') + '</div>';
+            return '<div style="font-size:11px; color:' + c + '; font-weight:' + (isCorr || isSel ? '800' : '400') + '; margin-bottom:3px;">' + letters[oi] + '. ' + esc(opt) + (isCorr ? ' ✓' : '') + (isSel && !isCorr ? ' (pilihan Anda)' : '') + '</div>';
           }).join('') +
-          (a.explanation ? '<div style="font-size:11px; color:#ccc; margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">Penjelasan: ' + a.explanation + '</div>' : '') +
+          (a.explanation ? '<div style="font-size:11px; color:#ccc; margin-top:8px; padding-top:8px; border-top:1px solid var(--border);">Penjelasan: ' + esc(a.explanation) + '</div>' : '') +
           '</div>';
       }).join('');
       box.innerHTML = html;
@@ -1331,7 +1342,7 @@ export function generateStandaloneQuizHtml(
       (q.options || []).forEach((opt, idx) => {
         const btn = document.createElement('button');
         btn.className = 'opt-btn';
-        btn.innerHTML = '<span><strong>' + String.fromCharCode(65 + idx) + '.</strong> ' + opt + '</span>';
+        btn.innerHTML = '<span><strong>' + String.fromCharCode(65 + idx) + '.</strong> ' + esc(opt) + '</span>';
         btn.onclick = () => selectOption(idx);
         optsBox.appendChild(btn);
       });
@@ -1495,7 +1506,7 @@ export function generateStandaloneQuizHtml(
           div.style = 'padding: 16px; border-radius: 16px; background: rgba(0,0,0,0.45); border: 1px solid var(--border); margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 12px;';
 
           const info = document.createElement('div');
-          info.innerHTML = '<h4 style="font-size: 15px; font-weight: 800; color: #fff;">' + deck.title + '</h4>' +
+          info.innerHTML = '<h4 style="font-size: 15px; font-weight: 800; color: #fff;">' + esc(deck.title) + '</h4>' +
             '<p style="font-size: 11px; color: var(--muted); margin-top: 4px;">' +
             ((deck.questions && deck.questions.length) || deck.cardCount || 0) + ' Soal • ' + (deck.difficulty || 'Sedang') +
             (owned ? ' • <span style="color:#10B981; font-weight:bold;">Tersimpan</span>' : ' • Rp' + Number(deck.price || 3000).toLocaleString('id-ID')) +

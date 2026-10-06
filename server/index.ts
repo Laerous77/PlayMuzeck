@@ -22,6 +22,9 @@ import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
 import { createAdminOpsRouter } from './adminOpsRoutes';
+import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
+import { isDeliverableEmail } from './auth/emailCheck';
+import { turnstileEnabled } from './auth/turnstile';
 import { createPaymentRouter } from './paymentRoutes';
 import {
   sendCustomAudioInquiryNotifications,
@@ -62,7 +65,12 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 // lingkungan, termasuk production -> siapa pun yang tahu sandi itu langsung menjadi Super Admin.
 // Sekarang sandi bawaan hanya berlaku saat development; di production login sandi dimatikan sampai
 // ADMIN_PASSWORD diisi (login Google / "akun ini" tetap bisa dipakai).
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PROD ? '' : 'PlayMuzeck-admin');
+let ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || (IS_PROD ? '' : 'PlayMuzeck-admin');
+// Di production sandi admin wajib panjang (>= 16 karakter). Kalau terlalu pendek, login sandi dimatikan.
+if (IS_PROD && ADMIN_PASSWORD && ADMIN_PASSWORD.length < 16) {
+  console.error('[SECURITY] ADMIN_PASSWORD kurang dari 16 karakter - login kata sandi admin DINONAKTIFKAN. Pakai login Google atau isi sandi acak yang panjang.');
+  ADMIN_PASSWORD = '';
+}
 if (!process.env.ADMIN_PASSWORD) {
   console.warn(
     IS_PROD
@@ -98,14 +106,38 @@ async function verifyGoogleIdToken(credential: string): Promise<{ email: string;
 }
 
 app.set('trust proxy', Number(process.env.TRUST_PROXY ?? (process.env.NODE_ENV === 'production' ? 1 : 0)));
+// CSP dipasang dalam mode REPORT-ONLY dulu: pelanggaran hanya tampil di console browser, tidak ada yang diblokir.
+// Setelah 1-2 minggu bersih (Google Sign-In, Midtrans, audio, font berjalan normal), ganti reportOnly menjadi false.
 app.use(helmet({
-  contentSecurityPolicy: false,
+  contentSecurityPolicy: {
+    reportOnly: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com', 'https://app.midtrans.com', 'https://app.sandbox.midtrans.com', 'https://challenges.cloudflare.com'],
+      frameSrc: ["'self'", 'https://accounts.google.com', 'https://app.midtrans.com', 'https://app.sandbox.midtrans.com', 'https://challenges.cloudflare.com'],
+      connectSrc: ["'self'", 'https://accounts.google.com', 'https://app.midtrans.com', 'https://app.sandbox.midtrans.com', 'https:', 'wss:'],
+      imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+      mediaSrc: ["'self'", 'blob:', 'data:', 'https:'],
+      workerSrc: ["'self'", 'blob:'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://accounts.google.com'],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com', 'data:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'self'"],
+    },
+  },
   crossOriginEmbedderPolicy: false,
   crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
 }));
 app.use(cors({ origin: (origin, cb) => cb(null, isAllowedOrigin(origin)), credentials: true }));
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
+// Endpoint tanpa login hanya menerima body kecil (anti pembengkakan memori); endpoint lain tetap 10 MB
+// karena membawa avatar / kuis / pola audio.
+const smallJson = express.json({ limit: '100kb' });
+const bigJson = express.json({ limit: '10mb' });
+const SMALL_BODY_PATHS = /^\/api\/(auth|public|payment\/notification|admin\/(login|google-login))(\/|$)/;
+app.use((req, res, next) => (SMALL_BODY_PATHS.test(req.path) ? smallJson : bigJson)(req, res, next));
 app.use(originGuard);
 
 app.get('/api/avatar/:id', async (req, res) => {
@@ -267,6 +299,8 @@ startToolQuotaSweeper(pool);
 app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));
 app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
 startDeletionSweeper(pool);
+startUnverifiedSweeper(pool);
+if (!turnstileEnabled()) console.warn('[SECURITY] TURNSTILE_SECRET belum diset - CAPTCHA pendaftaran/lupa password nonaktif.');
 app.use(createNotificationsRouter({ pool }));
 
 // ---- Pembayaran Midtrans + checkout/donasi yang WAJIB terverifikasi lunas (server/paymentRoutes.ts) ----
@@ -755,7 +789,18 @@ app.post('/api/public/inquiries', publicFormLimiter, async (req, res) => {
     // sehingga siapa pun yang menebak id bisa menimpa judul & catatan permintaan orang lain.
     const inqId = `inquiry-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
     const cleanTitle = String(title || 'Komposisi Custom PlayMuzeck').trim().slice(0, 255);
-    const cleanEmail = String(email || '').trim().slice(0, 255);
+    const cleanEmail = String(email || '').trim().toLowerCase().slice(0, 254);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail) || !(await isDeliverableEmail(cleanEmail))) {
+      return res.status(400).json({ error: 'Alamat email tidak valid atau tidak bisa menerima pesan.' });
+    }
+    // Batasi per alamat email (bukan hanya per IP) supaya server tidak bisa dipakai membanjiri inbox orang lain.
+    const recent = await pool.query(
+      `SELECT count(*)::int AS n FROM inquiries WHERE lower(email) = $1 AND created_at > now() - interval '1 hour'`,
+      [cleanEmail]
+    );
+    if ((recent.rows[0]?.n ?? 0) >= 3) {
+      return res.status(429).json({ error: 'Terlalu banyak permintaan untuk email ini. Coba lagi nanti.' });
+    }
     const cleanGenre = String(genre || 'General').trim().slice(0, 100);
     const cleanMood = String(mood || '').trim().slice(0, 100);
     const cleanNotes = String(notes || '').trim().slice(0, 10000);

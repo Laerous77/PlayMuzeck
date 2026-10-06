@@ -306,8 +306,16 @@ export async function initDatabase() {
       used_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    -- Mengikat token verifikasi email ke browser yang dipakai mendaftar (anti pre-hijack akun).
+    ALTER TABLE auth_tokens ADD COLUMN IF NOT EXISTS binding_hash CHAR(64);
     CREATE INDEX IF NOT EXISTS auth_tokens_hash_idx ON auth_tokens (token_hash);
     CREATE INDEX IF NOT EXISTS auth_tokens_user_idx ON auth_tokens (user_id, purpose, created_at);
+  `);
+
+  // Email harus unik tanpa peduli huruf besar/kecil (kode login mencari dengan lower(email)).
+  // Kalau sudah ada duplikat lama, langkah ini gagal dengan pesan di log dan tidak merusak apa pun.
+  await step('users-email-lower-unik', `
+    CREATE UNIQUE INDEX IF NOT EXISTS users_email_lower_uniq ON users (lower(email));
   `);
 
   // Bersihkan sesi & token kedaluwarsa setiap kali server start.

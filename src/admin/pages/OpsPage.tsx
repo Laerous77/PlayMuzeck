@@ -257,7 +257,7 @@ export const OpsPage: React.FC = () => {
   const [inqForm, setInqForm] = useState<InquiryForm | null>(null);
   // pengguna
   const [userSearch, setUserSearch] = useState('');
-  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'suspended' | 'deleting'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'active' | 'pending' | 'suspended' | 'deleting'>('all');
   const [userForm, setUserForm] = useState<UserForm | null>(null);
   const [emailForm, setEmailForm] = useState<{ user: UserRow; subject: string; message: string } | null>(null);
 
@@ -503,11 +503,19 @@ export const OpsPage: React.FC = () => {
     return users.filter(
       (u) =>
         (userFilter === 'all' ||
-          (userFilter === 'suspended' ? !!u.suspended_at : userFilter === 'deleting' ? !!u.deletion_scheduled_at : !u.suspended_at)) &&
+          (userFilter === 'suspended'
+            ? !!u.suspended_at
+            : userFilter === 'deleting'
+            ? !!u.deletion_scheduled_at
+            : userFilter === 'pending'
+            ? !u.email_verified_at && !u.suspended_at
+            : !u.suspended_at && !!u.email_verified_at)) &&
         (!q || u.email.toLowerCase().includes(q) || (u.name || '').toLowerCase().includes(q))
     );
   }, [users, userSearch, userFilter]);
   const suspendedCount = users.filter((u) => u.suspended_at).length;
+  // Belum verifikasi email = BUKAN pengguna aktif (tidak bisa login sampai email diverifikasi).
+  const pendingCount = users.filter((u) => !u.email_verified_at && !u.suspended_at).length;
   const deletingCount = users.filter((u) => u.deletion_scheduled_at).length;
 
   const suspendUser = async (u: UserRow) => {
@@ -1169,7 +1177,8 @@ export const OpsPage: React.FC = () => {
             {(
               [
                 ['all', `Semua (${users.length})`],
-                ['active', `Aktif (${users.length - suspendedCount})`],
+                ['active', `Aktif (${users.length - suspendedCount - pendingCount})`],
+                ['pending', `Menunggu verifikasi (${pendingCount})`],
                 ['suspended', `Ditangguhkan (${suspendedCount})`],
                 ['deleting', `Akan dihapus (${deletingCount})`],
               ] as const
@@ -1340,6 +1349,8 @@ export const OpsPage: React.FC = () => {
                           <Badge cls="bg-red-500/20 text-red-300">Ditangguhkan</Badge>
                           <div className="text-[10px] text-gray-500 max-w-[160px] truncate">{u.suspended_reason || fmtTime(u.suspended_at)}</div>
                         </div>
+                      ) : !u.email_verified_at ? (
+                        <Badge cls="bg-amber-500/20 text-amber-300">Menunggu verifikasi</Badge>
                       ) : (
                         <Badge cls="bg-emerald-500/20 text-emerald-300">Aktif</Badge>
                       )}
