@@ -21,6 +21,7 @@ import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
 import { createAdminOpsRouter } from './adminOpsRoutes';
+import { createPaymentRouter } from './paymentRoutes';
 import {
   sendCustomAudioInquiryNotifications,
   sendContactFeedbackNotifications,
@@ -34,8 +35,31 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
+
+// Express 4 tidak menangkap error dari handler async: tanpa ini, satu error database yang tidak ditangani
+// menjadi unhandled rejection dan bisa menjatuhkan seluruh server. Semua handler rute milik `app`
+// dibungkus supaya error diteruskan ke penangan error di bagian bawah file.
+const safeHandler = (fn: any) => {
+  if (typeof fn !== 'function' || fn.length === 4) return fn;
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    try {
+      const out = fn(req, res, next);
+      if (out && typeof out.catch === 'function') out.catch(next);
+    } catch (err) {
+      next(err);
+    }
+  };
+};
+for (const method of ['get', 'post', 'put', 'patch', 'delete'] as const) {
+  const original = (app as any)[method].bind(app);
+  (app as any)[method] = (routePath: any, ...handlers: any[]) =>
+    handlers.length ? original(routePath, ...handlers.map(safeHandler)) : original(routePath);
+}
 const PORT = Number(process.env.PORT) || 8787;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'PlayMuzeck-admin';
+if (!process.env.ADMIN_PASSWORD) {
+  console.warn('[SECURITY] ADMIN_PASSWORD belum diset - memakai sandi default yang mudah ditebak!');
+}
 
 async function isServerAdminEmail(email: string): Promise<boolean> {
   const e = String(email || '').trim().toLowerCase();
@@ -138,12 +162,17 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(uploadsDir));
 
+const serverUploads = path.resolve(process.cwd(), 'server/uploads');
+if (fs.existsSync(serverUploads)) {
+  app.use('/uploads', express.static(serverUploads));
+}
+
 const storage = multer.memoryStorage();
 const fileFilter = (_req: express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedExts = ['.mp3', '.wav', '.m4a', '.flac', '.pdf', '.jpg', '.jpeg', '.png', '.webp', '.txt'];
   const ext = path.extname(file.originalname).toLowerCase();
   if (allowedExts.includes(ext)) cb(null, true);
-  else cb(new Error('Format file tidak didukung.'));
+  else cb(Object.assign(new Error('Format file tidak didukung.'), { status: 400 }) as any);
 };
 const upload = multer({ storage, fileFilter, limits: { fileSize: 150 * 1024 * 1024 } });
 
@@ -183,6 +212,16 @@ app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUs
 app.use(createAccountDeletionRouter({ pool, requireUser, requireAdmin, requireSuperAdmin, isServerAdminEmail }));
 startDeletionSweeper(pool);
 app.use(createNotificationsRouter({ pool }));
+
+// ---- Pembayaran Midtrans + checkout/donasi yang WAJIB terverifikasi lunas (server/paymentRoutes.ts) ----
+// Pembungkus fungsi dipakai karena stripProductSuffix & DONATION_FRAME_TIERS didefinisikan lebih bawah di file ini.
+app.use(createPaymentRouter({
+  pool,
+  requireUser,
+  resolveAudioKeys: (item) => resolveAudioKeys(item),
+  stripProductSuffix: (id) => stripProductSuffix(id),
+  getDonationTiers: () => DONATION_FRAME_TIERS,
+}));
 app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin }));
 
 const OWN_ONLY_MSG = 'Kamu hanya bisa mengubah audio/kuis buatanmu sendiri.';
@@ -841,6 +880,15 @@ const stripProductSuffix = (id: string) =>
 app.post('/api/user/decks', async (req, res) => {
   const { email, deck } = req.body || {};
   if (!email || !deck || !deck.title) return res.status(400).json({ error: 'Data deck kuis tidak lengkap.' });
+  // Kreator Kuis adalah produk berbayar: dicek di SERVER (bukan cuma disembunyikan di UI).
+  const hasCreator = await pool.query(
+    `SELECT 1 FROM public.user_collections
+      WHERE user_email = $1 AND (item_type_key = 'quizCreatorSuite' OR item_id IN ('quiz-creator-suite','quiz_editor_10k')) LIMIT 1`,
+    [email]
+  );
+  if (!hasCreator.rows.length) {
+    return res.status(403).json({ error: 'Fitur Kreator Kuis belum dibeli untuk akun ini.' });
+  }
 
   const client = await pool.connect();
   try {
@@ -866,6 +914,11 @@ app.post('/api/user/decks', async (req, res) => {
        RETURNING *;`,
       [deckId, deck.topicId || null, deck.title, deck.description || '', questions.length, deck.difficulty || 'Sedang', true, 0, deck.badge || 'Kustom Kamu', JSON.stringify(questions), email, JSON.stringify(deckSettings)]
     );
+
+    if (!rows.length) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ error: 'ID kuis ini sudah dipakai milik orang lain / kuis resmi.' });
+    }
 
     await client.query(
       `INSERT INTO public.user_collections (user_email, item_category, item_id, item_type_key)
@@ -911,63 +964,29 @@ app.delete('/api/user/decks/:id', async (req, res) => {
   }
 });
 
-app.post('/api/user/checkout', async (req, res) => {
-  const { email, items: requestItems } = req.body;
-  if (!email || !Array.isArray(requestItems)) return res.status(400).json({ error: 'Data tidak lengkap' });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await pool.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [`usr_${Date.now()}`, email, email.split('@')[0]]);
-
-    const insert = (category: string, id: string, typeKey = '') =>
-      client.query(`INSERT INTO public.user_collections (user_email, item_category, item_id, item_type_key) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`, [email, category, id, typeKey]);
-
-    for (const item of requestItems) {
-      if (item.itemTypeKey === 'quizCreatorSuite' || /quiz.?(creator|editor)/i.test(String(item.id || ''))) {
-        await insert('feature', 'quiz-creator-suite', 'quizCreatorSuite');
-        continue;
-      }
-      const audioKeys = resolveAudioKeys(item);
-      if (item.category === 'audio' || audioKeys) {
-        const trackId = stripProductSuffix(String(item.trackId || item.id));
-        for (const k of audioKeys || ['fullMaster']) await insert('audio', trackId, k);
-      } else if (item.category === 'deck') {
-        const deckThemeBadge = typeof item.badge === 'string' ? item.badge.trim() : '';
-        await insert('quiz', item.deckId || item.id, deckThemeBadge ? `theme:${deckThemeBadge}` : 'quizDeck');
-      } else if (item.category === 'topic') {
-        const topicId = item.topicId || item.id;
-        await insert('topic', topicId, 'topic');
-        const { rows } = await client.query('SELECT id, badge FROM decks WHERE topic_id = $1', [topicId]);
-        for (const d of rows) {
-          const badge = typeof d.badge === 'string' ? d.badge.trim() : '';
-          await insert('quiz', d.id, badge ? `theme:${badge}` : 'quizDeck');
-        }
-      } else {
-        await insert(item.category, item.id, item.itemTypeKey || '');
-      }
-    }
-    await client.query('COMMIT');
-    res.json({ success: true, savedCount: requestItems.length });
-  } catch (error: any) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Gagal mencatat transaksi.' });
-  } finally {
-    client.release();
-  }
-});
-
 app.get('/api/user/collections', async (req, res) => {
   const email = String((req as any).userEmail || '');
   if (!email) return res.status(400).json({ error: 'Email wajib disertakan' });
 
   try {
-    const { rows } = await pool.query(`SELECT item_category, item_id, item_type_key FROM public.user_collections WHERE user_email = $1`, [email]);
+    const { rows } = await pool.query(
+      `SELECT item_category, item_id, item_type_key FROM public.user_collections WHERE user_email = $1`,
+      [email]
+    );
+
+    // Kuis: ambil ID langsung dari user_collections, tidak bergantung pada tabel decks
     const deckIds = rows.filter(r => r.item_category === 'quiz').map(r => r.item_id);
     const topicIds = rows.filter(r => r.item_category === 'topic').map(r => r.item_id);
-    const dbDecks = deckIds.length ? (await pool.query('SELECT * FROM decks WHERE id = ANY($1)', [deckIds])).rows : [];
+    const dbDecks = deckIds.length
+      ? (await pool.query('SELECT * FROM decks WHERE id = ANY($1)', [deckIds])).rows
+      : [];
 
-    const hasQuizEditor = rows.some(r => r.item_id === 'quiz_editor_10k' || r.item_id === 'quiz-creator-suite' || r.item_type_key === 'quizCreatorSuite' || /quiz.?(creator|editor)/i.test(String(r.item_id || '')));
+    const hasQuizEditor = rows.some(r =>
+      r.item_id === 'quiz_editor_10k' || r.item_id === 'quiz-creator-suite' || r.item_type_key === 'quizCreatorSuite' ||
+      /quiz.?(creator|editor)/i.test(String(r.item_id || ''))
+    );
+
+    // Audio ('all' tetap dikenali supaya data lama ikut benar)
     const audioRows = rows.filter(r => r.item_category === 'audio');
     const has16BarEditor = audioRows.some(r => r.item_type_key === 'fullEditor8Bar' || r.item_type_key === 'all');
     const hasAudioToolsSuite = audioRows.some(r => r.item_type_key === 'audioToolsSuite' || r.item_type_key === 'all');
@@ -985,26 +1004,83 @@ app.get('/api/user/collections', async (req, res) => {
     }
 
     const audioItems = [];
+    let hasFullBundleOnAnyTrack = false;
     for (const [trackId, ownership] of ownershipByTrack) {
       const t = await pool.query('SELECT * FROM public.audio_tracks WHERE id = $1', [trackId]);
       if (t.rows.length) audioItems.push({ track: mapTrackRow(t.rows[0]), ownership });
+      if (ownership.fullMaster && ownership.loopVersion && ownership.separatedStems && ownership.sheetMusic) {
+        hasFullBundleOnAnyTrack = true;
+      }
     }
 
-    const THEME_SLUG_RULES: [RegExp, string][] = [
-      [/olahraga/i, 'olahraga'], [/sehari.?hari/i, 'sehari_hari'], [/\balam\b/i, 'alam'],
-      [/musik/i, 'musik'], [/matematika/i, 'matematika'], [/\bseni\b/i, 'seni'],
-      [/teknologi/i, 'teknologi'], [/psikologi/i, 'psikologi'], [/bahasa/i, 'bahasa'],
-      [/sosial/i, 'sosial'], [/fiksi/i, 'fiksi'],
-    ];
+    // Tema deck bawaan berbayar (Olahraga, Matematika, dst.) tidak punya baris di tabel `decks`.
+    // Sumber kebenarannya adalah item_type_key berformat "theme:<nama>" yang disimpan saat checkout.
     const quizRows = rows.filter(r => r.item_category === 'quiz');
-    const purchasedThemeIds = Array.from(new Set(
-      quizRows.map((r) => {
-        const found = THEME_SLUG_RULES.find(([re]) => re.test(String(r.item_type_key || '') + ' ' + String(r.item_id || '')));
-        return found ? found[1] : null;
-      }).filter((v): v is string => v !== null)
-    ));
+    const themeFromItemTypeKey = quizRows
+      .map(r => {
+        const m = /^theme:(.+)$/.exec(String(r.item_type_key || ''));
+        return m ? m[1] : null;
+      })
+      .filter((v): v is string => v !== null);
 
+    const THEME_SLUG_RULES: [RegExp, string][] = [
+      [/olahraga/i, 'olahraga'],
+      [/sehari.?hari/i, 'sehari_hari'],
+      [/\balam\b/i, 'alam'],
+      [/musik/i, 'musik'],
+      [/matematika/i, 'matematika'],
+      [/\bseni\b/i, 'seni'],
+      [/teknologi/i, 'teknologi'],
+      [/psikologi/i, 'psikologi'],
+      [/bahasa/i, 'bahasa'],
+      [/sosial/i, 'sosial'],
+      [/fiksi/i, 'fiksi'],
+    ];
+    const themeIdsFromCheckoutBadge = themeFromItemTypeKey
+      .map((badge) => {
+        const found = THEME_SLUG_RULES.find(([re]) => re.test(badge));
+        return found ? found[1] : 'lainnya';
+      });
+
+    // Jaring pengaman untuk data LAMA (item_type_key masih 'quizDeck' polos): turunkan dari tabel decks/topics
+    // bila barisnya ada, lalu dari item_id (mis. "deck-olahraga-dunia").
+    const deckTopicIds = Array.from(
+      new Set(dbDecks.map((d) => d.topic_id).filter((id: unknown): id is string => typeof id === 'string' && id.length > 0))
+    );
+    const allTopicIdsToCheck = Array.from(new Set([...topicIds, ...deckTopicIds]));
+    const purchasedTopicRows = allTopicIdsToCheck.length
+      ? (await pool.query('SELECT id, title, badge FROM topics WHERE id = ANY($1)', [allTopicIdsToCheck])).rows
+      : [];
+    const deckBadgeHaystacks = dbDecks.map((d) => `${d.badge || ''} ${d.topic_id || ''}`);
+    const purchasedThemeIds = Array.from(new Set([
+      ...themeIdsFromCheckoutBadge,
+      ...purchasedTopicRows.map((t) => {
+        const haystack = `${t.badge || ''} ${t.title || ''}`;
+        const found = THEME_SLUG_RULES.find(([re]) => re.test(haystack));
+        return found ? found[1] : 'lainnya';
+      }),
+      ...deckBadgeHaystacks
+        .map((haystack) => {
+          const found = THEME_SLUG_RULES.find(([re]) => re.test(haystack));
+          return found ? found[1] : null;
+        })
+        .filter((v): v is string => v !== null),
+      ...quizRows
+        .map((r) => {
+          const found = THEME_SLUG_RULES.find(([re]) => re.test(String(r.item_id || '')));
+          return found ? found[1] : null;
+        })
+        .filter((v): v is string => v !== null),
+    ]));
+
+    // Bingkai yang terbuka lewat donasi/kontak/bundle dicatat di user_collections (kategori 'frame').
     const frameRows = rows.filter(r => r.item_category === 'frame').map(r => r.item_id);
+    const unlockedFrameIds = Array.from(new Set([
+      'none',
+      ...frameRows,
+      ...(hasFullBundleOnAnyTrack && has16BarEditor && hasAudioToolsSuite ? ['frame-bundle'] : []),
+    ]));
+
     const userRow = await pool.query('SELECT active_frame_id FROM users WHERE email = $1', [email]);
     const activeFrameId = userRow.rows[0]?.active_frame_id || 'none';
 
@@ -1018,18 +1094,34 @@ app.get('/api/user/collections', async (req, res) => {
         purchasedThemeIds,
         totalCount: deckIds.length,
       },
-      frames: { unlockedIds: ['none', ...frameRows], activeId: activeFrameId },
+      frames: { unlockedIds: unlockedFrameIds, activeId: activeFrameId },
     });
   } catch (error) {
-    res.status(500).json({ error: 'Gagal memuat data koleksi.' });
+    console.error('Error GET /api/user/collections:', error);
+    res.status(500).json({ error: 'Terjadi kesalahan saat memuat data koleksi.' });
   }
 });
 
 app.post('/api/user/frame', async (req, res) => {
   const { email, frameId } = req.body || {};
   if (!email || !frameId) return res.status(400).json({ error: 'Data bingkai tidak lengkap.' });
-  await pool.query('UPDATE users SET active_frame_id = $1 WHERE email = $2', [frameId, email]);
-  res.json({ success: true, frameId });
+  try {
+    // Hanya bingkai yang syaratnya tercatat sebagai baris 'frame' (donasi & masukan) yang dicek di sini.
+    // Bingkai tema/bundle dihitung dari pembelian (bukan baris 'frame'), jadi tidak boleh ditolak.
+    const gatedFrames = new Set([...DONATION_FRAME_TIERS.map((t) => t.frameId), 'frame-contact']);
+    if (gatedFrames.has(String(frameId))) {
+      const owned = await pool.query(
+        `SELECT 1 FROM public.user_collections WHERE user_email = $1 AND item_category = 'frame' AND item_id = $2 LIMIT 1`,
+        [email, frameId]
+      );
+      if (!owned.rows.length) return res.status(403).json({ error: 'Bingkai ini belum terbuka untuk akunmu.' });
+    }
+    await pool.query('UPDATE users SET active_frame_id = $1 WHERE email = $2', [frameId, email]);
+    res.json({ success: true, frameId });
+  } catch (err) {
+    console.error('Error menyimpan bingkai:', err);
+    res.status(500).json({ error: 'Gagal menyimpan pilihan bingkai.' });
+  }
 });
 
 const DONATION_FRAME_TIERS = [
@@ -1039,38 +1131,7 @@ const DONATION_FRAME_TIERS = [
   { min: 10000, frameId: 'frame-coffee' },
 ];
 
-app.post('/api/user/donate', async (req, res) => {
-  const { email, amount, orderId } = req.body || {};
-  const amt = Number(amount) || 0;
-  if (!email || amt <= 0) return res.status(400).json({ error: 'Data donasi tidak valid.' });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(`INSERT INTO users (id, email, name) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`, [`usr_${Date.now()}`, email, email.split('@')[0]]);
-    await client.query('INSERT INTO donations (id, user_email, amount) VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING', [orderId ? `don_${orderId}` : `don_${Date.now()}`, email, amt]);
-
-    const tier = DONATION_FRAME_TIERS.find((t) => amt >= t.min);
-    if (tier) {
-      await client.query(`INSERT INTO public.user_collections (user_email, item_category, item_id, item_type_key) VALUES ($1, 'frame', $2, 'donation') ON CONFLICT DO NOTHING`, [email, tier.frameId]);
-    }
-    await client.query('COMMIT');
-    res.json({ success: true, unlockedFrameId: tier?.frameId || null });
-  } catch (err: any) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: 'Gagal mencatat donasi.' });
-  } finally {
-    client.release();
-  }
-});
-
-// Midtrans & Payment Setup
-const MIDTRANS_SERVER_KEY = process.env.MIDTRANS_SERVER_KEY || '';
-const MIDTRANS_CLIENT_KEY = process.env.MIDTRANS_CLIENT_KEY || '';
-const MIDTRANS_PROD = process.env.MIDTRANS_IS_PRODUCTION === 'true';
-const ALLOW_UNPAID_CHECKOUT = process.env.ALLOW_UNPAID_CHECKOUT === 'true' || (!MIDTRANS_SERVER_KEY && process.env.NODE_ENV !== 'production');
-const PENDING_ORDER_TTL_MIN = 1440;
-
+// Tabel pesanan pembayaran. Rute pembayarannya ada di ./paymentRoutes.ts
 async function ensurePaymentTables() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS payment_orders (
@@ -1088,29 +1149,6 @@ async function ensurePaymentTables() {
       snap_token TEXT
     )`);
 }
-
-app.get('/api/payment/status', (_req, res) => {
-  const configured = Boolean(MIDTRANS_SERVER_KEY && MIDTRANS_CLIENT_KEY);
-  const mode = ALLOW_UNPAID_CHECKOUT ? 'demo' : configured ? (MIDTRANS_PROD ? 'production' : 'sandbox') : 'not-configured';
-  res.json({
-    mode,
-    ready: configured && !ALLOW_UNPAID_CHECKOUT,
-    clientKey: MIDTRANS_CLIENT_KEY || null,
-    snapUrl: MIDTRANS_PROD ? 'https://app.midtrans.com/snap/snap.js' : 'https://app.sandbox.midtrans.com/snap/snap.js',
-  });
-});
-
-app.post('/api/payment/charge', requireUser, async (req, res) => {
-  res.status(503).json({ error: 'Mode pembayaran langsung terintegrasi.' });
-});
-
-app.get('/api/payment/pending', requireUser, async (req, res) => {
-  res.json([]);
-});
-
-app.post('/api/payment/cancel', requireUser, async (req, res) => {
-  res.json({ success: true, cancelled: true });
-});
 
 // Kirim langsung sitemap.xml resmi dalam format XML ke Google
 app.get('/sitemap.xml', (_req, res) => {
@@ -1147,6 +1185,14 @@ if (fs.existsSync(distDir)) {
   });
 }
 
+// Penangan error terakhir: error dari handler async (lihat safeHandler) berakhir di sini, bukan menjatuhkan server.
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = Number(err?.status || err?.statusCode) || (err instanceof multer.MulterError ? 400 : 500);
+  if (status >= 500) console.error('[server] error tidak tertangani:', err);
+  if (res.headersSent) return;
+  res.status(status).json({ error: status < 500 ? String(err?.message || 'Permintaan tidak valid.') : 'Terjadi kesalahan pada server.' });
+});
+
 const httpServer = app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server aktif di http://localhost:${PORT} terhubung ke PostgreSQL.`);
   const ok = (v: unknown) => (v ? '✔' : '✘');
@@ -1156,11 +1202,51 @@ const httpServer = app.listen(PORT, '0.0.0.0', () => {
   console.log(`${ok(process.env.ADMIN_PASSWORD)} ADMIN_PASSWORD`);
   console.log(`${ok(process.env.GOOGLE_CLIENT_ID)} GOOGLE_CLIENT_ID`);
   console.log(`${ok(process.env.MIDTRANS_SERVER_KEY)} MIDTRANS_SERVER_KEY`);
+  console.log(`${ok(process.env.MIDTRANS_CLIENT_KEY)} MIDTRANS_CLIENT_KEY`);
+  console.log(`${process.env.NODE_ENV === 'production' ? '✔' : '✘'} NODE_ENV=production (sekarang: ${process.env.NODE_ENV || 'kosong'})`);
 });
 
-attachMultiplayerSocket(httpServer, (cookieHeader) =>
+// Multiplayer: kenali akun login dari cookie sesi saat socket tersambung, supaya blokir host
+// berlaku per AKUN (bukan hanya per browser). Memakai requireAuth yang sama dengan route lain.
+attachMultiplayerSocket(httpServer, (cookieHeader, handshake) =>
   new Promise<string | null>((resolve) => {
     if (!cookieHeader) return resolve(null);
-    resolve(null);
+    const timer = setTimeout(() => resolve(null), 3000);
+    const done = (id: string | null) => {
+      clearTimeout(timer);
+      resolve(id);
+    };
+    const fakeReq: any = {
+      headers: { ...handshake.headers, cookie: cookieHeader },
+      query: {},
+      body: {},
+      method: 'GET',
+      ip: handshake.address,
+      socket: { remoteAddress: handshake.address },
+      get(name: string) {
+        return this.headers[String(name).toLowerCase()];
+      },
+      header(name: string) {
+        return this.headers[String(name).toLowerCase()];
+      },
+    };
+    const fakeRes: any = {
+      locals: {},
+      status() { return fakeRes; },
+      json() { done(null); return fakeRes; },
+      send() { done(null); return fakeRes; },
+      end() { done(null); return fakeRes; },
+      set() { return fakeRes; },
+      setHeader() { return fakeRes; },
+      cookie() { return fakeRes; },
+      clearCookie() { return fakeRes; },
+    };
+    cookieParser()(fakeReq, fakeRes, () => {
+      try {
+        requireAuth(fakeReq, fakeRes, (err?: unknown) => done(!err && fakeReq.user?.id ? String(fakeReq.user.id) : null));
+      } catch {
+        done(null);
+      }
+    });
   })
 );
