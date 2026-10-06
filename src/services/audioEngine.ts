@@ -564,34 +564,110 @@ class AudioEngine {
     '/soundfont.sf2',
   ];
 
-  public async initBank(onProgress?: (msg: string) => void): Promise<boolean> {
-    if (this.isLoaded || this.isLoading) return true;
-    this.isLoading = true;
+  private static readonly SF_CACHE_NAME = 'soundfont-cache-v1';
+  private static readonly SF_FETCH_TIMEOUT_MS = 120000;
+  private bankLoadPromise: Promise<boolean> | null = null;
 
-    const candidatePaths = [
-      AudioEngine.PRIMARY_SOUNDFONT_PATH,
-      ...AudioEngine.FALLBACK_SOUNDFONT_PATHS,
-    ];
-
-    for (const path of candidatePaths) {
-      try {
-        if (onProgress) onProgress('Memuat Bank Sampel...');
-        const res = await fetch(path);
-        if (res.ok) {
-          if (onProgress) onProgress('Mengurai struktur gelombang akustik...');
-          const ab = await res.arrayBuffer();
-          this.soundfontInstance = new SoundFont2(new Uint8Array(ab));
-          this.isLoaded = true;
-          this.isLoading = false;
-          this.loadedSoundfontPath = path;
-          if (onProgress) onProgress(SOUND_BANK_READY_MESSAGE);
-          return true;
+  private async fetchSoundfontBytes(
+    path: string,
+    onProgress?: (msg: string) => void
+  ): Promise<Uint8Array | null> {
+    // 1) Cache browser dulu — muat berikutnya hampir instan
+    let cache: Cache | null = null;
+    try {
+      if (typeof caches !== 'undefined') {
+        cache = await caches.open(AudioEngine.SF_CACHE_NAME);
+        const hit = await cache.match(path);
+        if (hit) {
+          onProgress?.('Memuat Bank Sampel dari cache...');
+          return new Uint8Array(await hit.arrayBuffer());
         }
-      } catch {}
-    }
+      }
+    } catch {}
 
-    this.isLoading = false;
-    return false;
+    // 2) Unduh dengan progres + timeout
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), AudioEngine.SF_FETCH_TIMEOUT_MS);
+    try {
+      const res = await fetch(path, { signal: ctrl.signal });
+      if (!res.ok || !res.body) return null;
+
+      const total = Number(res.headers.get('content-length')) || 0;
+      const reader = res.body.getReader();
+      const chunks: Uint8Array[] = [];
+      let received = 0;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        const mb = (received / 1048576).toFixed(1);
+        onProgress?.(
+          total
+            ? `Mengunduh bank sampel... ${Math.round((received / total) * 100)}% (${mb} MB)`
+            : `Mengunduh bank sampel... ${mb} MB`
+        );
+      }
+
+      const bytes = new Uint8Array(received);
+      let offset = 0;
+      for (const c of chunks) {
+        bytes.set(c, offset);
+        offset += c.length;
+      }
+
+      // Tolak LFS pointer / halaman error HTML (SF2 asli diawali "RIFF")
+      const magic = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+      if (bytes.length < 1024 || magic !== 'RIFF') {
+        console.warn('[SF2] Bukan file SoundFont valid:', path, bytes.length, 'bytes');
+        return null;
+      }
+
+      try { await cache?.put(path, new Response(bytes)); } catch {}
+      return bytes;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  public initBank(onProgress?: (msg: string) => void): Promise<boolean> {
+    if (this.isLoaded) return Promise.resolve(true);
+    // Pemanggil kedua ikut menunggu proses yang sama (bukan langsung "sukses" palsu)
+    if (this.bankLoadPromise) return this.bankLoadPromise;
+
+    this.isLoading = true;
+    this.bankLoadPromise = (async () => {
+      const candidatePaths = [
+        AudioEngine.PRIMARY_SOUNDFONT_PATH,
+        ...AudioEngine.FALLBACK_SOUNDFONT_PATHS,
+      ];
+      try {
+        for (const path of candidatePaths) {
+          try {
+            onProgress?.('Memuat Bank Sampel...');
+            const bytes = await this.fetchSoundfontBytes(path, onProgress);
+            if (!bytes) continue;
+
+            onProgress?.('Mengurai struktur gelombang akustik...');
+            await new Promise((r) => setTimeout(r, 0)); // beri waktu repaint sebelum parsing sinkron
+            this.soundfontInstance = new SoundFont2(bytes);
+            this.isLoaded = true;
+            this.loadedSoundfontPath = path;
+            onProgress?.(SOUND_BANK_READY_MESSAGE);
+            return true;
+          } catch (err) {
+            console.error('[SF2] Gagal memuat', path, err);
+          }
+        }
+        onProgress?.('Bank sampel gagal dimuat. Periksa koneksi lalu muat ulang.');
+        return false;
+      } finally {
+        this.isLoading = false;
+        this.bankLoadPromise = null;
+      }
+    })();
+    return this.bankLoadPromise;
   }
 
   // Ambil nilai generator SF2 (mis. fineTune, overridingRootKey) dari peta gabungan,
