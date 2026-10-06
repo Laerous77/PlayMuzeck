@@ -2,10 +2,12 @@
 // Model data & fungsi murni untuk Step Sequencer (kekuatan drum, panjang not akor, seleksi/clipboard).
 
 // ---------------------------------------------------------------------------
-// KEKUATAN DRUM: 0 = tidak ada, 1 = pelan, 2 = normal, 3 = keras, 4 = maksimum
+// KEKUATAN DRUM: 0 = tidak ada, 1 = pianissimo (pp), 2 = piano (p), 3 = forte (f), 4 = fortissimo (ff)
 // ---------------------------------------------------------------------------
 export const DRUM_LEVEL_MAX = 4;
-export const DRUM_LEVEL_LABEL = ['Kosong', 'Pelan', 'Normal', 'Keras', 'Maksimum'] as const;
+export const DRUM_LEVEL_LABEL = ['Kosong', 'Pianissimo', 'Piano', 'Forte', 'Fortissimo'] as const;
+export const DRUM_LEVEL_SHORT = ['', 'pp', 'p', 'f', 'ff'] as const;
+export const DRUM_LEVEL_DESC = ['', 'Sangat pelan', 'Pelan', 'Keras', 'Sangat keras'] as const;
 // Pengali volume (dikalikan volume drum utama) dan velocity MIDI untuk tiap level.
 export const DRUM_LEVEL_GAIN = [0, 0.4, 0.65, 0.85, 1] as const;
 export const DRUM_LEVEL_MIDI = [0, 45, 75, 100, 127] as const;
@@ -169,3 +171,4 @@ export const makeRect = (tab: SeqTab, a: { r: number; s: number }, b: { r: numbe
   s1: Math.min(a.s, b.s),
   s2: Math.max(a.s, b.s),
 });
+
