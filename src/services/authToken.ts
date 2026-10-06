@@ -1,5 +1,5 @@
-// src/services/authApi.ts  — GANTI isi src/services/authToken.ts dengan file ini
-// (atau simpan sebagai authToken.ts). Tidak ada lagi token di localStorage:
+// src/services/authToken.ts
+// Tidak ada lagi token di localStorage:
 // sesi dipegang cookie httpOnly yang diatur server, jadi JavaScript (dan XSS) tidak bisa mencurinya.
 
 export const AUTH_EXPIRED_EVENT = 'muzeck-auth-expired';
@@ -99,4 +99,3 @@ export const authApi = {
      /reset-password?token=... -> form password baru -> authApi.resetPassword(token, password)
    Pastikan server meng-serve index.html untuk path-path itu (SPA fallback).
 --------------------------------------------------------------------------- */
-</file>
