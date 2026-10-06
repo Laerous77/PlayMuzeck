@@ -18,7 +18,15 @@ import deckStarter1 from './decks/deck-starter-1.json';
 import deckStarter2 from './decks/deck-starter-2.json';
 import deckStarter3 from './decks/deck-starter-3.json';
 
+// Starter decks yang diimpor oleh QuizIndex.tsx
+export const STARTER_DECKS: Deck[] = [
+  deckStarter1,
+  deckStarter2,
+  deckStarter3,
+] as unknown as Deck[];
+
 export const BUILTIN_TOPICS: Topic[] = topicsData as unknown as Topic[];
+export const TOPICS: Topic[] = BUILTIN_TOPICS;
 
 export const BUILTIN_DECKS: Deck[] = [
   deckStarter1,
@@ -38,10 +46,22 @@ export const BUILTIN_DECKS: Deck[] = [
   deckTeknologi,
 ] as unknown as Deck[];
 
+export const DECKS: Deck[] = BUILTIN_DECKS;
+
 export function isBuiltinDeckId(id: string): boolean {
   return BUILTIN_DECKS.some((d) => d.id === id);
+}
+
+export function isStarterDeckId(id: string): boolean {
+  return STARTER_DECKS.some((d) => d.id === id);
 }
 
 export function getBuiltinDeck(id: string): Deck | undefined {
   return BUILTIN_DECKS.find((d) => d.id === id);
 }
+
+export function getDeckById(id: string): Deck | undefined {
+  return BUILTIN_DECKS.find((d) => d.id === id);
+}
+
+export default BUILTIN_DECKS;
