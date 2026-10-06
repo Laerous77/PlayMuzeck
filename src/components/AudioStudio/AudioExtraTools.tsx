@@ -1,6 +1,6 @@
 // src/components/AudioStudio/AudioExtraTools.tsx
 //
-// 6 alat audio tambahan PlayMuzeck (semua diproses di browser, tanpa unggah ke server). Alat-alat ini
+// 6 alat audio tambahan PlayMuzeck. Alat-alat ini
 // ditanam di dalam AudioToolsSuite (satu suite 15 alat, dikelompokkan per fungsi) lewat <ExtraToolPanel/>.
 // Hanya alat yang TIDAK ada di 9 alat bawaan Suite (Trim, Volume, Pitch, Tempo, Reverse, Convert,
 // Compress, Noise Reduction, Vocal Isolator):
@@ -14,6 +14,9 @@ import {
 import {
   audioBufferToWav, downloadBlob, exportAudioFile,
 } from '../../services/exporters';
+import {
+  BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, INPUT_CLS, InfoTip, NUM_FIELD_CLS, PANEL_CLS, SLIDER_CLS, pillCls,
+} from './toolsShared';
 import {
   CLICK_SOUNDS, SUBDIVISIONS, TIME_SIGNATURES, TUNING_PRESETS, applyFade, concatChannels, detectBpm, detectKey,
   detectPitch, freqToNote, getClickSound, getSubdivision, lowestFreq, measureLufs, midiToFreq, nearestString,
@@ -109,23 +112,29 @@ const tick = () => new Promise<void>((r) => setTimeout(r, 30)); // beri UI kesem
 
 // ───────────────────────── Komponen kecil bersama ─────────────────────────
 
-const Panel: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="rounded-2xl bg-surface/30 border border-white/[0.08] p-4 sm:p-5 space-y-4">
-    <h3 className="text-sm font-black text-white">{title}</h3>
+/** Wadah alat: sama dengan panel 9 alat bawaan (judul + ikon info). */
+const Panel: React.FC<{ title: string; info?: string[]; children: React.ReactNode }> = ({ title, info, children }) => (
+  <div className={PANEL_CLS}>
+    <div className="flex items-center gap-2">
+      <h4 className="text-sm font-bold text-white">{title}</h4>
+      {info && info.length > 0 && (
+        <InfoTip label={`Info alat ${title}`}>
+          {info.map((line) => <p key={line} className="text-gray-300">{line}</p>)}
+        </InfoTip>
+      )}
+    </div>
     {children}
   </div>
 );
 
-const btnPrimary =
-  'px-4 py-2.5 rounded-xl bg-accent hover:bg-accent/80 text-on-accent font-black text-xs sm:text-sm inline-flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed';
-const btnGhost =
-  'px-3 py-2 rounded-xl bg-black/40 hover:bg-black/60 border border-white/[0.12] text-xs font-bold text-white inline-flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50';
-const inputCls =
-  'w-full rounded-lg bg-black/50 border border-white/[0.12] px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-accent/60';
+const btnPrimary = BTN_PRIMARY;
+const btnGhost = BTN_GHOST;
+const inputCls = INPUT_CLS;
+const sliderCls = SLIDER_CLS;
 
 const Field: React.FC<{ label: string; hint?: string; children: React.ReactNode }> = ({ label, hint, children }) => (
   <label className="block space-y-1">
-    <span className="text-[11px] font-bold text-gray-300">{label}</span>
+    <span className="text-xs font-bold text-gray-300">{label}</span>
     {children}
     {hint && <span className="block text-[10px] text-gray-500">{hint}</span>}
   </label>
@@ -158,7 +167,7 @@ const FilePicker: React.FC<{
 };
 
 const Waveform: React.FC<{ peaks: Float32Array; from?: number; to?: number }> = ({ peaks, from = 0, to = 1 }) => (
-  <div className="flex items-end gap-px h-20 rounded-xl bg-black/40 border border-white/[0.06] p-2" aria-hidden>
+  <div className="flex items-end gap-px h-20 rounded-xl bg-black/60 border border-white/10 p-2" aria-hidden>
     {Array.from(peaks).map((p, i) => {
       const pos = (i + 0.5) / peaks.length;
       const inside = pos >= from && pos <= to;
@@ -203,19 +212,23 @@ const ExportPanel: React.FC<{
     } finally { setBusy(false); }
   };
   return (
-    <div className="space-y-3 rounded-xl border border-accent/30 bg-accent/5 p-3">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Format hasil">
-          <select value={fmt} onChange={(e) => setFmt(e.target.value as typeof fmt)} className={inputCls}>
-            <option value="MP3">MP3 (192 kbps)</option>
-            <option value="WAV">WAV (kualitas penuh)</option>
-            <option value="FLAC">FLAC (lossless)</option>
-            <option value="M4A">M4A / AAC</option>
-          </select>
-        </Field>
-        <button type="button" onClick={run} disabled={busy} className={btnPrimary}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-          <span>{busy ? `Mengekspor ${Math.round(pct)}%` : 'Unduh hasil'}</span>
+    <div className="pt-3 border-t border-white/[0.06] space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+        <span className="text-gray-300 font-bold flex items-center gap-2">
+          Format Unduhan:
+          <InfoTip label="Info format unduhan"><p>{FORMAT_INFO}</p></InfoTip>
+        </span>
+        <div className="flex items-center gap-1.5">
+          {(['MP3', 'WAV', 'M4A', 'FLAC'] as const).map((f) => (
+            <button key={f} type="button" onClick={() => setFmt(f)} className={pillCls(fmt === f)}>{f}</button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-emerald-400 text-xs font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Siap</span>
+        <button type="button" onClick={run} disabled={busy} className={BTN_DOWNLOAD}>
+          {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+          <span>{busy ? `Mengekspor ${Math.round(pct)}%` : `Unduh ${fmt}`}</span>
         </button>
       </div>
       {note && <p className="text-[11px] text-amber-300">{note}</p>}
@@ -271,13 +284,12 @@ const MergeFadeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
   const total = items.reduce((s, x) => s + x.buffer.duration, 0);
 
   return (
-    <Panel title="Gabung Audio + Fade In/Out">
-      <p className="text-xs text-gray-400">Tambahkan satu atau lebih berkas, atur urutannya, lalu gabungkan. Dengan satu berkas, alat ini jadi pengatur fade in/out saja.</p>
+    <Panel title="Gabung & Fade" info={['Tambahkan satu atau lebih berkas, atur urutannya, lalu gabungkan. Dengan satu berkas, alat ini jadi pengatur fade in/out saja.', 'Crossfade menumpang-tindihkan akhir satu lagu dengan awal lagu berikutnya agar sambungannya halus.']}>
       <FilePicker label="Tambah berkas audio" multiple onFiles={addFiles} disabled={busy} />
       {items.length > 0 && (
         <ul className="space-y-2">
           {items.map((it, i) => (
-            <li key={it.id} className="flex items-center gap-2 rounded-xl bg-black/40 border border-white/[0.06] px-3 py-2 text-xs">
+            <li key={it.id} className="flex items-center gap-2 rounded-xl bg-black/50 border border-white/5 px-3 py-2 text-xs">
               <span className="w-5 text-gray-500">{i + 1}.</span>
               <span className="flex-1 min-w-0 truncate text-white">{it.name}</span>
               <span className="text-gray-400 tabular-nums">{fmtTime(it.buffer.duration)}</span>
@@ -291,13 +303,13 @@ const MergeFadeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
       )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Field label={`Crossfade: ${crossfade.toFixed(1)} dtk`} hint="Tumpang-tindih antar lagu">
-          <input type="range" min={0} max={5} step={0.1} value={crossfade} onChange={(e) => setCrossfade(+e.target.value)} className="w-full accent-[var(--t-accent)]" disabled={items.length < 2} />
+          <input type="range" min={0} max={5} step={0.1} value={crossfade} onChange={(e) => setCrossfade(+e.target.value)} className={sliderCls} disabled={items.length < 2} />
         </Field>
         <Field label={`Fade in: ${fadeIn.toFixed(1)} dtk`}>
-          <input type="range" min={0} max={10} step={0.1} value={fadeIn} onChange={(e) => setFadeIn(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
+          <input type="range" min={0} max={10} step={0.1} value={fadeIn} onChange={(e) => setFadeIn(+e.target.value)} className={sliderCls} />
         </Field>
         <Field label={`Fade out: ${fadeOut.toFixed(1)} dtk`}>
-          <input type="range" min={0} max={10} step={0.1} value={fadeOut} onChange={(e) => setFadeOut(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
+          <input type="range" min={0} max={10} step={0.1} value={fadeOut} onChange={(e) => setFadeOut(+e.target.value)} className={sliderCls} />
         </Field>
         <Field label="Kurva fade">
           <select value={curve} onChange={(e) => setCurve(e.target.value as FadeCurve)} className={inputCls}>
@@ -356,20 +368,19 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
   }, [res, fileName]);
 
   return (
-    <Panel title="Deteksi BPM & Kunci Nada">
-      <p className="text-xs text-gray-400">Pilih lagu, dan hasilnya langsung dianalisis di browser kamu. Berkas tidak diunggah.</p>
+    <Panel title="BPM & Kunci" info={['Pilih lagu, dan hasilnya langsung dianalisis.', 'Hasil berupa perkiraan otomatis. Lagu dengan tempo berubah-ubah atau modulasi bisa kurang akurat.']}>
       <FilePicker label={busy ? 'Menganalisis…' : 'Pilih lagu untuk dianalisis'} onFiles={onFiles} disabled={busy} />
       <ErrorNote msg={err} />
       {res && (
         <div className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="rounded-xl bg-black/40 border border-white/[0.08] p-4">
+            <div className="rounded-xl bg-black/50 border border-white/5 p-4">
               <div className="text-[11px] font-bold text-gray-400">TEMPO</div>
               <div className="text-3xl font-black text-white tabular-nums">{res.bpm ? res.bpm.bpm : '—'} <span className="text-sm text-gray-400">BPM</span></div>
               {res.bpm && res.bpm.alternatives.length > 0 && <div className="text-[11px] text-gray-400 mt-1">Bisa juga terasa seperti {res.bpm.alternatives.join(' atau ')} BPM (setengah/dua kali).</div>}
               {res.bpm && <div className="text-[11px] text-gray-500 mt-1">Keyakinan {Math.round(res.bpm.confidence * 100)}%</div>}
             </div>
-            <div className="rounded-xl bg-black/40 border border-white/[0.08] p-4">
+            <div className="rounded-xl bg-black/50 border border-white/5 p-4">
               <div className="text-[11px] font-bold text-gray-400">KUNCI NADA</div>
               <div className="text-3xl font-black text-white">{res.key ? res.key.name : '—'}</div>
               {res.key && <div className="text-[11px] text-gray-400 mt-1">Camelot {res.key.camelot} · relatif {res.key.relative}</div>}
@@ -468,8 +479,7 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
   const dur = buffer?.duration ?? 0;
 
   return (
-    <Panel title="Perekam Suara + Trim">
-      <p className="text-xs text-gray-400">Rekam dari mikrofon, potong bagian awal/akhir, lalu unduh. Rekaman tidak meninggalkan perangkatmu.</p>
+    <Panel title="Perekam" info={['Rekam dari mikrofon, potong bagian awal/akhir, lalu unduh.']}>
       <div className="flex flex-wrap items-center gap-3">
         {state !== 'recording' ? (
           <button type="button" onClick={begin} className={btnPrimary}><Mic className="w-4 h-4" /><span>{state === 'ready' ? 'Rekam ulang' : 'Mulai merekam'}</span></button>
@@ -484,10 +494,10 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
           <Waveform peaks={peaks} from={start / dur} to={end / dur} />
           <div className="grid grid-cols-2 gap-3">
             <Field label={`Mulai: ${fmtTime(start)}`}>
-              <input type="range" min={0} max={dur} step={0.01} value={start} onChange={(e) => setStart(Math.min(+e.target.value, end - 0.1))} className="w-full accent-[var(--t-accent)]" />
+              <input type="range" min={0} max={dur} step={0.01} value={start} onChange={(e) => setStart(Math.min(+e.target.value, end - 0.1))} className={sliderCls} />
             </Field>
             <Field label={`Selesai: ${fmtTime(end)}`}>
-              <input type="range" min={0} max={dur} step={0.01} value={end} onChange={(e) => setEnd(Math.max(+e.target.value, start + 0.1))} className="w-full accent-[var(--t-accent)]" />
+              <input type="range" min={0} max={dur} step={0.01} value={end} onChange={(e) => setEnd(Math.max(+e.target.value, start + 0.1))} className={sliderCls} />
             </Field>
           </div>
           <p className="text-[11px] text-gray-400">Hasil potongan: {fmtTime(Math.max(0, end - start))} dari {fmtTime(dur)}</p>
@@ -559,19 +569,24 @@ const CleanTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: str
   };
 
   return (
-    <Panel title="Hapus Hening · Normalisasi Volume · Stereo ke Mono">
-      <p className="text-xs text-gray-400">Cocok untuk podcast, voice-over, dan video YouTube. Proses berjalan berurutan: mono → hapus hening → normalisasi.</p>
+    <Panel title="Rapikan Audio" info={[
+      'Tiga proses yang bisa dipilih sendiri-sendiri. Kalau lebih dari satu dipilih, urutannya: stereo ke mono, hapus jeda hening, lalu samakan loudness.',
+      'Stereo ke mono: menggabungkan kanal kiri dan kanan jadi satu, ukuran berkas lebih kecil.',
+      'Hapus jeda hening: memangkas bagian senyap yang panjang, dengan sisa jeda singkat agar ucapan tetap natural.',
+      'Samakan loudness (LUFS): mengatur kenyaringan ke target, misalnya Podcast -16, YouTube/Spotify -14, atau TV -23.',
+      'Cocok untuk podcast, voice-over, dan video YouTube.',
+    ]}>
       <FilePicker label={busy ? 'Memproses…' : buffer ? `Ganti berkas (${fileName})` : 'Pilih berkas audio'} onFiles={onFiles} disabled={busy} />
       {buffer && (
         <div className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-            <div className="rounded-xl bg-black/40 border border-white/[0.06] p-3 space-y-2">
+            <div className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2">
               <label className="flex items-center gap-2 text-xs font-bold text-white cursor-pointer"><input type="checkbox" checked={doSilence} onChange={(e) => setDoSilence(e.target.checked)} />Hapus jeda hening</label>
-              <Field label={`Dianggap hening di bawah ${thr} dB`}><input type="range" min={-70} max={-20} value={thr} onChange={(e) => setThr(+e.target.value)} className="w-full accent-[var(--t-accent)]" disabled={!doSilence} /></Field>
-              <Field label={`Jeda minimal dipotong: ${minSil} ms`}><input type="range" min={150} max={3000} step={50} value={minSil} onChange={(e) => setMinSil(+e.target.value)} className="w-full accent-[var(--t-accent)]" disabled={!doSilence} /></Field>
-              <Field label={`Sisakan jeda: ${keep} ms`} hint="Agar ucapan tidak terdengar terpotong"><input type="range" min={0} max={600} step={10} value={keep} onChange={(e) => setKeep(+e.target.value)} className="w-full accent-[var(--t-accent)]" disabled={!doSilence} /></Field>
+              <Field label={`Dianggap hening di bawah ${thr} dB`}><input type="range" min={-70} max={-20} value={thr} onChange={(e) => setThr(+e.target.value)} className={sliderCls} disabled={!doSilence} /></Field>
+              <Field label={`Jeda minimal dipotong: ${minSil} ms`}><input type="range" min={150} max={3000} step={50} value={minSil} onChange={(e) => setMinSil(+e.target.value)} className={sliderCls} disabled={!doSilence} /></Field>
+              <Field label={`Sisakan jeda: ${keep} ms`} hint="Agar ucapan tidak terdengar terpotong"><input type="range" min={0} max={600} step={10} value={keep} onChange={(e) => setKeep(+e.target.value)} className={sliderCls} disabled={!doSilence} /></Field>
             </div>
-            <div className="rounded-xl bg-black/40 border border-white/[0.06] p-3 space-y-2">
+            <div className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2">
               <label className="flex items-center gap-2 text-xs font-bold text-white cursor-pointer"><input type="checkbox" checked={doNorm} onChange={(e) => setDoNorm(e.target.checked)} />Normalisasi volume (LUFS)</label>
               <div className="flex flex-col gap-1.5">
                 {LOUDNESS_PRESETS.map((p) => (
@@ -581,7 +596,7 @@ const CleanTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: str
               </div>
               <Field label="Target kustom (LUFS)"><input type="number" min={-40} max={-6} step={0.5} value={target} onChange={(e) => setTarget(Math.max(-40, Math.min(-6, +e.target.value || -16)))} className={inputCls} disabled={!doNorm} /></Field>
             </div>
-            <div className="rounded-xl bg-black/40 border border-white/[0.06] p-3 space-y-2">
+            <div className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2">
               <label className="flex items-center gap-2 text-xs font-bold text-white cursor-pointer"><input type="checkbox" checked={doMono} onChange={(e) => setDoMono(e.target.checked)} />Stereo ke mono</label>
               <p className="text-[11px] text-gray-400">Menggabungkan kanal kiri-kanan jadi satu. Ukuran berkas lebih kecil dan cocok untuk suara bicara. Rekaman dengan fase berlawanan antar kanal bisa jadi pelan.</p>
             </div>
@@ -714,52 +729,68 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     const pcm = renderMetronome({ bpm, beatsPerBar: sig.pulses, bars: b, subdivisionId: subId, accents, sound: soundId, sampleRate: 44100 });
     setClickBuf(toBuffer([pcm], 44100));
   };
-  const unit = sig.id.endsWith('/8') ? '♪ (eighth note)' : '♩ (quarter note)';
+  const [bpmText, setBpmText] = useState(String(bpm));
+  useEffect(() => { setBpmText(String(bpm)); }, [bpm]);
+  const commitBpm = () => {
+    const n = Number(bpmText);
+    if (Number.isFinite(n) && bpmText.trim() !== '') setBpm(clampBpm(n)); else setBpmText(String(bpm));
+  };
 
   return (
-    <Panel title="Metronom">
-      <div className="space-y-2">
-        <div className="flex flex-wrap items-center justify-center gap-2 py-1" aria-live="off">
-          {accents.map((a, i) => {
-            const on = running && beat === i;
-            const base = a === 0 ? 'border-dashed border-white/15 bg-transparent opacity-60' : a === 2 ? 'border-accent2 bg-accent2/25 w-6 h-6' : 'border-white/30 bg-black/40';
-            const lit = on ? (a === 2 ? '!bg-accent2 !border-accent2 scale-125' : '!bg-accent !border-accent scale-125') : '';
-            return (
-              <button key={i} type="button" onClick={() => cycleAccent(i)} aria-label={`Pulsa ${i + 1}: ${ACCENT_LABEL[a]}. Klik untuk mengganti.`} title={`Pulsa ${i + 1}: ${ACCENT_LABEL[a]}`}
-                className={`w-5 h-5 rounded-full border transition-all cursor-pointer ${base} ${lit}`} />
-            );
-          })}
-        </div>
-        <p className="text-[11px] text-gray-500 text-center">Klik lingkaran untuk mengganti aksen tiap pulsa: aksen (besar) → normal → senyap (putus-putus).</p>
+    <Panel title="Metronom" info={[
+      'Atur tempo, birama, jumlah klik per ketukan, dan aksen tiap pulsa. Hasilnya juga bisa diunduh sebagai berkas klik.',
+      'Klik lingkaran untuk mengganti aksen tiap pulsa: aksen (besar), normal, atau senyap (putus-putus).',
+      'Tempo dihitung per pulsa: pada birama x/4 satu pulsa adalah not seperempat, pada birama x/8 adalah not seperdelapan.',
+    ]}>
+      <div className="flex flex-wrap items-center justify-center gap-2 py-1" aria-live="off">
+        {accents.map((a, i) => {
+          const on = running && beat === i;
+          const base = a === 0 ? 'border-dashed border-white/15 bg-transparent opacity-60' : a === 2 ? 'border-accent2 bg-accent2/25 w-6 h-6' : 'border-white/30 bg-black/40';
+          const lit = on ? (a === 2 ? '!bg-accent2 !border-accent2 scale-125' : '!bg-accent !border-accent scale-125') : '';
+          return (
+            <button key={i} type="button" onClick={() => cycleAccent(i)} aria-label={`Pulsa ${i + 1}: ${ACCENT_LABEL[a]}. Klik untuk mengganti.`} title={`Pulsa ${i + 1}: ${ACCENT_LABEL[a]}`}
+              className={`w-5 h-5 rounded-full border transition-all cursor-pointer ${base} ${lit}`} />
+          );
+        })}
       </div>
+
+      {/* Tempo: angka (bisa diketik) + Tap tempo di kanan, slider di bawahnya */}
+      <div className={`${CARD_CLS} space-y-2 text-xs`}>
+        <div className="flex justify-between items-center gap-3 flex-wrap">
+          <label htmlFor="metro-bpm" className="text-gray-300 font-bold">Tempo ({tempoMarking(bpm)}):</label>
+          <div className="flex items-center gap-2">
+            <input id="metro-bpm" type="text" inputMode="numeric" value={bpmText}
+              onChange={(e) => setBpmText(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+              onBlur={commitBpm} onKeyDown={(e) => { if (e.key === 'Enter') { commitBpm(); (e.target as HTMLInputElement).blur(); } }}
+              className={NUM_FIELD_CLS} />
+            <span className="text-gray-400 font-mono">BPM</span>
+            <button type="button" onClick={tap} className={btnGhost}>Tap tempo</button>
+          </div>
+        </div>
+        <input type="range" min={30} max={300} value={bpm} onChange={(e) => setBpm(+e.target.value)} className={sliderCls} aria-label="Tempo (BPM)" />
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <Field label={`Tempo: ${bpm} BPM · ${tempoMarking(bpm)}`} hint={`1 BPM = 1 pulsa = ${unit}`}>
-          <input type="range" min={30} max={300} value={bpm} onChange={(e) => setBpm(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
-        </Field>
-        <Field label="Birama (time signature)" hint={`${sig.pulses} pulsa per bar`}>
+        <Field label="Birama" hint={`${sig.pulses} pulsa per bar`}>
           <select value={sigId} onChange={(e) => changeSig(e.target.value)} className={inputCls}>{TIME_SIGNATURES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select>
         </Field>
-        <Field label="Subdivisi (ritme per pulsa)" hint={sub.hint}>
+        <Field label="Klik per ketukan" hint={sub.hint}>
           <select value={subId} onChange={(e) => { setSubId(e.target.value); setClickBuf(null); }} className={inputCls}>{SUBDIVISIONS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
-        </Field>
-        <Field label="Atur BPM tepat" hint="Rentang 30–300 BPM">
-          <input type="number" min={30} max={300} value={bpm} onChange={(e) => setBpm(clampBpm(+e.target.value))} className={inputCls} />
         </Field>
         <Field label="Bunyi klik">
           <select value={soundId} onChange={(e) => { setSoundId(e.target.value); setClickBuf(null); }} className={inputCls}>{CLICK_SOUNDS.map((x) => <option key={x.id} value={x.id}>{x.label}</option>)}</select>
         </Field>
         <Field label={`Volume: ${Math.round(vol * 100)}%`} hint="Hanya untuk pemutaran langsung">
-          <input type="range" min={0} max={1} step={0.05} value={vol} onChange={(e) => setVol(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
+          <input type="range" min={0} max={1} step={0.05} value={vol} onChange={(e) => setVol(+e.target.value)} className={sliderCls} />
         </Field>
       </div>
       <div className="flex flex-wrap gap-2">
-        {!running ? <button type="button" onClick={start} className={btnPrimary}><Play className="w-4 h-4" /><span>Mulai</span></button>
-          : <button type="button" onClick={stop} className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-black text-sm inline-flex items-center gap-2 cursor-pointer"><Square className="w-4 h-4" /><span>Berhenti</span></button>}
-        <button type="button" onClick={tap} className={btnGhost}>Tap tempo</button>
-        <button type="button" onClick={() => { setAccents(sig.accents); setClickBuf(null); }} className={btnGhost}><RotateCcw className="w-4 h-4" /><span>Reset aksen</span></button>
+        {!running ? <button type="button" onClick={start} className={btnPrimary}><Play className="w-3.5 h-3.5 fill-on-accent" /><span>Mulai</span></button>
+          : <button type="button" onClick={stop} className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-md"><Square className="w-3.5 h-3.5" /><span>Berhenti</span></button>}
+        <button type="button" onClick={() => { setAccents(sig.accents); setClickBuf(null); }} className={btnGhost}><RotateCcw className="w-3.5 h-3.5" /><span>Reset aksen</span></button>
       </div>
-      <div className="rounded-xl border border-white/[0.08] bg-black/30 p-3 space-y-3">
-        <p className="text-xs font-bold text-white">Unduh klik sebagai berkas</p>
+      <div className={`${CARD_CLS} space-y-3 text-xs`}>
+        <p className="font-bold text-gray-300">Unduh klik sebagai berkas</p>
         <p className="text-[11px] text-gray-400">Memakai pengaturan di atas: {bpm} BPM, {sig.id}, {sub.label}, bunyi {snd.label}.</p>
         <div className="flex flex-wrap items-end gap-3">
           <Field label={`Jumlah bar (maks ${maxBars})`}>
@@ -847,9 +878,13 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
   const status = !reading ? 'Mainkan satu nada…' : inTune ? 'Pas!' : cents < 0 ? 'Terlalu rendah, kencangkan' : 'Terlalu tinggi, kendurkan';
 
   return (
-    <Panel title="Tuner">
+    <Panel title="Tuner" info={[
+      'Setel gitar, bass, ukulele, alat gesek, banjo, mandolin, dan vokal.',
+      'Mainkan satu senar saja di ruangan tenang, dan dekatkan perangkat ke sumber suara.',
+      'Ketuk nama senar untuk mendengar nada acuannya. Pilih Kromatik untuk vokal atau alat yang tidak ada di daftar.',
+    ]}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <Field label="Instrumen & stem" hint={`${TUNING_PRESETS.length - 1} preset, atau pilih Kromatik untuk vokal / alat lain`}>
+        <Field label="Instrumen">
           <select value={preset.id} onChange={(e) => { setPreset(TUNING_PRESETS.find((p) => p.id === e.target.value)!); recent.current = []; }} className={inputCls}>
             {PRESET_GROUPS.map((g) => (
               <optgroup key={g} label={g}>
@@ -860,15 +895,15 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
         </Field>
         <Field label={`Acuan A4: ${a4} Hz`}>
           <div className="flex items-center gap-2">
-            <input type="range" min={430} max={450} value={a4} onChange={(e) => setA4(+e.target.value)} className="w-full accent-[var(--t-accent)]" />
+            <input type="range" min={430} max={450} value={a4} onChange={(e) => setA4(+e.target.value)} className={sliderCls} />
             <button type="button" onClick={() => setA4(440)} disabled={a4 === 440} className={btnGhost}>440</button>
           </div>
         </Field>
       </div>
-      {!running ? <button type="button" onClick={start} className={btnPrimary}><Mic className="w-4 h-4" /><span>Mulai tuner</span></button>
-        : <button type="button" onClick={stop} className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-black text-sm inline-flex items-center gap-2 cursor-pointer w-fit"><X className="w-4 h-4" /><span>Hentikan</span></button>}
+      {!running ? <button type="button" onClick={start} className={btnPrimary}><Mic className="w-3.5 h-3.5" /><span>Mulai tuner</span></button>
+        : <button type="button" onClick={stop} className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-md w-fit"><X className="w-4 h-4" /><span>Hentikan</span></button>}
       <ErrorNote msg={err} />
-      <div className="rounded-2xl bg-black/50 border border-white/[0.08] p-5 text-center space-y-3">
+      <div className="rounded-xl bg-black/50 border border-white/5 p-5 text-center space-y-3">
         <div className={`text-6xl font-black tabular-nums ${inTune ? 'text-emerald-400' : 'text-white'}`}>
           {note ? <>{ns && preset.strings.length ? ns.string.label.replace(/\d+$/, '') : note.name}<span className="text-2xl text-gray-400">{ns && preset.strings.length ? ns.string.label.match(/\d+$/)?.[0] : note.octave}</span></> : '—'}
         </div>
@@ -887,7 +922,6 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
           ))}
         </div>
       )}
-      <p className="text-[11px] text-gray-500">Tips: mainkan satu senar saja, di ruangan tenang, dekatkan perangkat ke sumber suara. Ketuk nama senar untuk mendengar nada acuannya. Urutan senar di atas dari yang terendah ke tertinggi kecuali alat re-entrant (ukulele, banjo).</p>
     </Panel>
   );
 };

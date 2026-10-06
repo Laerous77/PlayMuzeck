@@ -563,21 +563,16 @@ export function normalizePeak(ch: Channels, targetDb = -1): { channels: Channels
 
 // ───────────────────────── Metronom (render ke berkas) ─────────────────────────
 
-/** Pola subdivisi dalam satu pulsa. `offsets` = posisi klik sebagai pecahan pulsa (0 = jatuh di pulsa). */
+/** Subdivisi = jumlah klik per pulsa (1 sampai 6), tersebar rata. Klik pertama di pulsa, sisanya lebih pelan. */
 export interface Subdivision { id: string; label: string; hint: string; offsets: number[]; }
 
 const even = (n: number) => Array.from({ length: n }, (_, i) => i / n);
-export const SUBDIVISIONS: Subdivision[] = [
-  { id: 'quarter', label: 'Quarter note (♩)', hint: '1 klik per pulsa', offsets: [0] },
-  { id: 'eighth', label: 'Eighth notes (♪♪)', hint: '2 klik per pulsa', offsets: even(2) },
-  { id: 'triplet', label: 'Eighth-note triplet', hint: '3 klik per pulsa (3:2)', offsets: even(3) },
-  { id: 'sixteenth', label: 'Sixteenth notes', hint: '4 klik per pulsa', offsets: even(4) },
-  { id: 'quintuplet', label: 'Quintuplet', hint: '5 klik per pulsa (5:4)', offsets: even(5) },
-  { id: 'sextuplet', label: 'Sextuplet', hint: '6 klik per pulsa (6:4)', offsets: even(6) },
-  { id: 'swing', label: 'Swing eighths (2:1)', hint: 'Klik ke-2 di 2/3 pulsa, feel shuffle', offsets: [0, 2 / 3] },
-  { id: 'gallop', label: 'Eighth + 2 sixteenths', hint: 'Pola gallop: 1 – – & a', offsets: [0, 0.5, 0.75] },
-  { id: 'revgallop', label: '2 sixteenths + eighth', hint: 'Pola reverse gallop: 1 e &', offsets: [0, 0.25, 0.5] },
-];
+export const SUBDIVISIONS: Subdivision[] = [1, 2, 3, 4, 5, 6].map((n) => ({
+  id: String(n),
+  label: n === 1 ? '1 klik per ketukan' : `${n} klik per ketukan`,
+  hint: n === 1 ? 'Hanya klik utama' : `Klik utama + ${n - 1} klik pelan di antara ketukan`,
+  offsets: even(n),
+}));
 
 /** Birama. `pulses` = jumlah pulsa per bar; BPM mengacu pada satu pulsa (nilai nada di penyebut). */
 export interface TimeSignature { id: string; label: string; pulses: number; accents: Accent[]; }
@@ -585,15 +580,16 @@ export interface TimeSignature { id: string; label: string; pulses: number; acce
 export type Accent = 0 | 1 | 2;
 
 const acc = (n: number, strong: number[]): Accent[] => Array.from({ length: n }, (_, i) => (strong.includes(i) ? 2 : 1) as Accent);
+const ts = (id: string, pulses: number, strong: number[]): TimeSignature => ({ id, label: id, pulses, accents: acc(pulses, strong) });
 export const TIME_SIGNATURES: TimeSignature[] = [
-  { id: '2/4', label: '2/4', pulses: 2, accents: acc(2, [0]) },
-  { id: '3/4', label: '3/4 (waltz)', pulses: 3, accents: acc(3, [0]) },
-  { id: '4/4', label: '4/4 (common time)', pulses: 4, accents: acc(4, [0]) },
-  { id: '5/4', label: '5/4 (3+2)', pulses: 5, accents: acc(5, [0, 3]) },
-  { id: '6/8', label: '6/8 (3+3, compound duple)', pulses: 6, accents: acc(6, [0, 3]) },
-  { id: '7/8', label: '7/8 (2+2+3)', pulses: 7, accents: acc(7, [0, 2, 4]) },
-  { id: '9/8', label: '9/8 (3+3+3, compound triple)', pulses: 9, accents: acc(9, [0, 3, 6]) },
-  { id: '12/8', label: '12/8 (3+3+3+3, compound quadruple)', pulses: 12, accents: acc(12, [0, 3, 6, 9]) },
+  ts('2/4', 2, [0]),
+  ts('3/4', 3, [0]),
+  ts('4/4', 4, [0]),
+  ts('5/4', 5, [0, 3]),
+  ts('6/8', 6, [0, 3]),
+  ts('7/8', 7, [0, 2, 4]),
+  ts('9/8', 9, [0, 3, 6]),
+  ts('12/8', 12, [0, 3, 6, 9]),
 ];
 
 /** Karakter bunyi klik. `accent`/`normal`/`sub` = frekuensi (Hz); `decay` = peluruhan envelope; `noise` = campuran derau (0..1). */
@@ -611,9 +607,9 @@ export interface MetronomeRenderOptions {
   /** Jumlah pulsa per bar (pembilang birama). */
   beatsPerBar: number;
   bars: number;
-  /** Id SUBDIVISIONS. Default 'quarter'. */
+  /** Id SUBDIVISIONS ('1'..'6' = jumlah klik per ketukan). Default '1'. */
   subdivisionId?: string;
-  /** Kompatibilitas lama: 1 = quarter, 2 = eighth, 3 = triplet, 4 = sixteenth. Diabaikan bila subdivisionId diisi. */
+  /** Jumlah klik per ketukan (1-6), alternatif dari subdivisionId. Diabaikan bila subdivisionId diisi. */
   subdivision?: number;
   /** Aksen per pulsa (0 senyap, 1 normal, 2 aksen). Default: pulsa 1 = aksen, lainnya normal. */
   accents?: Accent[];
@@ -622,7 +618,6 @@ export interface MetronomeRenderOptions {
   sampleRate?: number;
 }
 
-const LEGACY_SUB = ['quarter', 'eighth', 'triplet', 'sixteenth'];
 export const getSubdivision = (id?: string): Subdivision => SUBDIVISIONS.find((x) => x.id === id) ?? SUBDIVISIONS[0];
 export const getClickSound = (id?: string): ClickSound => CLICK_SOUNDS.find((x) => x.id === id) ?? CLICK_SOUNDS[0];
 
@@ -643,7 +638,7 @@ export function tempoMarking(bpm: number): string {
 /** Hasilkan loop klik metronom mono. Aksen mengikuti pola per pulsa; subdivisi memakai bunyi lebih pelan. */
 export function renderMetronome(opts: MetronomeRenderOptions): Float32Array {
   const sr = opts.sampleRate ?? 44100;
-  const sub = getSubdivision(opts.subdivisionId ?? (opts.subdivision !== undefined ? LEGACY_SUB[Math.max(1, Math.min(4, Math.round(opts.subdivision))) - 1] : undefined));
+  const sub = getSubdivision(opts.subdivisionId ?? (opts.subdivision !== undefined ? String(Math.max(1, Math.min(6, Math.round(opts.subdivision)))) : undefined));
   const snd = getClickSound(opts.sound);
   const pulses = Math.max(1, Math.round(opts.beatsPerBar));
   const accents: Accent[] = Array.from({ length: pulses }, (_, i) => opts.accents?.[i] ?? (i === 0 ? 2 : 1));

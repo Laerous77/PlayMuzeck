@@ -132,23 +132,21 @@ console.log(`\n${pass} pengujian lulus${process.exitCode ? ' (ADA YANG GAGAL)' :
   }
   for (const ts of D.TIME_SIGNATURES) ok(`Birama ${ts.id}: jumlah aksen = pulsa`, ts.accents.length === ts.pulses && ts.accents[0] === 2);
   for (const snd of D.CLICK_SOUNDS) {
-    const m = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivisionId: 'sixteenth', sound: snd.id, sampleRate: sr });
+    const m = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivisionId: '4', sound: snd.id, sampleRate: sr });
     ok(`Suara ${snd.id}: tidak clipping & tidak senyap`, D.peakOf([m]) <= 1 && D.peakOf([m]) > 0.1, `peak=${D.peakOf([m]).toFixed(2)}`);
   }
   // pulsa dimute -> awal bar tetap senyap
   const muted = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, accents: [0, 1, 1, 1], sampleRate: sr });
   ok('Pulsa 1 di-mute = senyap di awal bar', Math.max(...muted.subarray(0, 2000).map(Math.abs)) === 0);
-  // swing: klik kedua di 2/3 pulsa
-  const sw = D.renderMetronome({ bpm: 60, beatsPerBar: 1, bars: 1, subdivisionId: 'swing', accents: [0], sampleRate: sr });
-  const at = (x: Float32Array, a: number, b: number) => Math.max(...x.subarray(a, b).map(Math.abs));
-  ok('Swing: klik di 2/3 pulsa, bukan 1/2', at(sw, Math.round(sr * 2 / 3) + 10, Math.round(sr * 2 / 3) + 400) > 0.05 && at(sw, Math.round(sr / 2) + 10, Math.round(sr / 2) + 400) === 0);
-  // triplet: 3 klik per pulsa -> klik di 1/3
-  const tr = D.renderMetronome({ bpm: 60, beatsPerBar: 1, bars: 1, subdivisionId: 'triplet', accents: [0], sampleRate: sr });
-  ok('Triplet: klik di 1/3 pulsa', at(tr, Math.round(sr / 3) + 10, Math.round(sr / 3) + 400) > 0.05);
+  // 3 klik per ketukan: klik di 1/3 dan 2/3 pulsa
+  const at = (y: Float32Array, p: number, q: number) => Math.max(...y.subarray(p, q).map(Math.abs));
+  const tr = D.renderMetronome({ bpm: 60, beatsPerBar: 1, bars: 1, subdivisionId: '3', accents: [0], sampleRate: sr });
+  ok('3 per ketukan: klik di 1/3 & 2/3 pulsa, tidak di 1/2', at(tr, Math.round(sr / 3) + 10, Math.round(sr / 3) + 400) > 0.05 && at(tr, Math.round(sr * 2 / 3) + 10, Math.round(sr * 2 / 3) + 400) > 0.05 && at(tr, Math.round(sr / 2) + 10, Math.round(sr / 2) + 300) === 0);
+  ok('Subdivisi hanya angka 1-6', D.SUBDIVISIONS.map((q) => q.id).join(',') === '1,2,3,4,5,6');
   // kompatibilitas parameter lama
   const legacy = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivision: 3, sampleRate: sr });
-  const modern = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivisionId: 'triplet', sampleRate: sr });
-  ok('subdivision lama (3) = triplet', legacy.length === modern.length && legacy.every((v, i) => v === modern[i]));
+  const modern = D.renderMetronome({ bpm, beatsPerBar: 4, bars: 1, subdivisionId: '3', sampleRate: sr });
+  ok('subdivision angka 3 = id \'3\'', legacy.length === modern.length && legacy.every((v, i) => v === modern[i]));
   ok('Istilah tempo', D.tempoMarking(72) === 'Adagio' && D.tempoMarking(100) === 'Andante' && D.tempoMarking(128) === 'Allegro' && D.tempoMarking(210) === 'Prestissimo');
 }
 

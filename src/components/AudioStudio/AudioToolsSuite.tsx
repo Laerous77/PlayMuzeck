@@ -10,7 +10,6 @@ import {
   Minimize2,
   Waves,
   Wrench,
-  Info,
   Mic2,
   Upload,
   Merge,
@@ -34,6 +33,7 @@ import {
   X,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
+import { InfoTip, FORMAT_INFO } from './toolsShared';
 import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, type ExtraToolId } from './AudioExtraTools';
 import { consumeExtraQuota, remainingExtraQuota } from '../../services/extraToolsQuota';
 import {
@@ -369,56 +369,7 @@ const detectAudioFormat = (file: File | null): ExportAudioFormat | null => {
 // Tombol informasi (popover) agar penjelasan tiap alat tidak memenuhi panel
 // ---------------------------------------------------------------------------
 
-const InfoTip: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLSpanElement>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: PointerEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [open]);
-
-  return (
-    <span ref={wrapRef} className="relative inline-flex">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={label}
-        aria-expanded={open}
-        title={label}
-        className={`w-6 h-6 rounded-full flex items-center justify-center border transition-colors cursor-pointer ${
-          open
-            ? 'bg-accent/20 text-accent border-accent/40'
-            : 'bg-black/40 text-gray-400 border-white/10 hover:text-accent hover:border-accent/40'
-        }`}
-      >
-        <Info className="w-3.5 h-3.5" />
-      </button>
-      {open && (
-        <div
-          role="tooltip"
-          className="absolute left-0 top-full mt-2 z-30 w-72 sm:w-80 max-w-[calc(100vw-3rem)] rounded-xl bg-[#0b130e] border border-white/15 shadow-2xl p-3.5 space-y-2 text-[11px] leading-relaxed text-gray-300 font-normal normal-case tracking-normal"
-        >
-          {children}
-        </div>
-      )}
-    </span>
-  );
-};
-
-const FORMAT_INFO =
-  'MP3 di-encode dengan LAME (320 kbps untuk tool selain Compress), FLAC lossless 16-bit, WAV PCM 16-bit. M4A memakai encoder bawaan browser (bisa berupa .webm/.ogg).';
 
 /** Penjelasan tambahan per alat (di luar deskripsi singkat), ditampilkan di popover info. */
 const TOOL_INFO: Record<ToolType, string[]> = {
@@ -1419,7 +1370,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               <h3 className="text-lg sm:text-xl font-bold text-white tracking-tight">Audio Processing Tools Suite</h3>
             </div>
             <p className="text-xs text-gray-300">
-              15 alat studio dalam 6 kelompok: potong &amp; susun, perbaiki suara, nada/tempo/vokal, format &amp; ukuran, rekam &amp; analisis, serta latihan musik. Setiap alat gratis {DAILY_FREE_QUOTA}x per hari, selebihnya berbayar.
+              Potong, perbaiki, ubah, rekam, dan berlatih musik dalam satu tempat.
             </p>
           </div>
 
@@ -1550,9 +1501,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         </div>
 
         {/* Panel alat tambahan (6 alat; punya pemilih berkas sendiri) */}
-        {selectedExtra && (
-          <p className="text-[11px] text-gray-400 -mt-2">{toolInfo(selectedExtra).desc}. Semua diproses di perangkatmu.</p>
-        )}
         <ExtraToolPanel active={selectedExtra} gate={gateExtra} onSuccessToast={onSuccessToast} />
 
         {/* Panel Kontrol (9 alat bawaan, memakai tombol Unggah Berkas) */}
