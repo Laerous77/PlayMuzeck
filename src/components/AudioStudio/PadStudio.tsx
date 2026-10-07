@@ -1506,6 +1506,61 @@ const DynTextToggle: React.FC<{ on: boolean; disabled: boolean; onToggle: () => 
   );
 };
 
+const SPIN_INPUT_CLASS =
+  'w-11 bg-black/80 rounded-l-md border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+
+// Dua tombol kecil atas / bawah di sisi kanan kolom angka.
+const SpinButtons: React.FC<{ onUp: () => void; onDown: () => void; upDisabled?: boolean; downDisabled?: boolean; label: string }> = ({
+  onUp,
+  onDown,
+  upDisabled,
+  downDisabled,
+  label,
+}) => (
+  <div className="flex flex-col -ml-px">
+    <button
+      type="button"
+      onClick={onUp}
+      disabled={upDisabled}
+      aria-label={`${label}: naikkan`}
+      title="Naikkan"
+      className="flex items-center justify-center px-0.5 h-3.5 rounded-tr-md border border-white/15 bg-white/5 hover:bg-white/15 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+    >
+      <ChevronUp className="w-2.5 h-2.5" />
+    </button>
+    <button
+      type="button"
+      onClick={onDown}
+      disabled={downDisabled}
+      aria-label={`${label}: turunkan`}
+      title="Turunkan"
+      className="flex items-center justify-center px-0.5 h-3.5 -mt-px rounded-br-md border border-white/15 bg-white/5 hover:bg-white/15 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+    >
+      <ChevronDown className="w-2.5 h-2.5" />
+    </button>
+  </div>
+);
+
+// Kolom angka: bisa diketik manual (IntField) dan diatur dengan tombol atas / bawah.
+const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (v: number) => void; ariaLabel: string }> = ({
+  value,
+  min,
+  max,
+  onChange,
+  ariaLabel,
+}) => (
+  <div className="flex items-stretch">
+    <IntField value={value} min={min} max={max} onChange={onChange} ariaLabel={ariaLabel} className={SPIN_INPUT_CLASS} />
+    <SpinButtons
+      label={ariaLabel}
+      onUp={() => onChange(Math.min(max, value + 1))}
+      onDown={() => onChange(Math.max(min, value - 1))}
+      upDisabled={value >= max}
+      downDisabled={value <= min}
+    />
+  </div>
+);
+
 const ToolBtn: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -1580,6 +1635,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [barsPerView, setBarsPerView] = useState<number>(defaultBarsPerView(INITIAL_STEPS_PER_BAR));
   const [viewStartBar, setViewStartBar] = useState<number>(0);
   const [followPlayhead, setFollowPlayhead] = useState(true);
+  // Sekali tekan tombol geser kiri / kanan memindahkan tampilan sebanyak ini (bar).
+  const [shiftBars, setShiftBars] = useState(1);
 
   // Satu transport untuk semuanya: `isPlaying` = sedang berjalan; `playDrum` / `playChord` = bagian mana yang berbunyi
   // (boleh keduanya, minimal satu aktif). Pengguna gratis hanya bisa Drum.
@@ -3030,6 +3087,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     );
   };
   const syncPositionFields = () => paintPlayhead(playheadStepRef.current);
+  const nudgePosition = (el: HTMLInputElement | null, delta: number, min: number, max: number) => {
+    if (!el) return;
+    const cur = parseInt(el.value, 10);
+    el.value = String(Math.max(min, Math.min(max, (Number.isFinite(cur) ? cur : min) + delta)));
+    seekToPosition();
+  };
 
   // Tampilkan halaman grid yang memuat posisi playhead saat ini (berguna setelah menggulir jauh dari posisi putar).
   const jumpToPlayhead = () => {
@@ -3594,7 +3657,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Geser jendela tampilan grid per bar (menggantikan scroll horizontal 1560px).
   const shiftView = (direction: 1 | -1) => {
-    setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - barsPerView, v + direction)));
+    setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - barsPerView, v + direction * shiftBars)));
   };
 
   const changeBarsPerView = (n: number) => {
@@ -4358,52 +4421,53 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         </div>
 
         <div className="space-y-2 pt-1">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
-              {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
-            </h4>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[10px] font-mono text-gray-400">
-                Bar {viewStartBar + 1}–{viewStartBar + barsPerView} / {TOTAL_BARS} • {timeSig.label}
-              </span>
-              <label className="flex items-center gap-1 text-[10px] text-gray-400">
-                Tampil
-                <select
-                  value={barsPerView}
-                  onChange={(e) => changeBarsPerView(Number(e.target.value))}
-                  className="bg-black/60 border border-white/10 rounded-md px-1 py-0.5 font-mono text-accent focus:outline-none cursor-pointer"
-                >
-                  {BARS_PER_VIEW_OPTIONS.map((n) => (
-                    <option key={n} value={n} className="bg-black text-white">
-                      {n} bar
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1">
-                <Repeat className="w-3 h-3 text-accent" />
-                <span className="font-bold text-accent">Loop</span>
-                <span>Bar</span>
-                <IntField min={1} max={TOTAL_BARS} value={loopStartBar} onChange={setLoopStartBar} ariaLabel="Loop mulai bar" />
-                <span>Step</span>
-                <IntField min={1} max={stepsPerBar} value={loopStartBeat} onChange={setLoopStartBeat} ariaLabel="Loop mulai step" />
-                <span>—</span>
-                <span>Bar</span>
-                <IntField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={setLoopEndBar} ariaLabel="Loop sampai bar" />
-                <span>Step</span>
-                <IntField min={1} max={stepsPerBar} value={loopEndBeat} onChange={setLoopEndBeat} ariaLabel="Loop sampai step" />
-              </div>
-              {!isUnlocked8Bar && (
-                <button type="button" onClick={onUnlockEditor} className="text-[11px] text-accent hover:underline font-semibold cursor-pointer">
-                  Buka 16-Bar →
-                </button>
-              )}
-              <div
-                className="flex items-center gap-1 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1"
-                title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
+          <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
+            {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
+          </h4>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-mono text-gray-400">
+              Bar {viewStartBar + 1}–{viewStartBar + barsPerView} / {TOTAL_BARS} • {timeSig.label}
+            </span>
+            <label className="flex items-center gap-1 text-[10px] text-gray-400">
+              Tampil
+              <select
+                value={barsPerView}
+                onChange={(e) => changeBarsPerView(Number(e.target.value))}
+                className="bg-black/60 border border-white/10 rounded-md px-1 py-0.5 font-mono text-accent focus:outline-none cursor-pointer"
               >
-                <span className="font-bold text-accent">Posisi</span>
-                <span>Bar</span>
+                {BARS_PER_VIEW_OPTIONS.map((n) => (
+                  <option key={n} value={n} className="bg-black text-white">
+                    {n} bar
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div
+              className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1"
+              title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir"
+            >
+              <span>Bar</span>
+              <SpinField min={1} max={TOTAL_BARS} value={loopStartBar} onChange={setLoopStartBar} ariaLabel="Loop mulai bar" />
+              <span>Step</span>
+              <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={setLoopStartBeat} ariaLabel="Loop mulai step" />
+              <span>—</span>
+              <span>Bar</span>
+              <SpinField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={setLoopEndBar} ariaLabel="Loop sampai bar" />
+              <span>Step</span>
+              <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={setLoopEndBeat} ariaLabel="Loop sampai step" />
+            </div>
+            {!isUnlocked8Bar && (
+              <button type="button" onClick={onUnlockEditor} className="text-[11px] text-accent hover:underline font-semibold cursor-pointer">
+                Buka 16-Bar →
+              </button>
+            )}
+            <div
+              className="flex items-center gap-1.5 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1"
+              title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
+            >
+              <span className="font-bold text-accent">Posisi</span>
+              <span>Bar</span>
+              <div className="flex items-stretch">
                 <input
                   ref={posBarRef}
                   type="number"
@@ -4413,9 +4477,16 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={seekToPosition}
                   onBlur={syncPositionFields}
                   aria-label="Posisi bar"
-                  className="w-12 bg-black/80 rounded border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent"
+                  className="w-11 bg-black/80 rounded-l-md border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
-                <span>Step</span>
+                <SpinButtons
+                  label="Posisi bar"
+                  onUp={() => nudgePosition(posBarRef.current, 1, 1, TOTAL_BARS)}
+                  onDown={() => nudgePosition(posBarRef.current, -1, 1, TOTAL_BARS)}
+                />
+              </div>
+              <span>Step</span>
+              <div className="flex items-stretch">
                 <input
                   ref={posStepRef}
                   type="number"
@@ -4425,46 +4496,58 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={seekToPosition}
                   onBlur={syncPositionFields}
                   aria-label="Posisi step"
-                  className="w-12 bg-black/80 rounded border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent"
+                  className="w-11 bg-black/80 rounded-l-md border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
-                <button
-                  type="button"
-                  onClick={jumpToPlayhead}
-                  title="Tampilkan halaman grid yang memuat posisi ini"
-                  className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 hover:bg-white/15 text-gray-300 cursor-pointer"
-                >
-                  Lihat
-                </button>
+                <SpinButtons
+                  label="Posisi step"
+                  onUp={() => nudgePosition(posStepRef.current, 1, 1, stepsPerBar)}
+                  onDown={() => nudgePosition(posStepRef.current, -1, 1, stepsPerBar)}
+                />
               </div>
               <button
                 type="button"
-                onClick={() => setFollowPlayhead((f) => !f)}
-                aria-pressed={followPlayhead}
-                title="Halaman grid otomatis mengikuti playhead saat diputar"
-                className={`px-2 py-1 rounded-md text-[10px] font-bold border transition-colors ${
-                  followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10'
-                }`}
+                onClick={jumpToPlayhead}
+                title="Tampilkan halaman grid yang memuat posisi ini"
+                className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 hover:bg-white/15 text-gray-300 cursor-pointer"
               >
-                Ikuti
+                Lihat
               </button>
-              <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-lg p-0.5">
-                <button
-                  type="button"
-                  onClick={() => shiftView(-1)}
-                  disabled={viewStartBar <= 0}
-                  className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => shiftView(1)}
-                  disabled={viewStartBar >= TOTAL_BARS - barsPerView}
-                  className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40"
-                >
-                  <ChevronRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFollowPlayhead((f) => !f)}
+              aria-pressed={followPlayhead}
+              title="Halaman grid otomatis mengikuti playhead saat diputar"
+              className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
+                followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10'
+              }`}
+            >
+              Ikuti
+            </button>
+            <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg p-0.5 pr-1">
+              <button
+                type="button"
+                onClick={() => shiftView(-1)}
+                disabled={viewStartBar <= 0}
+                title={`Geser ${shiftBars} bar ke kiri`}
+                aria-label="Geser ke kiri"
+                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <span className="text-[10px] text-gray-400">Geser</span>
+              <SpinField min={1} max={TOTAL_BARS} value={shiftBars} onChange={setShiftBars} ariaLabel="Jumlah bar sekali geser" />
+              <span className="text-[10px] text-gray-400">bar</span>
+              <button
+                type="button"
+                onClick={() => shiftView(1)}
+                disabled={viewStartBar >= TOTAL_BARS - barsPerView}
+                title={`Geser ${shiftBars} bar ke kanan`}
+                aria-label="Geser ke kanan"
+                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40 cursor-pointer"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
 
@@ -4554,7 +4637,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
               <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
 
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() => void togglePlay()}
@@ -4567,7 +4651,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   {isPlaying ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
                   <span>{isPlaying ? 'Stop' : 'Putar'}</span>
                 </button>
-                <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg p-1" role="group" aria-label="Bagian yang diputar">
+                <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/10" role="group" aria-label="Bagian yang diputar">
                   {PLAY_PARTS.map(({ id, label, Icon, tip }) => {
                     const locked = id === 'chord' && !isUnlocked8Bar;
                     const on = id === 'drum' ? effPlayDrum : effPlayChord;
@@ -4589,26 +4673,27 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     );
                   })}
                 </div>
+                </div>
                 <button
                   type="button"
                   onClick={resetToBeginning}
-                  title="Mulai dari awal"
-                  aria-label="Mulai dari awal"
-                  className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 border border-white/10 text-gray-300 transition-colors cursor-pointer shrink-0"
+                  title="Mulai dari awal wilayah loop"
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-white/5 hover:bg-white/15 text-gray-200 border border-white/10 transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3 h-3" />
+                  <span>Awal</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsSeqLooping(!isSeqLooping)}
                   aria-pressed={isSeqLooping}
-                  title={isSeqLooping ? 'Ulangi (loop) aktif' : 'Ulangi (loop) mati'}
-                  aria-label="Ulangi (loop)"
-                  className={`p-1.5 rounded-lg border transition-all cursor-pointer shrink-0 ${
-                    isSeqLooping ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-500 border-white/10'
+                  title={isSeqLooping ? 'Ulangi (loop) aktif: klik untuk mematikan' : 'Ulangi (loop) mati: klik untuk menyalakan'}
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                    isSeqLooping ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
                   }`}
                 >
                   <Repeat className="w-3 h-3" />
+                  <span>Ulangi</span>
                 </button>
                 <button
                   type="button"
