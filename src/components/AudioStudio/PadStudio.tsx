@@ -1,4 +1,3 @@
-<file path="src/components/AudioStudio/PadStudio.tsx">
 // src/components/AudioStudio/PadStudio.tsx
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
@@ -6145,6 +6144,3 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     </section>
   );
 };
-</file>
-
-</files>
