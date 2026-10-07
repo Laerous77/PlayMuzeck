@@ -1,17 +1,19 @@
 // src/components/AudioStudio/padModel.ts
-// Model data & fungsi murni untuk Step Sequencer (kekuatan drum, panjang not akor, seleksi/clipboard).
+// Model data & fungsi murni untuk Step Sequencer (dinamika drum, panjang not akor, seleksi/clipboard).
 
 // ---------------------------------------------------------------------------
-// KEKUATAN DRUM: 0 = tidak ada, 1 = pianissimo (pp), 2 = piano (p), 3 = forte (f), 4 = fortissimo (ff)
+// DINAMIKA DRUM: 0 = tidak ada, 1 = pianissimo (pp), 2 = piano (p), 3 = forte (f), 4 = fortissimo (ff)
 // ---------------------------------------------------------------------------
 export const DRUM_LEVEL_MAX = 4;
+// Saat dinamika dimatikan, semua pukulan dibunyikan pada level ini (forte = velocity MIDI 100, volume normal).
+export const DRUM_FLAT_LEVEL = 3;
 export const DRUM_LEVEL_LABEL = ['Kosong', 'Pianissimo', 'Piano', 'Forte', 'Fortissimo'] as const;
 export const DRUM_LEVEL_SHORT = ['', 'pp', 'p', 'f', 'ff'] as const;
 export const DRUM_LEVEL_DESC = ['', 'Sangat pelan', 'Pelan', 'Keras', 'Sangat keras'] as const;
 // Pengali volume (dikalikan volume drum utama) dan velocity MIDI untuk tiap level.
 export const DRUM_LEVEL_GAIN = [0, 0.4, 0.65, 0.85, 1] as const;
 export const DRUM_LEVEL_MIDI = [0, 45, 75, 100, 127] as const;
-// Warna pad: makin kuat makin pekat (opacity memakai skala bawaan Tailwind: 30/50/75/100).
+// Warna pad: makin keras makin pekat (opacity memakai skala bawaan Tailwind: 30/50/75/100).
 export const DRUM_LEVEL_CELL_CLASS = [
   '',
   'bg-accent/30 border border-accent/40',
@@ -153,6 +155,8 @@ export interface DrumClip {
   rows: number;
   width: number;
   data: number[][]; // [baris][step] = level 0..4
+  // Sel mana yang ikut disalin (pilihan boleh terpisah-pisah). Tanpa mask = seluruh persegi panjang.
+  mask?: boolean[][];
 }
 
 export interface ChordClip {
@@ -160,6 +164,7 @@ export interface ChordClip {
   rows: number;
   width: number;
   data: Array<Array<{ pad: number; len: number } | null>>; // [track][step]
+  mask?: boolean[][];
 }
 
 export type SeqClip = DrumClip | ChordClip;
@@ -172,3 +177,50 @@ export const makeRect = (tab: SeqTab, a: { r: number; s: number }, b: { r: numbe
   s2: Math.max(a.s, b.s),
 });
 
+
+// ---------------------------------------------------------------------------
+// PILIHAN BERPENCAR (multi-select)
+// Pilihan disimpan sebagai himpunan sel: kunci = baris * CELL_STRIDE + step. Dengan begitu pad yang
+// tidak berdekatan bisa dipilih bersamaan (mode "Pilih+"), dan tiap pad bisa dipilih / dilepas satu per satu.
+// Untuk akor, kunci sel selalu menunjuk AWAL not (not yang menutupi sebuah step diwakili step awalnya).
+// ---------------------------------------------------------------------------
+export interface Selection {
+  tab: SeqTab;
+  cells: ReadonlySet<number>;
+}
+
+export const CELL_STRIDE = 2048; // > jumlah step maksimum (12/8 x 16 bar = 384)
+export const cellKey = (row: number, step: number): number => row * CELL_STRIDE + step;
+export const cellRow = (key: number): number => Math.floor(key / CELL_STRIDE);
+export const cellStep = (key: number): number => key % CELL_STRIDE;
+
+// Kotak pembatas terkecil yang memuat semua sel terpilih (null bila kosong).
+export function selectionBounds(cells: ReadonlySet<number>): { r1: number; r2: number; s1: number; s2: number } | null {
+  if (cells.size === 0) return null;
+  let r1 = Infinity;
+  let r2 = -Infinity;
+  let s1 = Infinity;
+  let s2 = -Infinity;
+  cells.forEach((k) => {
+    const r = cellRow(k);
+    const s = cellStep(k);
+    if (r < r1) r1 = r;
+    if (r > r2) r2 = r;
+    if (s < s1) s1 = s;
+    if (s > s2) s2 = s;
+  });
+  return { r1, r2, s1, s2 };
+}
+
+// Kelompokkan sel terpilih per baris (step terurut naik).
+export function groupCellsByRow(cells: ReadonlySet<number>): Map<number, number[]> {
+  const map = new Map<number, number[]>();
+  cells.forEach((k) => {
+    const r = cellRow(k);
+    const list = map.get(r);
+    if (list) list.push(cellStep(k));
+    else map.set(r, [cellStep(k)]);
+  });
+  map.forEach((list) => list.sort((a, b) => a - b));
+  return map;
+}
