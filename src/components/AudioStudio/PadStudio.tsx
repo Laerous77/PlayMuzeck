@@ -107,6 +107,8 @@ interface PadStudioProps {
 type PadTab = 'drum' | 'chord';
 // edit = pasang/ubah pad; select = pilih area. Tahan Shift untuk MENAMBAH ke pilihan (tanpa melepas yang lama).
 type EditMode = 'edit' | 'select';
+// Yang ikut diputar saat tombol Putar ditekan. Ketiganya saling eksklusif: Drum + Akor, hanya Drum, atau hanya Akor.
+type PlayMode = 'both' | 'drum' | 'chord';
 
 export interface DrumInstrument {
   id: 'kick' | 'snare' | 'clap' | 'closedhat' | 'openhat' | 'tom' | 'splash' | 'ride' | 'perc' | 'fx';
@@ -326,6 +328,7 @@ interface PadInfo {
 
 interface LiveSeqState {
   bpm: number;
+  isPlaying: boolean;
   isDrumLoopActive: boolean;
   isChordLoopActive: boolean;
   isSeqLooping: boolean;
@@ -427,6 +430,17 @@ const audioTimeOfEvent = (eventTimeStamp?: number): number => {
 };
 
 const SEL_CLASS = 'outline outline-2 outline-sky-300 -outline-offset-2';
+
+// Pilihan bagian yang diputar (saklar 3 pilihan, saling eksklusif).
+const PLAY_MODES: Array<{ id: PlayMode; label: string; Icon: React.ComponentType<{ className?: string }>; tip: string }> = [
+  { id: 'both', label: 'Drum + Akor', Icon: Layers, tip: 'Putar drum dan akor bersamaan' },
+  { id: 'drum', label: 'Drum', Icon: Drum, tip: 'Putar hanya drum' },
+  { id: 'chord', label: 'Akor', Icon: Music, tip: 'Putar hanya akor' },
+];
+
+// Pad akor live: lama maksimal akor ditahan, dan lama minimal akor berbunyi walau pad hanya diketuk.
+const CHORD_HOLD_SEC = 30;
+const CHORD_TAP_MIN_MS = 900;
 
 // Boolean yang diingat di localStorage (preferensi tampilan). Aman bila storage diblokir.
 function usePersistedBool(key: string, initial: boolean): [boolean, React.Dispatch<React.SetStateAction<boolean>>] {
@@ -728,9 +742,13 @@ const DrumLabel = memo(function DrumLabel({
   onMix,
   onAdsr,
   onSelectRow,
+  rowSelected,
+  pickMode,
 }: {
   id: string;
   rowIdx: number;
+  rowSelected: boolean;
+  pickMode: boolean;
   onSelectRow: (row: number, additive: boolean) => void;
   label: string;
   mix: DrumMixState;
@@ -740,7 +758,11 @@ const DrumLabel = memo(function DrumLabel({
 }) {
   const [adsrOpen, setAdsrOpen] = useState(false);
   return (
-    <div className={`${labelWidth(showMixer)} shrink-0 relative border-r border-white/10 bg-black/40 pl-4 pr-3 py-2 space-y-2`}>
+    <div
+      className={`${labelWidth(showMixer)} shrink-0 relative border-r border-white/10 pl-4 pr-3 py-2 space-y-2 transition-colors ${
+        rowSelected ? 'bg-accent/20' : 'bg-black/40'
+      }`}
+    >
       <span
         aria-hidden="true"
         className={`absolute inset-y-0 left-0 w-1 ${mix.muted ? 'bg-red-500/70' : mix.solo ? 'bg-accent' : 'bg-accent/40'}`}
@@ -749,10 +771,14 @@ const DrumLabel = memo(function DrumLabel({
         <button
           type="button"
           onClick={(e) => onSelectRow(rowIdx, e.shiftKey)}
-          title={`Klik: pilih seluruh baris ${label} (Shift+klik = tambahkan / lepas dari pilihan)`}
-          className="min-w-0 text-left text-xs font-semibold text-gray-200 truncate hover:text-accent cursor-pointer"
+          aria-pressed={rowSelected}
+          title={`Klik: pilih seluruh instrumen ${label} (Shift+klik = tambahkan / lepas dari pilihan). Lalu Salin ke… untuk menyalin isinya ke instrumen lain.`}
+          className={`min-w-0 flex items-center gap-1 text-left text-xs font-semibold truncate hover:text-accent cursor-pointer ${
+            rowSelected ? 'text-accent' : 'text-gray-200'
+          }`}
         >
-          {label}
+          {(pickMode || rowSelected) && <BoxSelect className="w-3 h-3 shrink-0" />}
+          <span className="truncate">{label}</span>
         </button>
         <MuteSoloButtons
           muted={mix.muted}
@@ -783,8 +809,16 @@ const ChordLabel = memo(function ChordLabel({
   onPickInstrument,
   onRemove,
   onSelectRow,
+  rowSelected,
+  pickMode,
+  canDuplicate,
+  onDuplicate,
 }: {
   tIdx: number;
+  rowSelected: boolean;
+  pickMode: boolean;
+  canDuplicate: boolean;
+  onDuplicate: (trackIndex: number) => void;
   track: ChordTrackState;
   instName: string;
   showMixer: boolean;
@@ -796,7 +830,11 @@ const ChordLabel = memo(function ChordLabel({
 }) {
   const [adsrOpen, setAdsrOpen] = useState(false);
   return (
-    <div className={`${labelWidth(showMixer)} shrink-0 relative border-r border-white/10 bg-black/40 pl-4 pr-3 py-2 space-y-2`}>
+    <div
+      className={`${labelWidth(showMixer)} shrink-0 relative border-r border-white/10 pl-4 pr-3 py-2 space-y-2 transition-colors ${
+        rowSelected ? 'bg-accent/20' : 'bg-black/40'
+      }`}
+    >
       <span
         aria-hidden="true"
         className={`absolute inset-y-0 left-0 w-1 ${track.muted ? 'bg-red-500/70' : track.solo ? 'bg-accent' : 'bg-accent/40'}`}
@@ -806,10 +844,14 @@ const ChordLabel = memo(function ChordLabel({
           <button
             type="button"
             onClick={(e) => onSelectRow(tIdx, e.shiftKey)}
-            title={`Klik: pilih seluruh baris ${track.label} (Shift+klik = tambahkan / lepas dari pilihan)`}
-            className="max-w-full text-left text-xs font-semibold text-gray-200 truncate block hover:text-accent cursor-pointer"
+            aria-pressed={rowSelected}
+            title={`Klik: pilih seluruh instrumen ${track.label} (Shift+klik = tambahkan / lepas dari pilihan). Lalu Salin ke… untuk menyalin isinya ke instrumen lain.`}
+            className={`max-w-full flex items-center gap-1 text-left text-xs font-semibold hover:text-accent cursor-pointer ${
+              rowSelected ? 'text-accent' : 'text-gray-200'
+            }`}
           >
-            {track.label}
+            {(pickMode || rowSelected) && <BoxSelect className="w-3 h-3 shrink-0" />}
+            <span className="truncate">{track.label}</span>
           </button>
           <button
             type="button"
@@ -819,6 +861,20 @@ const ChordLabel = memo(function ChordLabel({
           >
             <span className="truncate underline decoration-dotted underline-offset-2">{instName}</span>
             <ChevronDown className="w-3 h-3 shrink-0" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDuplicate(tIdx)}
+            disabled={!canDuplicate}
+            title={
+              canDuplicate
+                ? `Duplikat ${track.label}: isi, instrumen, volume, dan ADSR ikut disalin ke slot kosong`
+                : 'Semua slot instrumen akor sudah terpakai (maksimal 4)'
+            }
+            className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400 hover:text-accent cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:text-gray-400"
+          >
+            <CopyPlus className="w-3 h-3" />
+            <span>Duplikat</span>
           </button>
         </div>
         <div className="flex items-center gap-1 shrink-0">
@@ -870,7 +926,11 @@ const DrumRow = memo(function DrumRow({
   onCycle,
   onMenu,
   onSelectRow,
+  rowSelected,
+  pickMode,
 }: {
+  rowSelected: boolean;
+  pickMode: boolean;
   dynText: boolean;
   rowIdx: number;
   onSelectRow: (row: number, additive: boolean) => void;
@@ -896,7 +956,18 @@ const DrumRow = memo(function DrumRow({
         mix.muted ? 'opacity-60' : ''
       }`}
     >
-      <DrumLabel id={id} rowIdx={rowIdx} label={label} mix={mix} showMixer={showMixer} onMix={onMix} onAdsr={onAdsr} onSelectRow={onSelectRow} />
+      <DrumLabel
+        id={id}
+        rowIdx={rowIdx}
+        label={label}
+        mix={mix}
+        showMixer={showMixer}
+        onMix={onMix}
+        onAdsr={onAdsr}
+        onSelectRow={onSelectRow}
+        rowSelected={rowSelected}
+        pickMode={pickMode}
+      />
       <div className="flex-1 min-w-0 px-2 py-1 flex items-center">
         <div className="grid gap-0.5 w-full min-w-0" style={gridStyle} data-rowgrid="" data-row={rowIdx}>
           {steps.map((stepIdx) => (
@@ -1088,7 +1159,15 @@ const ChordRow = memo(function ChordRow({
   onPickInstrument,
   onRemove,
   onSelectRow,
+  rowSelected,
+  pickMode,
+  canDuplicate,
+  onDuplicate,
 }: {
+  rowSelected: boolean;
+  pickMode: boolean;
+  canDuplicate: boolean;
+  onDuplicate: (trackIndex: number) => void;
   onSelectRow: (row: number, additive: boolean) => void;
   onUpdateTrack: (trackIndex: number, updates: Partial<ChordTrackState>) => void;
   onUpdateAdsr: (trackIndex: number, patch: Partial<EnvelopeADSR>) => void;
@@ -1136,6 +1215,10 @@ const ChordRow = memo(function ChordRow({
         onPickInstrument={onPickInstrument}
         onRemove={onRemove}
         onSelectRow={onSelectRow}
+        rowSelected={rowSelected}
+        pickMode={pickMode}
+        canDuplicate={canDuplicate}
+        onDuplicate={onDuplicate}
       />
       <div className="flex-1 min-w-0 px-2 py-1.5 flex items-center">
       <div className="grid gap-0.5 w-full min-w-0" style={gridStyle} data-rowgrid="" data-row={tIdx}>
@@ -1288,11 +1371,39 @@ const DynamicsToggle: React.FC<{ on: boolean; onToggle: () => void }> = ({ on, o
   >
     <Gauge className="w-3 h-3" />
     <span>Dinamika</span>
-    <span className={`font-mono text-[9px] px-1 rounded ${on ? 'bg-accent text-on-accent' : 'bg-white/10 text-gray-400'}`}>
-      {on ? 'ON' : 'OFF'}
-    </span>
   </button>
 );
+
+// Saklar teks pp / p / f / ff di dalam pad. Selalu tampil di sebelah KIRI tombol Dinamika (tidak muncul / hilang),
+// jadi posisi tombol Dinamika tidak bergeser. Saat dinamika mati, tombol ini dinonaktifkan (pilihannya tetap diingat).
+const DynTextToggle: React.FC<{ on: boolean; disabled: boolean; onToggle: () => void }> = ({ on, disabled, onToggle }) => {
+  const active = on && !disabled;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      disabled={disabled}
+      onClick={onToggle}
+      title={
+        disabled
+          ? 'Teks pp / p / f / ff hanya berlaku saat dinamika menyala.'
+          : on
+          ? 'Teks pp / p / f / ff tampil di pad. Klik untuk menyembunyikannya (dinamika tetap menyala).'
+          : 'Teks pp / p / f / ff disembunyikan. Klik untuk menampilkan.'
+      }
+      className={`flex items-center px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors ${
+        disabled
+          ? 'bg-black/40 text-gray-600 border-white/5 opacity-50 cursor-not-allowed'
+          : active
+          ? 'bg-accent/20 text-accent border-accent/40 cursor-pointer'
+          : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25 cursor-pointer'
+      }`}
+    >
+      Teks
+    </button>
+  );
+};
 
 const ToolBtn: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
@@ -1369,8 +1480,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [viewStartBar, setViewStartBar] = useState<number>(0);
   const [followPlayhead, setFollowPlayhead] = useState(true);
 
-  const [isDrumLoopActive, setIsDrumLoopActive] = useState(false);
-  const [isChordLoopActive, setIsChordLoopActive] = useState(false);
+  // Satu transport untuk semuanya: `isPlaying` = sedang berjalan, `playMode` = bagian mana yang berbunyi
+  // (Drum + Akor / hanya Drum / hanya Akor, saling eksklusif). Pengguna gratis hanya bisa Drum.
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playMode, setPlayMode] = useState<PlayMode>(() => (isUnlocked8Bar ? 'both' : 'drum'));
+  const effPlayMode: PlayMode = isUnlocked8Bar ? playMode : 'drum';
+  const isDrumLoopActive = isPlaying && effPlayMode !== 'chord';
+  const isChordLoopActive = isPlaying && effPlayMode !== 'drum';
   const [isSeqLooping, setIsSeqLooping] = useState(true);
 
   const [loopStartBar, setLoopStartBar] = useState<number>(1);
@@ -1472,6 +1588,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const isRecordingRef = useRef(false);
   isRecordingRef.current = isRecording;
   const recTakeOpenRef = useRef(false); // true setelah pukulan pertama sebuah rekaman (satu rekaman = satu langkah undo)
+  const recChordTakeOpenRef = useRef(false); // sama, untuk akor
+  // Akor yang sedang direkam (pad masih ditahan): kunci = indeks pad, nilai = step awal, waktu awal, dan track tujuan.
+  const chordRecRef = useRef<Map<number, { step: number; t0: number; targets: number[] }>>(new Map());
 
   // Ref untuk scheduler & playhead (tidak memicu render ulang)
   const liveRef = useRef<LiveSeqState | null>(null);
@@ -1627,11 +1746,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [drumHover, setDrumHover] = useState<{ id: string; level: number } | null>(null);
   const drumHitTimer = useRef<number | undefined>(undefined);
 
-  // Rekam satu pukulan live: dibulatkan ke step terdekat dari ketukan yang sedang berjalan (kompensasi latensi keluaran audio).
-  const recordDrumHit = (drumId: string, level: number, audioTime: number) => {
+  // Bulatkan waktu jam audio sebuah input ke step terdekat dari ketukan yang sedang berjalan (kompensasi latensi keluaran
+  // audio). Dipakai bersama oleh perekaman drum dan akor supaya keduanya selalu sejajar. -1 = tidak ada ketukan yang cocok.
+  const quantizeToStep = (audioTime: number): number => {
     const L = liveRef.current;
     const q = recentStepsRef.current;
-    if (!L || !L.isDrumLoopActive || q.length === 0) return;
+    if (!L || !L.isPlaying || q.length === 0) return -1;
     const ctx = audioEngine.getAudioContext();
     const latency = Math.min(0.25, ((ctx as AudioContext & { outputLatency?: number }).outputLatency || 0) + (ctx.baseLatency || 0));
     const t = audioTime - latency;
@@ -1645,13 +1765,58 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         best = e.step;
       }
     }
-    if (best < 0 || bestDist > stepSec) return;
+    return best >= 0 && bestDist <= stepSec ? best : -1;
+  };
+
+  // Rekam satu pukulan live drum: masuk ke step terdekat.
+  const recordDrumHit = (drumId: string, level: number, audioTime: number) => {
+    const best = quantizeToStep(audioTime);
+    if (best < 0) return;
     setDrumGrid((prev) => {
       const row = [...(prev[drumId] || Array(layoutRef.current.totalSteps).fill(0))];
       row[best] = level;
       return { ...prev, [drumId]: row };
     });
   };
+
+  // Rekam akor live: saat pad ditekan, not akor dipasang di step terdekat (panjang awal 1 step) pada track tujuan
+  // (instrumen live yang dipilih); saat pad dilepas, panjang not disesuaikan dengan lama pad ditahan.
+  const recordChordStart = (padIdx: number, targets: number[], eventTimeStamp?: number) => {
+    if (!gateRef.current.isUnlocked8Bar) return;
+    const t0 = audioTimeOfEvent(eventTimeStamp);
+    const step = quantizeToStep(t0);
+    if (step < 0) return;
+    finishChordRecordRef.current(padIdx, t0);
+    const valid = targets.filter((ti) => liveRef.current?.chordTracks[ti]?.enabled);
+    if (valid.length === 0) return;
+    chordRecRef.current.set(padIdx, { step, t0, targets: valid });
+    setChordTracks((prev) =>
+      prev.map((t, ti) => (valid.includes(ti) && t.enabled ? { ...t, ...insertNote(t.steps, t.lens, step, padIdx, 1) } : t))
+    );
+  };
+
+  const finishChordRecord = (padIdx: number, tEnd: number) => {
+    const rec = chordRecRef.current.get(padIdx);
+    if (!rec) return;
+    chordRecRef.current.delete(padIdx);
+    const L = liveRef.current;
+    const stepSec = 60 / (L?.bpm ?? 115) / 4;
+    // Ketukan singkat tetap dihitung selama akor memang terdengar (CHORD_TAP_MIN_MS), sama seperti yang didengar pemain.
+    const heldSec = Math.max(tEnd - rec.t0, CHORD_TAP_MIN_MS / 1000);
+    let len = Math.max(1, Math.round(heldSec / stepSec));
+    if (L) {
+      const S = L.stepsPerBar;
+      const loopEnd = (L.loopEndBar - 1) * S + (L.loopEndBeat - 1);
+      if (loopEnd >= rec.step) len = Math.min(len, loopEnd - rec.step + 1);
+    }
+    setChordTracks((prev) =>
+      prev.map((t, ti) =>
+        rec.targets.includes(ti) && t.steps[rec.step] === padIdx ? { ...t, ...resizeNote(t.steps, t.lens, rec.step, len) } : t
+      )
+    );
+  };
+  const finishChordRecordRef = useRef(finishChordRecord);
+  finishChordRecordRef.current = finishChordRecord;
 
   const triggerDrum = (type: DrumInstrument['id'], level = 4, eventTimeStamp?: number) => {
     const lv = dynamicsOn ? Math.max(1, Math.min(DRUM_LEVEL_MAX, level)) : DRUM_FLAT_LEVEL;
@@ -1989,6 +2154,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const selectRowRef = useRef(selectRow);
   selectRowRef.current = selectRow;
   const onSelectRow = useCallback((row: number, additive: boolean) => selectRowRef.current(row, additive), []);
+  const duplicateTracksRef = useRef<(rows: number[]) => boolean>(() => false);
+  const onDuplicateTrack = useCallback((row: number) => void duplicateTracksRef.current([row]), []);
 
   const buildClip = (selection: Selection): SeqClip | null => {
     const L = liveRef.current;
@@ -2170,14 +2337,99 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     if (!clip) return;
     const cur = selRef.current;
     const b = cur ? selectionBounds(cur.cells) : null;
-    const res = pasteClip(clip, b ? b.r1 : 0, b ? b.s1 : playheadStepRef.current);
+    // Klip satu instrumen utuh (selebar seluruh grid) selalu ditempel dari step 1, ke baris instrumen yang sedang dipilih.
+    const wholeRow = clip.width >= layoutRef.current.totalSteps;
+    const res = pasteClip(clip, b ? b.r1 : 0, wholeRow ? 0 : b ? b.s1 : playheadStepRef.current);
     if (res) adoptPasted(clip.kind, res);
   };
 
+  // Salin isi pilihan ke instrumen lain (baris tujuan) dengan posisi step yang sama. Satu pilihan baris utuh = seluruh
+  // isi instrumen itu pindah ke instrumen tujuan (bagian drum lain / instrumen akor lain). Satu langkah Undo.
+  const copySelectionToRow = (target: number) => {
+    const cur = selRef.current;
+    if (!cur || Number.isNaN(target)) return;
+    const clip = buildClip(cur);
+    const b = selectionBounds(cur.cells);
+    if (!clip || !b) return;
+    if (target + clip.rows > rowCountOf(cur.tab)) {
+      onSuccessToast('Instrumen tujuan tidak cukup untuk menampung seluruh pilihan ini.');
+      return;
+    }
+    if (cur.tab === 'chord') {
+      for (let r = 0; r < clip.rows; r++) {
+        if (!liveRef.current?.chordTracks[target + r]?.enabled) {
+          onSuccessToast('Instrumen tujuan belum aktif. Tambahkan instrumen akor dulu.');
+          return;
+        }
+      }
+    }
+    const res = pasteClip(clip, target, b.s1);
+    if (res) {
+      adoptPasted(clip.kind, res);
+      const name =
+        cur.tab === 'drum' ? DRUM_INSTRUMENTS[target]?.label : liveRef.current?.chordTracks[target]?.label;
+      onSuccessToast(`Isi pilihan disalin ke ${name ?? 'instrumen tujuan'}.`);
+    }
+  };
+
+  // Duplikat instrumen akor: seluruh isi (not), instrumen suara, volume, dan ADSR ikut disalin ke slot kosong berikutnya.
+  const duplicateTracks = (srcRows: number[]): boolean => {
+    if (!gateRef.current.isUnlocked8Bar) {
+      gateRef.current.onUnlockEditor();
+      return false;
+    }
+    const tracks = liveRef.current?.chordTracks ?? [];
+    const free = tracks.map((t, i) => (t.enabled ? -1 : i)).filter((i) => i >= 0);
+    const rows = srcRows.filter((r) => tracks[r]?.enabled);
+    if (rows.length === 0) return false;
+    if (free.length < rows.length) {
+      onSuccessToast(
+        free.length === 0
+          ? 'Sudah 4 instrumen akor, tidak ada slot kosong untuk duplikat.'
+          : `Slot kosong hanya ${free.length}, tidak cukup untuk menduplikat ${rows.length} instrumen.`
+      );
+      return false;
+    }
+    setChordTracks((prev) =>
+      prev.map((t, i) => {
+        const k = free.indexOf(i);
+        if (k < 0) return t;
+        const src = prev[rows[k]];
+        return {
+          ...t,
+          enabled: true,
+          muted: false,
+          solo: false,
+          program: src.program,
+          volume: src.volume,
+          adsr: { ...src.adsr },
+          steps: [...src.steps],
+          lens: [...src.lens],
+        };
+      })
+    );
+    onSuccessToast(
+      rows.length === 1
+        ? `${tracks[rows[0]].label} diduplikat ke ${tracks[free[0]].label} (isi, instrumen, volume, dan ADSR ikut).`
+        : `${rows.length} instrumen akor diduplikat (isi, instrumen, volume, dan ADSR ikut).`
+    );
+    return true;
+  };
+
+  duplicateTracksRef.current = duplicateTracks;
+
   // Duplikat: salin pilihan lalu tempel TEPAT setelahnya; pilihan pindah ke hasil, jadi bisa diulang beruntun.
+  // Bila yang dipilih adalah instrumen akor UTUH (seluruh barisnya), yang diduplikat adalah instrumennya ke slot kosong.
   const duplicateSelection = () => {
     const cur = selRef.current;
     if (!cur) return;
+    if (cur.tab === 'chord') {
+      const rows = Array.from(groupCellsByRow(cur.cells).keys()).sort((a, b) => a - b);
+      if (rows.length > 0 && rows.every((r) => rowFullSel[r])) {
+        duplicateTracks(rows);
+        return;
+      }
+    }
     const clip = buildClip(cur);
     const b = selectionBounds(cur.cells);
     if (!clip || !b) return;
@@ -2232,6 +2484,29 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     });
     return rows;
   }, [activeSel]);
+
+  // Baris (instrumen) yang terpilih SELURUHNYA: dipakai untuk menandai label dan untuk Duplikat instrumen.
+  const rowFullSel = useMemo<boolean[]>(() => {
+    const out: boolean[] = [];
+    if (!activeSel) return out;
+    groupCellsByRow(activeSel.cells).forEach((steps, r) => {
+      if (activeSel.tab === 'drum') {
+        out[r] = steps.length >= totalSteps;
+        return;
+      }
+      const t = chordTracks[r];
+      if (!t || !t.enabled) return;
+      // Jumlah kunci sel unik satu baris penuh = jumlah not + step kosong yang tidak tertutup not.
+      let expected = 0;
+      let st = 0;
+      while (st < totalSteps) {
+        expected++;
+        st += t.steps[st] >= 0 ? Math.max(1, t.lens[st] || 1) : 1;
+      }
+      out[r] = steps.length === expected;
+    });
+    return out;
+  }, [activeSel, chordTracks, totalSteps]);
 
   // Panjang not akor yang sedang terpilih (untuk kolom angka panjang).
   const selectedNoteInfo = useMemo(() => {
@@ -2319,10 +2594,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }
     if (!chordSnapEqual(chordNow, lastChordRef.current)) {
       const coalesce = performance.now() < coalesceUntilRef.current;
-      if (!(coalesce && coalescingRef.current)) {
+      // Selama merekam, seluruh akor satu rekaman juga dihitung SATU langkah undo.
+      const chordInTake = isRecordingRef.current;
+      if (!(coalesce && coalescingRef.current) && !(chordInTake && recChordTakeOpenRef.current)) {
         H.chord.past.push(lastChordRef.current);
         if (H.chord.past.length > HISTORY_LIMIT) H.chord.past.shift();
       }
+      if (chordInTake) recChordTakeOpenRef.current = true;
       coalescingRef.current = coalesce;
       H.chord.future = [];
       lastChordRef.current = chordNow;
@@ -2535,18 +2813,64 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     paintPlayhead(startStep);
   };
 
-  const toggleDrumLoop = () => {
+  // Transport tunggal. Mode Drum saja langsung jalan; bila akor ikut, sample akor dipanaskan dulu, tapi pengguna JANGAN
+  // dibuat menunggu:
+  // - Bank sudah siap: tunggu paling lama 350 ms (biasanya cukup), sisanya jalan di latar belakang.
+  // - Bank belum siap: langsung mulai. Engine membunyikan suara sintesis sementara dan otomatis
+  //   pindah ke sample SF2 begitu bank selesai dimuat.
+  // Mengembalikan true bila pemutaran benar-benar dimulai.
+  const preparingChordsRef = useRef(false);
+  const startPlayback = async (): Promise<boolean> => {
     audioEngine.getAudioContext().resume();
-    setIsDrumLoopActive(!isDrumLoopActive);
+    if (preparingChordsRef.current) return false;
+    if (effPlayMode !== 'drum') {
+      preparingChordsRef.current = true;
+      try {
+        if (audioEngine.isLoaded) {
+          const warm = audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
+          await Promise.race([warm, new Promise<void>((r) => window.setTimeout(r, 350))]);
+        } else {
+          void audioEngine.initBank();
+          void audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
+        }
+      } finally {
+        preparingChordsRef.current = false;
+      }
+    }
+    setIsPlaying(true);
+    return true;
   };
 
-  // Rekam: pukulan dari live drum trigger pads (klik / sentuh / keyboard) masuk ke sequencer drum.
-  // Jika drum belum jalan, pemutaran dimulai dari awal wilayah loop. Berhenti otomatis saat drum berhenti / pindah tab.
-  const beginRecording = () => {
+  const togglePlay = async () => {
+    audioEngine.getAudioContext().resume();
+    if (isPlaying) {
+      stopAllLiveChords();
+      setIsPlaying(false);
+      return;
+    }
+    await startPlayback();
+  };
+
+  // Pilih bagian yang diputar (eksklusif). Boleh diganti saat sedang memutar; beralih ke Drum saja memotong akor yang menggantung.
+  const selectPlayMode = (mode: PlayMode) => {
+    if (mode !== 'drum' && !isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
+    if (mode === playMode) return;
+    if (isPlaying && mode === 'drum') stopAllLiveChords();
+    setPlayMode(mode);
+  };
+
+  // Rekam: pukulan pad drum dan akor live (klik / sentuh / keyboard) masuk ke sequencer, keduanya memakai ketukan yang sama.
+  // Jika belum diputar, pemutaran (sesuai mode Putar) dimulai dari awal wilayah loop. Berhenti otomatis saat pemutaran berhenti.
+  const beginRecording = async () => {
     recTakeOpenRef.current = false;
-    if (!isDrumLoopActive) {
+    recChordTakeOpenRef.current = false;
+    if (!isPlaying) {
       resetToBeginning();
-      setIsDrumLoopActive(true);
+      const started = await startPlayback();
+      if (!started) return;
     }
     setIsRecording(true);
   };
@@ -2606,7 +2930,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       left -= 1;
       if (left <= 0) {
         cancelCountdown();
-        beginRecordingRef.current();
+        void beginRecordingRef.current();
       } else {
         setCountdownLeft(left);
         countdownClickRef.current(false);
@@ -2614,40 +2938,16 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }, 1000);
   };
   useEffect(() => {
-    if (isRecording && !isDrumLoopActive) setIsRecording(false);
-  }, [isRecording, isDrumLoopActive]);
-
-  const preparingChordsRef = useRef(false);
-  const toggleChordLoop = async () => {
-    if (!isUnlocked8Bar) {
-      onUnlockEditor();
-      return;
-    }
-    if (preparingChordsRef.current) return;
-    audioEngine.getAudioContext().resume();
-    if (isChordLoopActive) {
-      stopAllLiveChords();
-      setIsChordLoopActive(false);
-      return;
-    }
-    // Panaskan sample akor sebelum mulai, tapi JANGAN membuat pengguna menunggu:
-    // - Bank sudah siap: tunggu paling lama 350 ms (biasanya cukup), sisanya jalan di latar belakang.
-    // - Bank belum siap: langsung mulai. Engine membunyikan suara sintesis sementara dan otomatis
-    //   pindah ke sample SF2 begitu bank selesai dimuat (sebelumnya tombol putar menunggu seluruh unduhan).
-    preparingChordsRef.current = true;
-    try {
-      if (audioEngine.isLoaded) {
-        const warm = audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
-        await Promise.race([warm, new Promise<void>((r) => window.setTimeout(r, 350))]);
-      } else {
-        void audioEngine.initBank();
-        void audioEngine.prewarmChordSamples(chordWarmPairs).catch(() => false);
-      }
-    } finally {
-      preparingChordsRef.current = false;
-    }
-    setIsChordLoopActive(true);
-  };
+    if (isRecording && !isPlaying) setIsRecording(false);
+  }, [isRecording, isPlaying]);
+  // Rekaman berhenti: akor yang masih ditahan diselesaikan panjangnya sekarang juga.
+  useEffect(() => {
+    if (isRecording) return;
+    const pending = Array.from(chordRecRef.current.keys());
+    if (pending.length === 0) return;
+    const now = audioEngine.getAudioContext().currentTime;
+    pending.forEach((padIdx) => finishChordRecordRef.current(padIdx, now));
+  }, [isRecording]);
 
   // Track yang dibunyikan pad live: satu track pilihan, atau semua track aktif (berlapis).
   const liveTargets = useMemo<number[]>(() => {
@@ -2662,8 +2962,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Ketukan singkat tetap berbunyi minimal CHORD_TAP_MIN_MS supaya tidak terpotong. Tiap pad × instrumen memakai kunci
   // sendiri di engine, jadi beberapa pad bisa ditahan bersamaan dan mode "Semua" benar-benar melapis semua instrumen
   // (dengan ADSR masing-masing) tanpa saling memotong.
-  const CHORD_HOLD_SEC = 30;
-  const CHORD_TAP_MIN_MS = 900;
   const [litChords, setLitChords] = useState<number[]>([]);
   const heldChordsRef = useRef<
     Map<
@@ -2676,7 +2974,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     >
   >(new Map());
 
-  const startChordHold = (padIdx: number) => {
+  const startChordHold = (padIdx: number, eventTimeStamp?: number) => {
     const info = padInfo[padIdx];
     if (!info) return;
     const ctx = audioEngine.getAudioContext();
@@ -2700,12 +2998,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       voices.push({ trackKey, midiNotes: info.midiNotes, program: t.program, adsr: { ...t.adsr } });
     });
     heldChordsRef.current.set(padIdx, { since: performance.now(), voices });
+    if (isRecordingRef.current) recordChordStart(padIdx, liveTargets, eventTimeStamp);
     setLitChords((l) => (l.includes(padIdx) ? l : [...l, padIdx]));
   };
 
   // Lepas: engine hanya punya "choke" per kunci, jadi akor yang sama dipicu ulang dengan volume 0 untuk memotong halus
   // voice yang sedang ditahan (memakai waktu release instrumen).
   const releaseChordHold = (padIdx: number) => {
+    if (chordRecRef.current.has(padIdx)) finishChordRecordRef.current(padIdx, audioEngine.getAudioContext().currentTime);
     const held = heldChordsRef.current.get(padIdx);
     if (!held) return;
     const doRelease = () => {
@@ -2767,7 +3067,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       if (e.repeat || held.has(e.code)) return;
       const idx = (bankKey ?? padBankRef.current) * PADS_PER_BANK + slot;
       held.set(e.code, idx);
-      startChordHoldRef.current(idx);
+      startChordHoldRef.current(idx, e.timeStamp);
     };
     const onKeyUp = (e: KeyboardEvent) => {
       const bank = bankOf(e.code);
@@ -2804,7 +3104,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     };
   }, []);
 
-  const isAnySeqActive = isDrumLoopActive || isChordLoopActive;
+  const isAnySeqActive = isPlaying;
 
   // Data turunan akor dihitung SEKALI per perubahan pad (bukan tiap render / tiap ketukan).
   const padInfo = useMemo<PadInfo[]>(
@@ -2896,6 +3196,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // setiap grid/track/volume/tempo berubah (sebelumnya interval dihentikan & dibuat ulang tiap edit).
   liveRef.current = {
     bpm,
+    isPlaying,
     isDrumLoopActive,
     isChordLoopActive,
     isSeqLooping,
@@ -3021,8 +3322,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             stepRef.current = 0;
             const waitMs = Math.max(0, (nextTimeRef.current - ctx.currentTime) * 1000) + 30;
             finishTimer = window.setTimeout(() => {
-              setIsDrumLoopActive(false);
-              setIsChordLoopActive(false);
+              setIsPlaying(false);
               stopAllLiveChords();
               visualQueueRef.current = [];
               paintPlayhead(0);
@@ -3135,8 +3435,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const newS = stepsPerBarOf(next);
 
     historyResetRef.current = true;
-    setIsDrumLoopActive(false);
-    setIsChordLoopActive(false);
+    setIsPlaying(false);
     stopAllLiveChords();
     stepRef.current = 0;
     visualQueueRef.current = [];
@@ -3225,8 +3524,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const total = S * TOTAL_BARS;
 
     historyResetRef.current = true;
-    setIsDrumLoopActive(false);
-    setIsChordLoopActive(false);
+    setIsPlaying(false);
     stopAllLiveChords();
     stepRef.current = 0;
     visualQueueRef.current = [];
@@ -3557,9 +3855,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   )}
                   <p>
                     <b className="text-gray-100">Rekam:</b> atur hitung mundur (0–15 detik) di kotak sebelah tombol, tekan Rekam, tunggu hitungan selesai, lalu mainkan pad{hasKeyboard ? ' (atau tombol keyboard)' : ''}. Tiap pukulan
-                    masuk ke step terdekat di sequencer drum (resolusi 1/16 not) dan ikut tercatat sebagai dinamikanya. Bila drum belum
-                    diputar, pemutaran dimulai otomatis dari awal wilayah loop. Satu rekaman = satu langkah Undo. Metronom (bila aktif) hanya
-                    berbunyi saat merekam.
+                    masuk ke step terdekat di sequencer drum (resolusi 1/16 not) dan ikut tercatat sebagai dinamikanya. Pad akor juga ikut
+                    terekam (lihat tab Chord Pad). Bila belum diputar, pemutaran sesuai pilihan Drum + Akor / Drum / Akor dimulai otomatis dari
+                    awal wilayah loop. Satu rekaman = satu langkah Undo. Metronom (bila aktif) hanya berbunyi saat merekam.
                   </p>
                 </InfoTip>
               ) : (
@@ -3573,89 +3871,76 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     (baris angka atau keypad) lalu tekan pad untuk membunyikan akor dari bank itu tanpa memindahkan tampilan bank. Tanpa angka,
                     dipakai bank yang sedang ditampilkan.
                   </p>
+                  <p>
+                    <b className="text-gray-100">Rekam:</b> tombol Rekam sama dengan di tab Drum Pad, jadi drum dan akor direkam bersamaan pada
+                    ketukan yang sama. Akor masuk ke instrumen live yang dipilih (atau semua instrumen bila memilih Semua); panjang
+                    notanya mengikuti lama pad ditahan. Satu rekaman = satu langkah Undo.
+                  </p>
                 </InfoTip>
               )}
             </div>
-            {activeTab === 'drum' && (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <DynamicsToggle on={dynamicsOn} onToggle={toggleDynamics} />
-                {dynamicsOn && (
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={dynText}
-                    onClick={() => setDynText((v) => !v)}
-                    title={
-                      dynText
-                        ? 'Teks pp / p / f / ff tampil di pad. Klik untuk menyembunyikan teksnya (dinamika tetap menyala).'
-                        : 'Teks pp / p / f / ff disembunyikan (dinamika tetap menyala). Klik untuk menampilkan.'
-                    }
-                    className={`flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                      dynText ? 'bg-accent/10 text-accent border-accent/30' : 'bg-black/60 text-gray-500 border-white/10 hover:border-white/25'
-                    }`}
-                  >
-                    <span className={`font-mono text-[10px] ${dynText ? '' : 'line-through'}`}>pp · p · f · ff</span>
-                    <span className={`font-mono text-[9px] px-1 rounded ${dynText ? 'bg-accent text-on-accent' : 'bg-white/10 text-gray-400'}`}>
-                      {dynText ? 'TEKS' : 'TEKS OFF'}
-                    </span>
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={toggleRecording}
-                  aria-pressed={isRecording || countdownLeft !== null}
-                  title={
-                    countdownLeft !== null
-                      ? 'Batalkan hitung mundur rekaman'
-                      : isRecording
-                      ? 'Hentikan rekaman'
-                      : 'Rekam: pukulan dari pad masuk ke sequencer drum'
-                  }
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                    countdownLeft !== null
-                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
-                      : isRecording
-                      ? 'bg-red-500/20 text-red-300 border-red-500/60'
-                      : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {activeTab === 'drum' && (
+                <>
+                  <DynTextToggle on={dynText} disabled={!dynamicsOn} onToggle={() => setDynText((v) => !v)} />
+                  <DynamicsToggle on={dynamicsOn} onToggle={toggleDynamics} />
+                </>
+              )}
+              <button
+                type="button"
+                onClick={toggleRecording}
+                aria-pressed={isRecording || countdownLeft !== null}
+                title={
+                  countdownLeft !== null
+                    ? 'Batalkan hitung mundur rekaman'
+                    : isRecording
+                    ? 'Hentikan rekaman'
+                    : 'Rekam: pukulan pad drum dan akor yang kamu mainkan masuk ke sequencer'
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  countdownLeft !== null
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
+                    : isRecording
+                    ? 'bg-red-500/20 text-red-300 border-red-500/60'
+                    : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
+                }`}
+              >
+                <Circle
+                  className={`w-3 h-3 ${
+                    isRecording || countdownLeft !== null ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'
                   }`}
-                >
-                  <Circle
-                    className={`w-3 h-3 ${
-                      isRecording || countdownLeft !== null ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'
-                    }`}
-                  />
-                  <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
-                </button>
-                <label
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gray-300 bg-black/60 border border-white/10"
-                  title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
-                >
-                  <Timer className="w-3 h-3 text-gray-400" />
-                  <IntField
-                    value={recCountdownSec}
-                    min={0}
-                    max={15}
-                    onChange={setRecCountdownSec}
-                    disabled={isRecording || countdownLeft !== null}
-                    ariaLabel="Hitung mundur sebelum rekam (detik, maksimal 15)"
-                    className="w-8 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
-                  />
-                  <span className="font-mono text-[10px] text-gray-400">dtk</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setMetronomeOn((v) => !v)}
-                  aria-pressed={metronomeOn}
-                  title="Metronom: klik ketukan saat merekam"
-                  className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                    metronomeOn ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
-                  }`}
-                >
-                  <Activity className="w-3 h-3" />
-                  <span>Metronom</span>
-                </button>
-              </div>
-            )}
+                />
+                <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
+              </button>
+              <label
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gray-300 bg-black/60 border border-white/10"
+                title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
+              >
+                <Timer className="w-3 h-3 text-gray-400" />
+                <IntField
+                  value={recCountdownSec}
+                  min={0}
+                  max={15}
+                  onChange={setRecCountdownSec}
+                  disabled={isRecording || countdownLeft !== null}
+                  ariaLabel="Hitung mundur sebelum rekam (detik, maksimal 15)"
+                  className="w-8 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
+                />
+                <span className="font-mono text-[10px] text-gray-400">dtk</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setMetronomeOn((v) => !v)}
+                aria-pressed={metronomeOn}
+                title="Metronom: klik ketukan saat merekam"
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  metronomeOn ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
+                }`}
+              >
+                <Activity className="w-3 h-3" />
+                <span>Metronom</span>
+              </button>
+            </div>
             {activeTab === 'chord' && engineStatus && (
               <span
                 className={`text-[10px] font-mono px-2 py-0.5 rounded border inline-flex items-center gap-1.5 flex-wrap ${
@@ -3780,7 +4065,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <>
               <p className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 flex-wrap">
                 <Timer className="w-3 h-3" />
-                Rekaman dimulai dalam {countdownLeft} detik… bersiap{activeTab === 'drum' ? ' di pad' : ' (tombol Q–P tetap merekam di tab ini)'}.
+                Rekaman dimulai dalam {countdownLeft} detik… bersiap di pad drum atau pad akor.
                 <button
                   type="button"
                   onClick={toggleRecording}
@@ -3801,15 +4086,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           {isRecording && (
             <p className="text-[11px] font-semibold text-red-300 flex items-center gap-1.5 flex-wrap">
               <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500 animate-pulse" />
-              Merekam…{' '}
-              {activeTab === 'drum'
-                ? hasKeyboard
-                  ? 'tekan pad atau tombol Q–P'
-                  : 'tekan pad'
-                : hasKeyboard
-                  ? 'tekan tombol Q–P (pad drum ada di tab Drum Pad)'
-                  : 'buka tab Drum Pad untuk memukul pad'}
-              ; pukulan masuk ke step terdekat.
+              Merekam… mainkan pad drum{hasKeyboard ? ' (Q–P)' : ''} atau pad akor{hasKeyboard ? ' (A–M)' : ''}
+              {!hasKeyboard ? ' (pad drum di tab Drum Pad, pad akor di tab Chord Pad)' : ''}; masuk ke step terdekat.
               <button
                   type="button"
                   onClick={toggleRecording}
@@ -3913,7 +4191,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       } catch {
                         // Abaikan bila pointer capture tidak didukung
                       }
-                      startChordHold(idx);
+                      startChordHold(idx, e.timeStamp);
                     }}
                     onPointerUp={() => releaseChordHold(idx)}
                     onPointerCancel={() => releaseChordHold(idx)}
@@ -4072,13 +4350,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               >
                 <Plus className="w-3 h-3" />
                 <span>Tambah</span>
-                <span
-                  className={`font-mono text-[9px] px-1 rounded ${
-                    addMode && editMode === 'select' ? 'bg-accent text-on-accent' : 'bg-white/10 text-gray-400'
-                  }`}
-                >
-                  {addMode && editMode === 'select' ? 'ON' : 'OFF'}
-                </span>
               </button>
 
               <button
@@ -4113,9 +4384,94 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <ToolBtn icon={Copy} label="Salin" title="Ctrl+C" onClick={copySelection} disabled={!activeSel} />
                 <ToolBtn icon={Scissors} label="Potong" title="Ctrl+X" onClick={cutSelection} disabled={!activeSel} />
                 <ToolBtn icon={ClipboardPaste} label="Tempel" title="Ctrl+V — ditempel di awal pilihan (atau di playhead)" onClick={pasteSelection} disabled={!clips[activeTab]} />
-                <ToolBtn icon={CopyPlus} label="Duplikat" title="Ctrl+D — salin lalu tempel tepat setelah pilihan" onClick={duplicateSelection} disabled={!activeSel} />
+                <ToolBtn
+                  icon={CopyPlus}
+                  label="Duplikat"
+                  title={
+                    activeTab === 'chord'
+                      ? 'Ctrl+D — salin lalu tempel tepat setelah pilihan. Bila yang dipilih instrumen akor utuh (klik namanya), instrumennya diduplikat ke slot kosong beserta isinya.'
+                      : 'Ctrl+D — salin lalu tempel tepat setelah pilihan'
+                  }
+                  onClick={duplicateSelection}
+                  disabled={!activeSel}
+                />
+                <label
+                  className={`flex items-center gap-1 pl-2 rounded-md text-[11px] font-bold bg-white/5 text-gray-200 border border-white/10 transition-colors ${
+                    activeSel ? 'hover:bg-white/15' : 'opacity-35'
+                  }`}
+                  title="Salin isi pilihan ke instrumen lain (pilih satu instrumen utuh dengan mengklik namanya, lalu pilih tujuan)"
+                >
+                  <Copy className="w-3 h-3" />
+                  <select
+                    value=""
+                    disabled={!activeSel}
+                    aria-label="Salin isi pilihan ke instrumen lain"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      e.target.value = '';
+                      if (v !== '') copySelectionToRow(Number(v));
+                    }}
+                    className="bg-transparent text-[11px] font-bold text-gray-200 py-1 pr-1 focus:outline-none cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    <option value="" className="bg-black text-gray-400">
+                      Salin ke…
+                    </option>
+                    {activeTab === 'drum'
+                      ? DRUM_INSTRUMENTS.map((inst, i) => (
+                          <option key={inst.id} value={i} className="bg-black text-white">
+                            {inst.label}
+                          </option>
+                        ))
+                      : chordTracks.map((t, i) =>
+                          t.enabled ? (
+                            <option key={t.id} value={i} className="bg-black text-white">
+                              {t.label}
+                            </option>
+                          ) : null
+                        )}
+                  </select>
+                </label>
                 <ToolBtn icon={Trash2} label="Hapus" title="Delete" onClick={deleteSelection} disabled={!activeSel} />
                 <ToolBtn icon={X} label="Lepas" title="Esc — batalkan semua pilihan" onClick={clearSelection} disabled={!activeSel} />
+              </div>
+
+              <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => void togglePlay()}
+                  aria-pressed={isPlaying}
+                  title={`${isPlaying ? 'Hentikan' : 'Putar'} ${PLAY_MODES.find((m) => m.id === effPlayMode)?.label ?? ''} (loop)`}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                    isPlaying ? 'bg-accent text-on-accent border-accent shadow-md' : 'bg-white/5 text-gray-200 border-white/10 hover:bg-white/10'
+                  }`}
+                >
+                  {isPlaying ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+                  <span>{isPlaying ? 'Stop' : 'Putar'}</span>
+                </button>
+                <div className="flex items-center bg-black/60 border border-white/10 rounded-lg p-0.5" role="radiogroup" aria-label="Bagian yang diputar">
+                  {PLAY_MODES.map(({ id, label, Icon, tip }) => {
+                    const locked = id !== 'drum' && !isUnlocked8Bar;
+                    const on = effPlayMode === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={on}
+                        title={locked ? 'Fitur akor perlu editor penuh' : tip}
+                        onClick={() => selectPlayMode(id)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                          on ? 'bg-accent text-on-accent shadow' : 'text-gray-300 hover:bg-white/10'
+                        }`}
+                      >
+                        {locked ? <Lock className="w-3 h-3 text-accent" /> : <Icon className="w-3 h-3" />}
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
 
               <div className="ml-auto flex items-center gap-2">
@@ -4160,8 +4516,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   </p>
                   <p>
                     {activeTab === 'drum'
-                      ? 'Klik nama drum (Kick, Snare, …) untuk memilih seluruh baris drum itu; tombol Semua memilih semua bagian drum.'
-                      : 'Klik nama progresi akor untuk memilih seluruh baris instrumen itu; tombol Semua memilih semua instrumen akor.'}
+                      ? 'Klik nama drum (Kick, Snare, …) untuk memilih seluruh instrumen drum itu; tombol Semua memilih semua bagian drum.'
+                      : 'Klik nama progresi akor untuk memilih seluruh instrumen itu; tombol Semua memilih semua instrumen akor.'}
+                  </p>
+                  <p>
+                    <b className="text-gray-100">Salin ke instrumen lain:</b> pilih satu instrumen utuh (klik namanya), lalu pilih tujuannya di
+                    menu <b className="text-gray-100">Salin ke…</b>. Isinya langsung disalin ke instrumen itu (menimpa isi lamanya), dan bisa
+                    di-Undo. Cara lain: Salin, klik nama instrumen tujuan, lalu Tempel.
+                    {activeTab === 'chord' && (
+                      <>
+                        {' '}
+                        <b className="text-gray-100">Duplikat instrumen:</b> tombol Duplikat di bawah nama instrumen (atau Duplikat saat instrumen
+                        utuh terpilih) membuat instrumen baru lengkap dengan isi, suara, volume, dan ADSR-nya (maksimal 4 instrumen).
+                      </>
+                    )}
+                  </p>
+                  <p>
+                    <b className="text-gray-100">Putar:</b> tombol Putar di toolbar memutar sesuai pilihan di sebelahnya: Drum + Akor, hanya Drum,
+                    atau hanya Akor (saling eksklusif). Pilihan boleh diganti saat sedang diputar.
                   </p>
                   <p>
                     Klik label BAR untuk memilih satu bar (dengan Shift, bar ditambahkan ke pilihan). Klik area kosong di luar pad untuk melepas semua
@@ -4250,23 +4622,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <div className="flex items-stretch border border-transparent">
                 <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent pr-2 flex items-center`}>
                 <div className="flex items-center gap-1 bg-black/60 border border-white/10 rounded-xl px-1.5 py-1 w-full min-w-0">
-                  {(() => {
-                    const playing = activeTab === 'drum' ? isDrumLoopActive : isChordLoopActive;
-                    const partName = activeTab === 'drum' ? 'Drum' : 'Akor';
-                    return (
-                      <button
-                        type="button"
-                        onClick={activeTab === 'drum' ? toggleDrumLoop : toggleChordLoop}
-                        title={`${playing ? 'Hentikan' : 'Putar'} ${partName} (loop)`}
-                        aria-label={`${playing ? 'Hentikan' : 'Putar'} ${partName}`}
-                        className={`p-1.5 rounded-lg transition-all cursor-pointer shrink-0 ${
-                          playing ? 'bg-accent text-on-accent shadow-md' : 'bg-white/5 text-gray-200 hover:bg-white/10'
-                        }`}
-                      >
-                        {playing ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
-                      </button>
-                    );
-                  })()}
                   <button
                     type="button"
                     onClick={resetToBeginning}
@@ -4360,6 +4715,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         onCycle={cycleDrumStep}
                         onMenu={openDrumPicker}
                         onSelectRow={onSelectRow}
+                        rowSelected={Boolean(rowFullSel[di])}
+                        pickMode={editMode === 'select'}
                       />
                     );
                   })}
@@ -4377,6 +4734,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         onPickInstrument={openInstrumentPicker}
                         onRemove={removeTrack}
                         onSelectRow={onSelectRow}
+                        rowSelected={Boolean(rowFullSel[tIdx])}
+                        pickMode={editMode === 'select'}
+                        canDuplicate={chordTracks.some((t) => !t.enabled)}
+                        onDuplicate={onDuplicateTrack}
                         key={track.id}
                         tIdx={tIdx}
                         track={track}
