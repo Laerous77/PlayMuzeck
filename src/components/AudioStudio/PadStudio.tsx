@@ -3862,7 +3862,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const bank = bankGroupRef.current;
     if (!row || !inst || !bank) return;
     const measure = () => {
-      const wrapped = bank.offsetTop > inst.offsetTop + 2;
+      // Bank akor dianggap turun bila posisinya sudah di bawah blok instrumen live (bukan sejajar dengannya).
+      const wrapped = bank.offsetTop >= inst.offsetTop + inst.offsetHeight - 2;
       setBankWrapped((prev) => (prev === wrapped ? prev : wrapped));
     };
     measure();
@@ -4446,6 +4447,26 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       >
                         <Pencil className="w-3 h-3" />
                       </button>
+                      {/* Hapus instrumen: tersedia untuk instrumen ke-2 dan seterusnya */}
+                      {i !== enabledChordIdx[0] && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isRecording) return;
+                            if (t.steps.some((v) => v >= 0) && !window.confirm(`Hapus "${name}" (${t.label}) beserta isinya di sequencer?`)) return;
+                            removeTrack(i);
+                            setLiveSel((prev) => (prev === i ? 0 : prev));
+                          }}
+                          disabled={isRecording}
+                          title={`Hapus instrumen ${t.label}`}
+                          aria-label={`Hapus instrumen ${t.label}`}
+                          className={`px-1.5 border-l cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                            active ? 'border-accent/40 text-accent hover:bg-red-500 hover:text-white' : 'border-white/10 text-gray-400 hover:bg-red-500/80 hover:text-white'
+                          }`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                   );
                 })}
@@ -4476,37 +4497,39 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 )}
               </div>
 
-              {/* Bank akor 1–8 */}
-              <div
-                ref={bankGroupRef}
-                className={`flex flex-wrap items-center justify-start gap-1.5 ${bankWrapped ? '' : 'ml-auto'}`}
-                role="tablist"
-                aria-label="Bank akor"
-              >
-                <span className="text-[11px] font-bold text-gray-300 mr-1">Bank akor:</span>
-                {Array.from({ length: PAD_BANKS }, (_, bank) => (
-                  <button
-                    key={bank}
-                    type="button"
-                    role="tab"
-                    aria-selected={padBank === bank}
-                    onClick={() => setPadBank(bank)}
-                    title={`Pad #${bank * PADS_PER_BANK + 1}–${(bank + 1) * PADS_PER_BANK}`}
-                    className={`flex flex-col items-center leading-tight px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
-                      padBank === bank ? 'bg-accent text-on-accent border-accent shadow' : 'bg-black/50 text-gray-300 border-white/10 hover:border-white/25'
-                    }`}
-                  >
-                    <span>{bank + 1}</span>
-                    <span className={`text-[9px] font-mono font-normal ${padBank === bank ? 'opacity-80' : 'text-gray-500'}`}>
-                      {padInfo[bank * PADS_PER_BANK]?.displayName}
-                    </span>
-                  </button>
-                ))}
+              {/* Bank akor 1–8 + keterangan pad dalam SATU unit. Bila unit ini tidak muat sejajar dengan instrumen live
+                  (sudah 2 instrumen atau lebih / layar sempit), seluruh unit turun ke baris bawah: Bank akor rata kiri,
+                  keterangan "Pad #… dari …" tetap di kanan. Selagi muat (1 instrumen), Bank akor di kanan. */}
+              <div ref={bankGroupRef} className="flex flex-auto items-center gap-x-3">
+                <div
+                  className={`flex flex-wrap items-center justify-start gap-1.5 min-w-0 ${bankWrapped ? '' : 'ml-auto'}`}
+                  role="tablist"
+                  aria-label="Bank akor"
+                >
+                  <span className="text-[11px] font-bold text-gray-300 mr-1">Bank akor:</span>
+                  {Array.from({ length: PAD_BANKS }, (_, bank) => (
+                    <button
+                      key={bank}
+                      type="button"
+                      role="tab"
+                      aria-selected={padBank === bank}
+                      onClick={() => setPadBank(bank)}
+                      title={`Pad #${bank * PADS_PER_BANK + 1}–${(bank + 1) * PADS_PER_BANK}`}
+                      className={`flex flex-col items-center leading-tight px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
+                        padBank === bank ? 'bg-accent text-on-accent border-accent shadow' : 'bg-black/50 text-gray-300 border-white/10 hover:border-white/25'
+                      }`}
+                    >
+                      <span>{bank + 1}</span>
+                      <span className={`text-[9px] font-mono font-normal ${padBank === bank ? 'opacity-80' : 'text-gray-500'}`}>
+                        {padInfo[bank * PADS_PER_BANK]?.displayName}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <span className={`shrink-0 text-[10px] font-mono text-gray-500 whitespace-nowrap ${bankWrapped ? 'ml-auto' : ''}`}>
+                  Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
+                </span>
               </div>
-              {/* Keterangan rentang pad: selalu menempel di kanan */}
-              <span className="text-[10px] font-mono text-gray-500 ml-auto whitespace-nowrap">
-                Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
-              </span>
               </div>
             </>
           )}
@@ -4678,47 +4701,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               })}
             </div>
           )}
-
-          {/* Visualisasi area main (rentang loop) langsung di panel pad. Rentangnya diatur lewat Bar / Step di bawah. */}
-          <div
-            className="flex flex-wrap items-center gap-x-3 gap-y-1"
-            title={`Area main: Bar ${loopStartBar} Step ${loopStartBeat} sampai Bar ${loopEndBar} Step ${loopEndBeat}`}
-          >
-            <span className="shrink-0 text-[10px] font-bold text-gray-300 uppercase tracking-wider">Area main</span>
-            <div className="flex flex-col gap-0.5 w-full max-w-xs sm:w-64">
-              <div
-                className="relative h-5 w-full rounded-md bg-black/60 border border-white/10 overflow-hidden"
-                role="img"
-                aria-label={`Area main dari bar ${loopStartBar} step ${loopStartBeat} sampai bar ${loopEndBar} step ${loopEndBeat}`}
-                style={{
-                  backgroundImage:
-                    'repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.12) 1px, transparent 1px, transparent calc(100% / 16))',
-                }}
-              >
-                <div
-                  className="absolute inset-y-0 bg-accent/35 border-x-2 border-accent"
-                  style={{
-                    left: `${(Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) / totalSteps) * 100}%`,
-                    width: `max(4px, ${
-                      ((Math.min(loopPos(loopEndBar, loopEndBeat), totalSteps - 1) - Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) + 1) /
-                        totalSteps) *
-                      100
-                    }%)`,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-[8px] font-mono text-gray-500 leading-none px-0.5">
-                <span>1</span>
-                <span>4</span>
-                <span>8</span>
-                <span>12</span>
-                <span>16</span>
-              </div>
-            </div>
-            <span className="shrink-0 text-[10px] font-mono text-gray-500">
-              Bar {loopStartBar}.{loopStartBeat} — Bar {loopEndBar}.{loopEndBeat}
-            </span>
-          </div>
 
         </div>
 
@@ -5173,6 +5155,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             }}
           >
             <div className="space-y-2" style={{ minWidth: gridMinWidth }}>
+              <div className="relative">
+              <div className="space-y-2">
               <div className="flex items-stretch border border-transparent">
                 <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent flex items-center text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider pl-4`}>
                   SEGMEN BAR
@@ -5327,17 +5311,62 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       />
                     ) : null
                   )}
-                  {chordTracks.some((t) => !t.enabled) && (
-                    <button
-                      type="button"
-                      onClick={addChordTrack}
-                      className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border border-dashed border-accent/50 text-accent text-xs font-bold hover:bg-accent/10 cursor-pointer transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                      <span>Tambah baris instrumen ({chordTracks.filter((t) => t.enabled).length + 1}/4)</span>
-                    </button>
-                  )}
                 </div>
+              )}
+              </div>
+
+              {/* Area main (rentang loop) ditimpa di atas ruler + semua baris, seperti locator di DAW:
+                  area di dalam rentang disorot, di luar rentang digelapkan. Mengikuti jendela bar yang tampil. */}
+              {(() => {
+                const pa = Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1);
+                const pb = Math.min(loopPos(loopEndBar, loopEndBeat), totalSteps - 1);
+                const lo = Math.min(pa, pb);
+                const hi = Math.max(pa, pb);
+                const winStart = viewStartBar * stepsPerBar;
+                const winEnd = winStart + viewSteps - 1;
+                const vLo = Math.max(lo, winStart);
+                const vHi = Math.min(hi, winEnd);
+                const title = `Area main: Bar ${loopStartBar} Step ${loopStartBeat} sampai Bar ${loopEndBar} Step ${loopEndBeat}`;
+                const colLo = vLo - winStart + 1; // kolom grid (1-based) awal area
+                const colHi = vHi - winStart + 2; // kolom grid penutup (eksklusif)
+                const hasArea = vLo <= vHi;
+                return (
+                  <div
+                    aria-hidden="true"
+                    title={title}
+                    className="absolute inset-0 z-[5] pointer-events-none flex items-stretch border border-transparent"
+                  >
+                    <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent`} />
+                    <div className="grid gap-0.5 flex-1 min-w-0 px-2" style={gridStyle}>
+                      {!hasArea ? (
+                        <div className="rounded-md bg-black/30" style={{ gridColumn: '1 / -1' }} />
+                      ) : (
+                        <>
+                          {colLo > 1 && <div className="rounded-md bg-black/30" style={{ gridColumn: `1 / ${colLo}` }} />}
+                          <div
+                            className={`bg-accent/[0.14] border-y-2 border-accent/60 ${
+                              lo >= winStart ? 'border-l-2 border-l-accent rounded-l-md' : ''
+                            } ${hi <= winEnd ? 'border-r-2 border-r-accent rounded-r-md' : ''}`}
+                            style={{ gridColumn: `${colLo} / ${colHi}` }}
+                          />
+                          {colHi <= viewSteps && <div className="rounded-md bg-black/30" style={{ gridColumn: `${colHi} / -1` }} />}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+              </div>
+
+              {activeTab === 'chord' && chordTracks.some((t) => !t.enabled) && (
+                <button
+                  type="button"
+                  onClick={addChordTrack}
+                  className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border border-dashed border-accent/50 text-accent text-xs font-bold hover:bg-accent/10 cursor-pointer transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah baris instrumen ({chordTracks.filter((t) => t.enabled).length + 1}/4)</span>
+                </button>
               )}
             </div>
           </div>
