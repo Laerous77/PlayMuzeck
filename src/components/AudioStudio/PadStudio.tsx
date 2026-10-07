@@ -3268,7 +3268,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const loopBounds = () => {
     const a = (loopStartBar - 1) * stepsPerBar + (loopStartBeat - 1);
     const b = (loopEndBar - 1) * stepsPerBar + (loopEndBeat - 1);
-    const hi = Math.max(0, Math.min(totalSteps - 1, Math.max(a, b)));
+    const playable = isUnlocked8Bar ? totalSteps : stepsPerBar;
+    const hi = Math.max(0, Math.min(playable - 1, Math.max(a, b)));
     const lo = Math.max(0, Math.min(Math.min(a, b), hi));
     return { lo, hi };
   };
@@ -3991,7 +3992,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       paintPlayhead(next);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loopStartBar, loopStartBeat, loopEndBar, loopEndBeat, stepsPerBar]);
+  }, [loopStartBar, loopStartBeat, loopEndBar, loopEndBeat, stepsPerBar, isUnlocked8Bar]);
 
   const handleClearGrid = () => {
     stopAllLiveChords();
@@ -4103,7 +4104,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const r = grid.getBoundingClientRect();
       const frac = (ev.clientX - r.left) / Math.max(1, r.width);
       const step = winStart + Math.max(0, Math.min(viewSteps - 1, Math.floor(frac * viewSteps)));
-      const clamped = Math.max(0, Math.min(totalSteps - 1, step));
+      const clamped = Math.max(0, Math.min((isUnlocked8Bar ? totalSteps : stepsPerBar) - 1, step));
       const bar = Math.floor(clamped / stepsPerBar) + 1;
       const beat = (clamped % stepsPerBar) + 1;
       if (edge === 'start') changeLoopStart(bar, beat);
@@ -5563,59 +5564,62 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               {/* Area main (rentang loop) ditimpa di atas ruler + semua baris, seperti locator di DAW:
                   area di dalam rentang disorot, di luar rentang digelapkan. Mengikuti jendela bar yang tampil. */}
               {(() => {
-                const pa = Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1);
-                const pb = Math.min(loopPos(loopEndBar, loopEndBeat), totalSteps - 1);
-                const lo = Math.min(pa, pb);
-                const hi = Math.max(pa, pb);
+                // Sama persis dengan yang dimainkan scheduler: awal <= akhir, dijepit ke panjang yang bisa diputar.
+                const playable = isUnlocked8Bar ? totalSteps : stepsPerBar;
+                const rawA = loopPos(loopStartBar, loopStartBeat);
+                const rawB = loopPos(loopEndBar, loopEndBeat);
+                const hi = Math.max(0, Math.min(playable - 1, Math.max(rawA, rawB)));
+                const lo = Math.max(0, Math.min(Math.min(rawA, rawB), hi));
                 const winStart = viewStartBar * stepsPerBar;
                 const winEnd = winStart + viewSteps - 1;
                 const vLo = Math.max(lo, winStart);
                 const vHi = Math.min(hi, winEnd);
-                const title = `Area main: Bar ${loopStartBar} Step ${loopStartBeat} sampai Bar ${loopEndBar} Step ${loopEndBeat}`;
+                const title = `Area main: Bar ${Math.floor(lo / stepsPerBar) + 1} Step ${(lo % stepsPerBar) + 1} sampai Bar ${Math.floor(hi / stepsPerBar) + 1} Step ${(hi % stepsPerBar) + 1}`;
                 const colLo = vLo - winStart + 1; // kolom grid (1-based) awal area
                 const colHi = vHi - winStart + 2; // kolom grid penutup (eksklusif)
                 const hasArea = vLo <= vHi;
+                // Overlay dipasang tepat di atas kolom pad: mulai setelah label (lebar label + 1px border baris + pl-2)
+                // dan berakhir di tepi dalam border kanan baris (1px). Grid-nya memakai gridStyle yang sama dengan baris
+                // pad, jadi tepi kiri / kanan area jatuh persis di ujung pad, tanpa lebih dan tanpa kurang.
                 return (
                   <div
                     aria-hidden="true"
                     title={title}
-                    className="absolute inset-0 z-[5] pointer-events-none flex items-stretch border border-transparent"
+                    className="absolute top-0 bottom-0 z-[5] pointer-events-none"
+                    style={{ left: `calc(${showMixer ? '16rem' : '13rem'} + 1px + 0.5rem)`, right: 1 }}
                   >
-                    <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent`} />
-                    <div ref={loopGridRef} className="grid gap-0.5 flex-1 min-w-0 pl-2 pr-0" style={gridStyle}>
+                    <div ref={loopGridRef} className="grid gap-0.5 w-full h-full" style={gridStyle}>
                       {!hasArea ? (
-                        <div className="bg-black/30" style={{ gridColumn: '1 / -1', marginRight: -3 }} />
+                        <div className="bg-black/30" style={{ gridColumn: '1 / -1' }} />
                       ) : (
                         <>
-                          {colLo > 1 && <div className="bg-black/30 rounded-l-md" style={{ gridColumn: `1 / ${colLo}` }} />}
+                          {colLo > 1 && <div className="bg-black/30" style={{ gridColumn: `1 / ${colLo}` }} />}
                           <div
                             className={`relative bg-accent/[0.14] border-y-2 border-accent/60 ${
-                              lo >= winStart ? 'border-l-2 border-l-accent rounded-l-md' : ''
-                            } ${hi <= winEnd ? 'border-r-2 border-r-accent rounded-r-md' : ''}`}
+                              lo >= winStart ? 'border-l-2 border-l-accent' : ''
+                            } ${hi <= winEnd ? 'border-r-2 border-r-accent' : ''}`}
                             style={{ gridColumn: `${colLo} / ${colHi}` }}
                           >
                             {lo >= winStart && (
                               <div
                                 onPointerDown={startLoopDrag('start')}
                                 title="Seret untuk memindahkan awal area main"
-                                className="pointer-events-auto absolute -left-2 top-0 h-24 w-4 cursor-ew-resize touch-none flex items-start justify-center z-10"
+                                className="pointer-events-auto absolute left-0 top-0 h-24 w-3 cursor-ew-resize touch-none flex items-start justify-start z-10"
                               >
-                                <div className="mt-1 w-2 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
+                                <div className="mt-1 w-1.5 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
                               </div>
                             )}
                             {hi <= winEnd && (
                               <div
                                 onPointerDown={startLoopDrag('end')}
                                 title="Seret untuk memindahkan akhir area main"
-                                className="pointer-events-auto absolute -right-2 top-0 h-24 w-4 cursor-ew-resize touch-none flex items-start justify-center z-10"
+                                className="pointer-events-auto absolute right-0 top-0 h-24 w-3 cursor-ew-resize touch-none flex items-start justify-end z-10"
                               >
-                                <div className="mt-1 w-2 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
+                                <div className="mt-1 w-1.5 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
                               </div>
                             )}
                           </div>
-                          {colHi <= viewSteps && (
-                            <div className="bg-black/30 rounded-l-md" style={{ gridColumn: `${colHi} / -1`, marginRight: -3 }} />
-                          )}
+                          {colHi <= viewSteps && <div className="bg-black/30" style={{ gridColumn: `${colHi} / -1` }} />}
                         </>
                       )}
                     </div>
