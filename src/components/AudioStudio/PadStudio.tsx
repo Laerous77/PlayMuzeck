@@ -569,7 +569,11 @@ const DrumLevelPicker: React.FC<{
   mode: DynMode;
   onPick: (level: number) => void;
   onClose: () => void;
-}> = ({ x, y, current, mode, onPick, onClose }) => {
+  heading?: string;
+  ariaLabel?: string;
+  clearLabel?: string;
+  clearIcon?: 'trash' | 'reset';
+}> = ({ x, y, current, mode, onPick, onClose, heading = 'Dinamika pukulan', ariaLabel = 'Pilih dinamika drum', clearLabel = 'Hapus pad', clearIcon = 'trash' }) => {
   const pal = DYN_PALETTE[mode];
   const ref = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ left: number; top: number }>({ left: x, top: y });
@@ -608,12 +612,12 @@ const DrumLevelPicker: React.FC<{
       <div
         ref={ref}
         role="menu"
-        aria-label="Pilih dinamika drum"
+        aria-label={ariaLabel}
         onPointerDown={(e) => e.stopPropagation()}
         style={{ left: pos.left, top: pos.top }}
         className="fixed w-48 rounded-xl border border-white/15 bg-zinc-950/95 backdrop-blur p-1.5 shadow-2xl shadow-black/60"
       >
-        <div className="px-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Dinamika pukulan</div>
+        <div className="px-1.5 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">{heading}</div>
         {pal.map((lv, li) => (
           <button
             key={lv}
@@ -641,10 +645,12 @@ const DrumLevelPicker: React.FC<{
           <button
             type="button"
             onClick={() => onPick(0)}
-            className="mt-1 w-full flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-lg text-[11px] font-bold text-red-300 hover:bg-red-500/15 border-t border-white/10 cursor-pointer"
+            className={`mt-1 w-full flex items-center justify-center gap-1.5 px-1.5 py-1.5 rounded-lg text-[11px] font-bold border-t border-white/10 cursor-pointer ${
+              clearIcon === 'reset' ? 'text-gray-300 hover:bg-white/10' : 'text-red-300 hover:bg-red-500/15'
+            }`}
           >
-            <Trash2 className="w-3 h-3" />
-            Hapus pad
+            {clearIcon === 'reset' ? <RotateCcw className="w-3 h-3" /> : <Trash2 className="w-3 h-3" />}
+            {clearLabel}
           </button>
         )}
       </div>
@@ -1170,7 +1176,19 @@ const ChordBlock = memo(function ChordBlock({
   getMode,
   onPick,
   onResize,
+  vel,
+  dynamics,
+  dynMode,
+  dynText,
+  onLevelCycle,
+  onLevelMenu,
 }: {
+  vel: number;
+  dynamics: boolean;
+  dynMode: DynMode;
+  dynText: boolean;
+  onLevelCycle: (trackIdx: number, start: number) => void;
+  onLevelMenu: (trackIdx: number, start: number, el: HTMLElement) => void;
   trackIdx: number;
   note: ChordNote;
   winStart: number;
@@ -1213,9 +1231,22 @@ const ChordBlock = memo(function ChordBlock({
     window.addEventListener('pointercancel', up);
   };
 
+  // Dinamika akor: level tersimpan dibulatkan ke palet mode yang dipilih (6 / 4 / 2). 0 = normal (belum diatur).
+  const lv = dynamics ? snapLevel(clampLevel(vel), dynMode) : 0;
+  const nextLv = nextLevelInPalette(lv, dynMode);
+  const nextText = nextLv === 0 ? 'kembali ke normal' : `naik ke ${DRUM_LEVEL_SHORT[nextLv]}`;
+  const levelTitle = lv > 0
+    ? `${DRUM_LEVEL_LABEL[lv]} (${DRUM_LEVEL_SHORT[lv]}) — klik: ${nextText} • klik kanan: pilih langsung`
+    : `Dinamika normal — klik: pasang ${DRUM_LEVEL_SHORT[DYN_PALETTE[dynMode][0]]}, klik lagi untuk menaikkan • klik kanan: pilih langsung`;
+
   return (
     <div
       data-block=""
+      onContextMenu={(e) => {
+        if (!dynamics || getMode() !== 'edit') return;
+        e.preventDefault();
+        onLevelMenu(trackIdx, note.start, e.currentTarget);
+      }}
       style={{ gridColumn: `${visStart - winStart + 1} / span ${visEnd - visStart + 1}`, gridRow: 1 }}
       className={`relative z-[2] h-16 border border-accent bg-accent/25 text-white p-1 flex flex-col justify-between items-center overflow-hidden ${
         clippedL ? 'rounded-l-none border-l-0' : 'rounded-l-lg'
@@ -1238,7 +1269,34 @@ const ChordBlock = memo(function ChordBlock({
         </select>
       </div>
       <div className="flex items-center gap-1.5 mb-0.5">
-        <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+        {dynamics ? (
+          <button
+            type="button"
+            data-keepsel=""
+            title={levelTitle}
+            aria-label={levelTitle}
+            onPointerDown={(e) => {
+              if (getMode() === 'edit' && !e.shiftKey) e.stopPropagation();
+            }}
+            onClick={(e) => {
+              if (getMode() !== 'edit' || e.shiftKey) return;
+              e.stopPropagation();
+              onLevelCycle(trackIdx, note.start);
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if (getMode() === 'edit') onLevelMenu(trackIdx, note.start, e.currentTarget);
+            }}
+            className={`relative z-[3] h-4 min-w-[1rem] px-1 rounded-sm flex items-center justify-center text-[9px] font-black italic leading-none cursor-pointer transition-colors ${
+              lv > 0 ? `${DRUM_LEVEL_CELL_CLASS[lv]} text-on-accent` : 'bg-black/40 border border-white/20 text-gray-300 hover:bg-white/15'
+            }`}
+          >
+            {lv > 0 ? (dynText ? DRUM_LEVEL_SHORT[lv] : '') : <span className="w-1.5 h-1.5 rounded-full bg-accent" />}
+          </button>
+        ) : (
+          <div className="w-1.5 h-1.5 rounded-full bg-accent" />
+        )}
         {note.len > 1 && <span className="text-[9px] font-mono text-gray-300">{note.len}</span>}
       </div>
       {!clippedR && (
@@ -1283,7 +1341,17 @@ const ChordRow = memo(function ChordRow({
   onMove,
   canMoveUp,
   canMoveDown,
+  dynamics,
+  dynMode,
+  dynText,
+  onLevelCycle,
+  onLevelMenu,
 }: {
+  dynamics: boolean;
+  dynMode: DynMode;
+  dynText: boolean;
+  onLevelCycle: (trackIdx: number, start: number) => void;
+  onLevelMenu: (trackIdx: number, start: number, el: HTMLElement) => void;
   rowSelected: boolean;
   pickMode: boolean;
   canDuplicate: boolean;
@@ -1383,6 +1451,12 @@ const ChordRow = memo(function ChordRow({
             getMode={getMode}
             onPick={onPick}
             onResize={onResize}
+            vel={clampLevel(track.vels?.[n.start])}
+            dynamics={dynamics}
+            dynMode={dynMode}
+            dynText={dynText}
+            onLevelCycle={onLevelCycle}
+            onLevelMenu={onLevelMenu}
           />
         ))}
       </div>
@@ -1736,6 +1810,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [loopStartBeat, setLoopStartBeat] = useState<number>(1);
   const [loopEndBar, setLoopEndBar] = useState<number>(DEFAULT_LOOP_END_BAR);
   const [loopEndBeat, setLoopEndBeat] = useState<number>(INITIAL_STEPS_PER_BAR);
+  // Grid overlay area main: dipakai untuk menghitung step dari posisi pointer saat pegangan area main ditarik.
+  const loopGridRef = useRef<HTMLDivElement>(null);
 
   const [drumVolume, setDrumVolume] = useState(85);
   const [chordMasterVolume, setChordMasterVolume] = useState(80);
@@ -2195,6 +2271,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [drumPicker, setDrumPicker] = useState<{ drumId: string; stepIdx: number; x: number; y: number } | null>(null);
   const closeDrumPicker = useCallback(() => setDrumPicker(null), []);
 
+  // Popover pemilih dinamika akor (klik kanan / tahan lama pada blok akor).
+  const [chordPicker, setChordPicker] = useState<{ trackIdx: number; start: number; x: number; y: number } | null>(null);
+  const closeChordPicker = useCallback(() => setChordPicker(null), []);
+
   // Panjang default akor yang baru dipasang (dalam step).
   const [newChordLen, setNewChordLen] = useState<number>(INITIAL_STEPS_PER_BAR);
   const newChordLenRef = useRef(newChordLen);
@@ -2278,6 +2358,48 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       copy[trackIndex] = { ...t, ...data };
       return copy;
     });
+  }, []);
+
+  // Pasang dinamika pada satu not akor (0 = normal / belum diatur). Ikut tercatat di Undo, Salin/Tempel, Simpan, dan ekspor.
+  const setChordNoteLevel = useCallback((trackIndex: number, start: number, level: number) => {
+    const next = clampLevel(level);
+    setChordTracks((prev) => {
+      const t = prev[trackIndex];
+      if (!t || t.steps[start] < 0) return prev;
+      if (clampLevel(t.vels?.[start]) === next) return prev;
+      const vels = t.vels ? [...t.vels] : Array<number>(t.steps.length).fill(0);
+      vels[start] = next;
+      const copy = [...prev];
+      copy[trackIndex] = { ...t, vels };
+      return copy;
+    });
+  }, []);
+
+  // Klik lencana dinamika pada blok akor = naik bertahap lewat tingkat yang dipilih (6 / 4 / 2), lalu kembali normal.
+  const cycleChordLevel = useCallback(
+    (trackIndex: number, start: number) => {
+      const L = liveRef.current;
+      if (!L || !L.chordDynamicsOn) return;
+      const spb = layoutRef.current.stepsPerBar;
+      if (!gateRef.current.isUnlocked8Bar && Math.floor(start / spb) > 0) {
+        gateRef.current.onUnlockEditor();
+        return;
+      }
+      const cur = clampLevel(L.chordTracks[trackIndex]?.vels?.[start]);
+      setChordNoteLevel(trackIndex, start, nextLevelInPalette(cur, L.chordDynMode));
+    },
+    [setChordNoteLevel]
+  );
+
+  const openChordPicker = useCallback((trackIndex: number, start: number, el: HTMLElement) => {
+    if (modeRef.current !== 'edit' || !liveRef.current?.chordDynamicsOn) return;
+    const spb = layoutRef.current.stepsPerBar;
+    if (!gateRef.current.isUnlocked8Bar && Math.floor(start / spb) > 0) {
+      gateRef.current.onUnlockEditor();
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    setChordPicker({ trackIdx: trackIndex, start, x: r.left + r.width / 2, y: r.bottom });
   }, []);
 
   const resizeChordNote = useCallback((trackIndex: number, start: number, newLen: number) => {
@@ -3590,26 +3712,29 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const selectionLabel = activeSel ? `${activeSel.cells.size} ${activeTab === 'drum' ? 'pad' : 'sel'} terpilih` : 'Belum ada pilihan';
   // Kontrol panjang akor (tab Akor): diletakkan di baris atas toolbar, di tempat teks jumlah pilihan sebelumnya.
   const chordLenControls = (
-    <div className="flex flex-wrap items-center justify-end gap-3">
-      <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-300">
-        Panjang akor baru
+    <div className="flex flex-nowrap items-center justify-end gap-2.5 whitespace-nowrap">
+      <label className="flex items-center gap-1 text-[10px] font-bold text-gray-300" title="Panjang akor baru: panjang default akor yang baru dipasang">
+        Panjang baru
         <select
           value={newChordLen}
           onChange={(e) => setNewChordLen(Number(e.target.value))}
-          className="bg-black/70 border border-white/15 rounded-md px-1.5 py-1 font-mono text-accent focus:outline-none cursor-pointer"
+          aria-label="Panjang akor baru (step)"
+          className="bg-black/70 border border-white/15 rounded-md px-1 py-0.5 text-[11px] font-mono text-accent focus:outline-none cursor-pointer"
         >
           {Array.from(new Set([1, 2, 4, 8, stepsPerBar, stepsPerBar * 2, stepsPerBar * 4, newChordLen]))
             .filter((n) => n >= 1 && n <= totalSteps)
             .sort((a, b) => a - b)
             .map((n) => (
               <option key={n} value={n} className="bg-black text-white">
-                {n} step{n % stepsPerBar === 0 ? ` (${n / stepsPerBar} bar)` : ''}
+                {n}
+                {n % stepsPerBar === 0 ? ` (${n / stepsPerBar} bar)` : ''}
               </option>
             ))}
         </select>
+        <span className="font-mono text-gray-500 font-normal">step</span>
       </label>
-      <label className="flex items-center gap-1.5 text-[11px] font-bold text-gray-300">
-        Panjang akor terpilih
+      <label className="flex items-center gap-1 text-[10px] font-bold text-gray-300" title="Panjang akor terpilih: ubah panjang semua akor yang sedang dipilih">
+        Terpilih
         <IntField
           value={selectedNoteInfo.len}
           min={1}
@@ -3618,7 +3743,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           disabled={selectedNoteInfo.count === 0}
           ariaLabel="Panjang akor terpilih (step)"
         />
-        <span className="font-mono text-gray-500 font-normal">step{selectedNoteInfo.count > 1 ? ` (${selectedNoteInfo.count} akor)` : ''}</span>
+        <span className="font-mono text-gray-500 font-normal">step{selectedNoteInfo.count > 1 ? ` ×${selectedNoteInfo.count}` : ''}</span>
       </label>
     </div>
   );
@@ -3964,6 +4089,34 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }
     setLoopEndBar(bar);
     setLoopEndBeat(beat);
+  };
+
+  // Tarik pegangan awal / akhir area main langsung di grid. Posisi dibulatkan ke step di jendela yang tampil.
+  const startLoopDrag = (edge: 'start' | 'end') => (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const grid = loopGridRef.current;
+    if (!grid) return;
+    const winStart = viewStartBar * stepsPerBar;
+    const move = (ev: PointerEvent) => {
+      const r = grid.getBoundingClientRect();
+      const frac = (ev.clientX - r.left) / Math.max(1, r.width);
+      const step = winStart + Math.max(0, Math.min(viewSteps - 1, Math.floor(frac * viewSteps)));
+      const clamped = Math.max(0, Math.min(totalSteps - 1, step));
+      const bar = Math.floor(clamped / stepsPerBar) + 1;
+      const beat = (clamped % stepsPerBar) + 1;
+      if (edge === 'start') changeLoopStart(bar, beat);
+      else changeLoopEnd(bar, beat);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
   };
 
   // Ganti birama: hentikan pemutaran, pindahkan isi grid ke panjang bar baru, reset wilayah loop.
@@ -5142,18 +5295,16 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 </button>
               </div>
 
-              <div className="ml-auto flex items-center gap-2">
+              <div className="ml-auto flex flex-col items-end gap-1">
+                {activeTab === 'chord' && chordLenControls}
+                <div className="flex items-center gap-2">
                 {isRecording && (
                   <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-red-300">
                     <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500 animate-pulse" />
                     Merekam
                   </span>
                 )}
-                {activeTab === 'chord' ? (
-                  chordLenControls
-                ) : (
-                  <span className="text-[10px] font-mono text-gray-400">{selectionLabel}</span>
-                )}
+                <span className="text-[10px] font-mono text-gray-400">{selectionLabel}</span>
                 <InfoTip title="Cara memakai sequencer">
                   {activeTab === 'drum' ? (
                     dynamicsOn ? (
@@ -5214,14 +5365,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     tempel, duplikat; Delete untuk hapus; Esc untuk melepas pilihan.
                   </p>
                 </InfoTip>
+                </div>
               </div>
             </div>
-
-            {activeTab === 'chord' && (
-              <div className="flex items-center justify-end">
-                <span className="text-[10px] font-mono text-gray-400">{selectionLabel}</span>
-              </div>
-            )}
 
           </div>
 
@@ -5376,6 +5522,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         selSteps={rowSelSets[tIdx] ?? null}
                         getMode={getMode}
                         onResize={resizeChordNote}
+                        dynamics={chordDynamicsOn}
+                        dynMode={chordDynMode}
+                        dynText={chordDynText}
+                        onLevelCycle={cycleChordLevel}
+                        onLevelMenu={openChordPicker}
                         onUpdateTrack={updateTrack}
                         onUpdateAdsr={updateTrackAdsr}
                         onPickInstrument={openInstrumentPicker}
@@ -5431,19 +5582,40 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     className="absolute inset-0 z-[5] pointer-events-none flex items-stretch border border-transparent"
                   >
                     <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent`} />
-                    <div className="grid gap-0.5 flex-1 min-w-0 pl-2 pr-0" style={gridStyle}>
+                    <div ref={loopGridRef} className="grid gap-0.5 flex-1 min-w-0 pl-2 pr-0" style={gridStyle}>
                       {!hasArea ? (
-                        <div className="rounded-md bg-black/30" style={{ gridColumn: '1 / -1' }} />
+                        <div className="bg-black/30" style={{ gridColumn: '1 / -1', marginRight: -3 }} />
                       ) : (
                         <>
-                          {colLo > 1 && <div className="rounded-md bg-black/30" style={{ gridColumn: `1 / ${colLo}` }} />}
+                          {colLo > 1 && <div className="bg-black/30 rounded-l-md" style={{ gridColumn: `1 / ${colLo}` }} />}
                           <div
-                            className={`bg-accent/[0.14] border-y-2 border-accent/60 ${
+                            className={`relative bg-accent/[0.14] border-y-2 border-accent/60 ${
                               lo >= winStart ? 'border-l-2 border-l-accent rounded-l-md' : ''
                             } ${hi <= winEnd ? 'border-r-2 border-r-accent rounded-r-md' : ''}`}
                             style={{ gridColumn: `${colLo} / ${colHi}` }}
-                          />
-                          {colHi <= viewSteps && <div className="rounded-md bg-black/30" style={{ gridColumn: `${colHi} / -1` }} />}
+                          >
+                            {lo >= winStart && (
+                              <div
+                                onPointerDown={startLoopDrag('start')}
+                                title="Seret untuk memindahkan awal area main"
+                                className="pointer-events-auto absolute -left-2 top-0 h-24 w-4 cursor-ew-resize touch-none flex items-start justify-center z-10"
+                              >
+                                <div className="mt-1 w-2 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
+                              </div>
+                            )}
+                            {hi <= winEnd && (
+                              <div
+                                onPointerDown={startLoopDrag('end')}
+                                title="Seret untuk memindahkan akhir area main"
+                                className="pointer-events-auto absolute -right-2 top-0 h-24 w-4 cursor-ew-resize touch-none flex items-start justify-center z-10"
+                              >
+                                <div className="mt-1 w-2 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
+                              </div>
+                            )}
+                          </div>
+                          {colHi <= viewSteps && (
+                            <div className="bg-black/30 rounded-l-md" style={{ gridColumn: `${colHi} / -1`, marginRight: -3 }} />
+                          )}
                         </>
                       )}
                     </div>
@@ -5477,6 +5649,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           onPick={(lv) => {
             setDrumLevel(drumPicker.drumId, drumPicker.stepIdx, lv);
             setDrumPicker(null);
+          }}
+        />
+      )}
+
+      {chordPicker && activeTab === 'chord' && chordDynamicsOn && (
+        <DrumLevelPicker
+          x={chordPicker.x}
+          y={chordPicker.y}
+          mode={chordDynMode}
+          current={snapLevel(clampLevel(chordTracks[chordPicker.trackIdx]?.vels?.[chordPicker.start]), chordDynMode)}
+          heading="Dinamika akor"
+          ariaLabel="Pilih dinamika akor"
+          clearLabel="Normal (tanpa dinamika)"
+          clearIcon="reset"
+          onClose={closeChordPicker}
+          onPick={(lvl) => {
+            setChordNoteLevel(chordPicker.trackIdx, chordPicker.start, lvl);
+            setChordPicker(null);
           }}
         />
       )}
