@@ -90,20 +90,36 @@ function scrollToAndSpotlight(id: string, durationMs = 2600): void {
   spotlightTimers.set(el, [start]);
 }
 
-// Id bagian halaman utama yang paling dekat dengan bagian atas layar (menandai menu aktif).
-function getActiveSectionId(ids: string[], offset = 140): string | null {
-  // Di dasar halaman, bagian terakhir mungkin tidak pernah mencapai batas atas layar,
-  // jadi anggap bagian terakhir yang aktif.
-  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
-  if (atBottom && ids.length > 0 && document.getElementById(ids[ids.length - 1])) {
-    return ids[ids.length - 1];
-  }
-  let active: string | null = null;
+// Id bagian halaman utama yang sedang "aktif" untuk menandai menu.
+// Kartu Audio Studio & Pusat Kuis berdampingan di satu baris (posisi atas sama), jadi tidak bisa dibedakan
+// hanya dari posisi scroll. Aturannya:
+//  1. Bagian yang baru dipilih dari menu (preferId) menang selama masih terlihat.
+//  2. Selain itu, ambil bagian yang menutupi garis offset; bila beberapa bagian sebaris, ambil yang paling kiri.
+function getActiveSectionId(ids: string[], offset = 140, preferId: string | null = null): string | null {
+  const rects: Record<string, DOMRect> = {};
   for (const id of ids) {
     const el = document.getElementById(id);
-    if (el && el.getBoundingClientRect().top <= offset) active = id;
+    if (el) rects[id] = el.getBoundingClientRect();
   }
-  return active;
+  const present = ids.filter((id) => rects[id]);
+  if (present.length === 0) return null;
+
+  if (preferId && rects[preferId]) {
+    const r = rects[preferId];
+    if (r.bottom > offset && r.top < window.innerHeight * 0.6) return preferId;
+  }
+
+  // Di dasar halaman, bagian terakhir mungkin tidak pernah mencapai batas atas layar.
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+  if (atBottom) return present[present.length - 1];
+
+  const covering = present.filter((id) => rects[id].top <= offset && rects[id].bottom > offset);
+  const pool = covering.length > 0 ? covering : present.filter((id) => rects[id].top <= offset);
+  if (pool.length === 0) return null;
+
+  const maxTop = Math.max(...pool.map((id) => rects[id].top));
+  const sameRow = pool.filter((id) => maxTop - rects[id].top <= 4);
+  return sameRow[0];
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -122,6 +138,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [isSectionMenuOpen, setIsSectionMenuOpen] = useState(false);
   const [activeIndexId, setActiveIndexId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  // Bagian yang baru dipilih dari menu; dipertahankan sebagai yang aktif (termasuk selama scroll mulus berlangsung).
+  const pickedRef = useRef<{ id: string; until: number } | null>(null);
 
   const totalCartCount = cartItems?.length || 0;
   const userInitial = (userSession?.name || 'M').charAt(0).toUpperCase();
@@ -153,8 +171,17 @@ export const Header: React.FC<HeaderProps> = ({
   }, [currentMode]);
 
   // Halaman Utama: sorotan menu selalu mengikuti posisi scroll (bukan hanya saat menu dibuka).
+  const computeActiveIndex = (ids: string[]): string | null => {
+    const picked = pickedRef.current;
+    if (picked && Date.now() < picked.until) return picked.id; // sedang scroll mulus ke bagian yang dipilih
+    const res = getActiveSectionId(ids, 140, picked ? picked.id : null);
+    if (picked && res !== picked.id) pickedRef.current = null;
+    return res;
+  };
+
   useEffect(() => {
     if (currentMode !== 'index') {
+      pickedRef.current = null;
       setActiveIndexId(null);
       return;
     }
@@ -162,7 +189,7 @@ export const Header: React.FC<HeaderProps> = ({
     let raf = 0;
     const sync = () => {
       raf = 0;
-      setActiveIndexId(getActiveSectionId(ids));
+      setActiveIndexId(computeActiveIndex(ids));
     };
     const onScroll = () => {
       if (!raf) raf = window.requestAnimationFrame(sync);
@@ -175,12 +202,13 @@ export const Header: React.FC<HeaderProps> = ({
       window.removeEventListener('resize', onScroll);
       if (raf) window.cancelAnimationFrame(raf);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMode]);
 
   const toggleMenu = () => {
     audioEngine.playClickSound();
     if (!isSectionMenuOpen && currentMode === 'index') {
-      setActiveIndexId(getActiveSectionId(INDEX_ITEMS.map((i) => i.id)));
+      setActiveIndexId(computeActiveIndex(INDEX_ITEMS.map((i) => i.id)));
     }
     setIsSectionMenuOpen((v) => !v);
   };
@@ -201,6 +229,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const pickIndex = (id: string) => {
     audioEngine.playClickSound();
+    pickedRef.current = { id, until: Date.now() + 1400 };
     setActiveIndexId(id);
     setIsSectionMenuOpen(false);
     scrollToAndSpotlight(id);

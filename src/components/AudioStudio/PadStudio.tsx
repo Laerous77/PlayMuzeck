@@ -1816,6 +1816,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // kiri / kanannya selalu persis di ujung pad berapa pun lebar label, border, atau scrollbar-nya.
   const seqWrapRef = useRef<HTMLDivElement>(null);
   const [loopBox, setLoopBox] = useState<{ left: number; right: number } | null>(null);
+  // Posisi tepi area main (px, relatif terhadap tepi kiri grid pad). Diukur dari tombol ruler yang sebenarnya dan
+  // diletakkan di tengah celah antar pad, sehingga garis batas persis di antara pad terakhir area main dan pad sesudahnya.
+  const [loopX, setLoopX] = useState<{ x1: number | null; x2: number | null; w: number; gap: number }>({
+    x1: null,
+    x2: null,
+    w: 0,
+    gap: 2,
+  });
 
   const [drumVolume, setDrumVolume] = useState(85);
   const [chordMasterVolume, setChordMasterVolume] = useState(80);
@@ -4051,6 +4059,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const left = Math.round((gr.left - wr.left) * 100) / 100;
       const right = Math.round((wr.right - gr.right) * 100) / 100;
       setLoopBox((prev) => (prev && prev.left === left && prev.right === right ? prev : { left, right }));
+
+      // Tepi area main: tengah celah antar pad (kiri pad awal, kanan pad akhir).
+      const S = stepsPerBar;
+      const playable = isUnlocked8Bar ? totalSteps : S;
+      const rawA = (loopStartBar - 1) * S + (loopStartBeat - 1);
+      const rawB = (loopEndBar - 1) * S + (loopEndBeat - 1);
+      const hi = Math.max(0, Math.min(playable - 1, Math.max(rawA, rawB)));
+      const lo = Math.max(0, Math.min(Math.min(rawA, rawB), hi));
+      const winStart = viewStartBar * S;
+      const winEnd = winStart + barsPerView * S - 1;
+      const gap = parseFloat(getComputedStyle(g).columnGap) || 2;
+      const btn = (n: number) => wrap.querySelector(`button[data-seek="1"][data-step="${n}"]`) as HTMLElement | null;
+      const bLo = lo >= winStart && lo <= winEnd ? btn(lo) : null;
+      const bHi = hi >= winStart && hi <= winEnd ? btn(hi) : null;
+      const x1 = bLo ? Math.round((bLo.getBoundingClientRect().left - gr.left - gap / 2) * 100) / 100 : null;
+      const x2 = bHi ? Math.round((bHi.getBoundingClientRect().right - gr.left + gap / 2) * 100) / 100 : null;
+      const w = Math.round(gr.width * 100) / 100;
+      setLoopX((prev) => (prev.x1 === x1 && prev.x2 === x2 && prev.w === w && prev.gap === gap ? prev : { x1, x2, w, gap }));
     };
     measure();
     if (typeof ResizeObserver === 'undefined') {
@@ -4062,7 +4088,20 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const g = wrap.querySelector('[data-rowgrid]');
     if (g) ro.observe(g);
     return () => ro.disconnect();
-  }, [activeTab, showMixer, chordTracks, barsPerView, stepsPerBar]);
+  }, [
+    activeTab,
+    showMixer,
+    chordTracks,
+    barsPerView,
+    stepsPerBar,
+    viewStartBar,
+    loopStartBar,
+    loopStartBeat,
+    loopEndBar,
+    loopEndBeat,
+    isUnlocked8Bar,
+    totalSteps,
+  ]);
 
   // Geser jendela tampilan grid per bar (menggantikan scroll horizontal 1560px).
   const shiftView = (direction: 1 | -1) => {
@@ -5605,12 +5644,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 const vLo = Math.max(lo, winStart);
                 const vHi = Math.min(hi, winEnd);
                 const title = `Area main: Bar ${Math.floor(lo / stepsPerBar) + 1} Step ${(lo % stepsPerBar) + 1} sampai Bar ${Math.floor(hi / stepsPerBar) + 1} Step ${(hi % stepsPerBar) + 1}`;
-                const colLo = vLo - winStart + 1; // kolom grid (1-based) awal area
-                const colHi = vHi - winStart + 2; // kolom grid penutup (eksklusif)
                 const hasArea = vLo <= vHi;
-                // Overlay dipasang tepat di atas kolom pad: mulai setelah label (lebar label + 1px border baris + pl-2)
-                // dan berakhir di tepi dalam border kanan baris (1px). Grid-nya memakai gridStyle yang sama dengan baris
-                // pad, jadi tepi kiri / kanan area jatuh persis di ujung pad, tanpa lebih dan tanpa kurang.
+                const startIn = hasArea && lo >= winStart && loopX.x1 !== null;
+                const endIn = hasArea && hi <= winEnd && loopX.x2 !== null;
+                // Isi area main: dari garis awal (atau tepi kiri grid bila awal di luar jendela) sampai garis akhir
+                // (atau tepi kanan grid). Garis batas berada di tengah celah antar pad, bukan di dalam pad.
+                const fillL = startIn ? (loopX.x1 as number) : 0;
+                const fillR = endIn ? (loopX.x2 as number) : loopX.w;
+                const lineW = Math.max(2, loopX.gap);
                 return (
                   <div
                     aria-hidden="true"
@@ -5622,38 +5663,51 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         : { left: `calc(${showMixer ? '16rem' : '13rem'} + 1px + 0.5rem)`, right: 1 }
                     }
                   >
-                    <div ref={loopGridRef} className="grid gap-0.5 w-full h-full" style={gridStyle}>
+                    <div ref={loopGridRef} className="relative w-full h-full">
                       {!hasArea ? (
-                        <div className="bg-black/30" style={{ gridColumn: '1 / -1' }} />
+                        <div className="absolute inset-0 bg-black/30" />
                       ) : (
                         <>
-                          {colLo > 1 && <div className="bg-black/30" style={{ gridColumn: `1 / ${colLo}` }} />}
+                          {fillL > 0 && <div className="absolute top-0 bottom-0 left-0 bg-black/30" style={{ width: fillL }} />}
                           <div
-                            className={`relative bg-accent/[0.14] border-y-2 border-accent/60 ${
-                              lo >= winStart ? 'border-l-2 border-l-accent' : ''
-                            } ${hi <= winEnd ? 'border-r-2 border-r-accent' : ''}`}
-                            style={{ gridColumn: `${colLo} / ${colHi}` }}
-                          >
-                            {lo >= winStart && (
+                            className="absolute top-0 bottom-0 bg-accent/[0.14] border-y-2 border-accent/60"
+                            style={{ left: fillL, width: Math.max(0, fillR - fillL) }}
+                          />
+                          {fillR < loopX.w && (
+                            <div className="absolute top-0 bottom-0 bg-black/30" style={{ left: fillR, right: 0 }} />
+                          )}
+                          {startIn && (
+                            <>
+                              <div
+                                className="absolute top-0 bottom-0 bg-accent"
+                                style={{ left: fillL - lineW / 2, width: lineW }}
+                              />
                               <div
                                 onPointerDown={startLoopDrag('start')}
                                 title="Seret untuk memindahkan awal area main"
-                                className="pointer-events-auto absolute left-0 top-0 h-24 w-3 cursor-ew-resize touch-none flex items-start justify-start z-10"
+                                className="pointer-events-auto absolute top-0 h-24 w-3 cursor-ew-resize touch-none flex items-start justify-center z-10"
+                                style={{ left: fillL - 6 }}
                               >
                                 <div className="mt-1 w-1.5 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
                               </div>
-                            )}
-                            {hi <= winEnd && (
+                            </>
+                          )}
+                          {endIn && (
+                            <>
+                              <div
+                                className="absolute top-0 bottom-0 bg-accent"
+                                style={{ left: fillR - lineW / 2, width: lineW }}
+                              />
                               <div
                                 onPointerDown={startLoopDrag('end')}
                                 title="Seret untuk memindahkan akhir area main"
-                                className="pointer-events-auto absolute right-0 top-0 h-24 w-3 cursor-ew-resize touch-none flex items-start justify-end z-10"
+                                className="pointer-events-auto absolute top-0 h-24 w-3 cursor-ew-resize touch-none flex items-start justify-center z-10"
+                                style={{ left: fillR - 6 }}
                               >
                                 <div className="mt-1 w-1.5 h-6 rounded-sm bg-accent ring-1 ring-black/50 shadow" />
                               </div>
-                            )}
-                          </div>
-                          {colHi <= viewSteps && <div className="bg-black/30" style={{ gridColumn: `${colHi} / -1` }} />}
+                            </>
+                          )}
                         </>
                       )}
                     </div>
