@@ -10,7 +10,7 @@
 
 import { buildHarmonicChord, ChordFormulaDef, CHORD_QUALITIES, CHORD_TENSIONS, NOTE_ROOTS } from '../../services/audioEngine';
 import { generateMidiFile } from '../../services/exporters';
-import { DRUM_LEVEL_MIDI, emptyTrackData, insertNote } from './padModel';
+import { DRUM_LEVEL_MAX, DRUM_LEVEL_MIDI, emptyTrackData, insertNote, noteGain } from './padModel';
 
 // ---------------------------------------------------------------------------
 // MODEL PROYEK
@@ -34,7 +34,7 @@ export interface ProjectChordTrack {
   m: boolean;
   s: boolean;
   a: Adsr4;
-  notes: Array<[number, number, number]>; // [step awal, panjang (step), indeks pad]
+  notes: Array<[number, number, number] | [number, number, number, number]>; // [step awal, panjang (step), indeks pad, dinamika 1–6 (opsional)]
 }
 
 export interface PadProject {
@@ -100,7 +100,7 @@ const MFR_ID = 0x7d;
 const MAGIC = 'PMZK1';
 
 export function encodeProjectPayload(project: PadProject): Uint8Array {
-  const json = JSON.stringify({ app: 'PlayMuzeck PadStudio', version: 1, project });
+  const json = JSON.stringify({ app: 'PlayMuzeck PadStudio', version: 2, project });
   const body = new TextEncoder().encode(json);
   const out = new Uint8Array(1 + MAGIC.length + body.length);
   out[0] = MFR_ID;
@@ -114,7 +114,20 @@ export function decodeProjectPayload(data: Uint8Array): unknown | null {
   for (let i = 0; i < MAGIC.length; i++) if (data[1 + i] !== MAGIC.charCodeAt(i)) return null;
   try {
     const parsed = JSON.parse(new TextDecoder().decode(data.subarray(1 + MAGIC.length)));
-    return parsed && typeof parsed === 'object' ? (parsed as { project?: unknown }).project ?? null : null;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const project = (parsed as { project?: unknown }).project ?? null;
+    // Proyek versi 1 memakai dinamika drum 4 tingkat (1 pp, 2 p, 3 f, 4 ff): petakan ke skala 6 tingkat (3 -> 5, 4 -> 6).
+    const version = Number((parsed as { version?: unknown }).version) || 1;
+    if (version < 2 && project && typeof project === 'object') {
+      const drum = (project as { drum?: Record<string, unknown> }).drum;
+      if (drum && typeof drum === 'object') {
+        Object.keys(drum).forEach((id) => {
+          const row = drum[id];
+          if (typeof row === 'string') drum[id] = row.replace(/[34]/g, (c) => (c === '3' ? '5' : '6'));
+        });
+      }
+    }
+    return project;
   } catch {
     return null;
   }
@@ -147,7 +160,7 @@ export function projectToMidiBlob(project: PadProject, title = 'PlayMuzeck Proje
     const row = project.drum[id];
     for (let i = 0; i < row.length; i++) {
       const level = row.charCodeAt(i) - 48;
-      if (level >= 1 && level <= 4) {
+      if (level >= 1 && level <= DRUM_LEVEL_MAX) {
         events.push({ step: i, note, velocity: DRUM_LEVEL_MIDI[level], isDrum: true, durationSteps: 1 });
       }
     }
@@ -155,14 +168,14 @@ export function projectToMidiBlob(project: PadProject, title = 'PlayMuzeck Proje
 
   const enabled = project.chords.filter((t) => t.on);
   enabled.forEach((track, channel) => {
-    track.notes.forEach(([start, len, pad]) => {
+    track.notes.forEach(([start, len, pad, vel]) => {
       const def = project.pads[pad];
       if (!def) return;
       buildHarmonicChord(tupleToPad(def)).midiNotes.forEach((note) => {
         events.push({
           step: start,
           note,
-          velocity: Math.max(1, Math.round((95 * track.vol) / 100)),
+          velocity: Math.max(1, Math.min(127, Math.round(((95 * track.vol) / 100) * noteGain(vel)))),
           durationSteps: len,
           channel,
         });
@@ -341,7 +354,7 @@ export function normalizeProject(raw: unknown, ctx: ImportContext): PadProject {
     let row = '';
     for (let i = 0; i < totalSteps; i++) {
       const c = src.charCodeAt(i) - 48;
-      row += c >= 1 && c <= 4 ? String(c) : '0';
+      row += c >= 1 && c <= 6 ? String(c) : '0';
     }
     drum[id] = row;
     const m = r.drumMix?.[id] ?? {};
@@ -355,7 +368,7 @@ export function normalizeProject(raw: unknown, ctx: ImportContext): PadProject {
 
   const chords: ProjectChordTrack[] = ctx.chordDefaults.map((def, i) => {
     const t = Array.isArray(r.chords) ? r.chords[i] ?? {} : {};
-    const notes: Array<[number, number, number]> = [];
+    const notes: Array<[number, number, number] | [number, number, number, number]> = [];
     if (Array.isArray(t.notes)) {
       t.notes.forEach((n: unknown) => {
         if (!Array.isArray(n)) return;
@@ -363,7 +376,9 @@ export function normalizeProject(raw: unknown, ctx: ImportContext): PadProject {
         const pad = Number(n[2]);
         if (!Number.isFinite(start) || start < 0 || start >= totalSteps) return;
         if (!Number.isFinite(pad) || pad < 0 || pad >= pads.length) return;
-        notes.push([Math.round(start), clampInt(n[1], 1, totalSteps, 1), Math.round(pad)]);
+        const vel = clampInt(n[3], 0, 6, 0);
+        const base: [number, number, number] = [Math.round(start), clampInt(n[1], 1, totalSteps, 1), Math.round(pad)];
+        notes.push(vel > 0 ? [base[0], base[1], base[2], vel] : base);
       });
     }
     notes.sort((a, b) => a[0] - b[0]);
@@ -421,8 +436,8 @@ mapGm('splash', [49, 52, 55, 57]);
 mapGm('ride', [51, 53, 59]);
 mapGm('perc', [54, 56, 58, ...Array.from({ length: 22 }, (_, i) => 60 + i)]);
 
-// Velocity MIDI -> level 1–4 (batas di tengah-tengah nilai ekspor 45 / 75 / 100 / 127).
-const levelFromVelocity = (v: number): number => (v < 60 ? 1 : v < 88 ? 2 : v < 114 ? 3 : 4);
+// Velocity MIDI -> level 1–6 (batas di tengah-tengah nilai ekspor 35 / 55 / 75 / 95 / 112 / 127).
+const levelFromVelocity = (v: number): number => (v < 45 ? 1 : v < 65 ? 2 : v < 85 ? 3 : v < 104 ? 4 : v < 120 ? 5 : 6);
 
 interface FormulaEntry {
   def: ChordFormulaDef;

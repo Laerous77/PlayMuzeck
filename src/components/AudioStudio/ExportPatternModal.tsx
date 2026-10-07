@@ -39,6 +39,8 @@ export interface ChordTrackExportData {
   notesPerStep: number[][];
   // Panjang tiap not dalam step (indeks = step awal not). Jika kosong, akor ditahan sampai akor berikutnya.
   stepLens?: number[];
+  // Pengali volume tiap not dari dinamikanya (indeks = step awal not). Kosong = volume normal.
+  stepGains?: number[];
   volume: number;
   adsr: EnvelopeADSR;
   enabled: boolean;
@@ -250,7 +252,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           events.push({
             step: step - fromStep,
             note,
-            velocity: Math.round(95 * track.volume),
+            velocity: Math.max(1, Math.min(127, Math.round(95 * track.volume * (track.stepGains?.[step] ?? 1)))),
             durationSteps: Math.min(chordHoldSteps(track, step, totalStepsAvailable), toStep - step + 1),
             channel: channelIdx,
           });
@@ -396,7 +398,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
                       track.program,
                       time,
                       holdSec,
-                      track.volume,
+                      track.volume * (track.stepGains?.[globalStep] ?? 1),
                       track.adsr
                     );
                   });
