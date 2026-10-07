@@ -35,6 +35,7 @@ import {
   Info,
   Gauge,
   Circle,
+  Timer,
   Save,
   FolderOpen,
 } from 'lucide-react';
@@ -103,8 +104,8 @@ interface PadStudioProps {
 }
 
 type PadTab = 'drum' | 'chord';
-// edit = pasang/ubah pad; select = pilih area (pilihan lama diganti); selectAdd = tambah pad ke pilihan tanpa melepas yang lama.
-type EditMode = 'edit' | 'select' | 'selectAdd';
+// edit = pasang/ubah pad; select = pilih area. Tahan Shift untuk MENAMBAH ke pilihan (tanpa melepas yang lama).
+type EditMode = 'edit' | 'select';
 
 export interface DrumInstrument {
   id: 'kick' | 'snare' | 'clap' | 'closedhat' | 'openhat' | 'tom' | 'splash' | 'ride' | 'perc' | 'fx';
@@ -685,7 +686,15 @@ const MiniVolume: React.FC<{ value: number; onChange: (v: number) => void; title
       onChange={(e) => onChange(Number(e.target.value))}
       className="flex-1 min-w-0 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
     />
-    <span className="text-[10px] font-mono text-gray-300 w-7 text-right shrink-0">{value}%</span>
+    <IntField
+      value={value}
+      min={0}
+      max={100}
+      onChange={onChange}
+      ariaLabel={`${title} (ketik angka 0–100)`}
+      className="w-9 shrink-0 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[10px] font-mono text-accent text-center outline-none focus:border-accent"
+    />
+    <span className="text-[10px] font-mono text-gray-400 shrink-0">%</span>
   </div>
 );
 
@@ -705,13 +714,17 @@ const AdsrToggle: React.FC<{ open: boolean; onClick: () => void }> = ({ open, on
 // Kolom label baris drum. Default ringkas (nama + M/S). Volume & ADSR baru muncul saat tombol "Mixer" aktif.
 const DrumLabel = memo(function DrumLabel({
   id,
+  rowIdx,
   label,
   mix,
   showMixer,
   onMix,
   onAdsr,
+  onSelectRow,
 }: {
   id: string;
+  rowIdx: number;
+  onSelectRow: (row: number, additive: boolean) => void;
   label: string;
   mix: DrumMixState;
   showMixer: boolean;
@@ -726,7 +739,14 @@ const DrumLabel = memo(function DrumLabel({
         className={`absolute inset-y-0 left-0 w-1 ${mix.muted ? 'bg-red-500/70' : mix.solo ? 'bg-accent' : 'bg-accent/40'}`}
       />
       <div className="flex items-center justify-between gap-1.5">
-        <span className="text-xs font-semibold text-gray-200 truncate">{label}</span>
+        <button
+          type="button"
+          onClick={(e) => onSelectRow(rowIdx, e.shiftKey)}
+          title={`Klik: pilih seluruh baris ${label} (Shift+klik = tambahkan / lepas dari pilihan)`}
+          className="min-w-0 text-left text-xs font-semibold text-gray-200 truncate hover:text-accent cursor-pointer"
+        >
+          {label}
+        </button>
         <MuteSoloButtons
           muted={mix.muted}
           solo={mix.solo}
@@ -755,6 +775,7 @@ const ChordLabel = memo(function ChordLabel({
   onUpdateAdsr,
   onPickInstrument,
   onRemove,
+  onSelectRow,
 }: {
   tIdx: number;
   track: ChordTrackState;
@@ -764,6 +785,7 @@ const ChordLabel = memo(function ChordLabel({
   onUpdateAdsr: (trackIndex: number, patch: Partial<EnvelopeADSR>) => void;
   onPickInstrument: (trackIndex: number) => void;
   onRemove: (trackIndex: number) => void;
+  onSelectRow: (row: number, additive: boolean) => void;
 }) {
   const [adsrOpen, setAdsrOpen] = useState(false);
   return (
@@ -774,7 +796,14 @@ const ChordLabel = memo(function ChordLabel({
       />
       <div className="flex items-start justify-between gap-1">
         <div className="min-w-0">
-          <span className="text-xs font-semibold text-gray-200 truncate block">{track.label}</span>
+          <button
+            type="button"
+            onClick={(e) => onSelectRow(tIdx, e.shiftKey)}
+            title={`Klik: pilih seluruh baris ${track.label} (Shift+klik = tambahkan / lepas dari pilihan)`}
+            className="max-w-full text-left text-xs font-semibold text-gray-200 truncate block hover:text-accent cursor-pointer"
+          >
+            {track.label}
+          </button>
           <button
             type="button"
             onClick={() => onPickInstrument(tIdx)}
@@ -832,8 +861,10 @@ const DrumRow = memo(function DrumRow({
   dynamics,
   onCycle,
   onMenu,
+  onSelectRow,
 }: {
   rowIdx: number;
+  onSelectRow: (row: number, additive: boolean) => void;
   dynamics: boolean;
   showMixer: boolean;
   id: string;
@@ -856,7 +887,7 @@ const DrumRow = memo(function DrumRow({
         mix.muted ? 'opacity-60' : ''
       }`}
     >
-      <DrumLabel id={id} label={label} mix={mix} showMixer={showMixer} onMix={onMix} onAdsr={onAdsr} />
+      <DrumLabel id={id} rowIdx={rowIdx} label={label} mix={mix} showMixer={showMixer} onMix={onMix} onAdsr={onAdsr} onSelectRow={onSelectRow} />
       <div className="flex-1 min-w-0 px-2 py-1 flex items-center">
         <div className="grid gap-0.5 w-full min-w-0" style={gridStyle} data-rowgrid="" data-row={rowIdx}>
           {steps.map((stepIdx) => (
@@ -1046,7 +1077,9 @@ const ChordRow = memo(function ChordRow({
   onUpdateAdsr,
   onPickInstrument,
   onRemove,
+  onSelectRow,
 }: {
+  onSelectRow: (row: number, additive: boolean) => void;
   onUpdateTrack: (trackIndex: number, updates: Partial<ChordTrackState>) => void;
   onUpdateAdsr: (trackIndex: number, patch: Partial<EnvelopeADSR>) => void;
   onPickInstrument: (trackIndex: number) => void;
@@ -1092,6 +1125,7 @@ const ChordRow = memo(function ChordRow({
         onUpdateAdsr={onUpdateAdsr}
         onPickInstrument={onPickInstrument}
         onRemove={onRemove}
+        onSelectRow={onSelectRow}
       />
       <div className="flex-1 min-w-0 px-2 py-1.5 flex items-center">
       <div className="grid gap-0.5 w-full min-w-0" style={gridStyle} data-rowgrid="" data-row={tIdx}>
@@ -1197,7 +1231,7 @@ const InfoTip: React.FC<{ title: string; children: React.ReactNode }> = ({ title
       </button>
       {open &&
         createPortal(
-          <div className="fixed inset-0 z-[80]" onPointerDown={() => setOpen(false)}>
+          <div className="fixed inset-0 z-[80]" data-keepsel="" onPointerDown={() => setOpen(false)}>
             <div
               ref={boxRef}
               role="dialog"
@@ -1746,10 +1780,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // ---------------------------------------------------------------------------
   // SELEKSI, SALIN, POTONG, TEMPEL, DUPLIKAT, HAPUS
-  // Pilihan = himpunan sel (boleh terpisah-pisah). Tiga cara memilih:
-  //  - Pilih  : ketuk / seret area; pilihan lama DIGANTI.
-  //  - Pilih+ : ketuk pad untuk menambah (ketuk lagi = lepas) tanpa melepas pilihan lama; seret = tambah area.
-  //  - Shift+seret di mode Edit (perluas area dari titik awal sebelumnya).
+  // Pilihan = himpunan sel (boleh terpisah-pisah). Cara memilih:
+  //  - Mode Pilih: ketuk / seret area; pilihan lama DIGANTI. Ketuk pad yang sudah terpilih = lepas pad itu.
+  //  - Tahan Shift (di mode apa pun): ketuk pad untuk menambah (ketuk lagi = lepas) tanpa melepas pilihan lama; seret = tambah area.
+  //  - Klik label baris (nama drum / progresi akor) = pilih seluruh baris; klik label BAR = pilih satu bar; tombol Semua = semuanya.
+  //  - Klik area kosong di luar pad / bar / tombol = lepas semua pilihan.
   // ---------------------------------------------------------------------------
   const [sel, setSel] = useState<Selection | null>(null);
   const activeSel = sel && sel.tab === activeTab ? sel : null;
@@ -1815,26 +1850,41 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const tab = activeTabRef.current;
     e.preventDefault();
 
+    const base = new Set<number>(selRef.current ? selRef.current.cells : []);
+    const start = cell;
+    const here = buildCells(tab, cell, cell);
+    const already = here.every((k) => base.has(k));
+    anchorRef.current = cell;
+    const isStart = (c: { r: number; s: number }) => c.r === start.r && c.s === start.s;
+
     let onMove: (c: { r: number; s: number }) => void;
-    if (mode === 'selectAdd') {
-      // Tambah / lepas satu pad tanpa menyentuh pilihan lain; seret = tambahkan seluruh area.
-      const base = new Set<number>(selRef.current ? selRef.current.cells : []);
-      const start = cell;
-      const here = buildCells(tab, cell, cell);
-      const already = here.every((k) => base.has(k));
-      anchorRef.current = cell;
-      setSel(makeSel(tab, already ? [...base].filter((k) => !here.includes(k)) : [...base, ...here]));
+    let onUp: (() => void) | null = null;
+    if (e.shiftKey) {
+      // Shift = tambah / lepas satu pad tanpa menyentuh pilihan lain; seret = tambahkan seluruh area.
+      const rest = [...base].filter((k) => !here.includes(k));
+      setSel(rest.length || !already ? makeSel(tab, already ? rest : [...base, ...here]) : null);
       onMove = (c) => {
-        if (c.r === start.r && c.s === start.s) return;
+        if (isStart(c)) return;
         setSel(makeSel(tab, [...base, ...buildCells(tab, start, c)]));
       };
-    } else {
-      // Pilih (area baru menggantikan pilihan lama). Shift = perluas dari titik awal sebelumnya.
-      const anchor = e.shiftKey && selRef.current && anchorRef.current ? anchorRef.current : cell;
-      anchorRef.current = anchor;
-      setSel(makeSel(tab, buildCells(tab, anchor, cell)));
+    } else if (already) {
+      // Ketuk pad yang sudah terpilih = lepas pad itu. Bila diseret, pilihan diganti dengan area baru.
+      let moved = false;
       onMove = (c) => {
-        if (anchorRef.current) setSel(makeSel(tab, buildCells(tab, anchorRef.current, c)));
+        if (!moved && isStart(c)) return;
+        moved = true;
+        setSel(makeSel(tab, buildCells(tab, start, c)));
+      };
+      onUp = () => {
+        if (moved) return;
+        const rest = [...base].filter((k) => !here.includes(k));
+        setSel(rest.length ? makeSel(tab, rest) : null);
+      };
+    } else {
+      // Area baru menggantikan pilihan lama.
+      setSel(makeSel(tab, here));
+      onMove = (c) => {
+        setSel(makeSel(tab, buildCells(tab, start, c)));
       };
     }
 
@@ -1846,22 +1896,46 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
+      if (onUp) onUp();
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   };
 
-  // Klik label BAR = pilih seluruh bar itu (Shift+klik, atau mode Pilih+ = tambahkan ke pilihan).
+  // Terapkan satu kelompok sel (bar / baris) ke pilihan.
+  //  - extend (Shift): kelompok ditambahkan; bila sudah terpilih seluruhnya, kelompok itu dilepas.
+  //  - tanpa extend : kelompok MENGGANTI pilihan; bila pilihan sudah persis kelompok itu, pilihan dilepas.
+  const applyGroup = (tab: PadTab, cells: number[], extend: boolean) => {
+    const prev = selRef.current;
+    const base: ReadonlySet<number> = prev ? prev.cells : new Set<number>();
+    const group = new Set<number>(cells);
+    if (group.size === 0) return;
+    const full = [...group].every((k) => base.has(k));
+    let next: Set<number>;
+    if (extend) next = full ? new Set([...base].filter((k) => !group.has(k))) : new Set([...base, ...group]);
+    else next = full && base.size === group.size ? new Set<number>() : new Set(group);
+    const first = [...group][0];
+    anchorRef.current = { r: cellRow(first), s: cellStep(first) };
+    setSel(next.size > 0 ? makeSel(tab, next) : null);
+  };
+
+  // Klik label BAR = pilih seluruh bar itu (Shift+klik = tambahkan ke pilihan).
   const selectBar = (barIdx: number, extend: boolean) => {
     const tab = activeTabRef.current;
     const S = layoutRef.current.stepsPerBar;
     const s1 = barIdx * S;
-    const cells = buildCells(tab, { r: 0, s: s1 }, { r: rowCountOf(tab) - 1, s: s1 + S - 1 });
-    const prev = selRef.current;
-    anchorRef.current = { r: 0, s: s1 };
-    setSel(makeSel(tab, extend && prev ? [...prev.cells, ...cells] : cells));
+    applyGroup(tab, buildCells(tab, { r: 0, s: s1 }, { r: rowCountOf(tab) - 1, s: s1 + S - 1 }), extend);
   };
+
+  // Klik label baris = pilih satu bagian drum / satu instrumen akor di seluruh bar.
+  const selectRow = (row: number, extend: boolean) => {
+    const tab = activeTabRef.current;
+    applyGroup(tab, buildCells(tab, { r: row, s: 0 }, { r: row, s: layoutRef.current.totalSteps - 1 }), extend);
+  };
+  const selectRowRef = useRef(selectRow);
+  selectRowRef.current = selectRow;
+  const onSelectRow = useCallback((row: number, additive: boolean) => selectRowRef.current(row, additive), []);
 
   const buildClip = (selection: Selection): SeqClip | null => {
     const L = liveRef.current;
@@ -2037,13 +2111,43 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     if (res) adoptPasted(clip.kind, res);
   };
 
-  const selectAll = () => {
+  // Pilih semua bagian drum / semua instrumen akor (yang aktif). Dari tombol "Semua": bila sudah semua terpilih, dilepas.
+  const selectAll = (toggle?: boolean) => {
     const tab = activeTabRef.current;
+    const last = layoutRef.current.totalSteps - 1;
+    const cells: number[] = [];
+    for (let r = 0; r < rowCountOf(tab); r++) {
+      if (tab === 'chord' && !liveRef.current?.chordTracks[r]?.enabled) continue;
+      cells.push(...buildCells(tab, { r, s: 0 }, { r, s: last }));
+    }
+    if (cells.length === 0) return;
+    const cur = selRef.current;
+    const group = new Set<number>(cells);
+    if (toggle === true && cur && cur.cells.size === group.size && cells.every((k) => cur.cells.has(k))) {
+      setSel(null);
+      return;
+    }
     anchorRef.current = { r: 0, s: 0 };
-    setSel(makeSel(tab, buildCells(tab, { r: 0, s: 0 }, { r: rowCountOf(tab) - 1, s: layoutRef.current.totalSteps - 1 })));
+    setSel(makeSel(tab, group));
   };
 
   const clearSelection = () => setSel(null);
+
+  // Klik di area kosong (bukan pad, bar, baris, tombol, atau kolom isian) = lepas semua pilihan.
+  useEffect(() => {
+    const onDown = (e: PointerEvent) => {
+      if (!selRef.current || modalOpenRef.current) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      const t = e.target as HTMLElement | null;
+      if (!t || !t.closest) return;
+      // Abaikan klik pada scrollbar.
+      if (e.offsetX > t.clientWidth || e.offsetY > t.clientHeight) return;
+      if (t.closest('button, input, select, textarea, a, label, [role="dialog"], [role="tab"], [data-rowgrid], [data-keepsel]')) return;
+      setSel(null);
+    };
+    window.addEventListener('pointerdown', onDown);
+    return () => window.removeEventListener('pointerdown', onDown);
+  }, []);
 
   // Step terpilih per baris (untuk menandai sel di grid). Identitas Set stabil selama pilihan tidak berubah.
   const rowSelSets = useMemo<Array<ReadonlySet<number> | undefined>>(() => {
@@ -2364,19 +2468,79 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Rekam: pukulan dari live drum trigger pads (klik / sentuh / keyboard) masuk ke sequencer drum.
   // Jika drum belum jalan, pemutaran dimulai dari awal wilayah loop. Berhenti otomatis saat drum berhenti / pindah tab.
-  const toggleRecording = () => {
-    if (activeTab !== 'drum') return;
-    audioEngine.getAudioContext().resume();
-    if (isRecording) {
-      setIsRecording(false);
-      return;
-    }
+  const beginRecording = () => {
     recTakeOpenRef.current = false;
     if (!isDrumLoopActive) {
       resetToBeginning();
       setIsDrumLoopActive(true);
     }
     setIsRecording(true);
+  };
+  const beginRecordingRef = useRef(beginRecording);
+  beginRecordingRef.current = beginRecording;
+
+  // Hitung mundur sebelum rekaman (0–15 detik). Klik tombol lagi saat hitung mundur = batal.
+  const [recCountdownSec, setRecCountdownSec] = useState<number>(() => {
+    try {
+      const v = parseInt(window.localStorage.getItem('padstudio.recCountdown') ?? '', 10);
+      return Number.isFinite(v) ? Math.max(0, Math.min(15, v)) : 3;
+    } catch {
+      return 3;
+    }
+  });
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('padstudio.recCountdown', String(recCountdownSec));
+    } catch {
+      // Abaikan bila storage diblokir
+    }
+  }, [recCountdownSec]);
+  const [countdownLeft, setCountdownLeft] = useState<number | null>(null);
+  const countdownTimerRef = useRef<number | undefined>(undefined);
+  const cancelCountdown = useCallback(() => {
+    window.clearInterval(countdownTimerRef.current);
+    countdownTimerRef.current = undefined;
+    setCountdownLeft(null);
+  }, []);
+  const countdownClickRef = useRef<(accent: boolean) => void>(() => {});
+  countdownClickRef.current = (accent: boolean) => {
+    if (!metronomeOn) return;
+    const ctx = audioEngine.getAudioContext();
+    scheduleClick(ctx, ctx.currentTime + 0.01, accent);
+  };
+  useEffect(() => () => window.clearInterval(countdownTimerRef.current), []);
+  useEffect(() => {
+    if (activeTab !== 'drum') cancelCountdown();
+  }, [activeTab, cancelCountdown]);
+
+  const toggleRecording = () => {
+    if (activeTab !== 'drum') return;
+    audioEngine.getAudioContext().resume();
+    if (countdownLeft !== null) {
+      cancelCountdown();
+      return;
+    }
+    if (isRecording) {
+      setIsRecording(false);
+      return;
+    }
+    if (recCountdownSec <= 0) {
+      beginRecording();
+      return;
+    }
+    let left = recCountdownSec;
+    setCountdownLeft(left);
+    countdownClickRef.current(true);
+    countdownTimerRef.current = window.setInterval(() => {
+      left -= 1;
+      if (left <= 0) {
+        cancelCountdown();
+        beginRecordingRef.current();
+      } else {
+        setCountdownLeft(left);
+        countdownClickRef.current(false);
+      }
+    }, 1000);
   };
   useEffect(() => {
     if (isRecording && (!isDrumLoopActive || activeTab !== 'drum')) setIsRecording(false);
@@ -3257,7 +3421,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     </p>
                   )}
                   <p>
-                    <b className="text-gray-100">Rekam:</b> tekan Rekam, lalu mainkan pad{hasKeyboard ? ' (atau tombol keyboard)' : ''}. Tiap pukulan
+                    <b className="text-gray-100">Rekam:</b> atur hitung mundur (0–15 detik) di kotak sebelah tombol, tekan Rekam, tunggu hitungan selesai, lalu mainkan pad{hasKeyboard ? ' (atau tombol keyboard)' : ''}. Tiap pukulan
                     masuk ke step terdekat di sequencer drum (resolusi 1/16 not) dan ikut tercatat sebagai dinamikanya. Bila drum belum
                     diputar, pemutaran dimulai otomatis dari awal wilayah loop. Satu rekaman = satu langkah Undo. Metronom (bila aktif) hanya
                     berbunyi saat merekam.
@@ -3275,20 +3439,56 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             {activeTab === 'drum' && (
               <div className="flex items-center gap-1.5 flex-wrap">
                 <DynamicsToggle on={dynamicsOn} onToggle={toggleDynamics} />
+                {dynamicsOn && (
+                  <span
+                    className="text-[10px] font-mono font-bold text-gray-400 px-1"
+                    title="Level dinamika: pp = sangat pelan, p = pelan, f = keras, ff = sangat keras"
+                  >
+                    pp · p · f · ff
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={toggleRecording}
-                  aria-pressed={isRecording}
-                  title={isRecording ? 'Hentikan rekaman' : 'Rekam: pukulan dari pad masuk ke sequencer drum'}
+                  aria-pressed={isRecording || countdownLeft !== null}
+                  title={
+                    countdownLeft !== null
+                      ? 'Batalkan hitung mundur rekaman'
+                      : isRecording
+                      ? 'Hentikan rekaman'
+                      : 'Rekam: pukulan dari pad masuk ke sequencer drum'
+                  }
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                    isRecording
+                    countdownLeft !== null
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
+                      : isRecording
                       ? 'bg-red-500/20 text-red-300 border-red-500/60'
                       : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
                   }`}
                 >
-                  <Circle className={`w-3 h-3 ${isRecording ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'}`} />
-                  <span>{isRecording ? 'Stop Rekam' : 'Rekam'}</span>
+                  <Circle
+                    className={`w-3 h-3 ${
+                      isRecording || countdownLeft !== null ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'
+                    }`}
+                  />
+                  <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
                 </button>
+                <label
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gray-300 bg-black/60 border border-white/10"
+                  title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
+                >
+                  <Timer className="w-3 h-3 text-gray-400" />
+                  <IntField
+                    value={recCountdownSec}
+                    min={0}
+                    max={15}
+                    onChange={setRecCountdownSec}
+                    disabled={isRecording || countdownLeft !== null}
+                    ariaLabel="Hitung mundur sebelum rekam (detik, maksimal 15)"
+                    className="w-8 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
+                  />
+                  <span className="font-mono text-[10px] text-gray-400">dtk</span>
+                </label>
                 <button
                   type="button"
                   onClick={() => setMetronomeOn((v) => !v)}
@@ -3420,6 +3620,21 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
                 </span>
               </div>
+            </>
+          )}
+
+          {activeTab === 'drum' && countdownLeft !== null && (
+            <>
+              <p className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5">
+                <Timer className="w-3 h-3" />
+                Rekaman dimulai dalam {countdownLeft} detik… bersiap di pad. Klik “Batal” untuk membatalkan.
+              </p>
+              {createPortal(
+                <div className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center" aria-live="assertive">
+                  <span className="text-8xl sm:text-9xl font-black text-accent drop-shadow-[0_4px_24px_rgba(0,0,0,0.8)]">{countdownLeft}</span>
+                </div>,
+                document.body
+              )}
             </>
           )}
 
@@ -3638,13 +3853,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     id: 'select',
                     label: 'Pilih',
                     Icon: BoxSelect,
-                    tip: 'Ketuk atau seret untuk memilih area. Memilih lagi MENGGANTI pilihan sebelumnya.',
-                  },
-                  {
-                    id: 'selectAdd',
-                    label: 'Pilih+',
-                    Icon: Plus,
-                    tip: 'Ketuk pad untuk menambah ke pilihan TANPA melepas yang sebelumnya (ketuk lagi untuk melepas). Seret untuk menambah area.',
+                    tip: 'Ketuk atau seret untuk memilih area. Tahan Shift untuk MENAMBAH ke pilihan tanpa melepas yang sebelumnya. Ketuk pad terpilih untuk melepasnya.',
                   },
                 ] as const).map(({ id, label, Icon, tip }) => (
                   <button
@@ -3677,8 +3886,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <span>Mixer</span>
               </button>
 
-              {activeTab === 'drum' && <DynamicsToggle on={dynamicsOn} onToggle={toggleDynamics} />}
-
               <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
 
               <div className="flex items-center gap-1">
@@ -3689,6 +3896,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
 
               <div className="flex flex-wrap items-center gap-1">
+                <ToolBtn
+                  icon={Layers}
+                  label="Semua"
+                  title={activeTab === 'drum' ? 'Ctrl+A — pilih semua bagian drum (klik lagi untuk melepas)' : 'Ctrl+A — pilih semua instrumen akor (klik lagi untuk melepas)'}
+                  onClick={() => selectAll(true)}
+                />
                 <ToolBtn icon={Copy} label="Salin" title="Ctrl+C" onClick={copySelection} disabled={!activeSel} />
                 <ToolBtn icon={Scissors} label="Potong" title="Ctrl+X" onClick={cutSelection} disabled={!activeSel} />
                 <ToolBtn icon={ClipboardPaste} label="Tempel" title="Ctrl+V — ditempel di awal pilihan (atau di playhead)" onClick={pasteSelection} disabled={!clips[activeTab]} />
@@ -3729,13 +3942,18 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   )}
                   <p>
                     <b className="text-gray-100">Pilih:</b> ketuk atau seret untuk memilih area; memilih lagi menggantikan pilihan sebelumnya.
-                    Shift+seret di mode Edit juga memilih area.
+                    Ketuk pad yang sudah terpilih untuk melepasnya. Tahan <b className="text-gray-100">Shift</b> untuk menambahkan pad atau area ke
+                    pilihan tanpa melepas yang lama (Shift+ketuk pad terpilih = lepas). Shift+seret di mode Edit juga memilih area.
                   </p>
                   <p>
-                    <b className="text-gray-100">Pilih+:</b> ketuk pad untuk menambahkannya ke pilihan tanpa melepas pad yang sudah dipilih (ketuk
-                    lagi untuk melepas). Pad yang dipilih boleh berjauhan; seret untuk menambah satu area sekaligus.
+                    {activeTab === 'drum'
+                      ? 'Klik nama drum (Kick, Snare, …) untuk memilih seluruh baris drum itu; tombol Semua memilih semua bagian drum.'
+                      : 'Klik nama progresi akor untuk memilih seluruh baris instrumen itu; tombol Semua memilih semua instrumen akor.'}
                   </p>
-                  <p>Klik label BAR untuk memilih satu bar (di mode Pilih+ atau dengan Shift, bar ditambahkan ke pilihan).</p>
+                  <p>
+                    Klik label BAR untuk memilih satu bar (dengan Shift, bar ditambahkan ke pilihan). Klik area kosong di luar pad untuk melepas semua
+                    pilihan.
+                  </p>
                   <p>
                     <b className="text-gray-100">Pintasan:</b> Ctrl+Z / Ctrl+Shift+Z untuk undo / redo; Ctrl+C / X / V / D untuk salin, potong,
                     tempel, duplikat; Delete untuk hapus; Esc untuk melepas pilihan.
@@ -3805,8 +4023,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     <div
                       key={barIdx}
                       style={{ gridColumn: `span ${stepsPerBar} / span ${stepsPerBar}` }}
-                      onClick={(e) => selectBar(barIdx, e.shiftKey || editMode === 'selectAdd')}
-                      title="Klik untuk memilih seluruh bar ini (Shift+klik atau mode Pilih+ = tambahkan ke pilihan)"
+                      data-keepsel=""
+                      onClick={(e) => selectBar(barIdx, e.shiftKey)}
+                      title="Klik untuk memilih seluruh bar ini (Shift+klik = tambahkan / lepas dari pilihan)"
                       className="py-1.5 rounded-md border text-center text-xs font-mono font-bold bg-surface text-accent border-accent/30 cursor-pointer hover:bg-accent/10 select-none"
                     >
                       BAR {barIdx + 1}
@@ -3859,9 +4078,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       }
                       className="flex-1 min-w-0 h-1.5 bg-zinc-800 rounded appearance-none cursor-pointer accent-accent"
                     />
-                    <span className="text-[10px] font-mono text-accent w-8 text-right shrink-0">
-                      {activeTab === 'drum' ? drumVolume : chordMasterVolume}%
-                    </span>
+                    <IntField
+                      value={activeTab === 'drum' ? drumVolume : chordMasterVolume}
+                      min={0}
+                      max={100}
+                      onChange={activeTab === 'drum' ? setDrumVolume : setChordMasterVolume}
+                      ariaLabel={activeTab === 'drum' ? 'Volume drum utama (ketik angka 0–100)' : 'Volume akor utama (ketik angka 0–100)'}
+                      className="w-9 shrink-0 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[10px] font-mono text-accent text-center outline-none focus:border-accent"
+                    />
+                    <span className="text-[10px] font-mono text-gray-400 shrink-0">%</span>
                   </div>
                   <button
                     type="button"
@@ -3920,6 +4145,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         selSteps={rowSelSets[di] ?? null}
                         onCycle={cycleDrumStep}
                         onMenu={openDrumPicker}
+                        onSelectRow={onSelectRow}
                       />
                     );
                   })}
@@ -3936,6 +4162,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         onUpdateAdsr={updateTrackAdsr}
                         onPickInstrument={openInstrumentPicker}
                         onRemove={removeTrack}
+                        onSelectRow={onSelectRow}
                         key={track.id}
                         tIdx={tIdx}
                         track={track}
