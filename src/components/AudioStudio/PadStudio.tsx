@@ -2462,7 +2462,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     };
   }, []);
 
-  // Keyboard fisik -> pad drum live: Q W E R T Y U I O P (kiri ke kanan). Aktif di tab Drum Pad saat Pad Studio terlihat
+  // Keyboard fisik -> pad drum live: Q W E R T Y U I O P (kiri ke kanan). Aktif di tab Drum Pad maupun tab Akor (tombolnya tidak bentrok dengan pad akor) selama Pad Studio terlihat
   // di layar dan fokus tidak sedang di kolom ketik. Dinamika dipilih dengan menahan tombol koma / titik lalu menekan pad:
   //   ,  = pp      Shift + ,  = p      .  = f      Shift + .  = ff      (tanpa keduanya: f, Shift saja: ff)
   // Hanya berlaku bila dinamika menyala.
@@ -2474,7 +2474,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const isPeriod = e.code === 'Period';
       const inst = DRUM_BY_CODE[e.code];
       if (!inst && !isComma && !isPeriod) return;
-      if (activeTabRef.current !== 'drum' || modalOpenRef.current) return;
+      if (modalOpenRef.current) return;
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
@@ -2583,12 +2583,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     scheduleClick(ctx, ctx.currentTime + 0.01, accent);
   };
   useEffect(() => () => window.clearInterval(countdownTimerRef.current), []);
-  useEffect(() => {
-    if (activeTab !== 'drum') cancelCountdown();
-  }, [activeTab, cancelCountdown]);
-
+  // Hitung mundur dan rekaman TIDAK dibatalkan saat pindah tab: pukulan drum dari keyboard tetap masuk ke sequencer
+  // walau yang tampil tab Chord Pad. Tombol Stop/Batal tersedia di kedua tab.
   const toggleRecording = () => {
-    if (activeTab !== 'drum') return;
     audioEngine.getAudioContext().resume();
     if (countdownLeft !== null) {
       cancelCountdown();
@@ -2617,8 +2614,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     }, 1000);
   };
   useEffect(() => {
-    if (isRecording && (!isDrumLoopActive || activeTab !== 'drum')) setIsRecording(false);
-  }, [isRecording, isDrumLoopActive, activeTab]);
+    if (isRecording && !isDrumLoopActive) setIsRecording(false);
+  }, [isRecording, isDrumLoopActive]);
 
   const preparingChordsRef = useRef(false);
   const toggleChordLoop = async () => {
@@ -2732,7 +2729,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     else doRelease();
   };
 
-  // Keyboard fisik -> pad akor live (tab Akor): A S D F G H J K = baris atas, L Z X C V B N M = baris bawah.
+  // Keyboard fisik -> pad akor live (aktif di tab Akor maupun tab Drum, tombolnya tidak bentrok dengan pad drum): A S D F G H J K = baris atas, L Z X C V B N M = baris bawah.
   // Tahan angka 1–8 (baris angka atau keypad) lalu tekan pad = bunyikan akor dari bank itu TANPA pindah tampilan bank.
   // Tanpa angka, memakai bank yang sedang ditampilkan.
   const startChordHoldRef = useRef(startChordHold);
@@ -2753,7 +2750,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const bank = bankOf(e.code);
       const slot = CHORD_KEY_CODES.indexOf(e.code);
       if (bank === null && slot < 0) return;
-      if (activeTabRef.current !== 'chord' || modalOpenRef.current) return;
+      if (modalOpenRef.current) return;
       const t = e.target as HTMLElement | null;
       const tag = t?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t?.isContentEditable) return;
@@ -2826,7 +2823,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         - Kosongkan -
       </option>,
       ...Array.from({ length: PAD_BANKS }, (_, bank) => (
-        <optgroup key={bank} label={`Bank ${bank + 1}`}>
+        <optgroup key={bank} label={`Bank ${bank + 1}`} className="bg-surface text-accent font-black">
           {padInfo.slice(bank * PADS_PER_BANK, (bank + 1) * PADS_PER_BANK).map((p, i) => {
             const pIdx = bank * PADS_PER_BANK + i;
             return (
@@ -3779,11 +3776,18 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </>
           )}
 
-          {activeTab === 'drum' && countdownLeft !== null && (
+          {countdownLeft !== null && (
             <>
-              <p className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5">
+              <p className="text-[11px] font-semibold text-amber-300 flex items-center gap-1.5 flex-wrap">
                 <Timer className="w-3 h-3" />
-                Rekaman dimulai dalam {countdownLeft} detik… bersiap di pad. Klik “Batal” untuk membatalkan.
+                Rekaman dimulai dalam {countdownLeft} detik… bersiap{activeTab === 'drum' ? ' di pad' : ' (tombol Q–P tetap merekam di tab ini)'}.
+                <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className="ml-1 px-2 py-0.5 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-[10px] font-bold cursor-pointer"
+                >
+                  Batal
+                </button>
               </p>
               {createPortal(
                 <div className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center" aria-live="assertive">
@@ -3794,10 +3798,25 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </>
           )}
 
-          {activeTab === 'drum' && isRecording && (
-            <p className="text-[11px] font-semibold text-red-300 flex items-center gap-1.5">
+          {isRecording && (
+            <p className="text-[11px] font-semibold text-red-300 flex items-center gap-1.5 flex-wrap">
               <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500 animate-pulse" />
-              Merekam… {hasKeyboard ? 'tekan pad atau tombol Q–P' : 'tekan pad'}; pukulan masuk ke step terdekat.
+              Merekam…{' '}
+              {activeTab === 'drum'
+                ? hasKeyboard
+                  ? 'tekan pad atau tombol Q–P'
+                  : 'tekan pad'
+                : hasKeyboard
+                  ? 'tekan tombol Q–P (pad drum ada di tab Drum Pad)'
+                  : 'buka tab Drum Pad untuk memukul pad'}
+              ; pukulan masuk ke step terdekat.
+              <button
+                  type="button"
+                  onClick={toggleRecording}
+                  className="ml-1 px-2 py-0.5 rounded-md bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-200 text-[10px] font-bold cursor-pointer"
+                >
+                  Stop
+                </button>
             </p>
           )}
 
@@ -4100,7 +4119,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
 
               <div className="ml-auto flex items-center gap-2">
-                {activeTab === 'drum' && isRecording && (
+                {isRecording && (
                   <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-red-300">
                     <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500 animate-pulse" />
                     Merekam

@@ -219,3 +219,15 @@ button[data-seek][data-playing="1"] {
   color: var(--t-on-accent);
   font-weight: 900;
 }
+
+/* ── Dropdown bawaan browser: judul grup (optgroup) ikut warna tema, bukan putih bawaan ── */
+select optgroup {
+  background-color: var(--t-surface);
+  color: var(--t-accent);
+  font-style: normal;
+  font-weight: 800;
+}
+select option {
+  background-color: var(--t-surface);
+  color: var(--t-fg);
+}
