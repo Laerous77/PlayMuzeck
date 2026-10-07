@@ -1,3 +1,4 @@
+<file path="src/components/AudioStudio/PadStudio.tsx">
 // src/components/AudioStudio/PadStudio.tsx
 import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
@@ -2490,10 +2491,69 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     return { r: Number(rowEl.dataset.row), s };
   };
 
+  // Pilih kolom step (semua baris) lewat ruler beat/step di bawah label BAR.
+  //  - klik 1x pada step / angka beat = pilih step itu saja
+  //  - klik 2x pada angka beat = pilih seluruh beat
+  //  - seret ke samping = pilih rentang step
+  const lastRulerTapRef = useRef<{ idx: number; t: number } | null>(null);
+  const rulerStepAt = (x: number): number | null => {
+    const el = document.querySelector<HTMLElement>('[data-ruler]');
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const v = viewRef.current;
+    const count = v.count * v.stepsPerBar;
+    const frac = (x - rect.left) / Math.max(1, rect.width);
+    return v.start * v.stepsPerBar + Math.max(0, Math.min(count - 1, Math.floor(frac * count)));
+  };
+  const handleRulerPointerDown = (e: React.PointerEvent<HTMLDivElement>, startIdx: number) => {
+    const tab = activeTabRef.current;
+    e.preventDefault();
+    const S = layoutRef.current.stepsPerBar;
+    const lastRow = rowCountOf(tab) - 1;
+    const colCells = (a: number, b: number) => buildCells(tab, { r: 0, s: a }, { r: lastRow, s: b });
+    const additive = wantsAdd(e.shiftKey);
+    const base = new Set<number>(additive && selRef.current ? selRef.current.cells : []);
+    const now = Date.now();
+    const prev = lastRulerTapRef.current;
+    const isDouble = prev !== null && prev.idx === startIdx && now - prev.t < 400;
+    lastRulerTapRef.current = isDouble ? null : { idx: startIdx, t: now };
+    anchorRef.current = { r: 0, s: startIdx };
+
+    if (isDouble && beatInfo.isBeatStart[startIdx % S]) {
+      const pos = startIdx % S;
+      let end = pos + 1;
+      while (end < S && !beatInfo.isBeatStart[end]) end++;
+      const barStart = startIdx - pos;
+      setSel(makeSel(tab, [...base, ...colCells(barStart + pos, barStart + end - 1)]));
+      return;
+    }
+
+    const apply = (a: number, b: number) =>
+      setSel(makeSel(tab, [...base, ...colCells(Math.min(a, b), Math.max(a, b))]));
+    apply(startIdx, startIdx);
+    const move = (ev: PointerEvent) => {
+      const idx = rulerStepAt(ev.clientX);
+      if (idx !== null) apply(startIdx, idx);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  };
+
   const handleGridPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const mode = modeRef.current;
     if (mode === 'edit' && !e.shiftKey) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const rulerBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-ruler] [data-step]');
+    if (rulerBtn) {
+      handleRulerPointerDown(e, Number(rulerBtn.dataset.step));
+      return;
+    }
     const cell = pointToCell(e.clientX, e.clientY);
     if (!cell) return;
     const tab = activeTabRef.current;
@@ -2934,6 +2994,23 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     });
     return rows;
   }, [activeSel]);
+
+  // Step yang punya sel terpilih (untuk menandai ruler beat/step).
+  const rulerSelSteps = useMemo<ReadonlySet<number>>(() => {
+    const out = new Set<number>();
+    if (!activeSel) return out;
+    const tracks = chordTracks;
+    activeSel.cells.forEach((k) => {
+      const st = cellStep(k);
+      out.add(st);
+      if (activeSel.tab === 'chord') {
+        const t = tracks[cellRow(k)];
+        const len = Math.max(1, t?.lens[st] || 1);
+        for (let i = 1; i < len; i++) out.add(st + i);
+      }
+    });
+    return out;
+  }, [activeSel, chordTracks]);
 
   // Baris (instrumen) yang terpilih SELURUHNYA: dipakai untuk menandai label dan untuk Duplikat instrumen.
   const rowFullSel = useMemo<boolean[]>(() => {
@@ -4070,24 +4147,44 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const winStart = viewStartBar * S;
       const winEnd = winStart + barsPerView * S - 1;
       const gap = parseFloat(getComputedStyle(g).columnGap) || 2;
-      const btn = (n: number) => wrap.querySelector(`button[data-seek="1"][data-step="${n}"]`) as HTMLElement | null;
-      const bLo = lo >= winStart && lo <= winEnd ? btn(lo) : null;
-      const bHi = hi >= winStart && hi <= winEnd ? btn(hi) : null;
-      const x1 = bLo ? Math.round((bLo.getBoundingClientRect().left - gr.left - gap / 2) * 100) / 100 : null;
-      const x2 = bHi ? Math.round((bHi.getBoundingClientRect().right - gr.left + gap / 2) * 100) / 100 : null;
+      // Kolom grid sama lebar (1fr + celah), jadi tepi dihitung dari lebar grid — tidak bergantung ukuran tombol
+      // yang bisa belum final saat halaman baru dimuat.
+      const nCols = Math.max(1, barsPerView * S);
+      const colW = (gr.width - gap * (nCols - 1)) / nCols;
+      const colLeft = (k: number) => k * (colW + gap);
+      const x1 = lo >= winStart && lo <= winEnd ? Math.round((colLeft(lo - winStart) - gap / 2) * 100) / 100 : null;
+      const x2 = hi >= winStart && hi <= winEnd ? Math.round((colLeft(hi - winStart) + colW + gap / 2) * 100) / 100 : null;
       const w = Math.round(gr.width * 100) / 100;
       setLoopX((prev) => (prev.x1 === x1 && prev.x2 === x2 && prev.w === w && prev.gap === gap ? prev : { x1, x2, w, gap }));
     };
     measure();
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', measure);
-      return () => window.removeEventListener('resize', measure);
-    }
+    // Ukur ulang setelah layout/font benar-benar settle (pemuatan awal / reload).
+    const raf1 = requestAnimationFrame(() => {
+      measure();
+      requestAnimationFrame(measure);
+    });
+    const t1 = window.setTimeout(measure, 150);
+    const t2 = window.setTimeout(measure, 600);
+    const fonts = (document as Document & { fonts?: { ready?: Promise<unknown> } }).fonts;
+    fonts?.ready?.then(measure).catch(() => {});
+    window.addEventListener('load', measure);
+    window.addEventListener('resize', measure);
+    const cleanupBase = () => {
+      cancelAnimationFrame(raf1);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.removeEventListener('load', measure);
+      window.removeEventListener('resize', measure);
+    };
+    if (typeof ResizeObserver === 'undefined') return cleanupBase;
     const ro = new ResizeObserver(measure);
     ro.observe(wrap);
-    const g = wrap.querySelector('[data-rowgrid]');
-    if (g) ro.observe(g);
-    return () => ro.disconnect();
+    if (wrap.parentElement) ro.observe(wrap.parentElement);
+    wrap.querySelectorAll('[data-rowgrid]').forEach((el) => ro.observe(el));
+    return () => {
+      cleanupBase();
+      ro.disconnect();
+    };
   }, [
     activeTab,
     showMixer,
@@ -5447,10 +5544,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             style={{ scrollbarWidth: 'thin', ...(editMode !== 'edit' ? { touchAction: 'none' } : {}) }}
             onPointerDown={handleGridPointerDown}
             onMouseDownCapture={(e) => {
-              if ((modeRef.current !== 'edit' || e.shiftKey) && (e.target as HTMLElement).closest('[data-rowgrid]')) e.preventDefault();
+              if ((modeRef.current !== 'edit' || e.shiftKey) && (e.target as HTMLElement).closest('[data-rowgrid], [data-ruler]')) e.preventDefault();
             }}
             onClickCapture={(e) => {
-              if ((modeRef.current !== 'edit' || e.shiftKey) && (e.target as HTMLElement).closest('[data-rowgrid]')) {
+              if ((modeRef.current !== 'edit' || e.shiftKey) && (e.target as HTMLElement).closest('[data-rowgrid], [data-ruler]')) {
                 e.stopPropagation();
                 e.preventDefault();
               }
@@ -5531,19 +5628,31 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 </div>
                 </div>
 
-                <div className="grid gap-0.5 flex-1 min-w-0 pl-2 pr-0" style={gridStyle}>
+                <div className="grid gap-0.5 flex-1 min-w-0 pl-2 pr-0" style={gridStyle} data-ruler="" data-keepsel="">
                   {windowSteps.map((idx) => {
                     const pos = idx % stepsPerBar;
                     const isBeat = beatInfo.isBeatStart[pos];
+                    const rulerSel = Boolean(activeSel && rulerSelSteps.has(idx));
                     return (
                       <button
                         key={idx}
                         type="button"
                         data-step={idx}
                         data-seek="1"
+                        title={
+                          editMode === 'select'
+                            ? isBeat
+                              ? 'Klik = pilih step ini · klik 2x = pilih satu beat · seret = pilih beberapa step'
+                              : 'Klik = pilih step ini · seret ke samping = pilih beberapa step'
+                            : undefined
+                        }
                         onClick={() => handleSeekStep(idx)}
                         className={`h-8 rounded-xs text-xs font-mono font-bold transition-colors flex items-center justify-center ${
-                          isBeat ? 'bg-white/15 text-white hover:bg-white/30' : 'bg-black/50 text-gray-500 hover:bg-white/10'
+                          rulerSel
+                            ? 'bg-accent/40 text-white ring-1 ring-accent'
+                            : isBeat
+                              ? 'bg-white/15 text-white hover:bg-white/30'
+                              : 'bg-black/50 text-gray-500 hover:bg-white/10'
                         }`}
                       >
                         {isBeat ? beatInfo.beatNumber[pos] : '·'}
@@ -6036,3 +6145,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     </section>
   );
 };
+</file>
+
+</files>
