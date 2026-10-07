@@ -920,25 +920,23 @@ const ChordLabel = memo(function ChordLabel({
             <div className="flex items-center gap-1 min-w-0">
               <button
                 type="button"
-                onClick={(e) => onSelectRow(tIdx, e.shiftKey)}
-                onDoubleClick={startRename}
+                onClick={(e) => {
+                  // Klik biasa = ganti nama. Di mode Pilih atau dengan Shift, klik memilih seluruh instrumen.
+                  if (pickMode || e.shiftKey) onSelectRow(tIdx, e.shiftKey);
+                  else startRename();
+                }}
                 aria-pressed={rowSelected}
-                title={`Klik: pilih seluruh instrumen ${track.label} (Shift+klik = tambahkan / lepas dari pilihan). Klik dua kali atau ikon pensil untuk mengganti nama.`}
-                className={`min-w-0 flex items-center gap-1 text-left text-xs font-semibold hover:text-accent cursor-pointer ${
+                title={
+                  pickMode
+                    ? `Klik: pilih seluruh instrumen ${track.label} (Shift+klik = tambahkan / lepas dari pilihan)`
+                    : `Klik untuk mengganti nama ${track.label}. Shift+klik = pilih seluruh instrumen ini.`
+                }
+                className={`min-w-0 max-w-full flex items-center gap-1 text-left text-xs font-semibold rounded-md border border-white/10 bg-white/[0.07] hover:bg-white/15 hover:border-accent/50 px-1.5 py-0.5 cursor-text transition-colors ${
                   rowSelected ? 'text-accent' : 'text-gray-200'
                 }`}
               >
                 {(pickMode || rowSelected) && <BoxSelect className="w-3 h-3 shrink-0" />}
                 <span className="truncate">{track.label}</span>
-              </button>
-              <button
-                type="button"
-                onClick={startRename}
-                title="Ganti nama progresi akor"
-                aria-label={`Ganti nama ${track.label}`}
-                className="shrink-0 p-0.5 rounded text-gray-500 hover:text-accent hover:bg-white/5 cursor-pointer"
-              >
-                <Pencil className="w-3 h-3" />
               </button>
             </div>
           )}
@@ -3121,7 +3119,22 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     };
   }, []);
 
-  const handleSeekStep = (targetStep: number) => {
+  // Posisi (playhead) selalu berada di dalam rentang main: di luar rentang, dijepit ke ujung terdekat.
+  // Bila awal dan akhir sama, posisinya ikut sama.
+  const loopBounds = () => {
+    const a = (loopStartBar - 1) * stepsPerBar + (loopStartBeat - 1);
+    const b = (loopEndBar - 1) * stepsPerBar + (loopEndBeat - 1);
+    const hi = Math.max(0, Math.min(totalSteps - 1, Math.max(a, b)));
+    const lo = Math.max(0, Math.min(Math.min(a, b), hi));
+    return { lo, hi };
+  };
+  const clampToLoop = (step: number) => {
+    const { lo, hi } = loopBounds();
+    return Math.max(lo, Math.min(hi, step));
+  };
+
+  const handleSeekStep = (rawTarget: number) => {
+    const targetStep = clampToLoop(rawTarget);
     const barIdx = Math.floor(targetStep / stepsPerBar);
     if (!isUnlocked8Bar && barIdx > 0) {
       onUnlockEditor();
@@ -3134,7 +3147,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   };
 
   const resetToBeginning = () => {
-    const startStep = Math.max(0, (loopStartBar - 1) * stepsPerBar + (loopStartBeat - 1));
+    const startStep = loopBounds().lo;
     stepRef.current = startStep;
     visualQueueRef.current = [];
     paintPlayhead(startStep);
@@ -3209,11 +3222,19 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     );
   };
   const syncPositionFields = () => paintPlayhead(playheadStepRef.current);
+  // Isi kolom Posisi dengan posisi playhead sebenarnya, walau kolomnya sedang difokus.
+  const forceSyncPositionFields = () => {
+    const S = Math.max(1, stepsPerBar);
+    const step = playheadStepRef.current;
+    if (posBarRef.current) posBarRef.current.value = String(Math.floor(step / S) + 1);
+    if (posStepRef.current) posStepRef.current.value = String((step % S) + 1);
+  };
   const nudgePosition = (el: HTMLInputElement | null, delta: number, min: number, max: number) => {
     if (!el) return;
     const cur = parseInt(el.value, 10);
     el.value = String(Math.max(min, Math.min(max, (Number.isFinite(cur) ? cur : min) + delta)));
     seekToPosition();
+    forceSyncPositionFields();
   };
 
   // Tampilkan halaman grid yang memuat posisi playhead saat ini (berguna setelah menggulir jauh dari posisi putar).
@@ -3706,13 +3727,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             // Selesai (tanpa loop): berhenti setelah ketukan terakhir benar-benar selesai berbunyi.
             stopped = true;
             stopTicker?.();
-            stepRef.current = 0;
+            stepRef.current = configuredStartStep;
             const waitMs = Math.max(0, (nextTimeRef.current - ctx.currentTime) * 1000) + 30;
             finishTimer = window.setTimeout(() => {
               setIsPlaying(false);
               stopAllLiveChords();
               visualQueueRef.current = [];
-              paintPlayhead(0);
+              paintPlayhead(configuredStartStep);
             }, waitMs);
             break;
           }
@@ -3763,6 +3784,18 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     paintPlayhead(playheadStepRef.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, enabledKey, viewStartBar, barsPerView, timeSigId]);
+
+  // Rentang main berubah: playhead yang tertinggal di luar rentang langsung dijepit masuk.
+  useEffect(() => {
+    const cur = playheadStepRef.current;
+    const next = clampToLoop(cur);
+    if (next !== cur || stepRef.current !== clampToLoop(stepRef.current)) {
+      stepRef.current = clampToLoop(stepRef.current);
+      visualQueueRef.current = [];
+      paintPlayhead(next);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loopStartBar, loopStartBeat, loopEndBar, loopEndBeat, stepsPerBar]);
 
   const handleClearGrid = () => {
     stopAllLiveChords();
@@ -4342,14 +4375,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             )}
           </div>
 
-          {hasKeyboard && (activeTab === 'drum' ? dynamicsOn : true) && (
-            <p className="text-[10px] font-mono text-gray-500 leading-relaxed">
-              {activeTab === 'drum'
-                ? `Dinamika keyboard (tahan lalu tekan pad; Shift kiri untuk simbol < > ?): ${dynKeyGuide('drum', drumDynMode)}`
-                : `Dinamika keyboard (tahan lalu tekan pad; Shift kanan untuk simbol { } |): ${dynKeyGuide('chord', chordDynMode)}`}
-            </p>
-          )}
-
           {activeTab === 'chord' && (
             <>
               {/* Satu baris: instrumen live di kiri, bank akor di kanan (sejajar secara vertikal) */}
@@ -4650,6 +4675,39 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <SpinField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
               <span>Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
+            </div>
+            <div
+              className="shrink-0 flex flex-col gap-0.5"
+              title={`Area main: Bar ${loopStartBar} Step ${loopStartBeat} sampai Bar ${loopEndBar} Step ${loopEndBeat}`}
+            >
+              <div
+                className="relative h-5 w-44 rounded-md bg-black/60 border border-white/10 overflow-hidden"
+                role="img"
+                aria-label={`Area main dari bar ${loopStartBar} step ${loopStartBeat} sampai bar ${loopEndBar} step ${loopEndBeat}`}
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.12) 1px, transparent 1px, transparent calc(100% / 16))',
+                }}
+              >
+                <div
+                  className="absolute inset-y-0 bg-accent/35 border-x-2 border-accent"
+                  style={{
+                    left: `${(Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) / totalSteps) * 100}%`,
+                    width: `max(4px, ${
+                      ((Math.min(loopPos(loopEndBar, loopEndBeat), totalSteps - 1) - Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) + 1) /
+                        totalSteps) *
+                      100
+                    }%)`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[8px] font-mono text-gray-500 leading-none px-0.5">
+                <span>1</span>
+                <span>4</span>
+                <span>8</span>
+                <span>12</span>
+                <span>16</span>
+              </div>
             </div>
             {!isUnlocked8Bar && (
               <button type="button" onClick={onUnlockEditor} className="shrink-0 text-[11px] text-accent hover:underline font-semibold cursor-pointer">
