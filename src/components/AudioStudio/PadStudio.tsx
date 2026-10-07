@@ -1812,6 +1812,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [loopEndBeat, setLoopEndBeat] = useState<number>(INITIAL_STEPS_PER_BAR);
   // Grid overlay area main: dipakai untuk menghitung step dari posisi pointer saat pegangan area main ditarik.
   const loopGridRef = useRef<HTMLDivElement>(null);
+  // Overlay area main diukur langsung dari grid pad yang sebenarnya (bukan dihitung dari lebar label), supaya tepi
+  // kiri / kanannya selalu persis di ujung pad berapa pun lebar label, border, atau scrollbar-nya.
+  const seqWrapRef = useRef<HTMLDivElement>(null);
+  const [loopBox, setLoopBox] = useState<{ left: number; right: number } | null>(null);
 
   const [drumVolume, setDrumVolume] = useState(85);
   const [chordMasterVolume, setChordMasterVolume] = useState(80);
@@ -2701,6 +2705,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Mengembalikan sel yang ditempel (menjadi pilihan baru).
   const pasteClip = (clip: SeqClip, r0: number, s0: number): Set<number> | null => {
     const { totalSteps: total, stepsPerBar: spb } = layoutRef.current;
+    if (r0 < 0 || s0 < 0) return null;
     if (s0 >= total) {
       onSuccessToast('Tidak ada ruang untuk menempel di sini (sudah di ujung grid).');
       return null;
@@ -4033,6 +4038,31 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setEditingPadIndex(null);
     onSuccessToast('Formula akor berhasil diperbarui.');
   };
+
+  // Ukur posisi horizontal grid pad (baris pertama) relatif terhadap pembungkus overlay.
+  useLayoutEffect(() => {
+    const wrap = seqWrapRef.current;
+    if (!wrap) return;
+    const measure = () => {
+      const g = wrap.querySelector('[data-rowgrid]') as HTMLElement | null;
+      if (!g) return;
+      const wr = wrap.getBoundingClientRect();
+      const gr = g.getBoundingClientRect();
+      const left = Math.round((gr.left - wr.left) * 100) / 100;
+      const right = Math.round((wr.right - gr.right) * 100) / 100;
+      setLoopBox((prev) => (prev && prev.left === left && prev.right === right ? prev : { left, right }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    const g = wrap.querySelector('[data-rowgrid]');
+    if (g) ro.observe(g);
+    return () => ro.disconnect();
+  }, [activeTab, showMixer, chordTracks, barsPerView, stepsPerBar]);
 
   // Geser jendela tampilan grid per bar (menggantikan scroll horizontal 1560px).
   const shiftView = (direction: 1 | -1) => {
@@ -5388,7 +5418,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             }}
           >
             <div className="space-y-2" style={{ minWidth: gridMinWidth }}>
-              <div className="relative">
+              <div className="relative" ref={seqWrapRef}>
               <div className="space-y-2">
               <div className="flex items-stretch border border-transparent">
                 <div className={`${labelWidth(showMixer)} shrink-0 border-r border-transparent flex items-center text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider pl-4`}>
@@ -5586,7 +5616,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     aria-hidden="true"
                     title={title}
                     className="absolute top-0 bottom-0 z-[5] pointer-events-none"
-                    style={{ left: `calc(${showMixer ? '16rem' : '13rem'} + 1px + 0.5rem)`, right: 1 }}
+                    style={
+                      loopBox
+                        ? { left: loopBox.left, right: loopBox.right }
+                        : { left: `calc(${showMixer ? '16rem' : '13rem'} + 1px + 0.5rem)`, right: 1 }
+                    }
                   >
                     <div ref={loopGridRef} className="grid gap-0.5 w-full h-full" style={gridStyle}>
                       {!hasArea ? (
