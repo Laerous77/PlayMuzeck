@@ -1714,16 +1714,18 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   viewRef.current = { start: viewStartBar, count: barsPerView, stepsPerBar, follow: followPlayhead };
 
   // Teks posisi playhead ("Bar 2 · Step 5"), ditulis langsung ke DOM supaya tidak memicu render ulang tiap ketukan.
-  const posReadoutRef = useRef<HTMLSpanElement | null>(null);
+  const posBarRef = useRef<HTMLInputElement | null>(null);
+  const posStepRef = useRef<HTMLInputElement | null>(null);
 
   // Tandai kolom ketukan yang sedang berbunyi langsung di DOM (tanpa render ulang React).
   const paintPlayhead = (step: number) => {
     playheadStepRef.current = step;
-    const readout = posReadoutRef.current;
-    if (readout) {
-      const S = Math.max(1, layoutRef.current.stepsPerBar);
-      readout.textContent = `Bar ${Math.floor(step / S) + 1} · Step ${(step % S) + 1}`;
-    }
+    // Isian posisi tidak ditimpa saat sedang diketik / difokus.
+    const S = Math.max(1, layoutRef.current.stepsPerBar);
+    const barEl = posBarRef.current;
+    const stepEl = posStepRef.current;
+    if (barEl && document.activeElement !== barEl) barEl.value = String(Math.floor(step / S) + 1);
+    if (stepEl && document.activeElement !== stepEl) stepEl.value = String((step % S) + 1);
     const root = sequencerScrollRef.current;
     if (!root) return;
     paintedElsRef.current.forEach((el) => el.removeAttribute('data-playing'));
@@ -3015,6 +3017,20 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setPlayChord(next.chord);
   };
 
+  // Pindah posisi putar dari isian Posisi (Bar / Step), diketik atau lewat tombol atas-bawah.
+  const seekToPosition = () => {
+    const b = parseInt(posBarRef.current?.value ?? '', 10);
+    const st = parseInt(posStepRef.current?.value ?? '', 10);
+    if (!Number.isFinite(b) || !Number.isFinite(st)) return;
+    const bar = Math.max(1, Math.min(TOTAL_BARS, b));
+    const stepInBar = Math.max(1, Math.min(stepsPerBar, st));
+    handleSeekStep((bar - 1) * stepsPerBar + (stepInBar - 1));
+    setViewStartBar((v) =>
+      bar - 1 < v || bar - 1 >= v + barsPerView ? Math.max(0, Math.min(TOTAL_BARS - barsPerView, bar - 1)) : v
+    );
+  };
+  const syncPositionFields = () => paintPlayhead(playheadStepRef.current);
+
   // Tampilkan halaman grid yang memuat posisi playhead saat ini (berguna setelah menggulir jauh dari posisi putar).
   const jumpToPlayhead = () => {
     const bar = Math.floor(playheadStepRef.current / Math.max(1, stepsPerBar));
@@ -4051,60 +4067,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   <DynamicsToggle on={dynamicsOn} onToggle={toggleDynamics} />
                 </>
               )}
-              <button
-                type="button"
-                onClick={toggleRecording}
-                aria-pressed={isRecording || countdownLeft !== null}
-                title={
-                  countdownLeft !== null
-                    ? 'Batalkan hitung mundur rekaman'
-                    : isRecording
-                    ? 'Hentikan rekaman'
-                    : 'Rekam: pukulan pad drum dan akor yang kamu mainkan masuk ke sequencer'
-                }
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                  countdownLeft !== null
-                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
-                    : isRecording
-                    ? 'bg-red-500/20 text-red-300 border-red-500/60'
-                    : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
-                }`}
-              >
-                <Circle
-                  className={`w-3 h-3 ${
-                    isRecording || countdownLeft !== null ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'
-                  }`}
-                />
-                <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
-              </button>
-              <label
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gray-300 bg-black/60 border border-white/10"
-                title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
-              >
-                <Timer className="w-3 h-3 text-gray-400" />
-                <IntField
-                  value={recCountdownSec}
-                  min={0}
-                  max={15}
-                  onChange={setRecCountdownSec}
-                  disabled={isRecording || countdownLeft !== null}
-                  ariaLabel="Hitung mundur sebelum rekam (detik, maksimal 15)"
-                  className="w-8 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
-                />
-                <span className="font-mono text-[10px] text-gray-400">dtk</span>
-              </label>
-              <button
-                type="button"
-                onClick={() => setMetronomeOn((v) => !v)}
-                aria-pressed={metronomeOn}
-                title="Metronom: klik ketukan saat memutar di editor maupun saat merekam"
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                  metronomeOn ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
-                }`}
-              >
-                <Activity className="w-3 h-3" />
-                <span>Metronom</span>
-              </button>
             </div>
             {activeTab === 'chord' && engineStatus && (
               <span
@@ -4132,7 +4094,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           {activeTab === 'chord' && (
             <>
               {/* Pemilih instrumen live: satu chip per instrumen yang sedang dipakai di sequencer */}
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center justify-end gap-1.5">
                 <span className="text-[11px] font-bold text-gray-300 mr-1">Instrumen live:</span>
                 {chordTracks.map((t, i) => {
                   if (!t.enabled) return null;
@@ -4199,7 +4161,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
 
               {/* Bank akor 1–8 */}
-              <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Bank akor">
+              <div className="flex flex-wrap items-center justify-end gap-1.5" role="tablist" aria-label="Bank akor">
                 <span className="text-[11px] font-bold text-gray-300 mr-1">Bank akor:</span>
                 {Array.from({ length: PAD_BANKS }, (_, bank) => (
                   <button
@@ -4219,7 +4181,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     </span>
                   </button>
                 ))}
-                <span className="text-[10px] font-mono text-gray-500 ml-auto">
+                <span className="text-[10px] font-mono text-gray-500 ml-2">
                   Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
                 </span>
               </div>
@@ -4436,15 +4398,44 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   Buka 16-Bar →
                 </button>
               )}
-              <button
-                type="button"
-                onClick={jumpToPlayhead}
-                title="Posisi playhead saat ini. Klik untuk menampilkan halaman grid yang memuat posisi ini. Aktifkan Ikuti, lalu atur posisi lewat baris penanda ketukan (garis putar)."
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-mono border border-white/10 bg-black/50 text-gray-300 hover:border-accent/50 cursor-pointer"
+              <div
+                className="flex items-center gap-1 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1"
+                title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
               >
-                <span className="text-gray-500">Posisi</span>
-                <span ref={posReadoutRef} className="font-bold text-accent tabular-nums" aria-live="off" />
-              </button>
+                <span className="font-bold text-accent">Posisi</span>
+                <span>Bar</span>
+                <input
+                  ref={posBarRef}
+                  type="number"
+                  min={1}
+                  max={TOTAL_BARS}
+                  defaultValue={1}
+                  onChange={seekToPosition}
+                  onBlur={syncPositionFields}
+                  aria-label="Posisi bar"
+                  className="w-12 bg-black/80 rounded border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent"
+                />
+                <span>Step</span>
+                <input
+                  ref={posStepRef}
+                  type="number"
+                  min={1}
+                  max={stepsPerBar}
+                  defaultValue={1}
+                  onChange={seekToPosition}
+                  onBlur={syncPositionFields}
+                  aria-label="Posisi step"
+                  className="w-12 bg-black/80 rounded border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent"
+                />
+                <button
+                  type="button"
+                  onClick={jumpToPlayhead}
+                  title="Tampilkan halaman grid yang memuat posisi ini"
+                  className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 hover:bg-white/15 text-gray-300 cursor-pointer"
+                >
+                  Lihat
+                </button>
+              </div>
               <button
                 type="button"
                 onClick={() => setFollowPlayhead((f) => !f)}
@@ -4576,7 +4567,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   {isPlaying ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
                   <span>{isPlaying ? 'Stop' : 'Putar'}</span>
                 </button>
-                <div className="flex items-center bg-black/60 border border-white/10 rounded-lg p-0.5" role="group" aria-label="Bagian yang diputar">
+                <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg p-1" role="group" aria-label="Bagian yang diputar">
                   {PLAY_PARTS.map(({ id, label, Icon, tip }) => {
                     const locked = id === 'chord' && !isUnlocked8Bar;
                     const on = id === 'drum' ? effPlayDrum : effPlayChord;
@@ -4631,6 +4622,48 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   <Activity className="w-3 h-3" />
                   <span>Metronom</span>
                 </button>
+              <button
+                type="button"
+                onClick={toggleRecording}
+                aria-pressed={isRecording || countdownLeft !== null}
+                title={
+                  countdownLeft !== null
+                    ? 'Batalkan hitung mundur rekaman'
+                    : isRecording
+                    ? 'Hentikan rekaman'
+                    : 'Rekam: pukulan pad drum dan akor yang kamu mainkan masuk ke sequencer'
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  countdownLeft !== null
+                    ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
+                    : isRecording
+                    ? 'bg-red-500/20 text-red-300 border-red-500/60'
+                    : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'
+                }`}
+              >
+                <Circle
+                  className={`w-3 h-3 ${
+                    isRecording || countdownLeft !== null ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'
+                  }`}
+                />
+                <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
+              </button>
+              <label
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gray-300 bg-black/60 border border-white/10"
+                title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
+              >
+                <Timer className="w-3 h-3 text-gray-400" />
+                <IntField
+                  value={recCountdownSec}
+                  min={0}
+                  max={15}
+                  onChange={setRecCountdownSec}
+                  disabled={isRecording || countdownLeft !== null}
+                  ariaLabel="Hitung mundur sebelum rekam (detik, maksimal 15)"
+                  className="w-8 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
+                />
+                <span className="font-mono text-[10px] text-gray-400">dtk</span>
+              </label>
               </div>
 
               <div className="ml-auto flex items-center gap-2">
