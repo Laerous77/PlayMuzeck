@@ -92,6 +92,12 @@ function scrollToAndSpotlight(id: string, durationMs = 2600): void {
 
 // Id bagian halaman utama yang paling dekat dengan bagian atas layar (menandai menu aktif).
 function getActiveSectionId(ids: string[], offset = 140): string | null {
+  // Di dasar halaman, bagian terakhir mungkin tidak pernah mencapai batas atas layar,
+  // jadi anggap bagian terakhir yang aktif.
+  const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
+  if (atBottom && ids.length > 0 && document.getElementById(ids[ids.length - 1])) {
+    return ids[ids.length - 1];
+  }
   let active: string | null = null;
   for (const id of ids) {
     const el = document.getElementById(id);
@@ -146,6 +152,31 @@ export const Header: React.FC<HeaderProps> = ({
     setIsSectionMenuOpen(false);
   }, [currentMode]);
 
+  // Halaman Utama: sorotan menu selalu mengikuti posisi scroll (bukan hanya saat menu dibuka).
+  useEffect(() => {
+    if (currentMode !== 'index') {
+      setActiveIndexId(null);
+      return;
+    }
+    const ids = INDEX_ITEMS.map((i) => i.id);
+    let raf = 0;
+    const sync = () => {
+      raf = 0;
+      setActiveIndexId(getActiveSectionId(ids));
+    };
+    const onScroll = () => {
+      if (!raf) raf = window.requestAnimationFrame(sync);
+    };
+    sync();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.removeEventListener('resize', onScroll);
+      if (raf) window.cancelAnimationFrame(raf);
+    };
+  }, [currentMode]);
+
   const toggleMenu = () => {
     audioEngine.playClickSound();
     if (!isSectionMenuOpen && currentMode === 'index') {
@@ -170,6 +201,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   const pickIndex = (id: string) => {
     audioEngine.playClickSound();
+    setActiveIndexId(id);
     setIsSectionMenuOpen(false);
     scrollToAndSpotlight(id);
   };
