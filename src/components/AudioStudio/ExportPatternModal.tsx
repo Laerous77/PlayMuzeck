@@ -4,6 +4,7 @@ import { X, Download, Loader2, Music, Disc, Repeat, Layers } from 'lucide-react'
 import { generateMidiFile, exportAudioFile, downloadBlob } from '../../services/exporters';
 import { audioEngine, EnvelopeADSR } from '../../services/audioEngine';
 import { ModalPortal } from './ModalPortal';
+import { SoundBankCredits } from './SoundBankCredits';
 import { IntField } from './NumberFields';
 import { DRUM_LEVEL_GAIN, DRUM_LEVEL_MIDI, clampLevel } from './padModel';
 
@@ -686,6 +687,8 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             </>
           )}
         </button>
+
+        {isAudioFormat && <SoundBankCredits />}
       </div>
     </ModalPortal>
   );

@@ -68,6 +68,7 @@ import {
 import { ModalPortal } from './ModalPortal';
 import { AdsrMini, AdsrRanges, IntField } from './NumberFields';
 import { InstrumentPickerModal } from './InstrumentPickerModal';
+import { SoundBankCredits } from './SoundBankCredits';
 import {
   DRUM_LEVEL_MAX,
   DRUM_LEVEL_LABEL,
@@ -4669,6 +4670,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         projectPayload={isExportModalOpen ? encodeProjectPayload(snapshotProject()) : undefined}
         onSuccessToast={onSuccessToast}
       />
+      <div className="pt-3">
+        <SoundBankCredits />
+      </div>
     </section>
   );
 };

@@ -609,16 +609,14 @@ class AudioEngine {
   // dipakai, dan HAPUS file SF2 lama dari /public supaya tidak ada
   // kemungkinan tersandung nama file basi lagi.
   // -------------------------------------------------------------------
-  private static readonly PRIMARY_SOUNDFONT_PATH = 'https://huggingface.co/Laerous77/playmuzeck-assets/resolve/main/soundfont.sf2';
-  private static readonly FALLBACK_SOUNDFONT_PATHS = [
-    '/soundfont.sf2',
-    '/just t4.sf2',
-  ];
+  private static readonly PRIMARY_SOUNDFONT_PATH = 'https://huggingface.co/Laerous77/playmuzeck-assets/resolve/main/MuseScore_General.sf2';
+  // Sengaja kosong: bank cadangan dari /public tidak dipakai lagi (file .sf2 tidak ikut di-deploy).
+  private static readonly FALLBACK_SOUNDFONT_PATHS: string[] = [];
 
   // Naikkan angka ini setiap kali isi file SF2 di sumbernya diganti (path tetap sama), supaya cache
   // browser pengguna lama tidak terus memakai bank yang basi.
-  private static readonly SF_CACHE_NAME = 'soundfont-cache-v2';
-  private static readonly SF_LEGACY_CACHE_NAMES = ['soundfont-cache-v1'];
+  private static readonly SF_CACHE_NAME = 'soundfont-cache-v3';
+  private static readonly SF_LEGACY_CACHE_NAMES = ['soundfont-cache-v1', 'soundfont-cache-v2'];
   // Waktu tunggu sampai server MULAI menjawab (header). Bila lewat, pindah ke sumber cadangan
   // alih-alih menunggu 2 menit tanpa suara.
   private static readonly SF_HEADER_TIMEOUT_MS = 12000;
@@ -881,7 +879,7 @@ class AudioEngine {
   // -------------------------------------------------------------------
   // PENYAMAAN LOUDNESS ANTAR-INSTRUMEN (Auto-Gain per Sample)
   //
-  // Masalah: bank SF2 (mis. "just t4.sf2") sering dibuat dengan level
+  // Masalah: bank SF2 (mis. bank GM dari berbagai sumber) sering dibuat dengan level
   // rekaman/mixing yang berbeda-beda per instrumen — beberapa sample
   // sengaja/tidak sengaja jauh lebih keras atau lebih pelan dari yang
   // lain. Sebelumnya sample dipakai apa adanya (hanya dikoreksi skala

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Volume2, VolumeX, Lock, Play, Shuffle, Check, AlertTriangle, Loader2 } from 'lucide-react';
 import { audioEngine, INSTRUMENTS_128, SOUND_BANK_READY_MESSAGE } from '../../services/audioEngine';
+import { SoundBankCredits } from '../AudioStudio/SoundBankCredits';
 import {
   SFX_SECTIONS,
   SFX_SECTION_LABEL,
@@ -359,6 +360,8 @@ export const SoundFxSettings: React.FC<Props> = ({ isLoggedIn, onGetPadEditor })
           >
             <Shuffle className="w-3.5 h-3.5" /> Acak {s.gmLinked ? 'efek' : 'semua efek'}
           </button>
+
+          <SoundBankCredits />
         </div>
       )}
     </div>
