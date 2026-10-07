@@ -1,5 +1,5 @@
 // src/components/AudioStudio/PadStudio.tsx
-import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Play,
@@ -1861,6 +1861,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Teks posisi playhead ("Bar 2 · Step 5"), ditulis langsung ke DOM supaya tidak memicu render ulang tiap ketukan.
   const posBarRef = useRef<HTMLInputElement | null>(null);
+  // Baris "Instrumen live + Bank akor": dipakai mendeteksi apakah Bank akor sudah turun ke baris bawah.
+  const chordRowRef = useRef<HTMLDivElement | null>(null);
+  const liveInstRef = useRef<HTMLDivElement | null>(null);
+  const bankGroupRef = useRef<HTMLDivElement | null>(null);
+  const [bankWrapped, setBankWrapped] = useState(false);
   const posStepRef = useRef<HTMLInputElement | null>(null);
 
   // Tandai kolom ketukan yang sedang berbunyi langsung di DOM (tanpa render ulang React).
@@ -3848,6 +3853,30 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - n, v)));
   };
 
+  // Deteksi Bank akor yang overflow (turun ke baris bawah instrumen live). Tidak bergantung pada kelas rata kiri/kanan,
+  // jadi hasilnya stabil dan tidak bolak-balik.
+  useLayoutEffect(() => {
+    if (activeTab !== 'chord') return;
+    const row = chordRowRef.current;
+    const inst = liveInstRef.current;
+    const bank = bankGroupRef.current;
+    if (!row || !inst || !bank) return;
+    const measure = () => {
+      const wrapped = bank.offsetTop > inst.offsetTop + 2;
+      setBankWrapped((prev) => (prev === wrapped ? prev : wrapped));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure);
+      return () => window.removeEventListener('resize', measure);
+    }
+    const ro = new ResizeObserver(measure);
+    ro.observe(row);
+    ro.observe(inst);
+    ro.observe(bank);
+    return () => ro.disconnect();
+  }, [activeTab, chordTracks]);
+
   // Rentang loop dijaga urut: awal tidak bisa melewati akhir dan akhir tidak bisa mendahului awal. Bila diubah melewati
   // batas, nilai yang sedang diubah berhenti di nilai pasangannya (awal dan akhir jadi sama).
   const loopPos = (bar: number, beat: number) => (bar - 1) * stepsPerBar + (beat - 1);
@@ -4377,10 +4406,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
           {activeTab === 'chord' && (
             <>
-              {/* Satu baris: instrumen live di kiri, bank akor di kanan (sejajar secara vertikal) */}
-              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              {/* Satu baris: instrumen live di kiri, bank akor di kanan. Bila Bank akor overflow dan turun ke baris
+                  bawah, Bank akor rata kiri sedangkan keterangan "Pad #… dari …" tetap di kanan. */}
+              <div ref={chordRowRef} className="flex flex-wrap items-center gap-x-4 gap-y-2">
               {/* Pemilih instrumen live: satu chip per instrumen yang sedang dipakai di sequencer */}
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div ref={liveInstRef} className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[11px] font-bold text-gray-300 mr-1">Instrumen live:</span>
                 {chordTracks.map((t, i) => {
                   if (!t.enabled) return null;
@@ -4447,7 +4477,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
 
               {/* Bank akor 1–8 */}
-              <div className="flex flex-wrap items-center justify-end gap-1.5 ml-auto" role="tablist" aria-label="Bank akor">
+              <div
+                ref={bankGroupRef}
+                className={`flex flex-wrap items-center justify-start gap-1.5 ${bankWrapped ? '' : 'ml-auto'}`}
+                role="tablist"
+                aria-label="Bank akor"
+              >
                 <span className="text-[11px] font-bold text-gray-300 mr-1">Bank akor:</span>
                 {Array.from({ length: PAD_BANKS }, (_, bank) => (
                   <button
@@ -4467,10 +4502,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     </span>
                   </button>
                 ))}
-                <span className="text-[10px] font-mono text-gray-500 ml-2">
-                  Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
-                </span>
               </div>
+              {/* Keterangan rentang pad: selalu menempel di kanan */}
+              <span className="text-[10px] font-mono text-gray-500 ml-auto whitespace-nowrap">
+                Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
+              </span>
               </div>
             </>
           )}
@@ -4643,6 +4679,47 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </div>
           )}
 
+          {/* Visualisasi area main (rentang loop) langsung di panel pad. Rentangnya diatur lewat Bar / Step di bawah. */}
+          <div
+            className="flex flex-wrap items-center gap-x-3 gap-y-1"
+            title={`Area main: Bar ${loopStartBar} Step ${loopStartBeat} sampai Bar ${loopEndBar} Step ${loopEndBeat}`}
+          >
+            <span className="shrink-0 text-[10px] font-bold text-gray-300 uppercase tracking-wider">Area main</span>
+            <div className="flex flex-col gap-0.5 w-full max-w-xs sm:w-64">
+              <div
+                className="relative h-5 w-full rounded-md bg-black/60 border border-white/10 overflow-hidden"
+                role="img"
+                aria-label={`Area main dari bar ${loopStartBar} step ${loopStartBeat} sampai bar ${loopEndBar} step ${loopEndBeat}`}
+                style={{
+                  backgroundImage:
+                    'repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.12) 1px, transparent 1px, transparent calc(100% / 16))',
+                }}
+              >
+                <div
+                  className="absolute inset-y-0 bg-accent/35 border-x-2 border-accent"
+                  style={{
+                    left: `${(Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) / totalSteps) * 100}%`,
+                    width: `max(4px, ${
+                      ((Math.min(loopPos(loopEndBar, loopEndBeat), totalSteps - 1) - Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) + 1) /
+                        totalSteps) *
+                      100
+                    }%)`,
+                  }}
+                />
+              </div>
+              <div className="flex justify-between text-[8px] font-mono text-gray-500 leading-none px-0.5">
+                <span>1</span>
+                <span>4</span>
+                <span>8</span>
+                <span>12</span>
+                <span>16</span>
+              </div>
+            </div>
+            <span className="shrink-0 text-[10px] font-mono text-gray-500">
+              Bar {loopStartBar}.{loopStartBeat} — Bar {loopEndBar}.{loopEndBeat}
+            </span>
+          </div>
+
         </div>
 
         <div className="space-y-2 pt-1">
@@ -4675,39 +4752,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <SpinField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
               <span>Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
-            </div>
-            <div
-              className="shrink-0 flex flex-col gap-0.5"
-              title={`Area main: Bar ${loopStartBar} Step ${loopStartBeat} sampai Bar ${loopEndBar} Step ${loopEndBeat}`}
-            >
-              <div
-                className="relative h-5 w-44 rounded-md bg-black/60 border border-white/10 overflow-hidden"
-                role="img"
-                aria-label={`Area main dari bar ${loopStartBar} step ${loopStartBeat} sampai bar ${loopEndBar} step ${loopEndBeat}`}
-                style={{
-                  backgroundImage:
-                    'repeating-linear-gradient(to right, rgba(255,255,255,0.12) 0, rgba(255,255,255,0.12) 1px, transparent 1px, transparent calc(100% / 16))',
-                }}
-              >
-                <div
-                  className="absolute inset-y-0 bg-accent/35 border-x-2 border-accent"
-                  style={{
-                    left: `${(Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) / totalSteps) * 100}%`,
-                    width: `max(4px, ${
-                      ((Math.min(loopPos(loopEndBar, loopEndBeat), totalSteps - 1) - Math.min(loopPos(loopStartBar, loopStartBeat), totalSteps - 1) + 1) /
-                        totalSteps) *
-                      100
-                    }%)`,
-                  }}
-                />
-              </div>
-              <div className="flex justify-between text-[8px] font-mono text-gray-500 leading-none px-0.5">
-                <span>1</span>
-                <span>4</span>
-                <span>8</span>
-                <span>12</span>
-                <span>16</span>
-              </div>
             </div>
             {!isUnlocked8Bar && (
               <button type="button" onClick={onUnlockEditor} className="shrink-0 text-[11px] text-accent hover:underline font-semibold cursor-pointer">
