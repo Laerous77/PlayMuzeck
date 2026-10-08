@@ -2,7 +2,7 @@
 // Komponen & gaya yang dipakai bersama oleh AudioToolsSuite (9 alat bawaan) dan AudioExtraTools (11 alat tambahan)
 // supaya tampilan ke-20 alat seragam.
 import React, { useEffect, useRef, useState } from 'react';
-import { Info } from 'lucide-react';
+import { AlertTriangle, FileAudio, Info } from 'lucide-react';
 
 /** Popover info (ikon "i") di sebelah judul alat. */
 export const InfoTip: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => {
@@ -107,3 +107,83 @@ export const quotaGuardProps = (locked: boolean, onBlocked: () => void): Record<
     },
   };
 };
+
+// ───────────────────────── Kerangka seragam panel alat ─────────────────────────
+// Dipakai ke-20 alat (bawaan & tambahan) supaya bagian yang sama selalu tampil sama:
+// chip nama berkas, catatan "unggah dulu", catatan batas durasi, dan baris Format Unduhan.
+
+export type DownloadFormat = 'MP3' | 'WAV' | 'M4A' | 'FLAC';
+export const DOWNLOAD_FORMATS: readonly DownloadFormat[] = ['MP3', 'WAV', 'M4A', 'FLAC'];
+
+/** Chip nama berkas aktif di pojok kanan judul panel. */
+export const FileChip: React.FC<{ name: string; meta?: string }> = ({ name, meta }) => (
+  <span className="text-[11px] font-mono text-accent bg-black/60 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
+    <FileAudio className="w-3.5 h-3.5" />
+    <span className="truncate max-w-[150px] sm:max-w-xs">{name}</span>
+    {meta && <span className="text-gray-400">({meta})</span>}
+  </span>
+);
+
+/** Catatan "unggah berkas dulu" yang tampil selama belum ada berkas. */
+export const EmptyFileNotice: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="text-[11px] text-gray-400 bg-black/40 border border-white/5 rounded-lg px-3 py-2">{children}</p>
+);
+
+/** Catatan batas durasi, plus peringatan kuning bila berkas melanggar batas. */
+export const LimitNote: React.FC<{ text: string; alert?: string | null }> = ({ text, alert }) => (
+  <>
+    <p className="text-[11px] text-gray-500">{text}</p>
+    {alert && (
+      <p role="alert" className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+        <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+        <span>{alert}</span>
+      </p>
+    )}
+  </>
+);
+
+/**
+ * Baris "Format Unduhan" dengan pil MP3 / WAV / M4A / FLAC.
+ * `disabled` berisi alasan per format yang tidak boleh dipilih (muncul sebagai tooltip).
+ * `strike` mencoret format yang dikunci (dipakai Convert); matikan bila format dikunci karena alasan lain.
+ */
+export const FormatRow: React.FC<{
+  value: DownloadFormat | null;
+  onChange: (f: DownloadFormat) => void;
+  disabled?: Partial<Record<DownloadFormat, string>>;
+  strike?: boolean;
+  info?: string;
+}> = ({ value, onChange, disabled, strike = true, info = FORMAT_INFO }) => (
+  <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
+    <span className="text-gray-300 font-bold flex items-center gap-2">
+      Format Unduhan:
+      <InfoTip label="Info format unduhan">
+        <p>{info}</p>
+      </InfoTip>
+    </span>
+    <div className="flex items-center gap-1.5">
+      {DOWNLOAD_FORMATS.map((f) => {
+        const reason = disabled?.[f];
+        const isOff = reason !== undefined;
+        return (
+          <button
+            key={f}
+            type="button"
+            disabled={isOff}
+            title={reason}
+            onClick={() => onChange(f)}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              isOff
+                ? `bg-black/30 text-gray-600 cursor-not-allowed ${strike ? 'line-through' : ''}`
+                : value === f
+                ? 'bg-accent text-on-accent shadow cursor-pointer'
+                : 'bg-black/60 text-gray-400 hover:text-white cursor-pointer'
+            }`}
+          >
+            {f}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);

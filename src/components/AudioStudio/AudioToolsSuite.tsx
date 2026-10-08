@@ -19,7 +19,6 @@ import {
   Download,
   CheckCircle,
   Loader2,
-  FileAudio,
   Film,
   Music,
   Trash2,
@@ -29,8 +28,8 @@ import {
   Target,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
-import { InfoTip, FORMAT_INFO, BTN_DOWNLOAD, BTN_PRIMARY, PANEL_CLS, quotaGuardProps } from './toolsShared';
-import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, type ExtraToolId, type QuotaGate } from './AudioExtraTools';
+import { InfoTip, BTN_DOWNLOAD, BTN_PRIMARY, PANEL_CLS, EmptyFileNotice, FileChip, FormatRow, LimitNote, quotaGuardProps } from './toolsShared';
+import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, EXTRA_FILE_TOOLS, type ExtraPickerHandle, type ExtraToolId, type QuotaGate } from './AudioExtraTools';
 import { checkInputDuration, checkOutputDuration, limitLabelFor } from '../../services/audioLimits';
 import { DAILY_FREE_QUOTA, refreshQuota, refundReservation, remainingQuota, reserveQuota, subscribeQuota, type Reservation } from '../../services/toolQuota';
 import {
@@ -402,6 +401,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const [selectedTool, setSelectedTool] = useState<ToolType>(initialTool && !isExtraId(initialTool) ? initialTool : 'trim');
   const [selectedExtra, setSelectedExtra] = useState<ExtraToolId | null>(initialTool && isExtraId(initialTool) ? initialTool : null);
   const [extraTick, setExtraTick] = useState(0);
+  // Pemilih berkas milik alat tambahan yang sedang aktif (Gabung & Fade, Ulangi Audio, Rapikan Audio, Edit Metadata).
+  const [extraPicker, setExtraPicker] = useState<ExtraPickerHandle | null>(null);
   const extraSessionRef = useRef<Set<string>>(new Set());
   const paidExtraRef = useRef<Set<string>>(new Set());
   const extraResRef = useRef<Map<string, Reservation>>(new Map());
@@ -1255,6 +1256,30 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const panelLocked = !isToolsOwned && !selectedExtra && currentToolQuota <= 0 && !hasPaidWork;
   const guardBuiltin = quotaGuardProps(panelLocked, () => goPricing(selectedTool));
 
+  // Tombol "Unggah Berkas" di header dipakai bersama: alat bawaan memuat berkas ke suite ini,
+  // alat tambahan berbasis berkas membuka pemilih berkas miliknya sendiri.
+  const showUploadBtn = !selectedExtra || (EXTRA_FILE_TOOLS.includes(selectedExtra) && extraPicker !== null);
+  const uploadLoading = selectedExtra ? Boolean(extraPicker?.loading) : isLoadingFile;
+  const uploadLabel = selectedExtra
+    ? extraPicker?.label ?? 'Unggah Berkas'
+    : isLoadingFile
+    ? 'Membaca...'
+    : audioFile
+    ? 'Ganti Berkas'
+    : 'Unggah Berkas';
+  const handleUploadClick = () => {
+    if (selectedExtra) {
+      if (extraGate.locked(selectedExtra)) {
+        goPricing(selectedExtra);
+        return;
+      }
+      extraPicker?.open();
+      return;
+    }
+    if (panelLocked) goPricing(selectedTool);
+    else fileInputRef.current?.click();
+  };
+
   const predictedPeak = sourcePeak * Math.pow(10, dynamicGainDb / 20);
   const clipWarning = selectedTool === 'volume' && dynamicGainDb > 0 && predictedPeak > 1;
   const safeGainDb = sourcePeak > 0 ? Math.floor(-20 * Math.log10(sourcePeak) * 10) / 10 : 0;
@@ -1323,19 +1348,19 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
               </button>
             )}
 
-            {!selectedExtra && (
+            {showUploadBtn && (
               <button
                 type="button"
-                onClick={() => (panelLocked ? goPricing(selectedTool) : fileInputRef.current?.click())}
-                disabled={isLoadingFile}
+                onClick={handleUploadClick}
+                disabled={uploadLoading}
                 className="h-9 px-3.5 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-xs font-bold text-gray-200 flex items-center gap-1.5 cursor-pointer disabled:opacity-60"
               >
-                {isLoadingFile ? (
+                {uploadLoading ? (
                   <Loader2 className="w-3.5 h-3.5 text-accent animate-spin" />
                 ) : (
                   <Upload className="w-3.5 h-3.5 text-accent" />
                 )}
-                <span>{isLoadingFile ? 'Membaca...' : audioFile ? 'Ganti Berkas' : 'Unggah Berkas'}</span>
+                <span>{uploadLabel}</span>
               </button>
             )}
             <input
@@ -1433,6 +1458,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
           gate={extraGate}
           onSuccessToast={onSuccessToast}
           studioActiveTrack={studioActiveTrack}
+          onPicker={setExtraPicker}
         />
 
         {/* Panel Kontrol (9 alat bawaan) */}
@@ -1451,27 +1477,18 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                 </InfoTip>
               </div>
 
-              {audioFile && (
-                <span className="text-[11px] font-mono text-accent bg-black/60 px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
-                  <FileAudio className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[150px] sm:max-w-xs">{audioFile.name}</span>
-                  <span className="text-gray-400">({decodedBuffer?.duration.toFixed(1)}s)</span>
-                </span>
-              )}
+              {audioFile && <FileChip name={audioFile.name} meta={`${decodedBuffer?.duration.toFixed(1)}s`} />}
             </div>
 
             {!decodedBuffer && (
-              <p className="text-[11px] text-gray-400 bg-black/40 border border-white/5 rounded-lg px-3 py-2">
+              <EmptyFileNotice>
                 Unggah berkas audio (atau video untuk ekstrak audio) terlebih dahulu untuk memakai alat ini.
-              </p>
+              </EmptyFileNotice>
             )}
-            <p className="text-[11px] text-gray-500">Durasi berkas maks. {limitLabelFor(selectedTool)} untuk alat ini (berlaku untuk berkas masuk dan hasil unduhan).</p>
-            {limitMsg && (
-              <p role="alert" className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
-                <span>{limitMsg}</span>
-              </p>
-            )}
+            <LimitNote
+              text={`Durasi berkas maks. ${limitLabelFor(selectedTool)} untuk alat ini (berlaku untuk berkas masuk dan hasil unduhan).`}
+              alert={limitMsg}
+            />
 
             <div className="pt-2">
               {/* TRIM / CUT */}
@@ -1819,34 +1836,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
             {/* Format Unduhan & Aksi */}
             <div className="pt-3 border-t border-white/[0.06] space-y-3">
-              <div className="flex items-center justify-between flex-wrap gap-2 text-xs">
-                <span className="text-gray-300 font-bold flex items-center gap-2">
-                  Format Unduhan:
-                  <InfoTip label="Info format unduhan">
-                    <p>{FORMAT_INFO}</p>
-                  </InfoTip>
-                </span>
-                <div className="flex items-center gap-1.5">
-                  {(['MP3', 'WAV', 'M4A', 'FLAC'] as const).map((fmt) => (
-                    <button
-                      key={fmt}
-                      type="button"
-                      disabled={blockedFormat === fmt}
-                      title={blockedFormat === fmt ? 'Sama dengan format berkas asal' : undefined}
-                      onClick={() => setSelectedExportFormat(fmt)}
-                      className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                        blockedFormat === fmt
-                          ? 'bg-black/30 text-gray-600 line-through cursor-not-allowed'
-                          : selectedExportFormat === fmt
-                          ? 'bg-accent text-on-accent shadow cursor-pointer'
-                          : 'bg-black/60 text-gray-400 hover:text-white cursor-pointer'
-                      }`}
-                    >
-                      {fmt}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <FormatRow
+                value={selectedExportFormat}
+                onChange={setSelectedExportFormat}
+                disabled={blockedFormat ? { [blockedFormat]: 'Sama dengan format berkas asal' } : undefined}
+              />
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                 <div className="flex items-center gap-2.5 flex-wrap">
