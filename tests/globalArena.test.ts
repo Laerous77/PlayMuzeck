@@ -1,0 +1,217 @@
+// Tes Arena Global: siklus lobi -> soal -> jeda -> podium, kunci jawaban tidak bocor, pencatatan skor oleh server.
+// Memakai io/socket palsu dan jam terkendali, jadi tidak butuh jaringan. Jalankan: npx tsx tests/globalArena.test.ts
+import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
+
+let bad = 0;
+const ok = (n: string, c: boolean) => {
+  console.log(c ? 'ok  ' : 'GAGAL', n);
+  if (!c) bad++;
+};
+
+// ── Jam & timer terkendali (harus dipasang SEBELUM modul dimuat) ──
+let clock = 1_800_000_000_000;
+Date.now = () => clock;
+let tick: () => void = () => {};
+(globalThis as any).setInterval = (fn: () => void) => {
+  tick = fn;
+  return { unref() {}, ref() {} };
+};
+const advance = (ms: number) => {
+  clock += ms;
+  tick();
+};
+const flush = () => new Promise<void>((r) => setImmediate(r));
+
+const arena = await import('../server/globalArena.ts');
+
+// ── io/socket palsu ──
+class FakeSocket {
+  static seq = 0;
+  id = `s${++FakeSocket.seq}`;
+  data: Record<string, any> = {};
+  rooms = new Set<string>();
+  handlers = new Map<string, (p?: any) => void>();
+  log: Array<[string, any]> = [];
+  constructor(private io: FakeIo) {}
+  on(ev: string, fn: (p?: any) => void) {
+    this.handlers.set(ev, fn);
+  }
+  emit(ev: string, payload?: any) {
+    this.log.push([ev, payload]);
+  }
+  join(r: string) {
+    this.rooms.add(r);
+  }
+  leave(r: string) {
+    this.rooms.delete(r);
+  }
+  fire(ev: string, payload?: any) {
+    this.handlers.get(ev)?.(payload);
+  }
+  last(ev: string) {
+    return [...this.log].reverse().find((l) => l[0] === ev)?.[1];
+  }
+  all(ev: string) {
+    return this.log.filter((l) => l[0] === ev).map((l) => l[1]);
+  }
+}
+class FakeIo {
+  sockets = { sockets: new Map<string, FakeSocket>() };
+  conn: ((s: FakeSocket) => void) | null = null;
+  on(ev: string, fn: (s: FakeSocket) => void) {
+    if (ev === 'connection') this.conn = fn;
+  }
+  to(target: string) {
+    return {
+      emit: (ev: string, payload?: any) => {
+        const direct = this.sockets.sockets.get(target);
+        if (direct) return direct.emit(ev, payload);
+        for (const s of this.sockets.sockets.values()) if (s.rooms.has(target)) s.emit(ev, payload);
+      },
+    };
+  }
+  connect(userId?: string) {
+    const s = new FakeSocket(this);
+    if (userId) s.data.userId = userId;
+    this.sockets.sockets.set(s.id, s);
+    this.conn!(s);
+    return s;
+  }
+}
+
+// ── Fungsi murni ──
+ok('poin penuh bila dijawab seketika', arena.arenaPoints(0) === 100);
+ok('poin turun linear sampai 30%', arena.arenaPoints(1) === 30 && arena.arenaPoints(0.5) === 65);
+ok('poin tidak keluar rentang', arena.arenaPoints(-1) === 100 && arena.arenaPoints(9) === 30);
+const deck = arena.pickBuiltinDeck()!;
+ok('deck bawaan terpilih', Boolean(deck) && deck.source === 'builtin' && deck.questions.length >= arena.ARENA_MIN_QUESTIONS);
+const qs = arena.buildMatchQuestions(deck);
+ok('soal permainan maksimal ARENA_QUESTIONS', qs.length === Math.min(arena.ARENA_QUESTIONS, deck.questions.length));
+ok('pengacakan pilihan menjaga kunci jawaban', qs.every((q) => {
+  const src = deck.questions.find((d) => d.question === q.question)!;
+  return src.options[src.correctIndex] === q.options[q.correctIndex];
+}));
+
+// ── Simulasi permainan ──
+const io = new FakeIo();
+const finished: any[] = [];
+arena.attachGlobalArena(io as any, {
+  onFinished: async (game) => {
+    finished.push(game);
+    return Object.fromEntries(game.players.map((p) => [p.userId, { counted: true, points: p.correct * 10 }]));
+  },
+});
+
+const s1 = io.connect('user-1');
+const s2 = io.connect('user-2');
+const guest = io.connect();
+const ident = (n: string) => ({ clientId: `client-${n}-0000000000`, name: n, avatarUrl: 'javascript:alert(1)', frameId: 'none' });
+
+s1.fire('arena:join', ident('Ani'));
+s2.fire('arena:join', ident('Budi'));
+await flush();
+
+const joined1 = s1.last('arena:joined');
+ok('pemain masuk tanpa kode ruangan', Boolean(joined1) && !('code' in joined1.state));
+ok('keadaan awal: lobi dengan kuis terpilih server', joined1.state.phase === 'lobby');
+await flush();
+ok('server memilih kuis untuk lobi berikutnya', Boolean(s1.last('arena:update')?.deckTitle));
+ok('avatar berbahaya dibuang', s1.last('arena:update').players.every((p: any) => p.avatarUrl === ''));
+ok('dua pemain berada di kanal yang sama', s1.last('arena:update').players.length === 2);
+
+// Pemain baru lewat refresh: id publik sama, bukan pemain ganda.
+const s1b = io.connect('user-1');
+s1b.fire('arena:join', ident('Ani'));
+ok('refresh memulihkan pemain yang sama', s1b.last('arena:joined').you === joined1.you && s1b.last('arena:update').players.length === 2);
+ok('tab lama diberi tahu sudah digantikan', s1.all('arena:replaced').length === 1);
+
+// Lobi -> permainan dimulai
+advance(arena.ARENA_LOBBY_SEC * 1000 + 1);
+const started = s1b.last('arena:started');
+ok('permainan dimulai otomatis setelah hitung mundur', Boolean(started) && started.questions.length === qs.length);
+ok('soal yang dikirim TIDAK memuat kunci/penjelasan', started.questions.every((q: any) => !('correctIndex' in q) && !('explanation' in q)));
+ok('pemain lobi ikut bermain', started.participating === true);
+
+// Penonton yang masuk saat permainan berjalan
+guest.fire('arena:join', ident('Tamu'));
+const gj = guest.last('arena:joined');
+ok('pemain yang masuk saat berjalan menonton dulu', gj.state.players.find((p: any) => p.id === gj.you).participating === false);
+ok('penonton tidak menerima kunci soal yang belum selesai', Object.keys(gj.sync.revealed).length === 0);
+guest.fire('arena:answer', { optionIndex: 0 });
+ok('penonton tidak bisa menjawab', guest.all('arena:answerResult').length === 0);
+
+const correctIdxOf = (publicQ: any) => {
+  const src = (BUILTIN_DECKS as any[]).flatMap((d) => d.questions).find((x: any) => x.question === publicQ.question);
+  return publicQ.options.indexOf(src.options[src.correctIndex]);
+};
+const wrongIdxOf = (publicQ: any) => (correctIdxOf(publicQ) + 1) % publicQ.options.length;
+
+let questions = started.questions as any[];
+const total = questions.length;
+for (let i = 0; i < total; i++) {
+  const q = questions[i];
+  s1b.fire('arena:answer', { optionIndex: correctIdxOf(q) });
+  if (i === 0) {
+    const r = s1b.last('arena:answerResult');
+    ok('jawaban benar dinilai server & kunci baru dikirim setelah menjawab', r.isCorrect === true && r.correctIndex === correctIdxOf(q) && r.pointsAwarded > 0);
+    s1b.fire('arena:answer', { optionIndex: wrongIdxOf(q) });
+    ok('menjawab dua kali diabaikan', s1b.all('arena:answerResult').length === 1);
+  }
+  s2.fire('arena:answer', { optionIndex: wrongIdxOf(q) });
+  advance(arena.ARENA_ROUND_SEC * 1000 + 1); // waktu soal habis -> jeda
+  ok(`soal ${i + 1}: jeda menampilkan jawaban benar`, s1b.last('arena:roundEnded')?.currentQIndex === i);
+  advance(arena.ARENA_GAP_SEC * 1000 + 1); // jeda habis -> soal berikut / podium
+}
+
+const ended = s1b.last('arena:ended');
+ok('permainan berakhir di podium', Boolean(ended) && ended.state.phase === 'podium');
+const scores = Object.fromEntries(ended.state.players.map((p: any) => [p.name, p.score]));
+ok('skor pemain yang benar semua > 0, yang salah semua = 0', scores['Ani'] > 0 && scores['Budi'] === 0);
+ok('podium membuka seluruh kunci jawaban', Object.keys(ended.revealed).length === total);
+
+await flush();
+ok('skor dicatat SEKALI oleh server', finished.length === 1);
+const g = finished[0];
+ok('catatan memuat id deck & soal dari server', g.deckId === deck.deckId || BUILTIN_DECKS.some((d: any) => d.id === g.deckId));
+ok('hanya akun login peserta yang dicatat (tamu penonton tidak)', g.players.length === 2 && g.players.every((p: any) => p.userId.startsWith('user-')));
+ok('jawaban benar dihitung server', g.players.find((p: any) => p.userId === 'user-1').correct === total && g.players.find((p: any) => p.userId === 'user-2').correct === 0);
+ok('hasil peringkat dikirim ke pemain di podium', s1b.last('arena:leaderboard')?.points === total * 10);
+
+// Podium -> lobi -> permainan berikutnya otomatis
+advance(arena.ARENA_PODIUM_SEC * 1000 + 1);
+await flush();
+ok('setelah podium kembali ke lobi dengan kuis baru', s1b.last('arena:update').phase === 'lobby');
+ok('penonton kini ikut permainan berikutnya', s1b.last('arena:update').players.length === 3);
+advance(arena.ARENA_LOBBY_SEC * 1000 + 1);
+ok('permainan berikutnya berjalan otomatis', s1b.last('arena:started') !== started && guest.last('arena:started')?.participating === true);
+
+// Keluar di tengah permainan = tidak dicatat
+questions = s1b.last('arena:started').questions;
+s2.fire('arena:leave');
+ok('keluar mengirim arena:left', s2.all('arena:left').length === 1);
+for (let i = 0; i < questions.length; i++) {
+  s1b.fire('arena:answer', { optionIndex: correctIdxOf(questions[i]) });
+  advance(arena.ARENA_ROUND_SEC * 1000 + 1);
+  advance(arena.ARENA_GAP_SEC * 1000 + 1);
+}
+await flush();
+ok('permainan kedua dicatat tanpa pemain yang sudah keluar', finished.length === 2 && finished[1].players.every((p: any) => p.userId !== 'user-2'));
+
+// Reaksi emoji: daftar putih
+const before = s1b.all('arena:reactionReceived').length;
+s1b.fire('arena:reaction', { emoji: '🔥' });
+s1b.fire('arena:reaction', { emoji: '<script>' });
+ok('emoji terdaftar diteruskan, lainnya ditolak', s1b.all('arena:reactionReceived').length === before + 1);
+
+// Identitas tidak valid
+const bogus = io.connect();
+bogus.fire('arena:join', { clientId: 'x', name: 'Z' });
+ok('clientId tidak valid ditolak', Boolean(bogus.last('arena:error')));
+
+// Semua peserta menjawab -> sisa waktu dipangkas jadi 3 detik
+const fast = io.connect('user-9');
+fast.fire('arena:join', ident('Cepat'));
+ok('summary arena tersedia untuk kartu Pusat Kuis', arena.getArenaSummary().playersOnline >= 1);
+
+if (bad) process.exitCode = 1;
+else console.log('\nSemua tes Arena Global lulus.');

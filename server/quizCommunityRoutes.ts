@@ -1,24 +1,46 @@
 // server/quizCommunityRoutes.ts
 // Papan peringkat (harian / bulanan / sepanjang waktu) + Komunitas Kuis (berbagi kuis buatan Kuis Editor).
-// Papan peringkat HANYA berisi skor dari mode Multiplayer Online. Skor dihitung & dicatat oleh SERVER saat permainan
-// multiplayer selesai (recordMultiplayerGame, dipanggil dari server/multiplayerSocket.ts), bukan dikirim klien.
+//
+// PAPAN PERINGKAT hanya berisi skor dari ARENA GLOBAL (multiplayer publik tanpa kode ruangan, server/globalArena.ts).
+// Skor dihitung & dicatat oleh SERVER saat permainan tuntas (recordMultiplayerGame), bukan dikirim klien.
+// Ruangan multiplayer berkode (teman/kelas) dan mode lain TIDAK masuk peringkat.
+//
+// KOMUNITAS KUIS: kuis yang diunggah TIDAK langsung tayang. Alurnya (lihat server/quizModeration.ts):
+//   unggah -> pemeriksaan aturan (instan) -> pemeriksaan AI (latar belakang, bila API key tersedia) -> keputusan:
+//     ditolak otomatis  |  disetujui otomatis (aturan bersih + AI aman)  |  menunggu tinjauan admin.
+//   Kuis berstatus "approved" saja yang muncul di daftar publik, bisa dimainkan, dan masuk rotasi Arena Global.
+//   Mengubah isi kuis yang sudah disetujui = diperiksa ulang. Pemain bisa melaporkan kuis; 3 laporan = ditinjau ulang admin.
 //
 // Dipasang di server/index.ts:
-//   import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper } from './quizCommunityRoutes';
+//   import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame, pickApprovedCommunityDeck } from './quizCommunityRoutes';
 //   .then(() => ensureQuizCommunitySchema(pool))
 //   app.use(createQuizCommunityRouter({ db: pool, requireUser, requireAdmin, resolveEmail: softEmail }));
 //   startQuizCommunitySweeper(pool);
 //
 // Aturan akses:
-//   - MEMBACA papan peringkat & daftar/isi kuis komunitas  -> siapa saja (/api/public/...).
-//   - MEMBAGIKAN / memperbarui / menghapus kuis sendiri     -> hanya akun yang sudah membuka Kuis Editor
+//   - MEMBACA papan peringkat & daftar/isi kuis komunitas yang disetujui -> siapa saja (/api/public/...).
+//   - MEMBAGIKAN / memperbarui / menghapus kuis sendiri                   -> hanya akun yang sudah membuka Kuis Editor
 //     (dicek di SERVER dari tabel user_collections, bukan cuma disembunyikan di UI).
-//   - Mencatat skor ke papan peringkat                      -> otomatis oleh server saat multiplayer selesai (akun login).
+//   - Mencatat skor ke papan peringkat                                    -> otomatis oleh server saat Arena Global selesai (akun login).
+//   - Menyetujui / menolak kuis                                           -> admin (/api/admin/shared-quizzes/...).
 import crypto from 'crypto';
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import type { Pool } from 'pg';
 import { builtinDeckTitle, isBuiltinDeckKnown, verifyBuiltinQuestions } from './builtinQuizVerify';
+import {
+  contentHash,
+  decideModeration,
+  moderationEnvFromProcess,
+  ruleScan,
+  scanQuiz,
+  toScanInput,
+  type ModerationEnv,
+  type ModerationStatus,
+  type ScanReport,
+} from './quizModeration';
+import { notifyUser } from './notifications';
+import type { ArenaDeck } from './globalArena';
 
 type Db = Pick<Pool, 'query'>;
 
@@ -56,6 +78,26 @@ CREATE TABLE IF NOT EXISTS shared_quizzes (
 );
 CREATE INDEX IF NOT EXISTS shared_quizzes_created_idx ON shared_quizzes (created_at DESC);
 CREATE INDEX IF NOT EXISTS shared_quizzes_plays_idx ON shared_quizzes (play_count DESC);
+
+-- Moderasi. Kuis yang sudah ada sebelum fitur ini dianggap 'pending' sampai dipindai & ditinjau (default kolom).
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS moderation_status VARCHAR(20) NOT NULL DEFAULT 'pending';
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS moderation_reason TEXT NOT NULL DEFAULT '';
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS moderation_source VARCHAR(20) NOT NULL DEFAULT '';
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS moderated_by VARCHAR(255);
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMPTZ;
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS scan_report JSONB;
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS scanned_at TIMESTAMPTZ;
+ALTER TABLE shared_quizzes ADD COLUMN IF NOT EXISTS content_hash VARCHAR(64) NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS shared_quizzes_mod_idx ON shared_quizzes (moderation_status, created_at DESC);
+CREATE INDEX IF NOT EXISTS shared_quizzes_hash_idx ON shared_quizzes (content_hash);
+
+CREATE TABLE IF NOT EXISTS shared_quiz_reports (
+  quiz_id VARCHAR(40) NOT NULL REFERENCES shared_quizzes(id) ON DELETE CASCADE,
+  reporter_email VARCHAR(255) NOT NULL,
+  reason VARCHAR(300) NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (quiz_id, reporter_email)
+);
 `;
 export const ensureQuizCommunitySchema = (db: Db) => db.query(QUIZ_COMMUNITY_SCHEMA_SQL);
 
@@ -64,17 +106,21 @@ export const ensureQuizCommunitySchema = (db: Db) => db.query(QUIZ_COMMUNITY_SCH
 export type LeaderboardPeriod = 'daily' | 'monthly' | 'all';
 export const PERIODS: LeaderboardPeriod[] = ['daily', 'monthly', 'all'];
 
-/** Skor hanya dicatat untuk kuis yang dimainkan minimal sekian soal. */
+/** Skor hanya dicatat untuk permainan minimal sekian soal. */
 export const MIN_SCORED_QUESTIONS = 5;
 export const MAX_SCORED_QUESTIONS = 200;
 export const POINTS_PER_CORRECT = 10;
 export const LEADERBOARD_SIZE = 50;
+
 /** Skor multiplayer hanya dicatat bila minimal sekian AKUN berbeda (bukan tamu) ikut bermain. */
 export const MIN_MULTIPLAYER_ACCOUNTS = 2;
 
 export const MAX_SHARED_PER_USER = 30;
 export const MAX_QUESTIONS_PER_SHARE = 100;
 export const MAX_SHARE_BYTES = 6 * 1024 * 1024;
+
+/** Jumlah pelapor berbeda yang mengembalikan kuis disetujui ke antrean admin. */
+export const REPORT_THRESHOLD = 3;
 
 /** Hari & bulan papan peringkat mengikuti waktu Indonesia Barat (WIB, UTC+7, tanpa DST). */
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
@@ -190,11 +236,12 @@ export function sanitizeSharedSettings(raw: any): { penaltyPercent: number; scor
   };
 }
 
-/* ───────────────────────── Skor multiplayer ───────────────────────── */
+/* ───────────────────────── Skor Arena Global ───────────────────────── */
 
 export interface FinishedMultiplayerGame {
+  /** Id deck bawaan, atau "deck-custom-shared-shq_xxx" untuk kuis komunitas. */
   deckId: string;
-  /** Soal yang dimainkan (dikirim host; diverifikasi terhadap deck bawaan di server). */
+  /** Soal yang dimainkan (dipilih server; bawaan diverifikasi ulang terhadap data server). */
   questions: unknown[];
   /** Peserta yang masuk akun, dengan jumlah jawaban benar yang DIHITUNG SERVER. */
   players: { userId: string; correct: number }[];
@@ -203,11 +250,11 @@ export interface FinishedMultiplayerGame {
 export interface ScoreOutcome {
   counted: boolean;
   points?: number;
-  reason?: 'too_short' | 'not_eligible' | 'few_players' | 'no_account';
+  reason?: 'too_short' | 'not_eligible' | 'few_players' | 'no_account' | 'own_quiz' | 'unavailable';
   message?: string;
 }
 
-/** Aturan murni: apakah permainan multiplayer ini boleh masuk papan peringkat. */
+/** Aturan murni (tanpa database): apakah permainan ini boleh masuk papan peringkat. Kuis komunitas masih dicek ke database. */
 export function checkMultiplayerEligibility(g: {
   deckId: string;
   questions: unknown[];
@@ -217,8 +264,14 @@ export function checkMultiplayerEligibility(g: {
   if (total < MIN_SCORED_QUESTIONS || total > MAX_SCORED_QUESTIONS) {
     return { ok: false, reason: 'too_short', message: `Skor hanya dicatat untuk permainan minimal ${MIN_SCORED_QUESTIONS} soal.` };
   }
-  if (!isBuiltinDeckKnown(g.deckId) || !verifyBuiltinQuestions(g.deckId, g.questions)) {
-    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan & starter yang masuk papan peringkat. Kuis komunitas dan kuis pribadi tidak dihitung.' };
+  const builtinKnown = isBuiltinDeckKnown(g.deckId);
+  const sharedId = parseSharedDeckId(g.deckId);
+  if (builtinKnown) {
+    if (!verifyBuiltinQuestions(g.deckId, g.questions)) {
+      return { ok: false, reason: 'not_eligible', message: 'Soal permainan tidak cocok dengan deck bawaan, jadi skor tidak dihitung.' };
+    }
+  } else if (!sharedId) {
+    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan, starter, dan kuis Komunitas yang sudah disetujui yang masuk papan peringkat.' };
   }
   if (g.accountCount < MIN_MULTIPLAYER_ACCOUNTS) {
     return { ok: false, reason: 'few_players', message: `Skor dicatat bila minimal ${MIN_MULTIPLAYER_ACCOUNTS} pemain yang masuk akun ikut bermain.` };
@@ -232,8 +285,9 @@ const LB_TTL_MS = 10_000;
 export const clearLeaderboardCache = () => lbCache.clear();
 
 /**
- * Catat skor sebuah permainan multiplayer yang SELESAI sampai soal terakhir.
+ * Catat skor sebuah permainan Arena Global yang TUNTAS sampai soal terakhir.
  * Poin = 10 per jawaban benar (+20% bila semua benar), dihitung dari jawaban yang dinilai server.
+ * Kuis komunitas: harus berstatus disetujui saat permainan selesai, dan skor pembuatnya sendiri tidak dihitung.
  * Mengembalikan hasil per akun supaya pemain bisa diberi tahu di layar akhir.
  */
 export async function recordMultiplayerGame(db: Db, game: FinishedMultiplayerGame): Promise<Record<string, ScoreOutcome>> {
@@ -243,38 +297,134 @@ export async function recordMultiplayerGame(db: Db, game: FinishedMultiplayerGam
   for (const p of game.players) best.set(p.userId, Math.max(best.get(p.userId) ?? 0, p.correct));
   if (best.size === 0) return out;
 
-  const verdict = checkMultiplayerEligibility({ deckId: game.deckId, questions: game.questions, accountCount: best.size });
-  if (!verdict.ok) {
-    for (const id of best.keys()) out[id] = { counted: false, reason: verdict.reason, message: verdict.message };
+  const rejectAll = (reason: NonNullable<ScoreOutcome['reason']>, message: string) => {
+    for (const id of best.keys()) out[id] = { counted: false, reason, message };
     return out;
-  }
+  };
+
+  const verdict = checkMultiplayerEligibility({ deckId: game.deckId, questions: game.questions, accountCount: best.size });
+  if (!verdict.ok) return rejectAll(verdict.reason, verdict.message);
 
   await ensureQuizCommunitySchema(db);
   const total = game.questions.length;
-  const title = builtinDeckTitle(game.deckId);
-  const { rows } = await db.query(
-    `SELECT id, email FROM users WHERE id = ANY($1::text[]) AND suspended_at IS NULL`,
-    [Array.from(best.keys())]
-  );
+
+  let deckKey = game.deckId;
+  let title = builtinDeckTitle(game.deckId);
+  let ownerEmail = '';
+  const sharedId = parseSharedDeckId(game.deckId);
+  if (sharedId) {
+    const { rows } = await db.query(`SELECT title, owner_email, moderation_status FROM shared_quizzes WHERE id = $1`, [sharedId]);
+    if (!rows.length || rows[0].moderation_status !== 'approved') {
+      return rejectAll('unavailable', 'Kuis komunitas ini sudah tidak tersedia atau belum disetujui, jadi skor tidak dihitung.');
+    }
+    deckKey = `shared:${sharedId}`;
+    title = String(rows[0].title);
+    ownerEmail = String(rows[0].owner_email).toLowerCase();
+  }
+
+  const { rows } = await db.query(`SELECT id, email FROM users WHERE id = ANY($1::text[]) AND suspended_at IS NULL`, [Array.from(best.keys())]);
   const emailOf = new Map<string, string>(rows.map((r: any) => [String(r.id), String(r.email)]));
 
+  // Pembuat kuis tidak mendapat poin dari kuisnya sendiri (dia tahu semua jawabannya).
+  const scorable: [string, number][] = [];
   for (const [userId, rawCorrect] of best) {
     const email = emailOf.get(userId);
     if (!email) {
       out[userId] = { counted: false, reason: 'no_account', message: 'Akun tidak ditemukan.' };
-      continue;
+    } else if (ownerEmail && email.toLowerCase() === ownerEmail) {
+      out[userId] = { counted: false, reason: 'own_quiz', message: 'Kuis buatan sendiri tidak dihitung ke papan peringkat.' };
+    } else {
+      scorable.push([userId, rawCorrect]);
     }
+  }
+  if (scorable.length < MIN_MULTIPLAYER_ACCOUNTS) {
+    for (const [userId] of scorable) {
+      out[userId] = { counted: false, reason: 'few_players', message: `Skor dicatat bila minimal ${MIN_MULTIPLAYER_ACCOUNTS} pemain yang masuk akun ikut bermain.` };
+    }
+    return out;
+  }
+
+  for (const [userId, rawCorrect] of scorable) {
     const correct = Math.max(0, Math.min(total, Math.round(rawCorrect)));
     const points = computePoints(correct, total);
     await db.query(
       `INSERT INTO quiz_leaderboard_scores (user_email, deck_key, deck_title, correct, total, points, mode)
        VALUES ($1,$2,$3,$4,$5,$6,'multiplayer')`,
-      [email, game.deckId, title, correct, total, points]
+      [emailOf.get(userId), deckKey, title.slice(0, 160), correct, total, points]
     );
     out[userId] = { counted: true, points };
   }
   clearLeaderboardCache();
   return out;
+}
+
+/** Kuis komunitas yang disetujui, dipilih acak untuk rotasi Arena Global. null bila belum ada. */
+export async function pickApprovedCommunityDeck(db: Db): Promise<ArenaDeck | null> {
+  const { rows } = await db.query(
+    `SELECT q.id, q.title, q.questions, u.name AS owner_name
+       FROM shared_quizzes q
+       JOIN users u ON lower(u.email) = lower(q.owner_email) AND u.suspended_at IS NULL
+      WHERE q.moderation_status = 'approved' AND q.question_count >= $1
+      ORDER BY random() LIMIT 1`,
+    [MIN_SCORED_QUESTIONS]
+  );
+  if (!rows.length) return null;
+  const r = rows[0];
+  const questions = Array.isArray(r.questions) ? r.questions : [];
+  if (questions.length < MIN_SCORED_QUESTIONS) return null;
+  return { deckId: toClientDeckId(String(r.id)), title: String(r.title), source: 'community', ownerName: String(r.owner_name || 'Pengguna'), questions };
+}
+
+/* ───────────────────────────── Moderasi (database) ───────────────────────────── */
+
+const inFlight = new Set<string>();
+
+const STATUS_LABEL: Record<ModerationStatus, string> = { pending: 'menunggu tinjauan', approved: 'disetujui', rejected: 'ditolak' };
+
+async function notifyOwner(pool: Pool, ownerEmail: string, title: string, status: ModerationStatus, reason: string) {
+  if (status === 'pending') return;
+  await notifyUser(
+    pool,
+    ownerEmail,
+    status === 'approved' ? 'quiz_approved' : 'quiz_rejected',
+    status === 'approved' ? `Kuis "${title}" disetujui` : `Kuis "${title}" ditolak`,
+    status === 'approved'
+      ? 'Kuismu sudah tampil di Komunitas Kuis dan masuk rotasi Arena Global.'
+      : `${reason || 'Kuis tidak memenuhi pedoman komunitas.'} Kamu bisa memperbaikinya lalu membagikannya lagi.`
+  );
+}
+
+/**
+ * Pindai kuis berstatus 'pending' (aturan + AI) lalu terapkan keputusan otomatis. Aman dipanggil berulang:
+ * hasil hanya ditulis bila isi kuis belum berubah sejak dibaca (mencegah hasil lama menimpa suntingan pemilik).
+ */
+export async function moderateSharedQuiz(pool: Pool, id: string, env: ModerationEnv = moderationEnvFromProcess()): Promise<ModerationStatus | null> {
+  if (inFlight.has(id)) return null;
+  inFlight.add(id);
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, owner_email, title, description, questions, content_hash, moderation_status FROM shared_quizzes WHERE id = $1`,
+      [id]
+    );
+    if (!rows.length || rows[0].moderation_status !== 'pending') return null;
+    const r = rows[0];
+    const { input, correctIndexes } = toScanInput(r.title, r.description, r.questions);
+    const hash = contentHash({ ...input, correctIndexes });
+    const report: ScanReport = await scanQuiz(input, correctIndexes, env);
+    const decision = decideModeration(report, { autoApprove: env.autoApprove ?? 'ai' });
+    const res = await pool.query(
+      `UPDATE shared_quizzes
+          SET moderation_status = $3, moderation_reason = $4, moderation_source = $5, scan_report = $6::jsonb,
+              scanned_at = now(), content_hash = $7, moderated_by = NULL,
+              moderated_at = CASE WHEN $3 = 'pending' THEN NULL ELSE now() END
+        WHERE id = $1 AND content_hash = $2 AND moderation_status = 'pending'`,
+      [id, r.content_hash, decision.status, decision.reason, decision.source, JSON.stringify(report), hash]
+    );
+    if (res.rowCount) await notifyOwner(pool, String(r.owner_email), String(r.title), decision.status, decision.reason);
+    return res.rowCount ? decision.status : null;
+  } finally {
+    inFlight.delete(id);
+  }
 }
 
 /* ───────────────────────────── Router ───────────────────────────── */
@@ -285,6 +435,8 @@ interface Options {
   requireAdmin: RequestHandler;
   /** Email akun yang sedang login atau null untuk tamu. Tidak boleh melempar 401. */
   resolveEmail: (req: Request) => Promise<string | null>;
+  /** Dapat diganti saat tes. */
+  moderationEnv?: () => ModerationEnv;
 }
 
 const likeEscape = (s: string) => s.replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -299,7 +451,7 @@ async function hasQuizCreator(db: Db, email: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resolveEmail }: Options): Router {
+export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resolveEmail, moderationEnv = moderationEnvFromProcess }: Options): Router {
   const router = Router();
 
   // Tabel dibuat saat boot; bila gagal (DB belum siap) dicoba lagi pada permintaan berikutnya.
@@ -320,15 +472,21 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     };
 
   const emailOf = (req: Request) => String((req as any).userEmail || '').trim();
+  const adminOf = (req: Request) => String((req as any).adminEmail || 'admin').toLowerCase();
   const limiter = (windowMs: number, limit: number) =>
     rateLimit({ windowMs, limit, standardHeaders: true, legacyHeaders: false, message: { error: 'Terlalu sering. Coba lagi beberapa saat lagi.' } });
 
   const shareLimiter = limiter(60 * 60_000, 20);
+  const reportLimiter = limiter(60 * 60_000, 15);
   const listLimiter = limiter(60_000, 120);
+
+  const runModeration = (id: string) => {
+    moderateSharedQuiz(db, id, moderationEnv()).catch((e) => console.error('[quiz-community] moderasi gagal:', e?.message || e));
+  };
 
   /* ───────────── Papan peringkat ───────────── */
 
-  // Hanya skor dari Multiplayer Online. Peringkat = jumlah skor TERBAIK tiap kuis dalam periode (bukan jumlah semua permainan),
+  // Hanya skor dari Arena Global. Peringkat = jumlah skor TERBAIK tiap kuis dalam periode (bukan jumlah semua permainan),
   // jadi mengulang kuis yang sama tidak bisa dipakai untuk menggembungkan poin.
   router.get('/api/public/quiz-leaderboard', listLimiter, wrap('leaderboard', async (req, res) => {
     const period = String(req.query.period || 'daily') as LeaderboardPeriod;
@@ -403,7 +561,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     res.json(body);
   }));
 
-  /* ───────────── Komunitas kuis: baca (publik) ───────────── */
+  /* ───────────── Komunitas kuis: baca (publik, HANYA yang disetujui) ───────────── */
 
   const ownerJoin = `JOIN users u ON lower(u.email) = lower(q.owner_email) AND u.suspended_at IS NULL`;
   const summaryOf = (r: any) => ({
@@ -432,7 +590,8 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     const pattern = search ? `%${likeEscape(search)}%` : null;
     const order = sort === 'popular' ? 'q.play_count DESC, q.created_at DESC' : 'q.created_at DESC';
 
-    const where = `WHERE ($1::text IS NULL OR q.title ILIKE $1::text ESCAPE '\\' OR q.description ILIKE $1::text ESCAPE '\\' OR u.name ILIKE $1::text ESCAPE '\\')`;
+    const where = `WHERE q.moderation_status = 'approved'
+      AND ($1::text IS NULL OR q.title ILIKE $1::text ESCAPE '\\' OR q.description ILIKE $1::text ESCAPE '\\' OR u.name ILIKE $1::text ESCAPE '\\')`;
     const [list, count] = await Promise.all([
       db.query(`SELECT ${SUMMARY_COLS} FROM shared_quizzes q ${ownerJoin} ${where} ORDER BY ${order} LIMIT $2 OFFSET $3`, [pattern, limit, offset]),
       db.query(`SELECT COUNT(*)::int AS n FROM shared_quizzes q ${ownerJoin} ${where}`, [pattern]),
@@ -445,7 +604,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     const id = String(req.params.id || '');
     if (!SHARED_ID_RE.test(id)) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
     const { rows } = await db.query(
-      `SELECT ${SUMMARY_COLS}, q.questions, q.settings FROM shared_quizzes q ${ownerJoin} WHERE q.id = $1`,
+      `SELECT ${SUMMARY_COLS}, q.questions, q.settings FROM shared_quizzes q ${ownerJoin} WHERE q.id = $1 AND q.moderation_status = 'approved'`,
       [id]
     );
     if (!rows.length) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
@@ -468,7 +627,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     if (seenPlays.size > 5000) for (const [k, t] of seenPlays) if (now - t > 30 * 60_000) seenPlays.delete(k);
     if (!seenPlays.has(key) || now - (seenPlays.get(key) || 0) > 30 * 60_000) {
       seenPlays.set(key, now);
-      await db.query(`UPDATE shared_quizzes SET play_count = play_count + 1 WHERE id = $1`, [id]);
+      await db.query(`UPDATE shared_quizzes SET play_count = play_count + 1 WHERE id = $1 AND moderation_status = 'approved'`, [id]);
     }
     res.status(204).end();
   }));
@@ -480,7 +639,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     const [canShare, mine] = await Promise.all([
       hasQuizCreator(db, email),
       db.query(
-        `SELECT id, source_deck_id, title, question_count, play_count, updated_at
+        `SELECT id, source_deck_id, title, question_count, play_count, updated_at, moderation_status, moderation_reason, moderated_at
            FROM shared_quizzes WHERE lower(owner_email) = lower($1) ORDER BY updated_at DESC`,
         [email]
       ),
@@ -497,6 +656,9 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
         questionCount: r.question_count,
         playCount: r.play_count,
         updatedAt: r.updated_at,
+        moderationStatus: r.moderation_status as ModerationStatus,
+        moderationReason: r.moderation_reason || '',
+        moderatedAt: r.moderated_at,
       })),
     });
   }));
@@ -528,7 +690,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     const settings = JSON.stringify(sanitizeSharedSettings(deck.settings));
 
     const existing = await db.query(
-      `SELECT id FROM shared_quizzes WHERE lower(owner_email) = lower($1) AND source_deck_id = $2`,
+      `SELECT id, content_hash, moderation_status, moderation_reason FROM shared_quizzes WHERE lower(owner_email) = lower($1) AND source_deck_id = $2`,
       [email, sourceDeckId]
     );
     if (!existing.rows.length) {
@@ -538,22 +700,72 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
       }
     }
 
+    const { input, correctIndexes } = toScanInput(title, description, qs.questions);
+    const hash = contentHash({ ...input, correctIndexes });
+
+    // Isi yang sama persis dengan kuis milik akun lain = salinan; tolak supaya komunitas tidak dibanjiri duplikat.
+    const dup = await db.query(
+      `SELECT 1 FROM shared_quizzes WHERE content_hash = $1 AND lower(owner_email) <> lower($2) AND moderation_status <> 'rejected' LIMIT 1`,
+      [hash, email]
+    );
+    if (dup.rows.length) {
+      return res.status(409).json({ error: 'Isi kuis ini sama persis dengan kuis lain di Komunitas. Ubah atau buat kuis yang orisinal.' });
+    }
+
+    // Isi tidak berubah: hanya perbarui kesulitan/pengaturan; status moderasi dipertahankan.
+    const prev = existing.rows[0];
+    if (prev && prev.content_hash === hash) {
+      await db.query(`UPDATE shared_quizzes SET difficulty = $2, settings = $3::jsonb, updated_at = now() WHERE id = $1`, [prev.id, difficulty, settings]);
+      return res.status(200).json({
+        id: prev.id,
+        deckId: toClientDeckId(prev.id),
+        updated: true,
+        questionCount: qs.questions.length,
+        moderationStatus: prev.moderation_status as ModerationStatus,
+        moderationReason: prev.moderation_reason || '',
+      });
+    }
+
+    // Isi baru / berubah: periksa aturan SEKARANG (instan). Pelanggaran berat langsung ditolak tanpa memboroskan AI.
+    const quick = ruleScan(input);
+    const rejected = quick.verdict === 'block' ? decideModeration(quick) : null;
+    const status: ModerationStatus = rejected ? 'rejected' : 'pending';
+    const reason = rejected ? rejected.reason : 'Sedang diperiksa. Biasanya selesai dalam beberapa menit.';
+
     const newId = `shq_${crypto.randomBytes(6).toString('hex')}`;
     const { rows } = await db.query(
-      `INSERT INTO shared_quizzes (id, owner_email, source_deck_id, title, description, difficulty, question_count, questions, settings)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb)
+      `INSERT INTO shared_quizzes
+         (id, owner_email, source_deck_id, title, description, difficulty, question_count, questions, settings,
+          moderation_status, moderation_reason, moderation_source, scan_report, scanned_at, content_hash, moderated_at, moderated_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13::jsonb,$14,$15,$16,NULL)
        ON CONFLICT (owner_email, source_deck_id) DO UPDATE SET
          title = EXCLUDED.title, description = EXCLUDED.description, difficulty = EXCLUDED.difficulty,
          question_count = EXCLUDED.question_count, questions = EXCLUDED.questions, settings = EXCLUDED.settings,
+         moderation_status = EXCLUDED.moderation_status, moderation_reason = EXCLUDED.moderation_reason,
+         moderation_source = EXCLUDED.moderation_source, scan_report = EXCLUDED.scan_report, scanned_at = EXCLUDED.scanned_at,
+         content_hash = EXCLUDED.content_hash, moderated_at = EXCLUDED.moderated_at, moderated_by = NULL,
          updated_at = now()
        RETURNING id, (xmax = 0) AS inserted`,
-      [newId, email, sourceDeckId, title, description, difficulty, qs.questions.length, questionsJson, settings]
+      [
+        newId, email, sourceDeckId, title, description, difficulty, qs.questions.length, questionsJson, settings,
+        status, reason, rejected ? 'auto-rules' : '', rejected ? JSON.stringify(quick) : null,
+        rejected ? new Date() : null, hash, rejected ? new Date() : null,
+      ]
     );
+    const id = String(rows[0].id);
+    // Suntingan membuat laporan lama tidak relevan lagi.
+    if (!rows[0].inserted) await db.query(`DELETE FROM shared_quiz_reports WHERE quiz_id = $1`, [id]);
+    if (rejected) await db.query(`DELETE FROM quiz_leaderboard_scores WHERE deck_key = $1`, [`shared:${id}`]).catch(() => undefined);
+    else runModeration(id);
+    clearLeaderboardCache();
+
     res.status(rows[0].inserted ? 201 : 200).json({
-      id: rows[0].id,
-      deckId: toClientDeckId(rows[0].id),
+      id,
+      deckId: toClientDeckId(id),
       updated: !rows[0].inserted,
       questionCount: qs.questions.length,
+      moderationStatus: status,
+      moderationReason: reason,
     });
   }));
 
@@ -569,7 +781,163 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     res.json({ success: true });
   }));
 
+  // Pemain melaporkan kuis komunitas. REPORT_THRESHOLD pelapor berbeda mengembalikannya ke antrean tinjauan admin.
+  router.post('/api/user/shared-quizzes/:id/report', requireUser, reportLimiter, wrap('report', async (req, res) => {
+    const id = String(req.params.id || '');
+    if (!SHARED_ID_RE.test(id)) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    const email = emailOf(req).toLowerCase();
+    const found = await db.query(`SELECT owner_email, moderation_status FROM shared_quizzes WHERE id = $1`, [id]);
+    if (!found.rows.length) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    if (String(found.rows[0].owner_email).toLowerCase() === email) return res.status(400).json({ error: 'Kamu tidak bisa melaporkan kuismu sendiri.' });
+    const reason = clean(req.body?.reason, 300);
+    await db.query(
+      `INSERT INTO shared_quiz_reports (quiz_id, reporter_email, reason) VALUES ($1,$2,$3) ON CONFLICT (quiz_id, reporter_email) DO NOTHING`,
+      [id, email, reason]
+    );
+    const cnt = await db.query(`SELECT COUNT(*)::int AS n FROM shared_quiz_reports WHERE quiz_id = $1`, [id]);
+    let escalated = false;
+    if ((cnt.rows[0]?.n ?? 0) >= REPORT_THRESHOLD && found.rows[0].moderation_status === 'approved') {
+      const r = await db.query(
+        `UPDATE shared_quizzes
+            SET moderation_status = 'pending', moderation_source = 'reports', moderated_at = NULL, moderated_by = NULL, scanned_at = now(),
+                moderation_reason = 'Dilaporkan oleh beberapa pemain. Disembunyikan sampai admin meninjau ulang.'
+          WHERE id = $1 AND moderation_status = 'approved'`,
+        [id]
+      );
+      escalated = Boolean(r.rowCount);
+      if (escalated) clearLeaderboardCache();
+    }
+    res.json({ success: true, escalated });
+  }));
+
   /* ───────────── Moderasi admin ───────────── */
+
+  const adminItemOf = (r: any) => {
+    const report: ScanReport | null = r.scan_report || null;
+    return {
+      id: r.id,
+      deckId: toClientDeckId(r.id),
+      title: r.title,
+      description: r.description,
+      difficulty: r.difficulty,
+      questionCount: r.question_count,
+      playCount: r.play_count,
+      ownerEmail: r.owner_email,
+      ownerName: r.owner_name || '',
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+      moderationStatus: r.moderation_status as ModerationStatus,
+      moderationReason: r.moderation_reason || '',
+      moderationSource: r.moderation_source || '',
+      moderatedBy: r.moderated_by || null,
+      moderatedAt: r.moderated_at,
+      scanned: Boolean(r.scanned_at),
+      reportCount: r.report_count ?? 0,
+      scan: report
+        ? {
+            verdict: report.verdict,
+            risk: report.risk,
+            flagCount: report.flags.length,
+            highFlags: report.flags.filter((f) => f.severity === 'high').length,
+            unverifiedMedia: report.unverifiedMedia,
+            ai: report.ai.map((a) => ({ provider: a.provider, ran: a.ran, verdict: a.verdict ?? null, summary: a.summary ?? '', error: a.error ?? '' })),
+          }
+        : null,
+    };
+  };
+
+  // Daftar antrean + hitungan per status. Urutan: yang menunggu paling lama dulu (adil bagi pengunggah).
+  router.get('/api/admin/shared-quizzes', requireAdmin, wrap('admin-list', async (req, res) => {
+    const status = ['pending', 'approved', 'rejected'].includes(String(req.query.status)) ? String(req.query.status) : 'pending';
+    const search = clean(req.query.q, 80);
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20));
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? '0'), 10) || 0);
+    const pattern = search ? `%${likeEscape(search)}%` : null;
+    const order = status === 'pending' ? 'q.updated_at ASC' : 'q.updated_at DESC';
+    const where = `WHERE q.moderation_status = $1
+      AND ($2::text IS NULL OR q.title ILIKE $2::text ESCAPE '\\' OR q.owner_email ILIKE $2::text ESCAPE '\\' OR q.description ILIKE $2::text ESCAPE '\\')`;
+    const [list, count, totals] = await Promise.all([
+      db.query(
+        `SELECT q.id, q.title, q.description, q.difficulty, q.question_count, q.play_count, q.owner_email, q.created_at, q.updated_at,
+                q.moderation_status, q.moderation_reason, q.moderation_source, q.moderated_by, q.moderated_at, q.scan_report, q.scanned_at,
+                u.name AS owner_name,
+                (SELECT COUNT(*)::int FROM shared_quiz_reports r WHERE r.quiz_id = q.id) AS report_count
+           FROM shared_quizzes q LEFT JOIN users u ON lower(u.email) = lower(q.owner_email)
+           ${where} ORDER BY ${order} LIMIT $3 OFFSET $4`,
+        [status, pattern, limit, offset]
+      ),
+      db.query(`SELECT COUNT(*)::int AS n FROM shared_quizzes q ${where}`, [status, pattern]),
+      db.query(`SELECT moderation_status AS s, COUNT(*)::int AS n FROM shared_quizzes GROUP BY moderation_status`),
+    ]);
+    const counts: Record<string, number> = { pending: 0, approved: 0, rejected: 0 };
+    for (const r of totals.rows) counts[String(r.s)] = r.n;
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      items: list.rows.map(adminItemOf),
+      total: count.rows[0]?.n ?? 0,
+      counts,
+      ai: { anthropic: Boolean(moderationEnv().anthropicKey), openai: Boolean(moderationEnv().openaiKey), autoApprove: moderationEnv().autoApprove ?? 'ai' },
+    });
+  }));
+
+  // Isi lengkap (termasuk kunci jawaban) + laporan pemindaian lengkap untuk ditinjau.
+  router.get('/api/admin/shared-quizzes/:id', requireAdmin, wrap('admin-get', async (req, res) => {
+    const id = String(req.params.id || '');
+    if (!SHARED_ID_RE.test(id)) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    const { rows } = await db.query(
+      `SELECT q.*, u.name AS owner_name,
+              (SELECT COUNT(*)::int FROM shared_quiz_reports r WHERE r.quiz_id = q.id) AS report_count
+         FROM shared_quizzes q LEFT JOIN users u ON lower(u.email) = lower(q.owner_email) WHERE q.id = $1`,
+      [id]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    const reports = await db.query(`SELECT reason, created_at FROM shared_quiz_reports WHERE quiz_id = $1 ORDER BY created_at DESC LIMIT 20`, [id]);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      ...adminItemOf(rows[0]),
+      questions: Array.isArray(rows[0].questions) ? rows[0].questions : [],
+      scanReport: rows[0].scan_report || null,
+      reports: reports.rows.map((r) => ({ reason: r.reason, createdAt: r.created_at })),
+    });
+  }));
+
+  // Putusan admin: setuju / tolak. Berlaku untuk status apa pun (admin boleh membatalkan penolakan otomatis atau mencabut persetujuan).
+  router.post('/api/admin/shared-quizzes/:id/review', requireAdmin, wrap('admin-review', async (req, res) => {
+    const id = String(req.params.id || '');
+    if (!SHARED_ID_RE.test(id)) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    const decision = req.body?.decision;
+    if (decision !== 'approve' && decision !== 'reject') return res.status(400).json({ error: 'Keputusan harus "approve" atau "reject".' });
+    const note = clean(req.body?.reason, 400);
+    if (decision === 'reject' && !note) return res.status(400).json({ error: 'Tulis alasan penolakan agar pemilik tahu apa yang perlu diperbaiki.' });
+
+    const status: ModerationStatus = decision === 'approve' ? 'approved' : 'rejected';
+    const reason = decision === 'approve' ? note || 'Disetujui admin.' : note;
+    const { rows } = await db.query(
+      `UPDATE shared_quizzes
+          SET moderation_status = $2, moderation_reason = $3, moderation_source = 'admin', moderated_by = $4, moderated_at = now(),
+              scanned_at = COALESCE(scanned_at, now())
+        WHERE id = $1 RETURNING owner_email, title`,
+      [id, status, reason, adminOf(req)]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    // Putusan baru menghapus laporan lama; kuis yang ditolak ikut membuang skor peringkat yang berasal darinya.
+    await db.query(`DELETE FROM shared_quiz_reports WHERE quiz_id = $1`, [id]);
+    if (status === 'rejected') await db.query(`DELETE FROM quiz_leaderboard_scores WHERE deck_key = $1`, [`shared:${id}`]);
+    clearLeaderboardCache();
+    await notifyOwner(db as Pool, String(rows[0].owner_email), String(rows[0].title), status, reason);
+    res.json({ success: true, status, label: STATUS_LABEL[status] });
+  }));
+
+  // Jalankan ulang pemeriksaan otomatis untuk kuis yang masih menunggu (mis. setelah API key AI dipasang).
+  router.post('/api/admin/shared-quizzes/:id/rescan', requireAdmin, wrap('admin-rescan', async (req, res) => {
+    const id = String(req.params.id || '');
+    if (!SHARED_ID_RE.test(id)) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    const found = await db.query(`SELECT moderation_status FROM shared_quizzes WHERE id = $1`, [id]);
+    if (!found.rows.length) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
+    if (found.rows[0].moderation_status !== 'pending') return res.status(409).json({ error: 'Hanya kuis yang menunggu tinjauan yang bisa dipindai ulang.' });
+    const result = await moderateSharedQuiz(db, id, moderationEnv());
+    res.json({ success: true, status: result ?? 'pending' });
+  }));
 
   // Menghapus kuis komunitas yang melanggar sekaligus menghapus skor papan peringkat yang berasal darinya.
   router.delete('/api/admin/shared-quizzes/:id', requireAdmin, wrap('admin-delete', async (req, res) => {
@@ -603,8 +971,22 @@ export async function pruneQuizScores(db: Db, now: Date = new Date()): Promise<v
   );
 }
 
-export function startQuizCommunitySweeper(db: Db): void {
-  const run = () => pruneQuizScores(db).catch((e) => console.error('[quiz-community] sweeper:', e?.message || e));
-  setTimeout(run, 60_000).unref();
-  setInterval(run, 6 * 60 * 60_000).unref();
+/** Pindai kuis 'pending' yang belum pernah dipindai (kuis lama sebelum fitur moderasi, atau pemindaian yang terputus saat server restart). */
+export async function scanPendingQuizzes(pool: Pool, limit = 5, env: ModerationEnv = moderationEnvFromProcess()): Promise<number> {
+  const { rows } = await pool.query(
+    `SELECT id FROM shared_quizzes WHERE moderation_status = 'pending' AND scanned_at IS NULL ORDER BY updated_at ASC LIMIT $1`,
+    [limit]
+  );
+  for (const r of rows) await moderateSharedQuiz(pool, String(r.id), env).catch((e) => console.error('[quiz-community] pindai ulang:', e?.message || e));
+  return rows.length;
+}
+
+export function startQuizCommunitySweeper(db: Pool): void {
+  const prune = () => pruneQuizScores(db).catch((e) => console.error('[quiz-community] sweeper:', e?.message || e));
+  setTimeout(prune, 60_000).unref();
+  setInterval(prune, 6 * 60 * 60_000).unref();
+  // Antrean pemindaian: tiap menit ambil beberapa kuis yang belum dipindai.
+  const scan = () => scanPendingQuizzes(db).catch((e) => console.error('[quiz-community] antrean moderasi:', e?.message || e));
+  setTimeout(scan, 20_000).unref();
+  setInterval(scan, 60_000).unref();
 }
