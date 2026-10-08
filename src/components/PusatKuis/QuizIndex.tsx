@@ -278,7 +278,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               {activeSection === 'pwa' && 'Unduh Web App'}
               {activeSection === 'play' && 'Mainkan Kuis'}
               {activeSection === 'all' && 'Perpustakaan Kuis'}
-              {activeSection === 'community' && 'Komunitas & Peringkat'}
+              {activeSection === 'community' && 'Aula Komunitas'}
             </h1>
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'pwa' && 'Pusat instalasi aplikasi web mandiri PWA & berkas aplikasi luring utuh.'}

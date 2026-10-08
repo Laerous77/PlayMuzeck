@@ -76,7 +76,7 @@ const QUIZ_POINTS = [
   { title: 'Riwayat hasil', desc: 'Simpan hasil permainan dan tinjau jawaban per soal kapan saja.' },
   { title: 'Perpustakaan: belasan topik trivia', desc: 'Sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya. 3 starter deck bawaan siap main, deck tambahan tersedia di Perpustakaan.' },
   { title: 'Bisa dipasang & dimainkan luring', desc: 'Pasang sebagai PWA atau unduh berkas standalone. Multiplayer online tetap butuh internet.' },
-  { title: 'Komunitas & peringkat', desc: 'Mainkan kuis buatan pengguna lain; pemilik Kuis Editor bisa membagikan kuisnya. Papan peringkat harian, bulanan, dan sepanjang waktu berasal dari multiplayer online.' },
+  { title: 'Aula Komunitas', desc: 'Mainkan kuis buatan pengguna lain; pemilik Kuis Editor bisa membagikan kuisnya. Papan peringkat harian, bulanan, dan sepanjang waktu berasal dari multiplayer online.' },
 ];
 
 const ECOSYSTEM = [
@@ -226,7 +226,8 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
           <h2 className="text-2xl sm:text-3xl font-black text-white">Dua ruang, satu akun</h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Tujuan menu "Eksplor Fitur": dua kartu produk (Audio Studio & Pusat Kuis). */}
+        <div id="index-products-section" className="grid grid-cols-1 lg:grid-cols-2 gap-6 scroll-mt-20">
           {[
             {
               id: 'index-audio-section',

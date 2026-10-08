@@ -12,10 +12,11 @@ import {
   Play,
   Layers,
   Globe,
-  Brain,
   ListChecks,
   HelpCircle,
   Info,
+  Lightbulb,
+  Compass,
 } from 'lucide-react';
 import { AppMode, CartItem, UserSession, AudioEntitlements } from '../types';
 import { PROFILE_FRAMES, FrameOrnament } from './Modals/ProfileDashboardModal';
@@ -23,7 +24,7 @@ import { audioEngine } from '../services/audioEngine';
 import { NotificationBell } from './NotificationBell';
 import type { QuizSegment } from './PusatKuis/quizSegments';
 
-// Papan Peringkat kini menyatu dengan Komunitas Kuis dalam satu segmen ('community').
+// Papan Peringkat kini menyatu dengan Komunitas Kuis dalam satu segmen ('community'), tampil sebagai "Aula Komunitas" (URL: /quiz/hall).
 export type { QuizSegment };
 
 interface HeaderProps {
@@ -46,13 +47,29 @@ interface HeaderProps {
   accentQuiz?: string;
 }
 
-// Urutan menu Halaman Utama = urutan bagian di IndexView: Cara Mulai -> Audio Studio -> Pusat Kuis -> FAQ.
-const INDEX_ITEMS = [
-  { id: 'index-steps-section', icon: ListChecks, tone: 'accent', title: 'Cara Mulai', desc: 'Mulai dalam 3 langkah' },
-  { id: 'index-audio-section', icon: Music, tone: 'accent', title: 'Audio Studio', desc: '128 instrumen, 4 track akor & 20 Audio Tools' },
-  { id: 'index-quiz-section', icon: Brain, tone: 'accent2', title: 'Pusat Kuis', desc: '4 mode main, peringkat & komunitas kuis' },
+// Urutan menu Halaman Utama = urutan bagian di IndexView:
+// Kenapa PlayMuzeck (solusi) -> Langkah Awal (mulai dalam 3 langkah) -> Eksplor Fitur (dua kartu produk) -> Pertanyaan Umum (FAQ).
+// `spotIds`: elemen yang menyala (spotlight) setelah gulir; bila kosong, elemen tujuan itu sendiri yang menyala.
+const INDEX_ITEMS: readonly {
+  id: string;
+  icon: React.ComponentType<{ className?: string }>;
+  tone: 'accent' | 'accent2';
+  title: string;
+  desc: string;
+  spotIds?: readonly string[];
+}[] = [
+  { id: 'index-solutions-section', icon: Lightbulb, tone: 'accent', title: 'Kenapa PlayMuzeck', desc: 'Solusi untuk kebutuhan musik & kuismu' },
+  { id: 'index-steps-section', icon: ListChecks, tone: 'accent', title: 'Langkah Awal', desc: 'Mulai dalam 3 langkah' },
+  {
+    id: 'index-products-section',
+    icon: Compass,
+    tone: 'accent',
+    title: 'Eksplor Fitur',
+    desc: 'Kartu Audio Studio & Pusat Kuis',
+    spotIds: ['index-audio-section', 'index-quiz-section'],
+  },
   { id: 'index-faq-section', icon: HelpCircle, tone: 'accent', title: 'Pertanyaan Umum', desc: 'Jawaban singkat seputar layanan' },
-] as const;
+];
 
 const AUDIO_ITEMS = [
   { key: 'assets', icon: Music, title: 'Aset Audio', desc: 'Katalog lagu, stems & lisensi' },
@@ -65,7 +82,7 @@ const QUIZ_ITEMS = [
   { key: 'pwa', icon: Download, iconIdle: 'text-accent2', title: 'Unduh Web App', desc: 'PWA mandiri & 3 starter pack' },
   { key: 'play', icon: Play, iconIdle: 'text-emerald-400', title: 'Mainkan Kuis', desc: 'Putar langsung deck yang siap dimainkan' },
   { key: 'all', icon: Layers, iconIdle: 'text-accent', title: 'Perpustakaan Kuis', desc: 'Koleksi seluruh tema & deck kuis' },
-  { key: 'community', icon: Globe, iconIdle: 'text-sky-300', title: 'Komunitas & Peringkat', desc: 'Kuis buatan pengguna & papan peringkat' },
+  { key: 'community', icon: Globe, iconIdle: 'text-sky-300', title: 'Aula Komunitas', desc: 'Kuis buatan pengguna & papan peringkat' },
 ] as const;
 
 const ITEM_BASE =
@@ -75,28 +92,34 @@ const ITEM_BASE =
 // supaya mata pengguna langsung tertuju ke kartu/bagian yang dituju dari menu navigasi.
 const spotlightTimers = new WeakMap<HTMLElement, number[]>();
 
-function scrollToAndSpotlight(id: string, durationMs = 2600): void {
+function scrollToAndSpotlight(id: string, durationMs = 2600, spotIds?: readonly string[]): void {
   const el = document.getElementById(id);
   if (!el) return;
+  const targets = (spotIds && spotIds.length ? spotIds : [id])
+    .map((sid) => document.getElementById(sid))
+    .filter((t): t is HTMLElement => Boolean(t));
+  if (targets.length === 0) targets.push(el);
   const reduce =
     typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  (spotlightTimers.get(el) || []).forEach((t) => window.clearTimeout(t));
-  el.classList.remove('pm-spotlight');
+  for (const t of targets) {
+    (spotlightTimers.get(t) || []).forEach((timer) => window.clearTimeout(timer));
+    t.classList.remove('pm-spotlight');
+  }
   el.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'start' });
 
-  const start = window.setTimeout(() => {
-    void el.offsetWidth; // paksa reflow supaya animasi bisa diulang
-    el.classList.add('pm-spotlight');
-    const end = window.setTimeout(() => el.classList.remove('pm-spotlight'), durationMs);
-    spotlightTimers.set(el, [start, end]);
-  }, reduce ? 0 : 450);
-  spotlightTimers.set(el, [start]);
+  for (const t of targets) {
+    const start = window.setTimeout(() => {
+      void t.offsetWidth; // paksa reflow supaya animasi bisa diulang
+      t.classList.add('pm-spotlight');
+      const end = window.setTimeout(() => t.classList.remove('pm-spotlight'), durationMs);
+      spotlightTimers.set(t, [start, end]);
+    }, reduce ? 0 : 450);
+    spotlightTimers.set(t, [start]);
+  }
 }
 
-// Id bagian halaman utama yang sedang "aktif" untuk menandai menu.
-// Kartu Audio Studio & Pusat Kuis berdampingan di satu baris (posisi atas sama), jadi tidak bisa dibedakan
-// hanya dari posisi scroll. Aturannya:
+// Id bagian halaman utama yang sedang "aktif" untuk menandai menu. Aturannya:
 //  1. Bagian yang baru dipilih dari menu (preferId) menang selama masih terlihat.
 //  2. Selain itu, ambil bagian yang menutupi garis offset; bila beberapa bagian sebaris, ambil yang paling kiri.
 function getActiveSectionId(ids: string[], offset = 140, preferId: string | null = null): string | null {
@@ -129,7 +152,7 @@ function getActiveSectionId(ids: string[], offset = 140, preferId: string | null
 export const Header: React.FC<HeaderProps> = ({
   currentMode,
   onNavigateIndex,
-  activeAudioSection = 'assets',
+  activeAudioSection = 'tools',
   onSelectAudioSection,
   activeQuizSection = 'all',
   onSelectQuizSection,
@@ -236,7 +259,8 @@ export const Header: React.FC<HeaderProps> = ({
     pickedRef.current = { id, until: Date.now() + 1400 };
     setActiveIndexId(id);
     setIsSectionMenuOpen(false);
-    scrollToAndSpotlight(id);
+    const item = INDEX_ITEMS.find((i) => i.id === id);
+    scrollToAndSpotlight(id, 2600, item?.spotIds);
   };
 
   const menuLabel =
@@ -333,7 +357,7 @@ export const Header: React.FC<HeaderProps> = ({
                       );
                     })}
 
-                  {/* 3. HALAMAN UTAMA: Cara Mulai -> Audio Studio -> Pusat Kuis -> Pertanyaan Umum */}
+                  {/* 3. HALAMAN UTAMA: Kenapa PlayMuzeck -> Langkah Awal -> Eksplor Fitur -> Pertanyaan Umum */}
                   {currentMode === 'index' &&
                     INDEX_ITEMS.map((it) => {
                       const on = activeIndexId === it.id;

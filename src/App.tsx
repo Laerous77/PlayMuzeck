@@ -2,7 +2,16 @@
 import React, { useState, useEffect, useRef, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Header } from './components/Header';
-import { normalizeQuizSegment, type QuizSegment } from './components/PusatKuis/quizSegments';
+import { type QuizSegment } from './components/PusatKuis/quizSegments';
+import {
+  parseRoute,
+  buildPath,
+  isAliasRoute,
+  resolveAudioSection,
+  resolveQuizSegment,
+  type AudioSection,
+  type RouteMode,
+} from './services/routes';
 import { IndexView } from './components/IndexView';
 import { AudioStudioView } from './components/AudioStudio/AudioStudioView';
 import { QuizIndex } from './components/PusatKuis/QuizIndex';
@@ -89,9 +98,10 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
   }
 }
 
-// Posisi terakhir pengguna (mode + sub-halaman) disimpan supaya refresh tidak melempar balik ke awal.
+// Posisi terakhir pengguna disimpan di localStorage. URL (/audio/..., /quiz/...) adalah sumber utama halaman yang
+// dibuka; nilai tersimpan dipakai saat pengguna membuka /audio atau /quiz polos (dialihkan ke bagian terakhir yang
+// dibuka; bila belum ada: /audio/tools dan /quiz/library).
 const NAV_KEY = 'muzeck_last_nav';
-const AUDIO_SECTIONS = ['assets', 'pad', 'tools', 'pricing'] as const;
 type SavedNav = { mode?: string; audio?: string; quiz?: string };
 function readSavedNav(): SavedNav {
   try {
@@ -103,11 +113,33 @@ function readSavedNav(): SavedNav {
   }
 }
 
-// Tautan langsung dari halaman SEO: /alat-audio atau /alat-audio/<slug> membuka Audio Tools (alat yang dituju dipilih
-// oleh AudioStudioView lewat slug-nya). Tamu diminta masuk dulu; sesudah masuk langsung dibawa ke Audio Tools.
-function isAudioToolsLink(): boolean {
+// Halaman awal yang dituju URL saat aplikasi pertama dimuat. Bagian yang tidak disebut di URL diambil dari posisi
+// terakhir yang tersimpan. Tautan lama /alat-audio[/<slug>] dari halaman SEO membuka Audio Tools.
+function readInitialRoute(): { mode: RouteMode; audio: AudioSection; quiz: QuizSegment } {
+  const saved = readSavedNav();
+  let mode: RouteMode = 'index';
+  let audio = resolveAudioSection(saved.audio);
+  let quiz = resolveQuizSegment(saved.quiz);
   try {
-    return /^\/alat-audio(\/|$)/.test(window.location.pathname);
+    const r = parseRoute(window.location.pathname);
+    if (r.kind === 'audio') {
+      mode = 'audio';
+      if (r.section) audio = r.section;
+    } else if (r.kind === 'legacy-tools') {
+      mode = 'audio';
+      audio = 'tools';
+    } else if (r.kind === 'quiz') {
+      mode = 'quiz';
+      if (r.segment) quiz = r.segment;
+    }
+  } catch {}
+  return { mode, audio, quiz };
+}
+
+function hasCachedLogin(): boolean {
+  try {
+    const s = storage.getUserSession();
+    return Boolean(s?.isLoggedIn && String(s.email || '').trim());
   } catch {
     return false;
   }
@@ -126,36 +158,32 @@ function MainApp() {
     return { isLoggedIn: false, name: 'Tamu PlayMuzeck', email: '' };
   });
 
-  const [currentMode, setCurrentMode] = useState<AppMode | 'index'>(() => {
-    try {
-      const s = storage.getUserSession();
-      if (!(s?.isLoggedIn && String(s.email || '').trim())) return 'index';
-      if (isAudioToolsLink()) return 'audio';
-      const m = readSavedNav().mode;
-      return m === 'audio' || m === 'quiz' || m === 'index' ? m : 'audio';
-    } catch {
-      return 'index';
-    }
-  });
+  // Halaman yang dituju URL saat pertama dimuat (/audio/..., /quiz/..., atau tautan lama /alat-audio/...).
+  const [initialRoute] = useState(readInitialRoute);
+  const [bootCachedLogin] = useState(hasCachedLogin);
 
-  const [activeAudioSection, setActiveAudioSection] = useState<'assets' | 'pad' | 'tools' | 'pricing'>(() => {
-    if (isAudioToolsLink()) return 'tools';
-    const a = readSavedNav().audio;
-    return (AUDIO_SECTIONS as readonly string[]).includes(a || '') ? (a as 'assets' | 'pad' | 'tools' | 'pricing') : 'assets';
-  });
-  const [activeQuizSection, setActiveQuizSection] = useState<QuizSegment>(() => {
-    // Nilai lama / tak dikenal (mis. 'leaderboard' sebelum digabung ke Komunitas) dinormalkan agar halaman tidak kosong.
-    return normalizeQuizSegment(readSavedNav().quiz);
-  });
+  const [currentMode, setCurrentMode] = useState<AppMode | 'index'>(() =>
+    bootCachedLogin ? initialRoute.mode : 'index'
+  );
+  const [activeAudioSection, setActiveAudioSection] = useState<AudioSection>(initialRoute.audio);
+  // Nilai lama / tak dikenal (mis. 'leaderboard' sebelum digabung ke Aula Komunitas) sudah dinormalkan di readInitialRoute.
+  const [activeQuizSection, setActiveQuizSection] = useState<QuizSegment>(initialRoute.quiz);
 
-  // Tautan /alat-audio/... yang belum "dipakai" (tamu harus masuk dulu). Setelah masuk, buka Audio Tools sekali saja.
-  const audioToolsLinkPendingRef = useRef(isAudioToolsLink());
-  useEffect(() => {
-    if (!userSession.isLoggedIn || !audioToolsLinkPendingRef.current) return;
-    audioToolsLinkPendingRef.current = false;
-    setActiveAudioSection('tools');
-    setCurrentMode('audio');
-  }, [userSession.isLoggedIn]);
+  // Tamu yang membuka tautan dalam (/audio/..., /quiz/..., /alat-audio/...) harus masuk dulu. Tujuannya dicatat di sini,
+  // URL dibiarkan apa adanya, dan begitu login berhasil pengguna langsung dibawa ke halaman itu.
+  const pendingRouteRef = useRef<{ mode: 'audio' | 'quiz' } | null>(
+    !bootCachedLogin && initialRoute.mode !== 'index' ? { mode: initialRoute.mode } : null
+  );
+  const loggedInRef = useRef(userSession.isLoggedIn);
+  loggedInRef.current = userSession.isLoggedIn;
+
+  // Tamu kembali ke Halaman Utama lewat logo: lepaskan tujuan tadi dan rapikan URL ke "/".
+  // (Sengaja tidak dipanggil saat form login ditutup: AuthModal memanggil onLogin lalu onClose pada login sukses.)
+  const dropPendingRoute = () => {
+    if (!pendingRouteRef.current) return;
+    pendingRouteRef.current = null;
+    try { window.history.replaceState(null, '', '/'); } catch {}
+  };
 
   // Simpan posisi terakhir setiap kali berpindah.
   useEffect(() => {
@@ -166,6 +194,61 @@ function MainApp() {
       );
     } catch {}
   }, [currentMode, activeAudioSection, activeQuizSection]);
+
+  // ROUTING (1/3): state -> URL. Halaman Utama = "/", Audio Studio = "/audio/<bagian>", Pusat Kuis = "/quiz/<segmen>".
+  // Alamat polos ("/audio", "/quiz") dan tautan lama dirapikan dengan replaceState (tidak menambah riwayat);
+  // perpindahan biasa memakai pushState supaya tombol Kembali/Maju browser berfungsi.
+  // PENTING: efek ini harus dideklarasikan SEBELUM efek "tujuan tamu" di bawah, supaya pada render saat login
+  // tujuan itu masih tercatat dan URL tidak sempat tertimpa "/".
+  const firstSyncRef = useRef(true);
+  useEffect(() => {
+    if (pendingRouteRef.current) return;
+    let cur;
+    try { cur = parseRoute(window.location.pathname); } catch { return; }
+    if (cur.kind === 'passthrough') return; // /verify-email, /reset-password: ditangani efek lain di bawah
+    const target = buildPath(currentMode, activeAudioSection, activeQuizSection);
+    const here = window.location.pathname.replace(/\/+$/, '') || '/';
+    if (here === target) {
+      firstSyncRef.current = false;
+      return;
+    }
+    const replace = firstSyncRef.current || isAliasRoute(cur) || !userSession.isLoggedIn;
+    firstSyncRef.current = false;
+    try {
+      if (replace) window.history.replaceState(null, '', target + window.location.search + window.location.hash);
+      else window.history.pushState(null, '', target);
+    } catch {}
+  }, [currentMode, activeAudioSection, activeQuizSection, userSession.isLoggedIn]);
+
+  // ROUTING (2/3): tujuan tamu. Setelah login, buka halaman yang tadi dituju sekali saja.
+  useEffect(() => {
+    const p = pendingRouteRef.current;
+    if (!userSession.isLoggedIn || !p) return;
+    pendingRouteRef.current = null;
+    setCurrentMode(p.mode);
+  }, [userSession.isLoggedIn]);
+
+  // ROUTING (3/3): URL -> state, untuk tombol Kembali/Maju browser.
+  useEffect(() => {
+    const onPop = () => {
+      let r;
+      try { r = parseRoute(window.location.pathname); } catch { return; }
+      if (r.kind === 'passthrough') return;
+      if (r.kind === 'index' || r.kind === 'unknown' || !loggedInRef.current) {
+        setCurrentMode('index');
+        return;
+      }
+      if (r.kind === 'quiz') {
+        if (r.segment) setActiveQuizSection(r.segment);
+        setCurrentMode('quiz');
+      } else {
+        setActiveAudioSection(r.kind === 'audio' ? r.section ?? 'tools' : 'tools');
+        setCurrentMode('audio');
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   // Efek suara klik: (1) bagian yang sedang aktif, (2) muat pengaturan akun dari
   // database saat login / ganti akun / logout, (3) preload bank SF2 kalau mode Nada GM.
@@ -813,7 +896,8 @@ function MainApp() {
       showToast(`Selamat datang kembali, ${name}!`);
     }
 
-    setIsDestinationModalOpen(true);
+    // Kalau pengguna masuk karena membuka tautan dalam (/audio/..., /quiz/...), langsung bawa ke sana tanpa menanyakan tujuan.
+    if (!pendingRouteRef.current) setIsDestinationModalOpen(true);
   };
 
   const handleLogout = () => {
@@ -910,7 +994,15 @@ function MainApp() {
           setUserSession(guest);
           try { storage.setUserSession(guest); } catch {}
           setCurrentMode('index');
-          if (audioToolsLinkPendingRef.current) setIsAuthOpen(true);
+          // Sedang di /audio/... atau /quiz/... tanpa sesi yang sah (tamu, atau sesi sudah kedaluwarsa): catat tujuannya,
+          // minta masuk, lalu bawa kembali ke halaman itu setelah login.
+          try {
+            const here = parseRoute(window.location.pathname);
+            if (here.kind === 'audio' || here.kind === 'legacy-tools' || here.kind === 'quiz') {
+              if (!pendingRouteRef.current) pendingRouteRef.current = { mode: here.kind === 'quiz' ? 'quiz' : 'audio' };
+              setIsAuthOpen(true);
+            }
+          } catch {}
         }
       });
     }
@@ -992,6 +1084,7 @@ function MainApp() {
         }}
         onNavigateIndex={() => {
           audioEngine.playClickSound();
+          dropPendingRoute();
           setCurrentMode('index');
         }}
         activeAudioSection={activeAudioSection}

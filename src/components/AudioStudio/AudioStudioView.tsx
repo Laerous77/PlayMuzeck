@@ -12,6 +12,7 @@ import { storage } from '../../services/storage';
 import { calculateAudioPricing } from '../../services/pricing';
 import { audioEngine } from '../../services/audioEngine';
 import { findCartConflict } from '../../services/cartRules';
+import { peekInitialToolSlug, clearInitialToolSlug } from '../../services/routes';
 import {
   Music,
   Sliders,
@@ -43,7 +44,7 @@ export type StudioSection = 'assets' | 'pad' | 'tools' | 'pricing';
 export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   tracks = [],
   entitlements,
-  activeSection = 'assets',
+  activeSection = 'tools',
   onSectionChange,
   onRequestCustom,
   onAddToCart,
@@ -65,18 +66,16 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     if (activeSection === 'tools') setToolsMounted(true);
   }, [activeSection]);
 
-  // Audio Tools (20 alat dalam satu suite): slug URL /alat-audio/<slug> memilih alat yang dibuka pertama kali.
-  // Slug dibaca sekali saat tampilan dibuka (App.tsx membuka seksi Audio Tools untuk path /alat-audio/...), lalu URL
-  // dikembalikan ke "/" supaya tautan itu tidak terus memaksa Audio Tools setiap kali halaman dimuat ulang.
+  // Audio Tools (20 alat dalam satu suite): slug di URL (/alat-audio/<slug> dari halaman SEO, atau /audio/tools/<slug>)
+  // memilih alat yang dibuka pertama kali. Slug dicatat saat modul routes dimuat (sebelum App merapikan URL ke
+  // /audio/tools), jadi tamu yang harus login dulu pun tetap dibawa ke alat yang dituju. Dipakai sekali saja.
   const [initialTool] = useState(() => {
-    if (typeof window === 'undefined') return null;
-    const [, root, slug] = window.location.pathname.split('/');
-    return root === 'alat-audio' ? TOOL_SLUG_TO_ID[slug || ''] ?? null : null;
+    const slug = peekInitialToolSlug();
+    return slug ? TOOL_SLUG_TO_ID[slug] ?? null : null;
   });
   useEffect(() => {
-    if (typeof window === 'undefined' || !/^\/alat-audio(\/|$)/.test(window.location.pathname)) return;
     if (initialTool) document.getElementById('audio-tools-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    try { window.history.replaceState({}, '', '/'); } catch {}
+    clearInitialToolSlug();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const catalog: AudioTrackItem[] = tracks;
