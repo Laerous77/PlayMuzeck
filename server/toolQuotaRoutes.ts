@@ -8,16 +8,14 @@ import crypto from 'crypto';
 import { Router, type Request, type Response } from 'express';
 import type { Pool } from 'pg';
 import {
-  DAILY_FREE_QUOTA, ensureToolQuotaSchema, isQuotaTool, purgeOld, refund, remainingMap, reserve, serverDay,
+  DAILY_FREE_QUOTA, QUOTA_TOOL_IDS, ensureToolQuotaSchema, isQuotaTool, purgeOld, refund, remainingMap, reserve, serverDay,
 } from './toolQuotaCore';
 
 export { ensureToolQuotaSchema };
 
-const DEVICE_COOKIE = 'pm_dev';
 /** Kolom identity di DB VARCHAR(160): email yang sangat panjang di-hash supaya INSERT tidak gagal. */
 const MAX_IDENTITY = 160;
 const USE_KEY_RE = /^[A-Za-z0-9:_|.\-]{1,120}$/;
-
 interface Deps {
   db: Pool;
   /** Email akun yang sedang login (null = tamu). Tidak boleh melempar 401. */
@@ -35,22 +33,12 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
     return schemaReady;
   };
 
-  /** Akun login -> per-email. Tamu -> per-perangkat (cookie httpOnly yang dibuat server). */
-  const identityOf = async (req: Request, res: Response): Promise<string> => {
+  /** Jatah dicatat PER AKUN (email). Tamu tidak punya jatah: harus masuk dulu. Mengembalikan null untuk tamu. */
+  const accountOf = async (req: Request): Promise<string | null> => {
     const email = await resolveEmail(req).catch(() => null);
-    if (email) {
-      const id = `u:${email.trim().toLowerCase()}`;
-      return id.length <= MAX_IDENTITY ? id : `u:h:${crypto.createHash('sha256').update(id).digest('hex')}`;
-    }
-    let dev = String(req.cookies?.[DEVICE_COOKIE] ?? '');
-    if (!/^[0-9a-f-]{36}$/i.test(dev)) {
-      dev = crypto.randomUUID();
-      res.cookie(DEVICE_COOKIE, dev, {
-        httpOnly: true, sameSite: 'lax', secure: process.env.NODE_ENV === 'production',
-        maxAge: 400 * 24 * 3600 * 1000, path: '/',
-      });
-    }
-    return `g:${dev}`;
+    if (!email) return null;
+    const id = `u:${email.trim().toLowerCase()}`;
+    return id.length <= MAX_IDENTITY ? id : `u:h:${crypto.createHash('sha256').update(id).digest('hex')}`;
   };
 
   const fail = (res: Response, e: unknown) => {
@@ -61,9 +49,14 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
   router.get('/api/tool-quota', async (req, res) => {
     try {
       await ready();
-      const identity = await identityOf(req, res);
+      const identity = await accountOf(req);
       const day = await serverDay(db);
       res.set('Cache-Control', 'no-store');
+      if (!identity) {
+        const none: Record<string, number> = {};
+        for (const id of QUOTA_TOOL_IDS) none[id] = 0;
+        return res.json({ day, limit: DAILY_FREE_QUOTA, loginRequired: true, remaining: none });
+      }
       res.json({ day, limit: DAILY_FREE_QUOTA, remaining: await remainingMap(db, identity, day) });
     } catch (e) { fail(res, e); }
   });
@@ -74,8 +67,9 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
       if (!isQuotaTool(toolId)) return res.status(400).json({ error: 'Alat tidak dikenal.' });
       const key = typeof useKey === 'string' && USE_KEY_RE.test(useKey) ? useKey : crypto.randomUUID();
       await ready();
-      const identity = await identityOf(req, res);
+      const identity = await accountOf(req);
       res.set('Cache-Control', 'no-store');
+      if (!identity) return res.json({ allowed: false, remaining: 0, useKey: key, loginRequired: true });
       res.json(await reserve(db, identity, toolId, key));
     } catch (e) { fail(res, e); }
   });
@@ -87,8 +81,9 @@ export function createToolQuotaRouter({ db, resolveEmail }: Deps): Router {
         return res.status(400).json({ error: 'Permintaan tidak valid.' });
       }
       await ready();
-      const identity = await identityOf(req, res);
+      const identity = await accountOf(req);
       res.set('Cache-Control', 'no-store');
+      if (!identity) return res.json({ ok: true, remaining: 0 });
       res.json({ ok: true, remaining: await refund(db, identity, toolId, useKey) });
     } catch (e) { fail(res, e); }
   });

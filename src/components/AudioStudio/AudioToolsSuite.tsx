@@ -954,7 +954,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         if (!reservation.allowed) {
           setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE } }));
           setQuotaMap(readQuota());
-          goPricing(targetTool);
+          if (reservation.loginRequired) { toastRef.current('Masuk ke akun dulu untuk memakai jatah gratis Audio Tools.'); (onQuotaExhausted ?? onUnlockEditor)(); }
+          else if (reservation.unavailable) toastRef.current('Jatah belum bisa diperiksa karena server tidak terjangkau. Periksa koneksi lalu coba lagi.');
+          else goPricing(targetTool);
           return;
         }
       }
@@ -1173,7 +1175,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         }
         if (!liveRes.allowed) {
           setQuotaMap(readQuota());
-          goPricing(tool);
+          if (liveRes.loginRequired) { toastRef.current('Masuk ke akun dulu untuk memakai jatah gratis Audio Tools.'); (onQuotaExhausted ?? onUnlockEditor)(); }
+          else if (liveRes.unavailable) toastRef.current('Jatah belum bisa diperiksa karena server tidak terjangkau. Periksa koneksi lalu coba lagi.');
+          else goPricing(tool);
           return;
         }
         chargedSigRef.current[tool] = sig;
@@ -1209,7 +1213,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         if (sKey && extraSessionRef.current.has(sKey)) return true;
         const res = await reserveQuota(toolId, sKey ? `${sKey}|${pageNonce}` : undefined);
         if (!res.allowed) {
-          goPricingRef.current(toolId);
+          if (res.loginRequired) { toastRef.current('Masuk ke akun dulu untuk memakai jatah gratis Audio Tools.'); (onQuotaExhausted ?? onUnlockEditor)(); }
+          else if (res.unavailable) toastRef.current('Jatah belum bisa diperiksa karena server tidak terjangkau. Periksa koneksi lalu coba lagi.');
+          else goPricingRef.current(toolId);
           return false;
         }
         paidExtraRef.current.add(toolId);

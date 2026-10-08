@@ -3,8 +3,8 @@
 // (lihat server/toolQuotaCore.ts), bukan localStorage. Di sini hanya ada salinan sementara di memori halaman
 // supaya UI bisa menampilkan sisa jatah tanpa menunggu jaringan.
 //
-// Bila server tidak terjangkau, dipakai penghitung memori (hilang saat halaman dimuat ulang) agar alat tidak
-// jadi tanpa batas selama halaman terbuka. Penghitung ini TIDAK ditulis ke localStorage.
+// Bila server tidak terjangkau, pemakaian DITOLAK (gagal tertutup): tidak ada penghitung cadangan di browser,
+// karena penghitung di browser akan kembali nol saat halaman dimuat ulang / penyimpanan dihapus.
 export const DAILY_FREE_QUOTA = 2;
 
 export interface Reservation {
@@ -12,12 +12,13 @@ export interface Reservation {
   /** Kunci penggunaan (dipakai untuk refund & agar permintaan ulang tidak dihitung dua kali). */
   useKey: string;
   remaining: number;
-  /** true bila server tidak terjangkau dan keputusan dibuat dari penghitung memori. */
-  offline?: boolean;
+  /** true bila jatah TIDAK bisa diperiksa karena server tidak terjangkau (bukan karena jatah habis). */
+  unavailable?: boolean;
+  /** true bila pemakai belum masuk akun (jatah hanya untuk akun yang login). */
+  loginRequired?: boolean;
 }
 
 const remaining = new Map<string, number>();
-const offlineUsed = new Map<string, Set<string>>();
 const listeners = new Set<() => void>();
 let loadedDay = '';
 let inflight: Promise<void> | null = null;
@@ -35,9 +36,7 @@ const newKey = () =>
 export function remainingQuota(toolId: string, unlimited = false): number {
   if (unlimited) return Infinity;
   const v = remaining.get(toolId);
-  if (typeof v === 'number') return v;
-  const off = offlineUsed.get(toolId)?.size ?? 0;
-  return Math.max(0, DAILY_FREE_QUOTA - off);
+  return typeof v === 'number' ? v : DAILY_FREE_QUOTA;
 }
 
 export function subscribeQuota(cb: () => void): () => void {
@@ -65,11 +64,10 @@ export function refreshQuota(force = false): Promise<void> {
       loadedDay = data.day;
       remaining.clear();
       Object.entries(data.remaining).forEach(([k, v]) => remaining.set(k, Math.max(0, Math.min(DAILY_FREE_QUOTA, Number(v) || 0))));
-      offlineUsed.clear(); // data server menggantikan hitungan sementara
       lastFetch = Date.now();
       emit();
     } catch {
-      /* server tidak terjangkau: tampilan memakai nilai terakhir / penghitung memori */
+      /* server tidak terjangkau: tampilan memakai nilai terakhir; pemakaian tetap ditolak sampai server menjawab */
     } finally {
       inflight = null;
     }
@@ -81,36 +79,20 @@ export function refreshQuota(force = false): Promise<void> {
 export async function reserveQuota(toolId: string, useKey?: string): Promise<Reservation> {
   const key = useKey && /^[A-Za-z0-9:_|.\-]{1,120}$/.test(useKey) ? useKey : newKey();
   try {
-    const r = await postJson('/api/tool-quota/reserve', { toolId, useKey: key }) as { allowed: boolean; remaining: number; useKey: string };
+    const r = await postJson('/api/tool-quota/reserve', { toolId, useKey: key }) as { allowed: boolean; remaining: number; useKey: string; loginRequired?: boolean };
     remaining.set(toolId, Math.max(0, Number(r.remaining) || 0));
     lastFetch = Date.now();
     emit();
-    return { allowed: Boolean(r.allowed), remaining: remaining.get(toolId) ?? 0, useKey: r.useKey || key };
+    return { allowed: Boolean(r.allowed), remaining: remaining.get(toolId) ?? 0, useKey: r.useKey || key, loginRequired: Boolean(r.loginRequired) };
   } catch {
-    // Server tidak terjangkau: penghitung memori (tanpa localStorage).
-    const set = offlineUsed.get(toolId) ?? new Set<string>();
-    offlineUsed.set(toolId, set);
-    const known = set.has(key);
-    const base = remaining.get(toolId) ?? DAILY_FREE_QUOTA;
-    if (!known && set.size >= base) return { allowed: false, remaining: 0, useKey: key, offline: true };
-    set.add(key);
-    remaining.set(toolId, Math.max(0, base - (known ? 0 : 1)));
-    emit();
-    return { allowed: true, remaining: remaining.get(toolId) ?? 0, useKey: key, offline: true };
+    // Server tidak terjangkau / galat: tolak. Jatah tidak boleh diputuskan di browser.
+    return { allowed: false, remaining: remaining.get(toolId) ?? 0, useKey: key, unavailable: true };
   }
 }
 
 /** Kembalikan jatah yang tadi dipesan (proses gagal / dibatalkan). Aman dipanggil dengan null. */
 export async function refundReservation(toolId: string, res: Reservation | null | undefined): Promise<void> {
   if (!res || !res.allowed) return;
-  if (res.offline) {
-    const set = offlineUsed.get(toolId);
-    if (set?.delete(res.useKey)) {
-      remaining.set(toolId, Math.min(DAILY_FREE_QUOTA, (remaining.get(toolId) ?? 0) + 1));
-      emit();
-    }
-    return;
-  }
   try {
     const r = await postJson('/api/tool-quota/refund', { toolId, useKey: res.useKey }) as { remaining: number };
     remaining.set(toolId, Math.max(0, Math.min(DAILY_FREE_QUOTA, Number(r.remaining) || 0)));

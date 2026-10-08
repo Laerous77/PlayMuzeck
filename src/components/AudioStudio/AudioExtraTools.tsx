@@ -973,8 +973,8 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     }
   };
 
-  // Metronom: jatah dipakai begitu tombol Mulai ditekan. Satu sesi halaman = satu penggunaan (kunci 'session'),
-  // jadi Berhenti lalu Mulai lagi (mis. setelah ganti tempo) di halaman yang sama tidak memakan jatah lagi.
+  // Metronom: SETIAP penekanan Mulai memakai satu jatah (kunci unik per penekanan), termasuk Berhenti lalu Mulai lagi
+  // di halaman yang sama. Jatah dicatat di server, jadi refresh / ganti perangkat tidak mengembalikannya.
   const start = async () => {
     if (startingRef.current) return; // cegah klik ganda membuat dua penjadwal sekaligus
     startingRef.current = true;
@@ -983,8 +983,8 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
       // AudioContext dibuat SEBELUM menunggu server supaya masih dalam gestur klik (wajib di Safari/iOS).
       const ctx = new AudioCtx();
       void ctx.resume();
-      let allowed = true;
-      try { allowed = !gate || (await gate.use('metronome', 'session')); } catch {}
+      let allowed = false;
+      try { allowed = await chargeRun(gate, 'metronome', newRunKey('mt'), () => aliveRef.current); } catch { allowed = false; }
       if (!allowed || !aliveRef.current) { void ctx.close().catch(() => {}); return; }
 
       const master = makeMaster(ctx, cfg.current.vol);
@@ -1020,8 +1020,8 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     const b = Math.min(bars, maxBars);
     const pcm = renderMetronome({ bpm, beatsPerBar: num, denominator: den, tempoRef: effRef, bars: b, subdivisionId: sub.id, accents, sound: soundId, sampleRate: 44100 });
     const buf = toBuffer([pcm], 44100);
-    // Berkas klik yang berhasil dibuat memakai jatah sesi yang sama dengan tombol Mulai (tidak dihitung dua kali).
-    if (!(await chargeRun(gate, 'metronome', 'session'))) return;
+    // Satu berkas klik yang berhasil dibuat = satu penggunaan (terpisah dari penekanan Mulai).
+    if (!(await chargeRun(gate, 'metronome', newRunKey('mf'), () => aliveRef.current))) return;
     if (aliveRef.current) setClickBuf(buf);
   };
   const [bpmText, setBpmText] = useState(String(bpm));
@@ -1155,6 +1155,10 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
   const lastGood = useRef(0);
   const a4Ref = useRef(a4); a4Ref.current = a4;
   const presetRef = useRef(preset); presetRef.current = preset;
+  const startingRef = useRef(false);
+  const aliveRef = useRef(true);
+  const gateRef = useRef(gate); gateRef.current = gate;
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; }; }, []);
 
   const stop = useCallback(() => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current); rafRef.current = null;
@@ -1176,11 +1180,19 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
     };
   }, [stop]);
 
+  // Tuner: SETIAP penekanan "Mulai tuner" memakai satu jatah, begitu izin mikrofon berhasil didapat (izin ditolak = tidak
+  // memakan jatah). Jatah dicatat di server, jadi refresh / ganti perangkat tidak mengembalikannya.
   const start = async () => {
+    if (startingRef.current) return; // cegah klik ganda memakai dua jatah
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr('Browser ini belum mendukung akses mikrofon.'); return; }
+    if (!quotaAvailable(gateRef.current, 'tuner')) return;
+    startingRef.current = true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+      let charged = false;
+      try { charged = await chargeRun(gateRef.current, 'tuner', newRunKey('tn'), () => aliveRef.current); } catch { charged = false; }
+      if (!charged) { stream.getTracks().forEach((t) => t.stop()); return; }
       const ctx = new AudioCtx();
       if (ctx.state === 'suspended') await ctx.resume();
       const analyser = ctx.createAnalyser(); analyser.fftSize = 8192;
@@ -1204,7 +1216,7 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
     } catch (e) {
       stop();
       setErr((e as DOMException)?.name === 'NotAllowedError' ? 'Izin mikrofon ditolak.' : 'Gagal mengakses mikrofon.');
-    }
+    } finally { startingRef.current = false; }
   };
 
   const playRef = (midi: number) => {
@@ -1749,10 +1761,7 @@ export const ExtraToolPanel: React.FC<{
   const [visited, setVisited] = useState<Set<ExtraToolId>>(new Set());
   useEffect(() => { if (active) setVisited((v) => (v.has(active) ? v : new Set(v).add(active))); }, [active]);
   const show = (id: ExtraToolId) => (active === id ? '' : 'hidden');
-  const guard = (id: ExtraToolId) =>
-    ['tuner', 'metronome'].includes(id)
-      ? {}
-      : quotaGuardProps(Boolean(gate?.locked(id)), () => gate?.blocked(id));
+  const guard = (id: ExtraToolId) => quotaGuardProps(Boolean(gate?.locked(id)), () => gate?.blocked(id));
   const mounted = (id: ExtraToolId) => visited.has(id) || active === id;
 
   return (
