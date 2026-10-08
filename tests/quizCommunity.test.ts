@@ -8,7 +8,10 @@ import {
   sanitizeSharedQuestions,
   sanitizeSharedSettings,
   MAX_QUESTIONS_PER_SHARE,
+  checkMultiplayerEligibility,
 } from '../server/quizCommunityRoutes.ts';
+import { verifyBuiltinQuestions } from '../server/builtinQuizVerify.ts';
+import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
 
 let bad = 0;
 const ok = (n: string, c: boolean) => { console.log(c ? 'ok  ' : 'GAGAL', n); if (!c) bad++; };
@@ -70,4 +73,29 @@ ok('penalti dibatasi 0-100', sanitizeSharedSettings({ penaltyPercent: 500 }).pen
 ok('satuan skor tidak dikenal -> point', sanitizeSharedSettings({ scoreUnit: 'x' }).scoreUnit === 'point');
 ok('satuan skor percent dipertahankan', sanitizeSharedSettings({ scoreUnit: 'percent' }).scoreUnit === 'percent');
 
-if (bad) process.exitCode = 1; else console.log('\nSemua tes Komunitas Kuis & papan peringkat lulus.');
+// ── Skor multiplayer (papan peringkat hanya dari multiplayer) ──
+const deck: any = BUILTIN_DECKS[0];
+const real = deck.questions.slice(0, 6);
+ok('soal asli deck bawaan lolos verifikasi', verifyBuiltinQuestions(deck.id, real));
+ok('urutan soal diacak tetap lolos', verifyBuiltinQuestions(deck.id, [...real].reverse()));
+ok('pilihan diacak + correctIndex menyesuaikan tetap lolos', (() => {
+  const q = real[0];
+  const opts = [...q.options].reverse();
+  const ci = opts.indexOf(q.options[q.correctIndex]);
+  return verifyBuiltinQuestions(deck.id, [{ ...q, options: opts, correctIndex: ci }, ...real.slice(1)]);
+})());
+ok('soal buatan sendiri ditolak', !verifyBuiltinQuestions(deck.id, [{ question: 'Mudah?', options: ['ya', 'tidak'], correctIndex: 0 }, ...real.slice(1)]));
+ok('kunci jawaban diubah ditolak', !verifyBuiltinQuestions(deck.id, [{ ...real[0], correctIndex: (real[0].correctIndex + 1) % real[0].options.length }, ...real.slice(1)]));
+ok('soal ganda ditolak', !verifyBuiltinQuestions(deck.id, [real[0], real[0], real[0], real[0], real[0]]));
+ok('deck tidak dikenal ditolak', !verifyBuiltinQuestions('deck-custom-123', real));
+ok('daftar kosong ditolak', !verifyBuiltinQuestions(deck.id, []));
+
+const elig = (o: Partial<{ deckId: string; questions: unknown[]; accountCount: number }> = {}) =>
+  checkMultiplayerEligibility({ deckId: deck.id, questions: real, accountCount: 2, ...o });
+ok('multiplayer sah: deck bawaan, 6 soal, 2 akun', elig().ok === true);
+ok('kurang dari 5 soal tidak dihitung', (() => { const r = elig({ questions: real.slice(0, 4) }); return !r.ok && r.reason === 'too_short'; })());
+ok('1 akun saja tidak dihitung', (() => { const r = elig({ accountCount: 1 }); return !r.ok && r.reason === 'few_players'; })());
+ok('kuis komunitas/pribadi tidak dihitung', (() => { const r = elig({ deckId: 'deck-custom-shared-shq_0123456789ab' }); return !r.ok && r.reason === 'not_eligible'; })());
+ok('soal dipalsukan pada deck bawaan tidak dihitung', (() => { const r = elig({ questions: [{ question: 'x?', options: ['a', 'b'], correctIndex: 0 }, ...real.slice(1)] }); return !r.ok && r.reason === 'not_eligible'; })());
+
+if (bad) process.exitCode = 1; else console.log('\nSemua tes Komunitas Kuis & papan peringkat multiplayer lulus.');

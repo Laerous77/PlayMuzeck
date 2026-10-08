@@ -44,7 +44,6 @@ interface QuizCommunityProps {
 }
 
 const PAGE_SIZE = 12;
-const MIN_SCORED = 5;
 
 const DIFF_CLASS: Record<string, string> = {
   Mudah: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
@@ -404,12 +403,6 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
                             </span>
                           )}
                         </div>
-
-                        {qCount < MIN_SCORED && (
-                          <p className="text-[10px] text-amber-300/90 leading-snug">
-                            Kurang dari {MIN_SCORED} soal: tetap bisa dimainkan, tapi skornya tidak masuk papan peringkat.
-                          </p>
-                        )}
 
                         <div className="flex items-center gap-2">
                           <button

@@ -26,6 +26,26 @@ import type { Server as HttpServer } from 'http';
 import { Server, Socket } from 'socket.io';
 import { randomBytes, randomInt } from 'crypto';
 
+/** Hasil pencatatan skor ke papan peringkat untuk satu akun (dikirim ke pemain di layar akhir). */
+export interface LeaderboardOutcome {
+  counted: boolean;
+  points?: number;
+  message?: string;
+}
+
+/** Permainan yang SELESAI sampai soal terakhir. Jawaban benar dihitung server dari jawaban yang tercatat. */
+export interface FinishedGame {
+  deckId: string;
+  deckTitle: string;
+  questions: unknown[];
+  players: { userId: string; correct: number }[];
+}
+
+export type OnGameFinished = (game: FinishedGame) => Promise<Record<string, LeaderboardOutcome> | void>;
+
+/** Diisi attachMultiplayerSocket; dipakai endGameNow (fungsi tingkat modul). */
+let onGameFinished: OnGameFinished | undefined;
+
 export const MIN_GAP_SEC = 3;
 export const MAX_GAP_SEC = 60;
 const MIN_ROUND_SEC = 1;
@@ -129,6 +149,8 @@ interface DepartedSnapshot {
   answers: Record<number, number>;
   lastAnswerStatus?: 'correct' | 'wrong';
   lastPointsAwarded?: number;
+  /** ID akun pemain (rahasia) supaya skornya tetap bisa dicatat ke papan peringkat walau sempat terputus. */
+  userId?: string;
   /** 'manual' = menekan Keluar (tidak ditarik balik otomatis), 'timeout' = terputus > batas waktu. */
   reason: 'manual' | 'timeout';
   observer: boolean;
@@ -395,6 +417,7 @@ function reviveDeparted(room: Room, key: string, socketId: string, ident?: { nam
   p.late = snap.late;
   p.madeUp = snap.madeUp;
   p.participating = snap.participating;
+  p.userId = snap.userId;
   p.hasAnsweredThisRound = room.status === 'in-game' && snap.answers[room.currentQIndex] !== undefined;
   if (room.status === 'in-game' && !p.hasAnsweredThisRound) {
     p.lastAnswerStatus = undefined;
@@ -425,7 +448,38 @@ function assignHost(room: Room, oldHost: Player, successorId?: string) {
   room.hostId = next.id;
 }
 
-function endGameNow(io: Server, room: Room, notice: string) {
+/** Jumlah jawaban benar tiap peserta yang masuk akun, dinilai server dari `answers` (bukan dari klien). */
+function collectLeaderboardPlayers(room: Room): FinishedGame['players'] {
+  const out: FinishedGame['players'] = [];
+  for (const p of room.players.values()) {
+    if (!p.userId || p.observer || !p.participating) continue;
+    let correct = 0;
+    room.questions.forEach((q, i) => {
+      if (p.answers[i] !== undefined && p.answers[i] === q?.correctIndex) correct++;
+    });
+    out.push({ userId: p.userId, correct });
+  }
+  return out;
+}
+
+/** Kirim skor ke papan peringkat lalu beri tahu tiap pemain hasilnya. Gagal = diam-diam dicatat di log. */
+function reportFinishedGame(io: Server, room: Room) {
+  if (!onGameFinished) return;
+  const players = collectLeaderboardPlayers(room);
+  if (!players.length) return;
+  const game: FinishedGame = { deckId: room.deckId, deckTitle: room.deckTitle, questions: room.questions, players };
+  void onGameFinished(game)
+    .then((outcomes) => {
+      if (!outcomes) return;
+      for (const p of room.players.values()) {
+        const o = p.userId ? outcomes[p.userId] : undefined;
+        if (o && p.socketId) io.to(p.socketId).emit('game:leaderboard', o);
+      }
+    })
+    .catch((e) => console.error('[multiplayer] gagal mencatat skor papan peringkat:', e?.message || e));
+}
+
+function endGameNow(io: Server, room: Room, notice: string, completed = false) {
   room.status = 'podium';
   room.roundStartedAt = null;
   room.roundEndsAt = null;
@@ -444,6 +498,8 @@ function endGameNow(io: Server, room: Room, notice: string) {
     }
   }
   room.departed.clear();
+  // Hanya permainan yang tuntas sampai soal terakhir yang dicatat (diakhiri host / host keluar = tidak dicatat).
+  if (completed) reportFinishedGame(io, room);
   if (room.makeupActive) {
     for (const p of room.players.values()) if (p.participating && !p.observer) p.madeUp = true;
     room.makeupActive = false;
@@ -493,6 +549,7 @@ function removePlayer(io: Server, room: Room, p: Player, successorId?: string, r
       answers: { ...p.answers },
       lastAnswerStatus: p.lastAnswerStatus,
       lastPointsAwarded: p.lastPointsAwarded,
+      userId: p.userId,
       reason,
       observer: p.observer,
       late: p.late,
@@ -554,7 +611,8 @@ export type ResolveUserId = (cookieHeader: string | undefined, handshake: any) =
 /** Jeda singkat setelah semua peserta menjawab, sebelum masuk ke layar jeda. */
 const ALL_ANSWERED_GRACE_MS = 3000;
 
-export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: ResolveUserId) {
+export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: ResolveUserId, onFinished?: OnGameFinished) {
+  onGameFinished = onFinished;
   const io = new Server(httpServer, {
     cors: { origin: '*' },
     path: '/socket.io',
@@ -1126,7 +1184,7 @@ export function attachMultiplayerSocket(httpServer: HttpServer, resolveUserId?: 
     const isLastQuestion = room.currentQIndex >= room.questions.length - 1;
     room.roundResultEndsAt = null;
     if (isLastQuestion) {
-      endGameNow(ioRef, room, '');
+      endGameNow(ioRef, room, '', true);
       room.endNotice = null;
       return;
     }

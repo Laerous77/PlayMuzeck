@@ -1,6 +1,6 @@
 // src/services/quizCommunityApi.ts
 // Klien untuk papan peringkat & Komunitas Kuis (server/quizCommunityRoutes.ts).
-// Membaca = publik. Membagikan kuis & mencatat skor = akun login (cookie sesi dibawa otomatis oleh installAuthFetch).
+// Membaca = publik. Membagikan kuis = akun login (cookie sesi dibawa otomatis oleh installAuthFetch).
 import type { Deck, QuizQuestion } from '../types';
 
 export type LeaderboardPeriod = 'daily' | 'monthly' | 'all';
@@ -64,13 +64,6 @@ export interface MySharingState {
   items: MySharedQuiz[];
 }
 
-export interface ScoreSubmitResult {
-  counted: boolean;
-  points?: number;
-  reason?: 'too_short' | 'own_quiz' | 'not_eligible';
-  message?: string;
-}
-
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -101,9 +94,7 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const fetchLeaderboard = (period: LeaderboardPeriod) =>
   request<LeaderboardData>(`/api/public/quiz-leaderboard?period=${period}`);
 
-/** Skor sesi Solo. Server menentukan apakah skor dihitung (deck eligible, minimal 5 soal, bukan kuis sendiri). */
-export const submitQuizScore = (payload: { deckId: string; deckTitle: string; correct: number; total: number }) =>
-  request<ScoreSubmitResult>('/api/user/quiz-leaderboard', { method: 'POST', body: JSON.stringify(payload) });
+// Skor TIDAK dikirim dari klien: server mencatatnya sendiri saat permainan Multiplayer Online selesai.
 
 /* ───────── Komunitas kuis ───────── */
 

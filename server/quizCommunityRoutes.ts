@@ -1,5 +1,7 @@
 // server/quizCommunityRoutes.ts
 // Papan peringkat (harian / bulanan / sepanjang waktu) + Komunitas Kuis (berbagi kuis buatan Kuis Editor).
+// Papan peringkat HANYA berisi skor dari mode Multiplayer Online. Skor dihitung & dicatat oleh SERVER saat permainan
+// multiplayer selesai (recordMultiplayerGame, dipanggil dari server/multiplayerSocket.ts), bukan dikirim klien.
 //
 // Dipasang di server/index.ts:
 //   import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper } from './quizCommunityRoutes';
@@ -11,11 +13,12 @@
 //   - MEMBACA papan peringkat & daftar/isi kuis komunitas  -> siapa saja (/api/public/...).
 //   - MEMBAGIKAN / memperbarui / menghapus kuis sendiri     -> hanya akun yang sudah membuka Kuis Editor
 //     (dicek di SERVER dari tabel user_collections, bukan cuma disembunyikan di UI).
-//   - Mencatat skor ke papan peringkat                      -> akun yang sedang login.
+//   - Mencatat skor ke papan peringkat                      -> otomatis oleh server saat multiplayer selesai (akun login).
 import crypto from 'crypto';
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import type { Pool } from 'pg';
+import { builtinDeckTitle, isBuiltinDeckKnown, verifyBuiltinQuestions } from './builtinQuizVerify';
 
 type Db = Pick<Pool, 'query'>;
 
@@ -32,6 +35,7 @@ CREATE TABLE IF NOT EXISTS quiz_leaderboard_scores (
   points INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE quiz_leaderboard_scores ADD COLUMN IF NOT EXISTS mode VARCHAR(20) NOT NULL DEFAULT 'solo';
 CREATE INDEX IF NOT EXISTS quiz_lb_created_idx ON quiz_leaderboard_scores (created_at);
 CREATE INDEX IF NOT EXISTS quiz_lb_user_deck_idx ON quiz_leaderboard_scores (user_email, deck_key);
 
@@ -65,6 +69,8 @@ export const MIN_SCORED_QUESTIONS = 5;
 export const MAX_SCORED_QUESTIONS = 200;
 export const POINTS_PER_CORRECT = 10;
 export const LEADERBOARD_SIZE = 50;
+/** Skor multiplayer hanya dicatat bila minimal sekian AKUN berbeda (bukan tamu) ikut bermain. */
+export const MIN_MULTIPLAYER_ACCOUNTS = 2;
 
 export const MAX_SHARED_PER_USER = 30;
 export const MAX_QUESTIONS_PER_SHARE = 100;
@@ -184,6 +190,93 @@ export function sanitizeSharedSettings(raw: any): { penaltyPercent: number; scor
   };
 }
 
+/* ───────────────────────── Skor multiplayer ───────────────────────── */
+
+export interface FinishedMultiplayerGame {
+  deckId: string;
+  /** Soal yang dimainkan (dikirim host; diverifikasi terhadap deck bawaan di server). */
+  questions: unknown[];
+  /** Peserta yang masuk akun, dengan jumlah jawaban benar yang DIHITUNG SERVER. */
+  players: { userId: string; correct: number }[];
+}
+
+export interface ScoreOutcome {
+  counted: boolean;
+  points?: number;
+  reason?: 'too_short' | 'not_eligible' | 'few_players' | 'no_account';
+  message?: string;
+}
+
+/** Aturan murni: apakah permainan multiplayer ini boleh masuk papan peringkat. */
+export function checkMultiplayerEligibility(g: {
+  deckId: string;
+  questions: unknown[];
+  accountCount: number;
+}): { ok: true } | { ok: false; reason: NonNullable<ScoreOutcome['reason']>; message: string } {
+  const total = g.questions.length;
+  if (total < MIN_SCORED_QUESTIONS || total > MAX_SCORED_QUESTIONS) {
+    return { ok: false, reason: 'too_short', message: `Skor hanya dicatat untuk permainan minimal ${MIN_SCORED_QUESTIONS} soal.` };
+  }
+  if (!isBuiltinDeckKnown(g.deckId) || !verifyBuiltinQuestions(g.deckId, g.questions)) {
+    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan & starter yang masuk papan peringkat. Kuis komunitas dan kuis pribadi tidak dihitung.' };
+  }
+  if (g.accountCount < MIN_MULTIPLAYER_ACCOUNTS) {
+    return { ok: false, reason: 'few_players', message: `Skor dicatat bila minimal ${MIN_MULTIPLAYER_ACCOUNTS} pemain yang masuk akun ikut bermain.` };
+  }
+  return { ok: true };
+}
+
+// Cache papan peringkat (10 detik) dipakai bersama: dikosongkan setiap ada skor baru / kuis dihapus.
+const lbCache = new Map<string, { at: number; body: unknown }>();
+const LB_TTL_MS = 10_000;
+export const clearLeaderboardCache = () => lbCache.clear();
+
+/**
+ * Catat skor sebuah permainan multiplayer yang SELESAI sampai soal terakhir.
+ * Poin = 10 per jawaban benar (+20% bila semua benar), dihitung dari jawaban yang dinilai server.
+ * Mengembalikan hasil per akun supaya pemain bisa diberi tahu di layar akhir.
+ */
+export async function recordMultiplayerGame(db: Db, game: FinishedMultiplayerGame): Promise<Record<string, ScoreOutcome>> {
+  const out: Record<string, ScoreOutcome> = {};
+  // Satu akun yang bergabung dari dua browser dihitung sekali (skor tertinggi).
+  const best = new Map<string, number>();
+  for (const p of game.players) best.set(p.userId, Math.max(best.get(p.userId) ?? 0, p.correct));
+  if (best.size === 0) return out;
+
+  const verdict = checkMultiplayerEligibility({ deckId: game.deckId, questions: game.questions, accountCount: best.size });
+  if (!verdict.ok) {
+    for (const id of best.keys()) out[id] = { counted: false, reason: verdict.reason, message: verdict.message };
+    return out;
+  }
+
+  await ensureQuizCommunitySchema(db);
+  const total = game.questions.length;
+  const title = builtinDeckTitle(game.deckId);
+  const { rows } = await db.query(
+    `SELECT id, email FROM users WHERE id = ANY($1::text[]) AND suspended_at IS NULL`,
+    [Array.from(best.keys())]
+  );
+  const emailOf = new Map<string, string>(rows.map((r: any) => [String(r.id), String(r.email)]));
+
+  for (const [userId, rawCorrect] of best) {
+    const email = emailOf.get(userId);
+    if (!email) {
+      out[userId] = { counted: false, reason: 'no_account', message: 'Akun tidak ditemukan.' };
+      continue;
+    }
+    const correct = Math.max(0, Math.min(total, Math.round(rawCorrect)));
+    const points = computePoints(correct, total);
+    await db.query(
+      `INSERT INTO quiz_leaderboard_scores (user_email, deck_key, deck_title, correct, total, points, mode)
+       VALUES ($1,$2,$3,$4,$5,$6,'multiplayer')`,
+      [email, game.deckId, title, correct, total, points]
+    );
+    out[userId] = { counted: true, points };
+  }
+  clearLeaderboardCache();
+  return out;
+}
+
 /* ───────────────────────────── Router ───────────────────────────── */
 
 interface Options {
@@ -230,16 +323,12 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
   const limiter = (windowMs: number, limit: number) =>
     rateLimit({ windowMs, limit, standardHeaders: true, legacyHeaders: false, message: { error: 'Terlalu sering. Coba lagi beberapa saat lagi.' } });
 
-  const submitLimiter = limiter(10 * 60_000, 40);
   const shareLimiter = limiter(60 * 60_000, 20);
   const listLimiter = limiter(60_000, 120);
 
   /* ───────────── Papan peringkat ───────────── */
 
-  const lbCache = new Map<string, { at: number; body: unknown }>();
-  const LB_TTL_MS = 10_000;
-
-  // Peringkat = jumlah skor TERBAIK tiap kuis dalam periode (bukan jumlah semua permainan),
+  // Hanya skor dari Multiplayer Online. Peringkat = jumlah skor TERBAIK tiap kuis dalam periode (bukan jumlah semua permainan),
   // jadi mengulang kuis yang sama tidak bisa dipakai untuk menggembungkan poin.
   router.get('/api/public/quiz-leaderboard', listLimiter, wrap('leaderboard', async (req, res) => {
     const period = String(req.query.period || 'daily') as LeaderboardPeriod;
@@ -259,7 +348,8 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
                 (ARRAY_AGG(s.correct ORDER BY s.points DESC, s.id DESC))[1] AS correct,
                 MAX(s.created_at) AS played_at
            FROM quiz_leaderboard_scores s
-          WHERE ($1::timestamptz IS NULL OR s.created_at >= $1::timestamptz)
+          WHERE s.mode = 'multiplayer'
+            AND ($1::timestamptz IS NULL OR s.created_at >= $1::timestamptz)
           GROUP BY s.user_email, s.deck_key
        ), agg AS (
          SELECT b.user_email,
@@ -308,52 +398,9 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
       entries: all.filter((e) => e.rank <= LEADERBOARD_SIZE),
       me: all.find((e) => e.isMe) || null,
     };
-    if (lbCache.size > 500) lbCache.clear();
+    if (lbCache.size > 500) clearLeaderboardCache();
     lbCache.set(cacheKey, { at: Date.now(), body });
     res.json(body);
-  }));
-
-  // Catat skor sesi Solo. Skor dihitung dari jumlah jawaban benar yang dilaporkan klien (batasnya divalidasi di sini).
-  router.post('/api/user/quiz-leaderboard', requireUser, submitLimiter, wrap('submit-score', async (req, res) => {
-    const email = emailOf(req);
-    const deckId = clean(req.body?.deckId, 120);
-    const correct = Number(req.body?.correct);
-    const total = Number(req.body?.total);
-
-    if (!Number.isInteger(correct) || !Number.isInteger(total) || correct < 0 || total < 0 || correct > total) {
-      return res.status(400).json({ error: 'Data skor tidak valid.' });
-    }
-    if (total < MIN_SCORED_QUESTIONS) {
-      return res.json({ counted: false, reason: 'too_short', message: `Skor hanya dicatat untuk sesi minimal ${MIN_SCORED_QUESTIONS} soal.` });
-    }
-    if (total > MAX_SCORED_QUESTIONS) return res.status(400).json({ error: 'Data skor tidak valid.' });
-
-    let deckKey: string;
-    let deckTitle = clean(req.body?.deckTitle, 160);
-    const sharedId = parseSharedDeckId(deckId);
-    if (sharedId) {
-      const { rows } = await db.query(`SELECT title, owner_email, question_count FROM shared_quizzes WHERE id = $1`, [sharedId]);
-      if (!rows.length) return res.status(404).json({ error: 'Kuis komunitas ini sudah tidak tersedia.' });
-      if (String(rows[0].owner_email).toLowerCase() === email.toLowerCase()) {
-        return res.json({ counted: false, reason: 'own_quiz', message: 'Kuis buatan sendiri tidak dihitung ke papan peringkat.' });
-      }
-      if (total > rows[0].question_count) return res.status(400).json({ error: 'Data skor tidak valid.' });
-      deckKey = `shared:${sharedId}`;
-      deckTitle = rows[0].title;
-    } else if (isBuiltinDeckKey(deckId)) {
-      deckKey = deckId;
-    } else {
-      // Kuis pribadi buatan Editor tidak dihitung: pembuatnya bisa membuat soal semudah apa pun.
-      return res.json({ counted: false, reason: 'not_eligible', message: 'Kuis pribadi tidak dihitung ke papan peringkat.' });
-    }
-
-    const points = computePoints(correct, total);
-    await db.query(
-      `INSERT INTO quiz_leaderboard_scores (user_email, deck_key, deck_title, correct, total, points) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [email, deckKey, deckTitle, correct, total, points]
-    );
-    lbCache.clear();
-    res.json({ counted: true, points });
   }));
 
   /* ───────────── Komunitas kuis: baca (publik) ───────────── */
@@ -518,7 +565,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     // Skor dari kuis yang sudah tidak ada ikut dibuang (sama seperti moderasi admin), supaya papan peringkat
     // tidak memuat poin dari kuis yang tak bisa dimainkan lagi.
     await db.query(`DELETE FROM quiz_leaderboard_scores WHERE deck_key = $1`, [`shared:${id}`]);
-    lbCache.clear();
+    clearLeaderboardCache();
     res.json({ success: true });
   }));
 
@@ -531,7 +578,7 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     const { rowCount } = await db.query(`DELETE FROM shared_quizzes WHERE id = $1`, [id]);
     if (!rowCount) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
     await db.query(`DELETE FROM quiz_leaderboard_scores WHERE deck_key = $1`, [`shared:${id}`]);
-    lbCache.clear();
+    clearLeaderboardCache();
     res.json({ success: true });
   }));
 

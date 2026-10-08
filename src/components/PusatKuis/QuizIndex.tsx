@@ -284,7 +284,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               {activeSection === 'pwa' && 'Pusat instalasi aplikasi web mandiri PWA & berkas aplikasi luring utuh.'}
               {activeSection === 'play' && 'Pilih paket kuis yang dimuat, tentukan 4 mode permainan, dan mainkan langsung.'}
               {activeSection === 'all' && 'Katalog seluruh tema kuis, 3 starter deck bawaan, dan kreator kuis kustom.'}
-              {activeSection === 'community' && 'Mainkan & bagikan kuis buatan pengguna, lalu bersaing di papan peringkat harian, bulanan, dan sepanjang waktu.'}
+              {activeSection === 'community' && 'Mainkan & bagikan kuis buatan pengguna, dan lihat peringkat pemain multiplayer: harian, bulanan, dan sepanjang waktu.'}
             </p>
           </div>
         </div>
@@ -628,7 +628,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
           isLoggedIn={isLoggedIn}
           ownDecks={ownDecks}
           onPlay={playCommunityDeck}
-          onPlayNow={() => onSectionChange?.('play')}
+          onPlayNow={() => setIsMultiplayerOpen(true)}
           onOpenLibrary={() => onSectionChange?.('all')}
           onToast={onSuccessToast}
         />

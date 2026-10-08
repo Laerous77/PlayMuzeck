@@ -24,7 +24,7 @@ interface QuizCommunityHubProps {
   /** Kuis buatan Kuis Editor milik akun ini (kandidat untuk dibagikan). */
   ownDecks: Deck[];
   onPlay: (deck: Deck) => void;
-  /** Dipakai tombol "Main Sekarang" di papan peringkat (menuju segmen Mainkan Kuis). */
+  /** Dipakai tombol "Main Multiplayer" di papan peringkat (membuka modal Multiplayer Online). */
   onPlayNow: () => void;
   onOpenLibrary: () => void;
   onToast?: (msg: string) => void;

@@ -41,6 +41,7 @@ import {
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
+import { storage } from '../../services/storage';
 import { io, Socket } from 'socket.io-client';
 
 /** Semua pemberitahuan di modal hilang sendiri setelah 5 detik. */
@@ -423,6 +424,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
   // Indeks soal terakhir yang sudah tersimpan ke riwayat (null = belum pernah disimpan).
   const [savedUpTo, setSavedUpTo] = useState<number | null>(null);
   const [lbPage, setLbPage] = useState(0);
+  // Hasil pencatatan skor ke Papan Peringkat (dikirim server saat permainan selesai sampai soal terakhir).
+  const [lbOutcome, setLbOutcome] = useState<{ counted: boolean; points?: number; message?: string } | null>(null);
   const [gapLeft, setGapLeft] = useState(0);
   const [floatingReactions, setFloatingReactions] = useState<{ id: string; emoji: string; name: string }[]>([]);
   const [lockPlayers, setLockPlayers] = useState(false);
@@ -474,6 +477,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
     setMySocketId('');
     setSavedUpTo(null);
     setLbPage(0);
+    setLbOutcome(null);
     setJoinMode('code');
     setGlobalRooms([]);
     setPendingGlobalCode(null);
@@ -591,7 +595,12 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
       setIsLoadingGlobalRooms(false);
     });
 
+    socket.on('game:leaderboard', (o: { counted: boolean; points?: number; message?: string }) => {
+      setLbOutcome(o);
+    });
+
     socket.on('game:started', (payload: { questions: QuizQuestion[]; roundEndsAt: number; currentQIndex: number; makeup?: boolean; participating?: boolean }) => {
+      setLbOutcome(null);
       // Sesi susulan untuk pemain lain: jangan hapus jawaban & hasil sesi utamaku (masih bisa disimpan).
       if (payload.makeup && payload.participating === false) {
         setQuestionsSnapshot((prev) => (prev.length ? prev : payload.questions));
@@ -1799,6 +1808,23 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({
                 <p className="text-[11px] font-bold text-amber-300 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 inline-block">
                   {room.endNotice}
                 </p>
+              )}
+              {!isObserver && lbOutcome && (
+                <p
+                  role="status"
+                  className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border inline-block ${
+                    lbOutcome.counted
+                      ? 'bg-yellow-400/10 border-yellow-400/40 text-yellow-200'
+                      : 'bg-black/40 border-white/10 text-gray-300'
+                  }`}
+                >
+                  {lbOutcome.counted
+                    ? `+${lbOutcome.points ?? 0} poin tercatat di Papan Peringkat`
+                    : lbOutcome.message || 'Skor permainan ini tidak dihitung ke Papan Peringkat.'}
+                </p>
+              )}
+              {!isObserver && !lbOutcome && !storage.getUserSession()?.isLoggedIn && (
+                <p className="text-[11px] text-gray-400">Masuk ke akunmu supaya skor multiplayer tercatat di Papan Peringkat.</p>
               )}
               <p className="text-[11px] text-gray-500">Simpan hasil ini kalau mau dilihat lagi di riwayat permainanmu.</p>
 

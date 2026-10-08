@@ -53,7 +53,7 @@ const PROBLEMS = [
     icon: Brain,
     problem: 'Ingin belajar sambil bersenang-senang?',
     solution:
-      'Pusat Kuis punya mode solo (bisa lawan bot), pass & play, host kuis, dan multiplayer online, lengkap dengan timer per soal, papan peringkat, dan komunitas kuis.',
+      'Pusat Kuis punya mode solo (bisa lawan bot), pass & play, host kuis, dan multiplayer online, lengkap dengan timer per soal, komunitas kuis, dan papan peringkat multiplayer.',
   },
 ];
 
@@ -72,12 +72,11 @@ const AUDIO_POINTS = [
 ];
 
 const QUIZ_POINTS = [
-  { title: '4 mode permainan', desc: 'Solo (opsional lawan bot), pass & play, host kuis hingga 10 regu, dan multiplayer online.' },
-  { title: 'Belasan topik trivia', desc: 'Sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya.' },
-  { title: '3 starter deck bawaan', desc: 'Siap main begitu masuk. Deck topik tambahan tersedia di Perpustakaan.' },
+  { title: '4 mode permainan', desc: 'Solo (opsional lawan bot), pass & play, host kuis hingga 10 regu, dan multiplayer online, lengkap dengan timer per soal.' },
+  { title: 'Riwayat hasil', desc: 'Simpan hasil permainan dan tinjau jawaban per soal kapan saja.' },
+  { title: 'Perpustakaan: belasan topik trivia', desc: 'Sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya. 3 starter deck bawaan siap main, deck tambahan tersedia di Perpustakaan.' },
   { title: 'Bisa dipasang & dimainkan luring', desc: 'Pasang sebagai PWA atau unduh berkas standalone. Multiplayer online tetap butuh internet.' },
-  { title: 'Papan peringkat & riwayat hasil', desc: 'Peringkat harian, bulanan, dan sepanjang waktu untuk sesi Solo, peringkat langsung di setiap ronde multiplayer, dan riwayat hasilmu lengkap dengan tinjauan jawaban per soal.' },
-  { title: 'Komunitas kuis', desc: 'Siapa saja bisa memainkan kuis buatan pengguna lain. Pemilik Kuis Editor bisa membagikan kuis buatannya ke komunitas.' },
+  { title: 'Komunitas & peringkat', desc: 'Mainkan kuis buatan pengguna lain; pemilik Kuis Editor bisa membagikan kuisnya. Papan peringkat harian, bulanan, dan sepanjang waktu berasal dari multiplayer online.' },
 ];
 
 const ECOSYSTEM = [

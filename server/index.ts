@@ -27,7 +27,7 @@ import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
 import { isDeliverableEmail } from './auth/emailCheck';
 import { turnstileEnabled } from './auth/turnstile';
 import { createPaymentRouter } from './paymentRoutes';
-import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper } from './quizCommunityRoutes';
+import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame } from './quizCommunityRoutes';
 import {
   sendCustomAudioInquiryNotifications,
   sendContactFeedbackNotifications,
@@ -1461,5 +1461,7 @@ attachMultiplayerSocket(httpServer, (cookieHeader, handshake) =>
         done(null);
       }
     });
-  })
+  }),
+  // Permainan multiplayer selesai -> skor (dinilai server) dicatat ke papan peringkat.
+  (game) => recordMultiplayerGame(pool, game)
 );
