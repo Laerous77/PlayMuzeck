@@ -53,7 +53,7 @@ const PROBLEMS = [
     icon: Brain,
     problem: 'Ingin belajar sambil bersenang-senang?',
     solution:
-      'Pusat Kuis punya mode solo (bisa lawan bot), pass & play, host kuis, dan multiplayer online, lengkap dengan timer per soal.',
+      'Pusat Kuis punya mode solo (bisa lawan bot), pass & play, host kuis, dan multiplayer online, lengkap dengan timer per soal, papan peringkat, dan komunitas kuis.',
   },
 ];
 
@@ -76,7 +76,8 @@ const QUIZ_POINTS = [
   { title: 'Belasan topik trivia', desc: 'Sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya.' },
   { title: '3 starter deck bawaan', desc: 'Siap main begitu masuk. Deck topik tambahan tersedia di Perpustakaan.' },
   { title: 'Bisa dipasang & dimainkan luring', desc: 'Pasang sebagai PWA atau unduh berkas standalone. Multiplayer online tetap butuh internet.' },
-  { title: 'Papan peringkat & riwayat hasil', desc: 'Peringkat pemain tampil langsung di setiap ronde multiplayer, dan hasil permainanmu tersimpan lengkap dengan tinjauan jawaban per soal.' },
+  { title: 'Papan peringkat & riwayat hasil', desc: 'Peringkat harian, bulanan, dan sepanjang waktu untuk sesi Solo, peringkat langsung di setiap ronde multiplayer, dan riwayat hasilmu lengkap dengan tinjauan jawaban per soal.' },
+  { title: 'Komunitas kuis', desc: 'Siapa saja bisa memainkan kuis buatan pengguna lain. Pemilik Kuis Editor bisa membagikan kuis buatannya ke komunitas.' },
 ];
 
 const ECOSYSTEM = [

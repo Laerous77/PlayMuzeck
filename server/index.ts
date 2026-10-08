@@ -27,6 +27,7 @@ import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
 import { isDeliverableEmail } from './auth/emailCheck';
 import { turnstileEnabled } from './auth/turnstile';
 import { createPaymentRouter } from './paymentRoutes';
+import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper } from './quizCommunityRoutes';
 import {
   sendCustomAudioInquiryNotifications,
   sendContactFeedbackNotifications,
@@ -196,7 +197,9 @@ Promise.resolve(initDatabase())
   .then(() => ensureToolQuotaSchema(pool))
   .catch((err) => console.error('[DB] ensureToolQuotaSchema gagal:', err))
   .then(() => ensureNotificationSchema(pool))
-  .catch((err) => console.error('[DB] ensureNotificationSchema gagal:', err));
+  .catch((err) => console.error('[DB] ensureNotificationSchema gagal:', err))
+  .then(() => ensureQuizCommunitySchema(pool))
+  .catch((err) => console.error('[DB] ensureQuizCommunitySchema gagal:', err));
 
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -317,6 +320,11 @@ app.use(createPaymentRouter({
   getDonationTiers: () => DONATION_FRAME_TIERS,
 }));
 app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, getDonationTiers: () => DONATION_FRAME_TIERS }));
+
+// ---- Pusat Kuis: papan peringkat (harian/bulanan/sepanjang waktu) + Komunitas Kuis (server/quizCommunityRoutes.ts) ----
+// Baca = publik; bagikan kuis = hanya pemilik Kuis Editor (dicek di server); catat skor = akun login.
+app.use(createQuizCommunityRouter({ db: pool, requireUser, requireAdmin, resolveEmail: softEmail }));
+startQuizCommunitySweeper(pool);
 
 const OWN_ONLY_MSG = 'Kamu hanya bisa mengubah audio/kuis buatanmu sendiri.';
 const adminEmailOf = (req: express.Request): string | null => (req as any).adminEmail ? String((req as any).adminEmail).toLowerCase() : null;

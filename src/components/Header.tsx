@@ -11,6 +11,8 @@ import {
   Download,
   Play,
   Layers,
+  Trophy,
+  Globe,
   Brain,
   ListChecks,
   HelpCircle,
@@ -21,7 +23,7 @@ import { PROFILE_FRAMES, FrameOrnament } from './Modals/ProfileDashboardModal';
 import { audioEngine } from '../services/audioEngine';
 import { NotificationBell } from './NotificationBell';
 
-export type QuizSegment = 'pwa' | 'play' | 'all' | 'leaderboard';
+export type QuizSegment = 'pwa' | 'play' | 'all' | 'leaderboard' | 'community';
 
 interface HeaderProps {
   currentMode: AppMode | 'index';
@@ -47,7 +49,7 @@ interface HeaderProps {
 const INDEX_ITEMS = [
   { id: 'index-steps-section', icon: ListChecks, tone: 'accent', title: 'Cara Mulai', desc: 'Mulai dalam 3 langkah' },
   { id: 'index-audio-section', icon: Music, tone: 'accent', title: 'Audio Studio', desc: '128 instrumen, 4 track akor & 20 Audio Tools' },
-  { id: 'index-quiz-section', icon: Brain, tone: 'accent2', title: 'Pusat Kuis', desc: '4 mode main & 3 starter deck' },
+  { id: 'index-quiz-section', icon: Brain, tone: 'accent2', title: 'Pusat Kuis', desc: '4 mode main, peringkat & komunitas kuis' },
   { id: 'index-faq-section', icon: HelpCircle, tone: 'accent', title: 'Pertanyaan Umum', desc: 'Jawaban singkat seputar layanan' },
 ] as const;
 
@@ -62,6 +64,8 @@ const QUIZ_ITEMS = [
   { key: 'pwa', icon: Download, iconIdle: 'text-accent2', title: 'Unduh Web App', desc: 'PWA mandiri & 3 starter pack' },
   { key: 'play', icon: Play, iconIdle: 'text-emerald-400', title: 'Mainkan Kuis', desc: 'Putar langsung deck yang siap dimainkan' },
   { key: 'all', icon: Layers, iconIdle: 'text-accent', title: 'Perpustakaan Kuis', desc: 'Koleksi seluruh tema & deck kuis' },
+  { key: 'leaderboard', icon: Trophy, iconIdle: 'text-yellow-300', title: 'Papan Peringkat', desc: 'Peringkat harian, bulanan & sepanjang waktu' },
+  { key: 'community', icon: Globe, iconIdle: 'text-sky-300', title: 'Komunitas Kuis', desc: 'Mainkan & bagikan kuis buatan pengguna' },
 ] as const;
 
 const ITEM_BASE =

@@ -13,6 +13,8 @@ import {
   Minus,
   ListOrdered,
   History,
+  Trophy,
+  Globe,
 } from 'lucide-react';
 import { QuizInstall } from './QuizInstall';
 import { QuizLibrary } from './QuizLibrary';
@@ -20,6 +22,8 @@ import { QuizPlayer } from './QuizPlayer';
 import type { QuizPlayMode } from './QuizPlayer';
 import { MAX_TEAMS } from './QuizPlayer';
 import { QuizResultHistory } from './QuizResultHistory';
+import { QuizLeaderboard } from './QuizLeaderboard';
+import { QuizCommunity } from './QuizCommunity';
 import { MultiplayerArenaModal } from './MultiplayerArenaModal';
 import { generateStandaloneQuizHtml } from '../../services/quizStandalone';
 import { Deck, Topic, CartItem } from '../../types';
@@ -133,6 +137,21 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   );
   const accessibleDecks = React.useMemo(() => decksForDisplay.filter(canAccess), [decksForDisplay, canAccess]);
 
+  // Kuis buatan sendiri lewat Kuis Editor (kandidat untuk dibagikan ke Komunitas Kuis).
+  // Dibaca ulang tiap kali segmen Komunitas dibuka supaya perubahan terbaru dari Editor ikut terbawa.
+  const ownDecks = React.useMemo(() => {
+    const map = new Map<string, Deck>();
+    const add = (d: Deck) => {
+      const id = String(d?.id || '');
+      if (id.startsWith('deck-custom-') && !id.startsWith('deck-custom-shared-') && !isBuiltinDeckId(id)) map.set(id, d);
+    };
+    decks.forEach(add);
+    storage.getCustomDecks().forEach(add);
+    return Array.from(map.values());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decks, activeSection]);
+  const isLoggedIn = Boolean(storage.getUserSession()?.isLoggedIn);
+
   const [selectedDeckToLoad, setSelectedDeckToLoad] = useState<string>(accessibleDecks[0]?.id || 'deck-starter-1');
 
   React.useEffect(() => {
@@ -173,6 +192,18 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
       teamCount: hostTeamCount,
       questionLimit: questionCount,
       shuffleQuestions: shuffleOn,
+    });
+  };
+
+  // Kuis dari Komunitas dimainkan langsung dalam mode Solo (semua soal, urutan sesuai pembuat).
+  const playCommunityDeck = (deck: Deck) => {
+    setActiveSession({
+      deck,
+      mode: 'solo',
+      playerCount: passPlayCount,
+      teamCount: hostTeamCount,
+      questionLimit: deck.questions?.length || 0,
+      shuffleQuestions: false,
     });
   };
 
@@ -238,17 +269,23 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
             {activeSection === 'pwa' && <Download className="w-6 h-6 stroke-[2.5]" />}
             {activeSection === 'play' && <Play className="w-6 h-6 stroke-[2.5] fill-current" />}
             {activeSection === 'all' && <Layers className="w-6 h-6 stroke-[2.5]" />}
+            {activeSection === 'leaderboard' && <Trophy className="w-6 h-6 stroke-[2.5]" />}
+            {activeSection === 'community' && <Globe className="w-6 h-6 stroke-[2.5]" />}
           </div>
           <div>
             <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
               {activeSection === 'pwa' && 'Unduh Web App'}
               {activeSection === 'play' && 'Mainkan Kuis'}
               {activeSection === 'all' && 'Perpustakaan Kuis'}
+              {activeSection === 'leaderboard' && 'Papan Peringkat'}
+              {activeSection === 'community' && 'Komunitas Kuis'}
             </h1>
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'pwa' && 'Pusat instalasi aplikasi web mandiri PWA & berkas aplikasi luring utuh.'}
               {activeSection === 'play' && 'Pilih paket kuis yang dimuat, tentukan 4 mode permainan, dan mainkan langsung.'}
               {activeSection === 'all' && 'Katalog seluruh tema kuis, 3 starter deck bawaan, dan kreator kuis kustom.'}
+              {activeSection === 'leaderboard' && 'Peringkat pemain terbaik: harian, bulanan, dan sepanjang waktu.'}
+              {activeSection === 'community' && 'Mainkan kuis buatan pengguna lain, dan bagikan kuis buatanmu sendiri.'}
             </p>
           </div>
         </div>
@@ -280,6 +317,26 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Database Vault</span>
                 <span className="text-xs font-black text-accent">{decksForDisplay.length} Deck • {new Set([...BUILTIN_TOPICS.map((t) => t.id), ...topics.map((t) => t.id)]).size} Kategori</span>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'leaderboard' && (
+            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2 rounded-2xl border border-yellow-400/30 shadow-inner">
+              <Trophy className="w-4 h-4 text-yellow-300" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Peringkat</span>
+                <span className="text-xs font-black text-yellow-300">Harian • Bulanan • Semua</span>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'community' && (
+            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2 rounded-2xl border border-sky-400/30 shadow-inner">
+              <Globe className="w-4 h-4 text-sky-300" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Terbuka untuk semua</span>
+                <span className="text-xs font-black text-sky-300">Main & Bagikan Kuis</span>
               </div>
             </div>
           )}
@@ -572,6 +629,26 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
           onSuccessToast={onSuccessToast}
           canInstallPwa={canInstallPwa}
           onInstallPwa={onInstallPwa}
+        />
+      )}
+
+      {/* SEGMEN 4: PAPAN PERINGKAT (publik: harian, bulanan, sepanjang waktu) */}
+      {activeSection === 'leaderboard' && (
+        <QuizLeaderboard
+          isLoggedIn={isLoggedIn}
+          onPlayNow={() => onSectionChange?.('play')}
+          onOpenCommunity={() => onSectionChange?.('community')}
+        />
+      )}
+
+      {/* SEGMEN 5: KOMUNITAS KUIS (baca & main: siapa saja; bagikan: pemilik Kuis Editor) */}
+      {activeSection === 'community' && (
+        <QuizCommunity
+          isLoggedIn={isLoggedIn}
+          ownDecks={ownDecks}
+          onPlay={playCommunityDeck}
+          onOpenLibrary={() => onSectionChange?.('all')}
+          onToast={onSuccessToast}
         />
       )}
 

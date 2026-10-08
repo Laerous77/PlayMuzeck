@@ -38,6 +38,8 @@ import {
   Edit3,
   ListChecks,
   Play,
+  Trophy,
+  Loader2,
 } from 'lucide-react';
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
@@ -48,6 +50,8 @@ import {
   addSavedResult,
 } from '../../services/quizResultsStore';
 import { QuizResultHistory, AnswerReviewModal } from './QuizResultHistory';
+import { submitQuizScore } from '../../services/quizCommunityApi';
+import { storage } from '../../services/storage';
 
 export type QuizPlayMode = 'solo' | 'pass_play' | 'host';
 type PlayPhase = 'setup' | 'quiz' | 'finished';
@@ -214,6 +218,17 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
   const [showHistory, setShowHistory] = useState(false);
   const [answerLog, setAnswerLog] = useState<AnswerLogEntry[]>([]);
   const [showReview, setShowReview] = useState(false);
+
+  // --- Papan peringkat: skor sesi Solo dikirim otomatis sekali saat kuis selesai (hanya bila sudah login) ---
+  type LeaderboardResult =
+    | { state: 'idle' }
+    | { state: 'guest' }
+    | { state: 'sending' }
+    | { state: 'counted'; points: number }
+    | { state: 'skipped'; message: string }
+    | { state: 'error'; message: string };
+  const [lbResult, setLbResult] = useState<LeaderboardResult>({ state: 'idle' });
+  const lbSentRef = useRef(false);
 
   const questions = effectiveQuestions;
   const currentQ: QuizQuestion | undefined = questions[currentIndex];
@@ -407,6 +422,8 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
     setBotScore(0);
     setIsFinished(false);
     setIsResultSaved(false);
+    lbSentRef.current = false;
+    setLbResult({ state: 'idle' });
     setAnswerLog([]);
     setShowReview(false);
     setPlayerScores(Array(clampedPlayerCount).fill(0));
@@ -424,6 +441,8 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
     setBotScore(0);
     setIsFinished(false);
     setIsResultSaved(false);
+    lbSentRef.current = false;
+    setLbResult({ state: 'idle' });
     setAnswerLog([]);
     setShowReview(false);
     setPlayerScores(Array(clampedPlayerCount).fill(0));
@@ -432,6 +451,31 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
   };
 
   const scorePercentage = questions.length > 0 ? Math.round((score / questions.length) * 100) : 0;
+
+  const sendLeaderboardScore = () => {
+    if (!storage.getUserSession()?.isLoggedIn) {
+      setLbResult({ state: 'guest' });
+      return;
+    }
+    setLbResult({ state: 'sending' });
+    submitQuizScore({ deckId: deck?.id || '', deckTitle: deck?.title || '', correct: score, total: questions.length })
+      .then((r) =>
+        setLbResult(
+          r.counted
+            ? { state: 'counted', points: r.points || 0 }
+            : { state: 'skipped', message: r.message || 'Skor sesi ini tidak dihitung ke papan peringkat.' }
+        )
+      )
+      .catch((e: any) => setLbResult({ state: 'error', message: e?.message || 'Gagal mengirim skor ke papan peringkat.' }));
+  };
+
+  // Hanya sesi Solo yang masuk papan peringkat; dikirim tepat satu kali per sesi.
+  useEffect(() => {
+    if (!isFinished || !isSoloMode || phase !== 'quiz' || lbSentRef.current) return;
+    lbSentRef.current = true;
+    sendLeaderboardScore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFinished]);
 
   const modeLabel =
     mode === 'pass_play' ? 'Pass & Play' : mode === 'host' ? 'Host / Kuis Master' : 'Langsung Main';
@@ -1313,6 +1357,46 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                         </span>
                         <span className="text-[11px] text-gray-400 block mt-0.5">Pertanyaan Benar</span>
                       </div>
+                    </div>
+                  )}
+
+                  {isSoloMode && lbResult.state !== 'idle' && (
+                    <div
+                      role="status"
+                      className={`max-w-sm mx-auto flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl border text-[11px] font-bold ${
+                        lbResult.state === 'counted'
+                          ? 'bg-yellow-400/10 border-yellow-400/40 text-yellow-200'
+                          : lbResult.state === 'error'
+                          ? 'bg-red-500/10 border-red-500/30 text-red-200'
+                          : 'bg-black/40 border-white/10 text-gray-300'
+                      }`}
+                    >
+                      {lbResult.state === 'sending' && (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Mencatat skor ke papan peringkat…</span>
+                        </>
+                      )}
+                      {lbResult.state === 'counted' && (
+                        <>
+                          <Trophy className="w-3.5 h-3.5" />
+                          <span>+{lbResult.points} poin tercatat di papan peringkat</span>
+                        </>
+                      )}
+                      {lbResult.state === 'skipped' && <span>{lbResult.message}</span>}
+                      {lbResult.state === 'guest' && <span>Masuk ke akunmu untuk mencatat skor ke papan peringkat.</span>}
+                      {lbResult.state === 'error' && (
+                        <>
+                          <span>{lbResult.message}</span>
+                          <button
+                            type="button"
+                            onClick={sendLeaderboardScore}
+                            className="underline text-white hover:text-red-100 cursor-pointer shrink-0"
+                          >
+                            Coba lagi
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
 
