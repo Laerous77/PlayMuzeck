@@ -20,7 +20,7 @@ import { exportAudioFile, downloadBlob } from '../../services/exporters';
 import { checkInputDuration, checkOutputDuration } from '../../services/audioLimits';
 import {
   BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, InfoTip, PANEL_CLS,
-  SLIDER_CLS, pillCls
+  SLIDER_CLS, pillCls, chargeRun, newRunKey, quotaAvailable
 } from './toolsShared';
 import type { QuotaGate } from './AudioExtraTools';
 
@@ -83,7 +83,9 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const userSingingHistoryRef = useRef<UserVocalPoint[]>([]);
-  const runKeyRef = useRef<string | null>(null);
+  const practicingRef = useRef(false);
+  const aliveRef = useRef(true);
+  const gateRef = useRef(gate); gateRef.current = gate;
   const rafReviewRef = useRef<number | null>(null);
   const reviewStartTimeRef = useRef<number>(0);
   const reviewSourcesRef = useRef<{ refSource?: AudioBufferSourceNode; vocalSource?: AudioBufferSourceNode; refGain?: GainNode; vocalGain?: GainNode }>({});
@@ -120,18 +122,24 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
     setMatchFeedback(null);
   }, []);
 
+  // Dipisah dari pembersihan URL: dulu satu efek menutup AudioContext setiap kali URL rekaman berubah,
+  // yaitu tepat saat rekaman sedang didekode di akhir latihan.
   useEffect(() => {
+    aliveRef.current = true;
     return () => {
+      // Panel ditutup: latihan yang belum selesai dibuang dan tidak memakai jatah.
+      aliveRef.current = false;
       stopAllMedia();
       if (audioContextRef.current) {
         audioContextRef.current.close().catch(() => {});
         audioContextRef.current = null;
       }
-      if (recordedVocalUrl) {
-        URL.revokeObjectURL(recordedVocalUrl);
-      }
     };
-  }, [stopAllMedia, recordedVocalUrl]);
+  }, [stopAllMedia]);
+
+  useEffect(() => () => {
+    if (recordedVocalUrl) URL.revokeObjectURL(recordedVocalUrl);
+  }, [recordedVocalUrl]);
 
   // Decode & Analisis Audio Acuan
   const processReferenceAudio = async (arrayBuffer: ArrayBuffer, name: string) => {
@@ -203,11 +211,8 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
     }
     setErrorMsg(null);
 
-    const sessionKey = `pitch_match_${Date.now()}`;
-    if (gate && !(await gate.use('pitch_match', sessionKey))) {
-      return;
-    }
-    runKeyRef.current = sessionKey;
+    // Hanya memeriksa sisa jatah. Jatah baru dipakai setelah latihan berhasil dianalisis (lihat finishPractice).
+    if (!quotaAvailable(gate, 'pitch_match')) return;
 
     try {
       const AudioContextClass = AudioCtx;
@@ -256,9 +261,10 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
       const startTime = ctx.currentTime + 0.15;
       refSrc.start(startTime);
       refSrc.onended = () => {
-        finishPractice();
+        void finishPractice();
       };
 
+      practicingRef.current = true;
       setIsPracticing(true);
       setCurrentPlaybackTime(0);
 
@@ -285,37 +291,60 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
       }, 50);
 
     } catch (err: any) {
+      practicingRef.current = false;
       stopAllMedia();
-      if (runKeyRef.current) gate?.refund('pitch_match', runKeyRef.current);
       setErrorMsg(err.name === 'NotAllowedError' ? 'Akses mikrofon ditolak. Izinkan mikrofon di browser.' : 'Gagal memulai mikrofon.');
     }
   };
 
+  // Memakai ref (bukan state isPracticing) karena dipanggil juga dari refSrc.onended, yang menyimpan versi render lama:
+  // dengan state, akhir lagu acuan tidak pernah menyelesaikan latihan dan mikrofon terus merekam.
   const finishPractice = async () => {
-    if (!isPracticing) return;
+    if (!practicingRef.current) return;
+    practicingRef.current = false;
+    if (!aliveRef.current) return;
     const ctx = audioContextRef.current;
+    const recorder = mediaRecorderRef.current;
+    const recMime = recorder?.mimeType || 'audio/webm';
+    // Tunggu potongan rekaman terakhir sebelum merakit berkas (maks. 800 ms).
+    const recStopped = recorder && recorder.state === 'recording'
+      ? new Promise<void>((res) => { recorder.addEventListener('stop', () => res(), { once: true }); })
+      : Promise.resolve();
     stopAllMedia();
+    await Promise.race([recStopped, new Promise<void>((res) => setTimeout(res, 800))]);
+    if (!aliveRef.current) return;
 
     // Hitung evaluasi musikal
-    if (refProfile && userSingingHistoryRef.current.length > 0) {
-      const evalRes = evaluateVocalPerformance(userSingingHistoryRef.current, refProfile);
-      setEvaluationResult(evalRes);
-      onSuccessToast?.(`Latihan selesai! Skor keselarasan nada & tempo: ${evalRes.overallScore}%`);
+    if (!refProfile || userSingingHistoryRef.current.length === 0) return;
+    const evalRes = evaluateVocalPerformance(userSingingHistoryRef.current, refProfile);
+    if (evalRes.totalSingingDurationSec <= 0) {
+      // Tidak ada suara bernada yang terbaca: latihan belum berhasil dianalisis, jatah tidak dipakai.
+      setErrorMsg('Tidak ada suara bernada yang terdeteksi. Dekatkan mikrofon, bernyanyilah bersama audio acuan, lalu coba lagi.');
+      return;
     }
+    // Jatah dipakai sekarang: latihan sudah berhasil dianalisis (tidak peduli rekamannya nanti diunduh atau tidak).
+    // Bila ditolak (jatah habis), hasil dibuang.
+    const charged = await chargeRun(gateRef.current, 'pitch_match', newRunKey('pm'), () => aliveRef.current);
+    if (!charged) return;
+    setEvaluationResult(evalRes);
+    onSuccessToast?.(`Latihan selesai! Skor keselarasan nada & tempo: ${evalRes.overallScore}%`);
 
     // Dekode rekaman vokal jika ada
-    if (recordedChunksRef.current.length > 0 && ctx) {
+    if (recordedChunksRef.current.length > 0) {
+      let tmpCtx: AudioContext | null = null;
       try {
-        const mime = mediaRecorderRef.current?.mimeType || 'audio/webm';
-        const blob = new Blob(recordedChunksRef.current, { type: mime });
+        const blob = new Blob(recordedChunksRef.current, { type: recMime });
         const url = URL.createObjectURL(blob);
         setRecordedVocalUrl(url);
 
         const ab = await blob.arrayBuffer();
-        const decoded = await ctx.decodeAudioData(ab);
-        setRecordedVocalBuffer(decoded);
+        const decodeCtx = ctx && ctx.state !== 'closed' ? ctx : (tmpCtx = new AudioCtx());
+        const decoded = await decodeCtx.decodeAudioData(ab);
+        if (aliveRef.current) setRecordedVocalBuffer(decoded);
       } catch (e) {
         console.warn('Gagal decode vokal pengguna:', e);
+      } finally {
+        if (tmpCtx) void tmpCtx.close().catch(() => {});
       }
     }
   };

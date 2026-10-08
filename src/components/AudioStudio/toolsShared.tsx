@@ -108,6 +108,59 @@ export const quotaGuardProps = (locked: boolean, onBlocked: () => void): Record<
   };
 };
 
+// ───────────────────────── Aturan pemakaian jatah (dipakai semua alat) ─────────────────────────
+// Jatah dikurangi SETELAH proses berhasil, bukan saat tombol ditekan dan bukan saat berkas diunduh:
+//  - alat berbasis berkas: jatah dipakai begitu audio selesai diproses (hasil siap), terlepas dari sudah/tidaknya diunduh;
+//  - alat berbasis perekaman: jatah dipakai begitu rekaman berhasil dianalisis;
+//  - metronom: jatah dipakai begitu tombol Mulai ditekan.
+// Pemeriksaan di awal (quotaAvailable) hanya MELIHAT sisa jatah, tidak mengurangi apa pun.
+
+/** Bentuk minimal QuotaGate (lihat AudioExtraTools) agar helper ini tidak bergantung pada modul alat. */
+export interface QuotaGateOf<T extends string> {
+  use: (toolId: T, sessionKey?: string) => Promise<boolean>;
+  has?: (toolId: T, sessionKey?: string) => boolean;
+  refund: (toolId: T, sessionKey?: string) => void;
+  exhausted: (toolId: T) => boolean;
+  blocked: (toolId: T) => void;
+}
+
+let runKeySeq = 0;
+/** Kunci pemakaian unik per proses (karakter aman untuk server: huruf, angka, titik, minus, titik dua, garis bawah). */
+export const newRunKey = (prefix: string) => `${prefix}${++runKeySeq}x${Date.now().toString(36)}`;
+
+/**
+ * Periksa SEBELUM pekerjaan dimulai: bila jatah sudah habis, arahkan ke halaman harga dan kembalikan false.
+ * Tidak mengurangi jatah. `sessionKey` yang sudah terbayar pada halaman ini dianggap boleh lanjut.
+ */
+export function quotaAvailable<T extends string>(gate: QuotaGateOf<T> | undefined, toolId: T, sessionKey?: string): boolean {
+  if (!gate) return true;
+  if (sessionKey && gate.has?.(toolId, sessionKey)) return true;
+  if (gate.exhausted(toolId)) {
+    gate.blocked(toolId);
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Pakai satu jatah SETELAH proses berhasil. Mengembalikan false bila jatah ditolak (hasil harus dibuang) atau bila
+ * hasilnya sudah tidak berlaku lagi (`stillValid` false, jatah dikembalikan). `key` sama = tidak dihitung dua kali.
+ */
+export async function chargeRun<T extends string>(
+  gate: QuotaGateOf<T> | undefined,
+  toolId: T,
+  key: string,
+  stillValid: () => boolean = () => true,
+): Promise<boolean> {
+  if (!gate) return true;
+  if (!(await gate.use(toolId, key))) return false;
+  if (!stillValid()) {
+    gate.refund(toolId, key);
+    return false;
+  }
+  return true;
+}
+
 // ───────────────────────── Kerangka seragam panel alat ─────────────────────────
 // Dipakai ke-20 alat (bawaan & tambahan) supaya bagian yang sama selalu tampil sama:
 // chip nama berkas, catatan "unggah dulu", catatan batas durasi, dan baris Format Unduhan.

@@ -12,12 +12,13 @@ import type { Pool } from 'pg';
 
 export const DAILY_FREE_QUOTA = 2;
 
-/** Daftar alat yang kuotanya dicatat. Harus sama dengan ID alat di AudioToolsSuite. */
+/** Daftar alat yang kuotanya dicatat (20 alat). Harus sama dengan ID alat di AudioToolsSuite + AudioExtraTools. */
 export const QUOTA_TOOL_IDS = [
   'trim', 'volume', 'pitch', 'tempo', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator',
   'merge', 'clean', 'recorder', 'bpm', 'metronome', 'tuner',
   'pitch_detect', 'vocal_range',
   'loop', 'metadata',
+  'pitch_match',
 ] as const;
 export type QuotaToolId = (typeof QUOTA_TOOL_IDS)[number];
 export const isQuotaTool = (id: unknown): id is QuotaToolId => typeof id === 'string' && (QUOTA_TOOL_IDS as readonly string[]).includes(id);

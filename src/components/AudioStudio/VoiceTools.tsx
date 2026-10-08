@@ -7,6 +7,7 @@ import { detectPitch } from '../../services/audioExtraDsp';
 import { downloadBlob, exportAudioFile } from '../../services/exporters';
 import {
   BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, InfoTip, PANEL_CLS, SLIDER_CLS, pillCls,
+  chargeRun, newRunKey, quotaAvailable,
 } from './toolsShared';
 import type { QuotaGate } from './AudioExtraTools';
 import {
@@ -180,9 +181,6 @@ function useTonePlayer(a4 = 440) {
   return { play, stop, playingId };
 }
 
-let runSeq = 0;
-const newRunKey = (prefix: string) => `${prefix}-${++runSeq}-${Date.now().toString(36)}`;
-
 const LiveReading: React.FC<{
   midi: number | null; freq: number | null; cents: number; level: number; active: boolean; idle: string;
 }> = ({ midi, freq, cents, level, active, idle }) => {
@@ -313,8 +311,8 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
   const recent = useRef<number[]>([]);
   const lastVoiced = useRef(0);
   const range = useRef({ lo: 48, hi: 72 });
-  const runKey = useRef<string | null>(null);
   const stoppingRef = useRef(false);
+  const aliveRef = useRef(true);
 
   const clearResult = useCallback(() => {
     setSegments(null); setAudioBuffer(null);
@@ -339,13 +337,16 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     setRunning(false); setLive(null); setLevel(0);
     const segs = segRef.current?.finish() ?? [];
     segRef.current = null;
-    const key = runKey.current; runKey.current = null;
     if (segs.length === 0) {
-      if (key) gate?.refund('pitch_detect', key);
       setErr('Tidak ada nada yang terdeteksi. Dekatkan mikrofon, bernyanyilah dengan "aaa" atau bersiullah, dan pastikan ruangan tenang.');
       setBusy(false); stoppingRef.current = false;
       return;
     }
+    if (!aliveRef.current) { stoppingRef.current = false; return; }
+    // Jatah dipakai sekarang: rekaman sudah berhasil dianalisis (ada nada yang terdeteksi).
+    // Rekaman yang gagal / dibatalkan / tanpa nada tidak memakan jatah. Bila ditolak (jatah habis), hasil dibuang.
+    const charged = await chargeRun(gateRef.current, 'pitch_detect', newRunKey('pd'), () => aliveRef.current);
+    if (!charged) { setBusy(false); stoppingRef.current = false; return; }
     setSegments(segs);
     if (blob) {
       setAudioUrl(URL.createObjectURL(blob));
@@ -353,14 +354,17 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     }
     if (auto) toast?.('Batas perekaman 5 menit tercapai; rekaman dihentikan.');
     setBusy(false); stoppingRef.current = false;
-  }, [gate, toast]);
+  }, [toast]);
 
-  useEffect(() => () => {
-    micRef.current?.stop(); micRef.current = null;
-    void recRef.current?.stop(); recRef.current = null;
-    const key = runKey.current; runKey.current = null;
-    const seg = segRef.current; segRef.current = null;
-    if (key && (!seg || (seg.segments.length === 0 && seg.currentMidi === null))) gateRef.current?.refund('pitch_detect', key);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      // Panel ditutup di tengah perekaman: tidak ada analisis selesai, jadi tidak ada jatah yang dipakai.
+      aliveRef.current = false;
+      micRef.current?.stop(); micRef.current = null;
+      void recRef.current?.stop(); recRef.current = null;
+      segRef.current = null;
+    };
   }, []);
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
 
@@ -368,14 +372,12 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     if (running || busy) return;
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr(micError(new DOMException('', 'NotSupportedError'))); return; }
-    const key = newRunKey('pd');
-    if (gate && !(await gate.use('pitch_detect', key))) return;
+    if (!quotaAvailable(gate, 'pitch_detect')) return;
     setBusy(true);
     try {
       clearResult();
       hist.current = []; recent.current = []; lastVoiced.current = 0; range.current = { lo: 48, hi: 72 };
       segRef.current = new NoteSegmenter(0.12, 0.18, a4Ref.current);
-      runKey.current = key;
       const mic = await openMic((f) => {
         if (stoppingRef.current) return;
         setElapsed(f.t); setLevel(levelPct(f.rms));
@@ -402,8 +404,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
       recRef.current = startRecorder(mic.stream);
       setElapsed(0); setRunning(true);
     } catch (e) {
-      micRef.current?.stop(); micRef.current = null; segRef.current = null; runKey.current = null;
-      gate?.refund('pitch_detect', key);
+      micRef.current?.stop(); micRef.current = null; segRef.current = null;
       setErr(micError(e));
     } finally { setBusy(false); }
   };
@@ -733,22 +734,24 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
   const recent = useRef<number[]>([]);
   const lastVoiced = useRef(0);
   const lastT = useRef(0);
-  const runKey = useRef<string | null>(null);
+  const aliveRef = useRef(true);
+  const finishingRef = useRef(false);
 
   const goPhase = (p: Phase) => { phaseRef.current = p; detRef.current.reset(); setHold(0); setPhase(p); };
 
   const closeMic = useCallback(() => { micRef.current?.stop(); micRef.current = null; setLive(null); setLevel(0); }, []);
 
-  useEffect(() => () => {
-    micRef.current?.stop(); micRef.current = null;
-    const key = runKey.current; runKey.current = null;
-    if (key) gateRef.current?.refund('vocal_range', key);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      // Panel ditutup sebelum tes selesai: tidak ada hasil, jadi tidak ada jatah yang dipakai.
+      aliveRef.current = false;
+      micRef.current?.stop(); micRef.current = null;
+    };
   }, []);
 
   const abort = (message?: string) => {
     closeMic();
-    const key = runKey.current; runKey.current = null;
-    if (key) gate?.refund('vocal_range', key);
     lowRef.current = null; highRef.current = null; histRef.current = new Map();
     setLow(null); setHigh(null); setTessMeasured(null);
     goPhase('intro');
@@ -781,18 +784,16 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
     if (busy) return;
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia) { setErr(micError(new DOMException('', 'NotSupportedError'))); return; }
-    const key = newRunKey('vr');
-    if (gate && !(await gate.use('vocal_range', key))) return;
+    if (!quotaAvailable(gate, 'vocal_range')) return;
     setBusy(true);
     try {
       lowRef.current = null; highRef.current = null; histRef.current = new Map();
       setLow(null); setHigh(null); setTessMeasured(null);
-      recent.current = []; lastVoiced.current = 0; lastT.current = 0; runKey.current = key;
+      recent.current = []; lastVoiced.current = 0; lastT.current = 0;
       micRef.current = await openMic(onFrame);
       goPhase('low');
     } catch (e) {
-      micRef.current?.stop(); micRef.current = null; runKey.current = null;
-      gate?.refund('vocal_range', key);
+      micRef.current?.stop(); micRef.current = null;
       setErr(micError(e));
     } finally { setBusy(false); }
   };
@@ -814,16 +815,24 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
       }
       goPhase('comfort'); return;
     }
-    if (phase === 'comfort') finishTest(true);
+    if (phase === 'comfort') void finishTest(true);
   };
 
-  const finishTest = (useComfort: boolean) => {
+  // Jatah dipakai SEKARANG: tes sudah berhasil dianalisis (rentang terendah & tertinggi terekam).
+  // Tes yang dibatalkan, gagal membuka mikrofon, atau ditinggalkan di tengah jalan tidak memakan jatah.
+  const finishTest = async (useComfort: boolean) => {
+    if (finishingRef.current) return;
+    if (lowRef.current === null || highRef.current === null) return;
+    finishingRef.current = true;
     closeMic();
-    runKey.current = null;
-    setTessMeasured(useComfort && histRef.current.size >= 3 ? new Map(histRef.current) : null);
-    setHasTaken(true);
-    goPhase('result');
-    toast?.('Tes vocal range selesai.');
+    try {
+      const charged = await chargeRun(gateRef.current, 'vocal_range', newRunKey('vr'), () => aliveRef.current);
+      if (!charged) { if (aliveRef.current) abort(); return; } // jatah habis: hasil dibuang
+      setTessMeasured(useComfort && histRef.current.size >= 3 ? new Map(histRef.current) : null);
+      setHasTaken(true);
+      goPhase('result');
+      toast?.('Tes vocal range selesai.');
+    } finally { finishingRef.current = false; }
   };
 
   const retake = () => { setErr(null); goPhase('intro'); };
@@ -897,7 +906,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
               <span>{phase === 'comfort' ? 'Selesai & lihat hasil' : 'Lanjut'}</span><ArrowRight className="w-3.5 h-3.5" />
             </button>
             {phase === 'comfort' && (
-              <button type="button" onClick={() => finishTest(false)} className={BTN_GHOST}>Lewati langkah ini</button>
+              <button type="button" onClick={() => void finishTest(false)} className={BTN_GHOST}>Lewati langkah ini</button>
             )}
             <button type="button" onClick={redo} className={BTN_GHOST}><RotateCcw className="w-3.5 h-3.5" /><span>Ulangi bagian ini</span></button>
             <button type="button" onClick={() => abort()} className={BTN_GHOST}><X className="w-3.5 h-3.5" /><span>Batalkan tes</span></button>

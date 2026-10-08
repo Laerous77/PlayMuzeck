@@ -10,7 +10,7 @@ import {
 } from '../../services/exporters';
 import {
   BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, EmptyFileNotice, FORMAT_INFO, FileChip, FormatRow, INPUT_CLS, InfoTip, LimitNote,
-  NUM_FIELD_CLS, PANEL_CLS, SLIDER_CLS, pillCls, quotaGuardProps, type DownloadFormat,
+  NUM_FIELD_CLS, PANEL_CLS, SLIDER_CLS, pillCls, quotaGuardProps, chargeRun, newRunKey, quotaAvailable, type DownloadFormat,
 } from './toolsShared';
 import { PitchDetectTool, VocalRangeTool } from './VoiceTools';
 import { PitchMatchTool } from './PitchMatchTool';
@@ -248,37 +248,33 @@ const Preview: React.FC<{ buffer: AudioBuffer | null }> = ({ buffer }) => {
   return url ? <audio controls src={url} className="w-full" /> : null;
 };
 
-let exportSeq = 0;
-
 interface AudioExportArgs {
   buffer: AudioBuffer | null; fileName: string; toolId: ExtraToolId;
-  gate?: AudioExtraToolsProps['gate']; onDone?: (m: string) => void; sessionKey?: string;
+  onDone?: (m: string) => void;
   bitDepth?: 16 | 24; defaultFormat?: DownloadFormat;
 }
 
-/** Logika ekspor bersama (batas durasi, kuota, encode, unduh). Dipakai ExportPanel dan AudioToolFooter. */
-function useAudioExport({ buffer, fileName, toolId, gate, onDone, sessionKey, bitDepth, defaultFormat = 'MP3' }: AudioExportArgs) {
+/**
+ * Logika ekspor bersama (batas durasi, encode, unduh). Dipakai ExportPanel dan AudioToolFooter.
+ * Jatah TIDAK dipakai di sini: jatah sudah dipakai ketika audio berhasil diproses (lihat chargeRun di tiap alat),
+ * jadi mengunduh, mengunduh ulang, atau gagal/batal mengunduh tidak mengubah sisa jatah.
+ */
+function useAudioExport({ buffer, fileName, toolId, onDone, bitDepth, defaultFormat = 'MP3' }: AudioExportArgs) {
   const [fmt, setFmt] = useState<DownloadFormat>(defaultFormat);
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const resultKey = useMemo(() => `r${++exportSeq}`, [buffer]);
   const run = async () => {
     if (!buffer || busy) return;
-    // Batas panjang berkas keluaran: diperiksa SEBELUM jatah dipakai, jadi berkas yang ditolak tidak memakan kuota.
     const tooLong = checkOutputDuration(toolId, buffer.duration);
     if (tooLong) { setErr(tooLong); return; }
-    const key = sessionKey ?? resultKey;
-    const wasPaid = gate?.has(toolId, key) ?? false;
     setBusy(true); setErr(null); setNote(null); setPct(0);
-    if (gate && !(await gate.use(toolId, key))) { setBusy(false); return; }
     try {
       const r = await exportAudioFile(buffer, fileName, fmt, { mp3Kbps: 192, bitDepth, onProgress: setPct });
       if (r.note) setNote(r.note);
       onDone?.(`Berkas ${r.actualFormat} berhasil diunduh.`);
     } catch (e) {
-      if (!wasPaid) gate?.refund(toolId, key);
       setErr(e instanceof Error ? e.message : 'Gagal mengekspor berkas.');
     } finally { setBusy(false); }
   };
@@ -423,9 +419,9 @@ const ToolFooter: React.FC<{
 const AudioToolFooter: React.FC<{
   toolId: ExtraToolId; runLabel: string; onRun: () => void; running: boolean; runDisabled?: boolean;
   result: AudioBuffer | null; onClear: () => void; fileName: string;
-  gate?: AudioExtraToolsProps['gate']; onDone?: (m: string) => void; sessionKey?: string; bitDepth?: 16 | 24;
-}> = ({ toolId, runLabel, onRun, running, runDisabled, result, onClear, fileName, gate, onDone, sessionKey, bitDepth }) => {
-  const ex = useAudioExport({ buffer: result, fileName, toolId, gate, onDone, sessionKey, bitDepth });
+  onDone?: (m: string) => void; bitDepth?: 16 | 24;
+}> = ({ toolId, runLabel, onRun, running, runDisabled, result, onClear, fileName, onDone, bitDepth }) => {
+  const ex = useAudioExport({ buffer: result, fileName, toolId, onDone, bitDepth });
   return (
     <ToolFooter
       formatRow={<FormatRow value={ex.fmt} onChange={ex.setFmt} />}
@@ -451,6 +447,9 @@ const MergeFadeTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = f
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Naik setiap kali masukan/pengaturan berubah, supaya hasil proses lama yang selesai terlambat dibuang (dan tidak memakan jatah).
+  const verRef = useRef(0);
+  useEffect(() => { verRef.current += 1; }, [items, crossfade, fadeIn, fadeOut, curve]);
 
   const addFiles = async (files: File[]) => {
     setErr(null); setLoading(true);
@@ -476,6 +475,8 @@ const MergeFadeTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = f
 
   const process = async () => {
     if (items.length === 0) return;
+    if (!quotaAvailable(gate, 'merge')) return;
+    const ver = verRef.current;
     setBusy(true); setErr(null); await tick();
     try {
       const sr = items[0].buffer.sampleRate;
@@ -483,7 +484,11 @@ const MergeFadeTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = f
       for (const it of items) parts.push(viewChannels(await resampleTo(it.buffer, sr)));
       let ch = concatChannels(parts, sr, crossfade);
       if (fadeIn > 0 || fadeOut > 0) ch = applyFade(ch, sr, fadeIn, fadeOut, curve);
-      setResult(toBuffer(ch, sr));
+      const out = toBuffer(ch, sr);
+      if (ver !== verRef.current) return;
+      // Jatah dipakai sekarang: audio sudah berhasil diproses (tidak peduli nanti diunduh atau tidak).
+      if (!(await chargeRun(gate, 'merge', newRunKey('mg'), () => ver === verRef.current))) return;
+      setResult(out);
       toast?.('Gabung & Fade selesai diproses.');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal memproses audio.'); }
     finally { setBusy(false); }
@@ -504,7 +509,7 @@ const MergeFadeTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = f
         footer={
           <AudioToolFooter
             toolId="merge" runLabel="Gabung & Fade" onRun={items.length > 0 ? process : open} running={busy}
-            result={result} onClear={() => setResult(null)} fileName="PlayMuzeck_Gabungan" gate={gate} onDone={toast}
+            result={result} onClear={() => setResult(null)} fileName="PlayMuzeck_Gabungan" onDone={toast}
           />
         }
       >
@@ -557,7 +562,7 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
   const [res, setRes] = useState<{ bpm: ReturnType<typeof detectBpm>; key: ReturnType<typeof detectKey>; seconds: number } | null>(null);
 
   const onFiles = async ([file]: File[]) => {
-    if (gate && !(await gate.use('bpm'))) return;
+    if (!quotaAvailable(gate, 'bpm')) return;
     setBusy(true); setErr(null); setRes(null); setFileName(file.name);
     try {
       const buf = await decodeFile(file, 'bpm');
@@ -565,9 +570,11 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
       const ch = viewChannels(buf);
       const bpm = detectBpm(ch, buf.sampleRate);
       const key = detectKey(ch, buf.sampleRate);
-      if (!bpm && !key) { gate?.refund('bpm'); setErr('Tidak ada pola yang bisa dianalisis. Pastikan berkas cukup panjang (minimal ±5 detik) dan tidak senyap.'); }
-      else setRes({ bpm, key, seconds: buf.duration });
-    } catch (e) { gate?.refund('bpm'); setErr(e instanceof Error ? e.message : 'Gagal menganalisis.'); }
+      if (!bpm && !key) { setErr('Tidak ada pola yang bisa dianalisis. Pastikan berkas cukup panjang (minimal ±5 detik) dan tidak senyap.'); return; }
+      // Jatah dipakai sekarang: audio sudah berhasil dianalisis.
+      if (!(await chargeRun(gate, 'bpm', newRunKey('bp')))) return;
+      setRes({ bpm, key, seconds: buf.duration });
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal menganalisis.'); }
     finally { setBusy(false); }
   };
 
@@ -614,7 +621,7 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
 
 // 3. Perekam Suara + Trim
 const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
-  const [state, setState] = useState<'idle' | 'recording' | 'ready'>('idle');
+  const [state, setState] = useState<'idle' | 'recording' | 'processing' | 'ready'>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [start, setStart] = useState(0);
@@ -624,19 +631,30 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const aliveRef = useRef(true);
+  const gateRef = useRef(gate); gateRef.current = gate;
 
   const cleanup = useCallback(() => {
     if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
   }, []);
-  useEffect(() => () => { try { recRef.current?.state === 'recording' && recRef.current.stop(); } catch {} cleanup(); }, [cleanup]);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      // Panel ditutup: rekaman yang belum selesai dibuang dan TIDAK memakai jatah (lihat rec.onstop).
+      aliveRef.current = false;
+      try { recRef.current?.state === 'recording' && recRef.current.stop(); } catch {}
+      cleanup();
+    };
+  }, [cleanup]);
 
   const begin = async () => {
     setErr(null);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
       setErr('Browser ini belum mendukung perekaman suara.'); return;
     }
+    if (!quotaAvailable(gateRef.current, 'recorder')) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
       streamRef.current = stream;
@@ -646,11 +664,19 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
       rec.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
       rec.onstop = async () => {
         cleanup();
+        if (!aliveRef.current) return;
+        setState('processing');
         try {
           const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
           const ctx = new AudioCtx();
           const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
           void ctx.close();
+          if (!aliveRef.current) return;
+          if (decoded.length < 1 || decoded.duration < 0.2) {
+            setErr('Rekaman terlalu pendek atau kosong. Coba rekam ulang.'); setState('idle'); return;
+          }
+          // Jatah dipakai sekarang: rekaman sudah berhasil diproses (tidak peduli nanti diunduh atau tidak).
+          if (!(await chargeRun(gateRef.current, 'recorder', newRunKey('rc'), () => aliveRef.current))) { setState('idle'); return; }
           setBuffer(decoded); setStart(0); setEnd(decoded.duration); setState('ready');
         } catch { setErr('Rekaman tidak bisa diproses. Coba rekam ulang.'); setState('idle'); }
       };
@@ -682,7 +708,10 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
     <Panel title="Perekam" info={['Rekam dari mikrofon, potong bagian awal/akhir, lalu unduh.', `Rekaman otomatis berhenti di ${limitLabelFor('recorder')}.`]}>
       <div className="flex flex-wrap items-center gap-3">
         {state !== 'recording' ? (
-          <button type="button" onClick={begin} className={btnPrimary}><Mic className="w-4 h-4" /><span>{state === 'ready' ? 'Rekam ulang' : 'Mulai merekam'}</span></button>
+          <button type="button" onClick={begin} disabled={state === 'processing'} className={btnPrimary}>
+            {state === 'processing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mic className="w-4 h-4" />}
+            <span>{state === 'processing' ? 'Memproses…' : state === 'ready' ? 'Rekam ulang' : 'Mulai merekam'}</span>
+          </button>
         ) : (
           <button type="button" onClick={stop} className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-black text-sm inline-flex items-center gap-2 cursor-pointer"><Square className="w-4 h-4" /><span>Berhenti</span></button>
         )}
@@ -702,7 +731,7 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
           </div>
           <p className="text-[11px] text-gray-400">Hasil potongan: {fmtTime(Math.max(0, end - start))} dari {fmtTime(dur)}</p>
           <Preview buffer={trimmed} />
-          <ExportPanel buffer={trimmed} fileName="PlayMuzeck_Rekaman" toolId="recorder" gate={gate} onDone={toast} />
+          <ExportPanel buffer={trimmed} fileName="PlayMuzeck_Rekaman" toolId="recorder" onDone={toast} />
         </div>
       )}
     </Panel>
@@ -730,6 +759,9 @@ const CleanTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [out, setOut] = useState<{ buffer: AudioBuffer; lines: string[] } | null>(null);
+  // Naik setiap kali berkas/pengaturan berubah, supaya hasil proses lama yang selesai terlambat dibuang (dan tidak memakan jatah).
+  const verRef = useRef(0);
+  useEffect(() => { verRef.current += 1; }, [buffer, doSilence, thr, minSil, keep, doNorm, target, doMono]);
 
   const onFiles = async ([f]: File[]) => {
     setLoading(true); setErr(null); setOut(null);
@@ -743,6 +775,8 @@ const CleanTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false
   const run = async () => {
     if (!buffer) return;
     if (!doSilence && !doNorm && !doMono) { setErr('Aktifkan minimal satu proses.'); return; }
+    if (!quotaAvailable(gate, 'clean')) return;
+    const ver = verRef.current;
     setBusy(true); setErr(null); await tick();
     try {
       const sr = buffer.sampleRate;
@@ -762,7 +796,11 @@ const CleanTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false
           lines.push(`Loudness: ${r.beforeLufs.toFixed(1)} → ${r.afterLufs?.toFixed(1)} LUFS (target ${target}).`);
         }
       }
-      setOut({ buffer: toBuffer(ch, sr), lines });
+      const outBuf = toBuffer(ch, sr);
+      if (ver !== verRef.current) return;
+      // Jatah dipakai sekarang: audio sudah berhasil diproses (tidak peduli nanti diunduh atau tidak).
+      if (!(await chargeRun(gate, 'clean', newRunKey('cl'), () => ver === verRef.current))) return;
+      setOut({ buffer: outBuf, lines });
       toast?.('Rapikan Audio selesai diproses.');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal memproses audio.'); }
     finally { setBusy(false); }
@@ -782,7 +820,7 @@ const CleanTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false
           <AudioToolFooter
             toolId="clean" runLabel="Rapikan Audio" onRun={buffer ? run : open} running={busy}
             result={out?.buffer ?? null} onClear={() => setOut(null)}
-            fileName={`PlayMuzeck_Bersih_${baseName(fileName)}`} gate={gate} onDone={toast}
+            fileName={`PlayMuzeck_Bersih_${baseName(fileName)}`} onDone={toast}
           />
         }
       >
@@ -841,6 +879,9 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
   const [beat, setBeat] = useState(-1);
   const [bars, setBars] = useState(16);
   const [clickBuf, setClickBuf] = useState<AudioBuffer | null>(null);
+  const startingRef = useRef(false);
+  const aliveRef = useRef(true);
+  useEffect(() => { aliveRef.current = true; return () => { aliveRef.current = false; }; }, []);
 
   const subs = useMemo(() => subdivisionsFor(den), [den]);
   const sub = subs.find((s) => s.id === subId) ?? subs[0];
@@ -932,19 +973,26 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     }
   };
 
+  // Metronom: jatah dipakai begitu tombol Mulai ditekan. Satu sesi halaman = satu penggunaan (kunci 'session'),
+  // jadi Berhenti lalu Mulai lagi (mis. setelah ganti tempo) di halaman yang sama tidak memakan jatah lagi.
   const start = async () => {
-    stop();
-    const ctx = new AudioCtx();
-    void ctx.resume();
-    let allowed = true;
-    try { allowed = !gate || (await gate.use('metronome', 'session')); } catch {}
-    if (!allowed) { void ctx.close(); return; }
+    if (startingRef.current) return; // cegah klik ganda membuat dua penjadwal sekaligus
+    startingRef.current = true;
+    try {
+      stop();
+      // AudioContext dibuat SEBELUM menunggu server supaya masih dalam gestur klik (wajib di Safari/iOS).
+      const ctx = new AudioCtx();
+      void ctx.resume();
+      let allowed = true;
+      try { allowed = !gate || (await gate.use('metronome', 'session')); } catch {}
+      if (!allowed || !aliveRef.current) { void ctx.close().catch(() => {}); return; }
 
-    const master = makeMaster(ctx, cfg.current.vol);
-    ctxRef.current = ctx; masterRef.current = master; bufRef.current = new Map();
-    pulseStartRef.current = ctx.currentTime + 0.05; nextRef.current = pulseStartRef.current; pulseRef.current = 0; subRef.current = 0;
-    timerRef.current = window.setInterval(schedule, 25);
-    setRunning(true);
+      const master = makeMaster(ctx, cfg.current.vol);
+      ctxRef.current = ctx; masterRef.current = master; bufRef.current = new Map();
+      pulseStartRef.current = ctx.currentTime + 0.05; nextRef.current = pulseStartRef.current; pulseRef.current = 0; subRef.current = 0;
+      timerRef.current = window.setInterval(schedule, 25);
+      setRunning(true);
+    } finally { startingRef.current = false; }
   };
 
   // Dengarkan contoh bunyi (aksen, ketukan, subdivisi) tanpa memulai metronom.
@@ -968,10 +1016,13 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
   };
 
   const maxBars = Math.max(1, Math.floor(300 / barSec));
-  const makeFile = () => {
+  const makeFile = async () => {
     const b = Math.min(bars, maxBars);
     const pcm = renderMetronome({ bpm, beatsPerBar: num, denominator: den, tempoRef: effRef, bars: b, subdivisionId: sub.id, accents, sound: soundId, sampleRate: 44100 });
-    setClickBuf(toBuffer([pcm], 44100));
+    const buf = toBuffer([pcm], 44100);
+    // Berkas klik yang berhasil dibuat memakai jatah sesi yang sama dengan tombol Mulai (tidak dihitung dua kali).
+    if (!(await chargeRun(gate, 'metronome', 'session'))) return;
+    if (aliveRef.current) setClickBuf(buf);
   };
   const [bpmText, setBpmText] = useState(String(bpm));
   useEffect(() => { setBpmText(String(bpm)); }, [bpm]);
@@ -1079,9 +1130,9 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
           <Field label={`Jumlah bar (maks ${maxBars})`}>
             <input type="number" min={1} max={maxBars} value={Math.min(bars, maxBars)} onChange={(e) => setBars(Math.max(1, Math.min(maxBars, Math.round(+e.target.value) || 1)))} className={inputCls} />
           </Field>
-          <button type="button" onClick={makeFile} className={btnGhost}>Buat berkas</button>
+          <button type="button" onClick={() => void makeFile()} className={btnGhost}>Buat berkas</button>
         </div>
-        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${num}-${den}`} toolId="metronome" gate={gate} onDone={toast} sessionKey="session" /></>)}
+        {clickBuf && (<><Preview buffer={clickBuf} /><ExportPanel buffer={clickBuf} fileName={`PlayMuzeck_Metronom_${bpm}BPM_${num}-${den}`} toolId="metronome" onDone={toast} /></>)}
       </div>
     </Panel>
   );
@@ -1239,6 +1290,9 @@ const LoopTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false,
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Naik setiap kali berkas/pengaturan berubah, supaya hasil proses lama yang selesai terlambat dibuang (dan tidak memakan jatah).
+  const verRef = useRef(0);
+  useEffect(() => { verRef.current += 1; }, [buffer, times, crossfade]);
 
   const dur = buffer?.duration ?? 0;
   // Jumlah ulangan tertinggi yang hasilnya masih di bawah batas durasi alat (maks. MAX_REPEAT).
@@ -1261,10 +1315,16 @@ const LoopTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false,
     if (!buffer || !canLoop) return;
     const tooLong = checkOutputDuration('loop', outSec);
     if (tooLong) { setErr(tooLong); return; }
+    if (!quotaAvailable(gate, 'loop')) return;
+    const ver = verRef.current;
     setBusy(true); setErr(null); await tick();
     try {
       const sr = buffer.sampleRate;
-      setResult(toBuffer(repeatChannels(viewChannels(buffer), sr, useTimes, crossfade), sr));
+      const out = toBuffer(repeatChannels(viewChannels(buffer), sr, useTimes, crossfade), sr);
+      if (ver !== verRef.current) return;
+      // Jatah dipakai sekarang: audio sudah berhasil diproses (tidak peduli nanti diunduh atau tidak).
+      if (!(await chargeRun(gate, 'loop', newRunKey('lp'), () => ver === verRef.current))) return;
+      setResult(out);
       toast?.('Ulangi Audio selesai diproses.');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal memproses audio.'); }
     finally { setBusy(false); }
@@ -1288,7 +1348,7 @@ const LoopTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false,
           <AudioToolFooter
             toolId="loop" runLabel="Ulangi Audio" onRun={buffer ? run : open} running={busy} runDisabled={Boolean(buffer) && !canLoop}
             result={result} onClear={() => setResult(null)}
-            fileName={`PlayMuzeck_Ulang${useTimes}x_${baseName(fileName)}`} gate={gate} onDone={toast}
+            fileName={`PlayMuzeck_Ulang${useTimes}x_${baseName(fileName)}`} onDone={toast}
           />
         }
       >
@@ -1402,6 +1462,7 @@ const MetadataTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = fa
   const [coverNote, setCoverNote] = useState<string | null>(null);
   const [outBytes, setOutBytes] = useState<Uint8Array | null>(null);
   const [downloaded, setDownloaded] = useState(false);
+  const loadRef = useRef(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [coverUrl, setCoverUrl] = useState<string | null>(null);
   const coverInput = useRef<HTMLInputElement>(null);
@@ -1434,6 +1495,7 @@ const MetadataTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = fa
       const r = readTags(data);
       setFile(f); setBytes(data); setFmt(r.format); setInfo(r.info); setPreserved(r.preservedCount);
       setOrig(r.tags); setTags(r.tags); setSessionKey(`meta${++metaSeq}`); setRenameFromTags(false);
+      loadRef.current += 1;
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
     finally { setLoading(false); }
   };
@@ -1469,26 +1531,30 @@ const MetadataTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = fa
    
   };
 
-  // "Jalankan": tulis tag ke salinan berkas di memori (belum memakai jatah).
+  // "Jalankan": tulis tag ke salinan berkas di memori. Jatah dipakai SEKARANG, begitu penulisan tag berhasil
+  // (tidak peduli nanti diunduh atau tidak). Satu berkas yang diunggah = satu penggunaan (kunci sesi berkas):
+  // menjalankan ulang setelah mengubah tag pada berkas yang sama tidak memakai jatah lagi.
   const apply = async () => {
     if (!bytes || !file) { open(); return; }
     if (busy) return;
+    if (!quotaAvailable(gate, 'metadata', sessionKey)) return;
+    const load = loadRef.current;
     setBusy(true); setErr(null); setDownloaded(false);
     try {
       await tick();
-      setOutBytes(writeTags(bytes, tags, fmt));
+      const written = writeTags(bytes, tags, fmt);
+      if (load !== loadRef.current) return;
+      if (!(await chargeRun(gate, 'metadata', sessionKey, () => load === loadRef.current))) return;
+      setOutBytes(written);
       toast?.('Edit Metadata selesai diproses.');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal menyimpan metadata.'); }
     finally { setBusy(false); }
   };
 
-  // "Unduh": jatah dipakai di sini, sama seperti alat tambahan lain. Unduh ulang berkas yang sama tidak memakai jatah lagi.
+  // "Unduh": tidak memakai jatah (sudah dipakai saat "Jalankan" berhasil). Unduh ulang berkas yang sama gratis.
   const download = async () => {
     if (!outBytes || !file || downloading) return;
-    const key = sessionKey;
-    const wasPaid = gate?.has('metadata', key) ?? false;
     setDownloading(true); setErr(null);
-    if (gate && !(await gate.use('metadata', key))) { setDownloading(false); return; }
     try {
       let name = safeFileName(file.name.replace(/\.[^.]+$/, '')) || 'audio';
       if (renameFromTags && tags.title.trim()) {
@@ -1499,7 +1565,6 @@ const MetadataTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = fa
       setDownloaded(true);
       toast?.(`Metadata ${FORMAT_LABEL[fmt]} berhasil disimpan dan diunduh.`);
     } catch (e) {
-      if (!wasPaid) gate?.refund('metadata', key);
       setErr(e instanceof Error ? e.message : 'Gagal mengunduh berkas.');
     } finally { setDownloading(false); }
   };
@@ -1663,7 +1728,7 @@ const MetadataTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = fa
               <input type="checkbox" checked={renameFromTags} onChange={(e) => setRenameFromTags(e.target.checked)} className="accent-accent" />
               Namai berkas hasil “Artis - Judul”
             </label>
-            <p className="text-[10px] text-gray-500">Berkas hasil memakai nama yang sama dengan aslinya, jadi browser bisa menambahkan “(1)”. Mengunduh ulang berkas yang sama setelah mengubah tag tidak memakai jatah lagi.</p>
+            <p className="text-[10px] text-gray-500">Berkas hasil memakai nama yang sama dengan aslinya, jadi browser bisa menambahkan “(1)”. Menjalankan ulang pada berkas yang sama setelah mengubah tag tidak memakai jatah lagi.</p>
           </div>
         </div>
       )}

@@ -881,20 +881,9 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     revokeStateUrls(toolStatesRef.current[targetTool]);
     setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE, isProcessing: true, progress: 0 } }));
 
+    // Jatah TIDAK dipesan di sini. Jatah baru dipakai setelah audio berhasil diproses (lihat di bawah), jadi proses yang
+    // gagal, dibatalkan, atau ditinggalkan (tab ditutup di tengah jalan) tidak pernah memakan jatah.
     let reservation: Reservation | null = null;
-    if (needsCharge) {
-      reservation = await reserveQuota(targetTool, targetTool === 'compress' ? `compress:${myLoad}:${pageNonce}` : undefined);
-      if (isStale()) {
-        void refundReservation(targetTool, reservation);
-        return;
-      }
-      if (!reservation.allowed) {
-        setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE } }));
-        setQuotaMap(readQuota());
-        goPricing(targetTool);
-        return;
-      }
-    }
 
     let lastPct = -1;
     const dspOpts: DspOptions = {
@@ -949,6 +938,27 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
       if (isStale()) return;
 
+      // Audio sudah berhasil diproses: pakai jatah SEKARANG (tidak peduli hasilnya nanti diunduh atau tidak).
+      if (needsCharge) {
+        reservation = await reserveQuota(targetTool, targetTool === 'compress' ? `compress:${myLoad}:${pageNonce}` : undefined);
+        if (isStale()) {
+          if (targetTool === 'compress' && myLoad === loadIdRef.current) {
+            // Compress dijalankan ulang (ganti tingkat) untuk berkas yang sama: kunci jatahnya sama, jangan dikembalikan
+            // supaya hasil proses yang menggantikannya tidak jadi gratis.
+            compressChargedRef.current = true;
+          } else {
+            void refundReservation(targetTool, reservation);
+          }
+          return;
+        }
+        if (!reservation.allowed) {
+          setToolStates((prev) => ({ ...prev, [targetTool]: { ...INITIAL_TOOL_STATE } }));
+          setQuotaMap(readQuota());
+          goPricing(targetTool);
+          return;
+        }
+      }
+
       let previewUrl: string | null = null;
       let vocalUrls: ToolExecutionState['vocalUrls'];
       if (vocalBuffers) {
@@ -958,16 +968,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         };
       } else {
         previewUrl = URL.createObjectURL(audioBufferToWav(outputBuffer, 16));
-      }
-
-      if (isStale()) {
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
-        if (vocalUrls) {
-          URL.revokeObjectURL(vocalUrls.vocal);
-          URL.revokeObjectURL(vocalUrls.instrumental);
-        }
-        void refundReservation(targetTool, reservation);
-        return;
       }
 
       if (targetTool === 'compress') compressChargedRef.current = true;
@@ -1067,18 +1067,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     setIsExporting(true);
     setExportProgress(0);
 
-    let liveRes: Reservation | null = null;
-    let liveDone = false;
-    if (isLive && !isToolsOwned && !alreadyCharged) {
-      liveRes = await reserveQuota(tool, `${sig}|${pageNonce}`);
-      if (!liveRes.allowed) {
-        setIsExporting(false);
-        setQuotaMap(readQuota());
-        goPricing(tool);
-        return;
-      }
-    }
-
     let lastPct = -1;
     const dspOpts: DspOptions = {
       isCancelled: stale,
@@ -1174,19 +1162,33 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         return;
       }
 
+      // Volume / Pitch / Tempo diproses (dirender) di sini, jadi jatah dipakai begitu hasilnya berhasil dibuat,
+      // sebelum proses encode & unduh. Gagal/batal mengunduh sesudahnya tidak mengembalikan jatah; pengaturan yang sama
+      // tidak dihitung dua kali (kunci = tanda tangan pengaturan).
+      if (isLive && !isToolsOwned && !alreadyCharged) {
+        const liveRes = await reserveQuota(tool, `${sig}|${pageNonce}`);
+        if (stale()) {
+          void refundReservation(tool, liveRes);
+          return;
+        }
+        if (!liveRes.allowed) {
+          setQuotaMap(readQuota());
+          goPricing(tool);
+          return;
+        }
+        chargedSigRef.current[tool] = sig;
+      }
+
       const exported = await exportAudioFile(buf, `${baseName}_${suffix}`, fmt, {
         onProgress: (pct) => setExportProgress(Math.round(pct)),
       });
 
-      if (isLive && !alreadyCharged) chargedSigRef.current[tool] = sig;
-      liveDone = true;
       onSuccessToast(exported.note ? `Berkas diunduh. ${exported.note}` : `Berkas ${fmt} berhasil diunduh.`);
     } catch (err) {
       if (err instanceof DspError && err.code === 'CANCELLED') return;
       console.error(err);
       setErrorMsg(`Gagal mengekspor berkas ${fmt}. Coba format lain.`);
     } finally {
-      if (liveRes && !liveDone) void refundReservation(tool, liveRes);
       setIsExporting(false);
       setExportProgress(0);
     }
