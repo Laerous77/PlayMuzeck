@@ -20,9 +20,9 @@ import { exportAudioFile, downloadBlob } from '../../services/exporters';
 import { checkInputDuration, checkOutputDuration } from '../../services/audioLimits';
 import {
   BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, InfoTip, PANEL_CLS,
-  SLIDER_CLS, pillCls, chargeRun, newRunKey, quotaAvailable
+  SLIDER_CLS, pillCls, chargeRun, newRunKey, quotaAvailable, EmptyFileNotice
 } from './toolsShared';
-import type { QuotaGate } from './AudioExtraTools';
+import type { QuotaGate, ExtraPickerHandle } from './AudioExtraTools';
 
 const AudioCtx: typeof AudioContext = (typeof window !== 'undefined' &&
   (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)) as typeof AudioContext;
@@ -38,9 +38,12 @@ interface PitchMatchToolProps {
   gate?: QuotaGate;
   onSuccessToast?: (msg: string) => void;
   studioActiveTrack?: { id: string; title: string; audioUrl?: string } | null;
+  /** Tombol "Unggah Berkas" di header AudioToolsSuite membuka pemilih berkas alat ini (sama seperti alat lain). */
+  isActive?: boolean;
+  onPicker?: (h: ExtraPickerHandle | null) => void;
 }
 
-export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessToast, studioActiveTrack }) => {
+export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessToast, studioActiveTrack, isActive = false, onPicker }) => {
   // State Audio Acuan
   const [refFileName, setRefFileName] = useState<string>('');
   const [refBuffer, setRefBuffer] = useState<AudioBuffer | null>(null);
@@ -182,6 +185,7 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     const ab = await file.arrayBuffer();
     await processReferenceAudio(ab, file.name);
@@ -202,6 +206,15 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
       setIsAnalyzingRef(false);
     }
   };
+
+  // Daftarkan pemilih berkas ke tombol "Unggah Berkas" di header, hanya selama alat ini aktif.
+  const pickerBusy = isAnalyzingRef || isPracticing;
+  const pickerLabel = isAnalyzingRef ? 'Membaca...' : refBuffer ? 'Ganti Berkas' : 'Unggah Berkas';
+  useEffect(() => {
+    if (!onPicker || !isActive) return;
+    onPicker({ open: () => { if (!pickerBusy) fileInputRef.current?.click(); }, label: pickerLabel, loading: pickerBusy });
+    return () => onPicker(null);
+  }, [onPicker, isActive, pickerLabel, pickerBusy]);
 
   // Mulai Latihan & Evaluasi
   const startPractice = async () => {
@@ -515,15 +528,6 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
                 <span>Gunakan Trek Studio ({studioActiveTrack.title})</span>
               </button>
             )}
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isAnalyzingRef || isPracticing}
-              className={`${BTN_GHOST} px-3 py-1.5`}
-            >
-              <Upload className="w-3.5 h-3.5 text-accent" />
-              <span>{refBuffer ? 'Ganti File Audio' : 'Unggah File Audio Acuan'}</span>
-            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -533,6 +537,10 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
             />
           </div>
         </div>
+
+        {!refBuffer && !isAnalyzingRef && (
+          <EmptyFileNotice>Unggah berkas audio acuan (atau video untuk ekstrak audio) lewat tombol Unggah Berkas di atas terlebih dahulu untuk memakai alat ini.</EmptyFileNotice>
+        )}
 
         {isAnalyzingRef && (
           <div className="space-y-1.5 pt-1">

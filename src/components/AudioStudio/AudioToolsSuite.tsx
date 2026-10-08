@@ -167,8 +167,9 @@ export const TOOL_SLUG_TO_ID: Record<string, UnifiedToolId> = {
   ...EXTRA_SLUG_TO_TOOL,
 };
 
+// Alat dengan pratinjau langsung (Dengar Audio) sebelum dijalankan. Setelah "Jalankan" hasilnya jadi berkas seperti alat lain.
 const LIVE_TOOLS: ToolType[] = ['volume', 'pitch', 'tempo'];
-const STATIC_RESULT_TOOLS: ToolType[] = ['trim', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator'];
+const STATIC_RESULT_TOOLS: ToolType[] = ['trim', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator', 'volume', 'pitch', 'tempo'];
 
 const RESULT_TTL_MS = 5 * 60 * 1000;
 
@@ -464,7 +465,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const toolStatesRef = useRef(toolStates);
   const audioUrlRef = useRef<string | null>(null);
   const compressChargedRef = useRef(false);
-  const chargedSigRef = useRef<Partial<Record<ToolType, string>>>({});
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const toastRef = useRef(onSuccessToast);
   toastRef.current = onSuccessToast;
@@ -560,13 +560,13 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     const g = gainNodeRef.current;
     const ctx = audioCtxRef.current;
     if (!g || !ctx) return;
-    const v = live.current.selectedTool === 'volume' ? Math.pow(10, dynamicGainDbRef.current / 20) : 1;
+    const v = live.current.selectedTool === 'volume' && !toolStatesRef.current.volume.resultBuffer ? Math.pow(10, dynamicGainDbRef.current / 20) : 1;
     g.gain.setTargetAtTime(v, ctx.currentTime, 0.015);
   }, []);
 
   useEffect(() => {
     applyGain();
-  }, [selectedTool, dynamicGainDb, applyGain]);
+  }, [selectedTool, dynamicGainDb, applyGain, toolStates.volume.resultBuffer]);
 
   const vocalPreviewTarget: 'vocal' | 'instrumental' =
     vocalExtractTarget === 'both' ? vocalPreviewChoice : vocalExtractTarget;
@@ -600,13 +600,14 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     if (!isActive) stopPlayback();
   }, [isActive, stopPlayback]);
 
-  const desiredRate =
-    selectedTool === 'tempo'
-      ? dynamicTempoSpeed
-      : selectedTool === 'pitch' && !keepTempoOnPitch
-      ? Math.pow(2, dynamicPitchSemitones / 12)
-      : 1;
-  const desiredPreserve = !(selectedTool === 'pitch' && !keepTempoOnPitch);
+  const desiredRate = hasResult
+    ? 1
+    : selectedTool === 'tempo'
+    ? dynamicTempoSpeed
+    : selectedTool === 'pitch' && !keepTempoOnPitch
+    ? Math.pow(2, dynamicPitchSemitones / 12)
+    : 1;
+  const desiredPreserve = hasResult || !(selectedTool === 'pitch' && !keepTempoOnPitch);
 
   const applyRate = () => {
     const a = audioElementRef.current;
@@ -655,6 +656,21 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     if (tool === 'compress') compressChargedRef.current = false;
     setToolStates((prev) => ({ ...prev, [tool]: { ...INITIAL_TOOL_STATE } }));
   }, []);
+
+  // Mengubah pengaturan Volume / Pitch / Tempo membuang hasil lama (atau membatalkan proses yang berjalan),
+  // supaya hasil yang diunduh selalu sesuai pengaturan yang terlihat. Pratinjau langsung kembali aktif.
+  useEffect(() => {
+    const st = toolStatesRef.current.volume;
+    if (st.resultBuffer || st.isProcessing) clearToolResult('volume');
+  }, [dynamicGainDb, clearToolResult]);
+  useEffect(() => {
+    const st = toolStatesRef.current.pitch;
+    if (st.resultBuffer || st.isProcessing) clearToolResult('pitch');
+  }, [dynamicPitchSemitones, keepTempoOnPitch, clearToolResult]);
+  useEffect(() => {
+    const st = toolStatesRef.current.tempo;
+    if (st.resultBuffer || st.isProcessing) clearToolResult('tempo');
+  }, [dynamicTempoSpeed, clearToolResult]);
 
   const handleClearToolResult = (tool: ToolType) => {
     if (live.current.selectedTool === tool) stopPlayback();
@@ -739,7 +755,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       (Object.keys(runIdsRef.current) as ToolType[]).forEach((t) => (runIdsRef.current[t] += 1));
       if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
       compressChargedRef.current = false;
-      chargedSigRef.current = {};
 
       setToolStates(makeInitialStates());
       setAudioFile(file);
@@ -767,7 +782,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       return;
     }
 
-    if (isGranularPitchMode) {
+    if (isGranularPitchMode && !hasResult) {
       if (!decodedBuffer) return;
       const ctx = getAudioContext();
       try {
@@ -853,9 +868,8 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       fileInputRef.current?.click();
       return;
     }
-    if (LIVE_TOOLS.includes(targetTool)) return;
 
-    const inputMsg = checkInputDuration(targetTool, decodedBuffer.duration);
+    const inputMsg = checkInputDuration(targetTool, decodedBuffer.duration) ?? checkOutputDuration(targetTool, predictedOutputSec(targetTool));
     if (inputMsg) {
       setErrorMsg(inputMsg);
       return;
@@ -921,6 +935,25 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
         const tier = compressTiers.find((t) => t.id === (overrideTier || selectedCompressTier)) || compressTiers[2];
         const out = downsampleForCompress(chs, sr, tier.targetRate, tier.isMono);
         outputBuffer = makeBuffer(ctx, out.channels, out.sampleRate);
+      } else if (targetTool === 'volume') {
+        if (dynamicGainDb === 0) outputBuffer = src;
+        else {
+          const { channels: out, clipped } = applyGainDb(chs, dynamicGainDb);
+          outputBuffer = makeBuffer(ctx, out, sr);
+          if (clipped) onSuccessToast('Peringatan: sebagian puncak sinyal terpotong.');
+        }
+      } else if (targetTool === 'pitch') {
+        if (dynamicPitchSemitones === 0) outputBuffer = src;
+        else {
+          const out = await pitchShift(chs, sr, dynamicPitchSemitones, keepTempoOnPitch, dspOpts);
+          outputBuffer = makeBuffer(ctx, out, sr);
+        }
+      } else if (targetTool === 'tempo') {
+        if (Math.abs(dynamicTempoSpeed - 1) < 0.005) outputBuffer = src;
+        else {
+          const out = await timeStretch(chs, sr, dynamicTempoSpeed, dspOpts);
+          outputBuffer = makeBuffer(ctx, out, sr);
+        }
       } else if (targetTool === 'noise_reduction') {
         const out = await spectralNoiseGate(chs, sr, noiseAggression, dspOpts);
         outputBuffer = makeBuffer(ctx, out, sr);
@@ -1015,15 +1048,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     }
   };
 
-  const liveParamSig = (tool: ToolType) => {
-    if (tool === 'volume') return `${loadIdRef.current}|volume|${dynamicGainDb}`;
-    if (tool === 'pitch') return `${loadIdRef.current}|pitch|${dynamicPitchSemitones}|${keepTempoOnPitch}`;
-    return `${loadIdRef.current}|tempo|${dynamicTempoSpeed}`;
-  };
-
-  const liveAlreadyCharged = LIVE_TOOLS.includes(selectedTool) && chargedSigRef.current[selectedTool] === liveParamSig(selectedTool);
-  const liveNeedsPurchase = LIVE_TOOLS.includes(selectedTool) && !isToolsOwned && !liveAlreadyCharged && currentToolQuota <= 0;
-
   const getStaticExportBuffer = (): { buffer: AudioBuffer | null; suffix: string } => {
     const st = toolStates[selectedTool];
     if (selectedTool === 'vocal_separator' && st.vocalBuffers) {
@@ -1037,14 +1061,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
     if (!decodedBuffer || isExporting) return;
 
     const tool = selectedTool;
-    const isLive = LIVE_TOOLS.includes(tool);
-    const sig = isLive ? liveParamSig(tool) : '';
-    const alreadyCharged = isLive && chargedSigRef.current[tool] === sig;
-
-    if (isLive && !isToolsOwned && !alreadyCharged && remainingQuota(tool) <= 0) {
-      goPricing(tool);
-      return;
-    }
 
     if (tool === 'convert' && blockedFormat && selectedExportFormat === blockedFormat) {
       setErrorMsg(`Berkas asal sudah berformat ${blockedFormat}. Pilih format tujuan yang berbeda.`);
@@ -1130,25 +1146,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (custom) {
         buf = custom.buffer;
         suffix = custom.suffix;
-      } else if (tool === 'volume') {
-        if (dynamicGainDb === 0) buf = decodedBuffer;
-        else {
-          const { channels: out, clipped } = applyGainDb(chs, dynamicGainDb);
-          buf = makeBuffer(ctx, out, sr);
-          if (clipped) onSuccessToast('Peringatan: sebagian puncak sinyal terpotong.');
-        }
-      } else if (tool === 'pitch') {
-        if (dynamicPitchSemitones === 0) buf = decodedBuffer;
-        else {
-          const out = await pitchShift(chs, sr, dynamicPitchSemitones, keepTempoOnPitch, dspOpts);
-          buf = makeBuffer(ctx, out, sr);
-        }
-      } else if (tool === 'tempo') {
-        if (Math.abs(dynamicTempoSpeed - 1) < 0.005) buf = decodedBuffer;
-        else {
-          const out = await timeStretch(chs, sr, dynamicTempoSpeed, dspOpts);
-          buf = makeBuffer(ctx, out, sr);
-        }
       } else {
         const st = getStaticExportBuffer();
         buf = st.buffer;
@@ -1162,25 +1159,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (outputLimit) {
         setErrorMsg(outputLimit);
         return;
-      }
-
-      // Volume / Pitch / Tempo diproses (dirender) di sini, jadi jatah dipakai begitu hasilnya berhasil dibuat,
-      // sebelum proses encode & unduh. Gagal/batal mengunduh sesudahnya tidak mengembalikan jatah; pengaturan yang sama
-      // tidak dihitung dua kali (kunci = tanda tangan pengaturan).
-      if (isLive && !isToolsOwned && !alreadyCharged) {
-        const liveRes = await reserveQuota(tool, `${sig}|${pageNonce}`);
-        if (stale()) {
-          void refundReservation(tool, liveRes);
-          return;
-        }
-        if (!liveRes.allowed) {
-          setQuotaMap(readQuota());
-          if (liveRes.loginRequired) { toastRef.current('Masuk ke akun dulu untuk memakai jatah gratis Audio Tools.'); (onQuotaExhausted ?? onUnlockEditor)(); }
-          else if (liveRes.unavailable) toastRef.current('Jatah belum bisa diperiksa karena server tidak terjangkau. Periksa koneksi lalu coba lagi.');
-          else goPricing(tool);
-          return;
-        }
-        chargedSigRef.current[tool] = sig;
       }
 
       const exported = await exportAudioFile(buf, `${baseName}_${suffix}`, fmt, {
@@ -1252,15 +1230,13 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   const isLiveTool = LIVE_TOOLS.includes(selectedTool);
   const isProcessing = currentToolState.isProcessing;
   const staticNeedsPurchase =
-    !isLiveTool &&
     !isToolsOwned &&
     currentToolQuota <= 0 &&
     !(selectedTool === 'compress' && compressChargedRef.current);
 
-  const hasPaidWork = isLiveTool
-    ? liveAlreadyCharged
-    : Boolean(currentToolState.resultBuffer || currentToolState.vocalBuffers || currentToolState.isProcessing) ||
-      (selectedTool === 'compress' && compressChargedRef.current);
+  const hasPaidWork =
+    Boolean(currentToolState.resultBuffer || currentToolState.vocalBuffers || currentToolState.isProcessing) ||
+    (selectedTool === 'compress' && compressChargedRef.current);
   const panelLocked = !isToolsOwned && !selectedExtra && currentToolQuota <= 0 && !hasPaidWork;
   const guardBuiltin = quotaGuardProps(panelLocked, () => goPricing(selectedTool));
 
@@ -1298,7 +1274,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const playLabel = isPlaying
     ? 'Berhenti'
-    : isLiveTool || (selectedTool === 'trim' && !hasResult)
+    : (isLiveTool || selectedTool === 'trim') && !hasResult
     ? 'Dengar Audio (Live Preview)'
     : hasResult
     ? selectedTool === 'vocal_separator'
@@ -1852,8 +1828,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
                 <div className="flex items-center gap-2.5 flex-wrap">
-                  {!isLiveTool &&
-                    (staticNeedsPurchase ? (
+                  {(staticNeedsPurchase ? (
                       <button
                         type="button"
                         data-quota-free
@@ -1907,22 +1882,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                   )}
                 </div>
 
-                {(hasResult || isLiveTool) && decodedBuffer && (
+                {hasResult && decodedBuffer && (
                   <div className="flex items-center gap-2">
                     <span className="text-emerald-400 text-xs font-bold flex items-center gap-1">
                       <CheckCircle className="w-3.5 h-3.5" /> Siap
                     </span>
-                    {liveNeedsPurchase ? (
-                      <button
-                        type="button"
-                        data-quota-free
-                        onClick={onUnlockEditor}
-                        className={BTN_PRIMARY}
-                      >
-                        <Lock className="w-3.5 h-3.5" />
-                        <span>Beli Audio Tools — Rp{toolsPrice.toLocaleString('id-ID')}</span>
-                      </button>
-                    ) : (
                       <button
                         type="button"
                         onClick={() => handleDownloadFile()}
@@ -1943,7 +1907,6 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                           </>
                         )}
                       </button>
-                    )}
                   </div>
                 )}
               </div>

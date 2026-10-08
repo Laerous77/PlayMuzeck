@@ -56,7 +56,7 @@ export interface AudioExtraToolsProps {
 export interface ExtraPickerHandle { open: () => void; label: string; loading: boolean }
 
 /** Alat tambahan yang memakai tombol "Unggah Berkas" di header (bukan pemilih berkas di dalam panel). */
-export const EXTRA_FILE_TOOLS: ExtraToolId[] = ['merge', 'loop', 'metadata', 'clean'];
+export const EXTRA_FILE_TOOLS: ExtraToolId[] = ['merge', 'loop', 'metadata', 'clean', 'bpm', 'pitch_match'];
 
 interface ExtraFileToolProps {
   gate?: AudioExtraToolsProps['gate'];
@@ -555,25 +555,42 @@ const MergeFadeTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = f
 };
 
 // 2. BPM & Kunci
-const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
+const BpmKeyTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false, onPicker }) => {
   const [fileName, setFileName] = useState('');
+  const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
+  const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [res, setRes] = useState<{ bpm: ReturnType<typeof detectBpm>; key: ReturnType<typeof detectKey>; seconds: number } | null>(null);
+  // Naik setiap kali berkas berubah, supaya hasil analisis lama yang selesai terlambat dibuang (dan tidak memakan jatah).
+  const verRef = useRef(0);
+  useEffect(() => { verRef.current += 1; }, [buffer]);
 
-  const onFiles = async ([file]: File[]) => {
+  const onFiles = async ([f]: File[]) => {
+    setLoading(true); setErr(null); setRes(null);
+    try { setBuffer(await decodeFile(f, 'bpm')); setFileName(f.name); }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
+    finally { setLoading(false); }
+  };
+  const { input, open } = useFileInput({ onFiles });
+  useRegisterPicker(onPicker, isActive, open, loading ? 'Membaca...' : buffer ? 'Ganti Berkas' : 'Unggah Berkas', loading);
+
+  const run = async () => {
+    if (!buffer) return;
     if (!quotaAvailable(gate, 'bpm')) return;
-    setBusy(true); setErr(null); setRes(null); setFileName(file.name);
+    const ver = verRef.current;
+    setBusy(true); setErr(null); setRes(null);
     try {
-      const buf = await decodeFile(file, 'bpm');
       await tick();
-      const ch = viewChannels(buf);
-      const bpm = detectBpm(ch, buf.sampleRate);
-      const key = detectKey(ch, buf.sampleRate);
+      const ch = viewChannels(buffer);
+      const bpm = detectBpm(ch, buffer.sampleRate);
+      const key = detectKey(ch, buffer.sampleRate);
+      if (ver !== verRef.current) return;
       if (!bpm && !key) { setErr('Tidak ada pola yang bisa dianalisis. Pastikan berkas cukup panjang (minimal ±5 detik) dan tidak senyap.'); return; }
       // Jatah dipakai sekarang: audio sudah berhasil dianalisis.
-      if (!(await chargeRun(gate, 'bpm', newRunKey('bp')))) return;
-      setRes({ bpm, key, seconds: buf.duration });
+      if (!(await chargeRun(gate, 'bpm', newRunKey('bp'), () => ver === verRef.current))) return;
+      setRes({ bpm, key, seconds: buffer.duration });
+      toast?.('BPM & Kunci selesai dianalisis.');
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal menganalisis.'); }
     finally { setBusy(false); }
   };
@@ -587,12 +604,31 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
   }, [res, fileName]);
 
   return (
-    <Panel title="BPM & Kunci" info={['Pilih lagu, dan hasilnya langsung dianalisis.', 'Mendeteksi tempo lagu serta kunci nada mayor/minor.', `Durasi berkas maks. ${limitLabelFor('bpm')}.`]}>
-      <FilePicker label={busy ? 'Menganalisis…' : 'Pilih lagu untuk dianalisis'} onFiles={onFiles} disabled={busy}
-        onBeforePick={() => { if (gate?.exhausted('bpm')) { gate.blocked('bpm'); return false; } return true; }} />
-      <ErrorNote msg={err} />
-      {res && (
-        <div className="space-y-3">
+    <>
+      {input}
+      <ToolFrame
+        title="BPM & Kunci"
+        info={['Unggah lagu lalu jalankan analisis.', 'Mendeteksi tempo lagu serta kunci nada mayor/minor.', `Durasi berkas maks. ${limitLabelFor('bpm')}.`]}
+        file={buffer ? { name: fileName, meta: `${buffer.duration.toFixed(1)}s` } : null}
+        emptyNotice={!buffer ? 'Unggah berkas audio (atau video untuk ekstrak audio) terlebih dahulu untuk memakai alat ini.' : null}
+        limitText={`Durasi berkas maks. ${limitLabelFor('bpm')} untuk alat ini.`}
+        error={err}
+        footer={
+          <ToolFooter
+            formatRow={null}
+            runLabel="BPM & Kunci" onRun={buffer ? run : open} running={busy}
+            ready={Boolean(res)} onClear={() => setRes(null)}
+            downloadLabel="Unduh laporan (.txt)" downloading={false}
+            onDownload={() => { downloadBlob(new Blob([report], { type: 'text/plain;charset=utf-8' }), `PlayMuzeck_Analisis_${baseName(fileName)}.txt`); toast?.('Laporan diunduh.'); }}
+            after={res ? (
+              <button type="button" className={btnGhost} onClick={() => { void navigator.clipboard?.writeText(report); toast?.('Hasil disalin.'); }}>
+                <Copy className="w-4 h-4" /><span>Salin hasil</span>
+              </button>
+            ) : null}
+          />
+        }
+      >
+        {res && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="rounded-xl bg-black/50 border border-white/5 p-4">
               <div className="text-[11px] font-bold text-gray-400">TEMPO</div>
@@ -605,17 +641,9 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
               {res.key && <div className="text-[11px] text-gray-400 mt-1">Camelot {res.key.camelot} · relatif {res.key.relative}</div>}
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className={btnPrimary} onClick={() => { downloadBlob(new Blob([report], { type: 'text/plain;charset=utf-8' }), `PlayMuzeck_Analisis_${baseName(fileName)}.txt`); toast?.('Laporan diunduh.'); }}>
-              <Download className="w-4 h-4" /><span>Unduh laporan (.txt)</span>
-            </button>
-            <button type="button" className={btnGhost} onClick={() => { void navigator.clipboard?.writeText(report); toast?.('Hasil disalin.'); }}>
-              <Copy className="w-4 h-4" /><span>Salin hasil</span>
-            </button>
-          </div>
-        </div>
-      )}
-    </Panel>
+        )}
+      </ToolFrame>
+    </>
   );
 };
 
@@ -1771,12 +1799,12 @@ export const ExtraToolPanel: React.FC<{
       {mounted('metadata') && <div className={show('metadata')} {...guard('metadata')}><MetadataTool gate={gate} toast={onSuccessToast} isActive={active === 'metadata'} onPicker={onPicker} /></div>}
       {mounted('clean') && <div className={show('clean')} {...guard('clean')}><CleanTool gate={gate} toast={onSuccessToast} isActive={active === 'clean'} onPicker={onPicker} /></div>}
       {mounted('recorder') && <div className={show('recorder')} {...guard('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('bpm') && <div className={show('bpm')} {...guard('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('bpm') && <div className={show('bpm')} {...guard('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} isActive={active === 'bpm'} onPicker={onPicker} /></div>}
       {mounted('metronome') && <div className={show('metronome')} {...guard('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('tuner') && <div className={show('tuner')} {...guard('tuner')}><TunerTool gate={gate} /></div>}
       {mounted('pitch_detect') && <div className={show('pitch_detect')} {...guard('pitch_detect')}><PitchDetectTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('vocal_range') && <div className={show('vocal_range')} {...guard('vocal_range')}><VocalRangeTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('pitch_match') && <div className={show('pitch_match')} {...guard('pitch_match')}><PitchMatchTool gate={gate} onSuccessToast={onSuccessToast} studioActiveTrack={studioActiveTrack} /></div>}
+      {mounted('pitch_match') && <div className={show('pitch_match')} {...guard('pitch_match')}><PitchMatchTool gate={gate} onSuccessToast={onSuccessToast} studioActiveTrack={studioActiveTrack} isActive={active === 'pitch_match'} onPicker={onPicker} /></div>}
     </div>
   );
 };
