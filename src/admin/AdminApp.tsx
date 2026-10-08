@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   BarChart3,
   Brain,
+  ClipboardCheck,
   LogOut,
   Music,
   Palette,
@@ -32,15 +33,17 @@ import { ContentPage } from './pages/ContentPage';
 import { OpsPage } from './pages/OpsPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { AdminsPage } from './pages/AdminsPage';
+import { QuizReviewPage } from './pages/QuizReviewPage';
 import { applyCachedPalette, applyPalette } from '../theme/theme';
 import { ADMIN_PALETTE_EVENT, adminVars, loadAdminPalette } from './adminTheme';
 
-type AdminPage = 'dashboard' | 'audio' | 'content' | 'ops' | 'settings' | 'admins';
+type AdminPage = 'dashboard' | 'audio' | 'content' | 'quizreview' | 'ops' | 'settings' | 'admins';
 
 const NAV: Array<{ id: AdminPage; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'dashboard', label: 'Analitik', icon: BarChart3 },
   { id: 'audio', label: 'Katalog Audio', icon: Music },
   { id: 'content', label: 'Topik & Deck', icon: Brain },
+  { id: 'quizreview', label: 'Tinjau Kuis', icon: ClipboardCheck },
   { id: 'ops', label: 'Pesanan & User', icon: ShoppingBag },
   { id: 'settings', label: 'Tema & Pengaturan', icon: Palette },
   { id: 'admins', label: 'Admin & Akses', icon: Users },
@@ -353,6 +356,7 @@ export default function AdminApp() {
           {page === 'dashboard' && <DashboardPage />}
           {page === 'audio' && <AudioPage />}
           {page === 'content' && <ContentPage />}
+          {page === 'quizreview' && <QuizReviewPage />}
           {page === 'ops' && <OpsPage />}
           {page === 'settings' && <SettingsPage />}
           {page === 'admins' && <AdminsPage isSuperAdmin={Boolean(me?.isSuperAdmin)} currentEmail={me?.email} />}

@@ -1,6 +1,7 @@
 // src/components/PusatKuis/QuizCommunityHub.tsx
 // Segmen gabungan "Komunitas & Peringkat" Pusat Kuis: satu tempat untuk menelusuri/membagikan kuis
-// buatan pengguna (Komunitas Kuis) dan melihat Papan Peringkat (harian, bulanan, sepanjang waktu).
+// buatan pengguna (Komunitas Kuis, hanya yang sudah lolos pemeriksaan) dan melihat Papan Peringkat (harian, bulanan,
+// sepanjang waktu) yang berasal dari multiplayer Arena Global.
 import React, { useState } from 'react';
 import { Globe, Trophy } from 'lucide-react';
 import type { Deck } from '../../types';
@@ -24,7 +25,7 @@ interface QuizCommunityHubProps {
   /** Kuis buatan Kuis Editor milik akun ini (kandidat untuk dibagikan). */
   ownDecks: Deck[];
   onPlay: (deck: Deck) => void;
-  /** Dipakai tombol "Main Multiplayer" di papan peringkat (membuka modal Multiplayer Online). */
+  /** Dipakai tombol "Main Multiplayer" di papan peringkat (membuka modal Arena Global). */
   onPlayNow: () => void;
   onOpenLibrary: () => void;
   onToast?: (msg: string) => void;

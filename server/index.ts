@@ -12,6 +12,7 @@ import { pool, initDatabase, ensureAdminSchema, SUPER_ADMIN_EMAIL } from './db';
 import rateLimit from 'express-rate-limit';
 import { fileURLToPath } from 'url'; 
 import { attachMultiplayerSocket } from './multiplayerSocket';
+import { getArenaSummary } from './globalArena';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
@@ -27,7 +28,7 @@ import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
 import { isDeliverableEmail } from './auth/emailCheck';
 import { turnstileEnabled } from './auth/turnstile';
 import { createPaymentRouter } from './paymentRoutes';
-import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame } from './quizCommunityRoutes';
+import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame, pickApprovedCommunityDeck } from './quizCommunityRoutes';
 import {
   sendCustomAudioInquiryNotifications,
   sendContactFeedbackNotifications,
@@ -325,6 +326,12 @@ app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, getDonatio
 // Baca = publik; bagikan kuis = hanya pemilik Kuis Editor (dicek di server); catat skor = akun login.
 app.use(createQuizCommunityRouter({ db: pool, requireUser, requireAdmin, resolveEmail: softEmail }));
 startQuizCommunitySweeper(pool);
+
+// Ringkasan Arena Global (jumlah pemain online) untuk kartu di Pusat Kuis. Publik & ringan: tanpa data pemain.
+app.get('/api/public/arena-summary', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(getArenaSummary());
+});
 
 const OWN_ONLY_MSG = 'Kamu hanya bisa mengubah audio/kuis buatanmu sendiri.';
 const adminEmailOf = (req: express.Request): string | null => (req as any).adminEmail ? String((req as any).adminEmail).toLowerCase() : null;
@@ -1421,7 +1428,9 @@ const httpServer = app.listen(PORT, '0.0.0.0', () => {
 
 // Multiplayer: kenali akun login dari cookie sesi saat socket tersambung, supaya blokir host
 // berlaku per AKUN (bukan hanya per browser). Memakai requireAuth yang sama dengan route lain.
-attachMultiplayerSocket(httpServer, (cookieHeader, handshake) =>
+attachMultiplayerSocket(
+  httpServer,
+  (cookieHeader, handshake) =>
   new Promise<string | null>((resolve) => {
     if (!cookieHeader) return resolve(null);
     const timer = setTimeout(() => resolve(null), 3000);
@@ -1462,6 +1471,10 @@ attachMultiplayerSocket(httpServer, (cookieHeader, handshake) =>
       }
     });
   }),
-  // Permainan multiplayer selesai -> skor (dinilai server) dicatat ke papan peringkat.
-  (game) => recordMultiplayerGame(pool, game)
+  // Arena Global: kuis Komunitas yang SUDAH DISETUJUI ikut rotasi, dan skor (dinilai server) dicatat ke papan peringkat saat tuntas.
+  {
+    pickCommunityDeck: () => pickApprovedCommunityDeck(pool),
+    onFinished: (game) => recordMultiplayerGame(pool, game),
+  }
 );
+

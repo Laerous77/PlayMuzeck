@@ -203,6 +203,17 @@ s1b.fire('arena:reaction', { emoji: '🔥' });
 s1b.fire('arena:reaction', { emoji: '<script>' });
 ok('emoji terdaftar diteruskan, lainnya ditolak', s1b.all('arena:reactionReceived').length === before + 1);
 
+// Nama tampilan kasar diganti \"Pemain\"; nama biasa dipertahankan
+ok('nama biasa dipertahankan', arena.safeDisplayName('Budi Santoso') === 'Budi Santoso');
+for (const bad of ['anjing banget', 'n4zi', 'nazi', 'k0nt0l', 'a.n.j.i.n.g', 'bab1', 'kontol123']) {
+  ok(`nama kasar "${bad}" diganti Pemain`, arena.safeDisplayName(bad) === 'Pemain');
+}
+for (const fine of ['Nazirah', 'Taira', 'Dewi Cantik', 'Scunthorpe', 'Cukup Sabar', 'Dickson']) {
+  ok(`nama wajar "${fine}" tidak terblokir`, arena.safeDisplayName(fine) === fine);
+}
+ok('nama kosong menjadi Pemain', arena.safeDisplayName('   ') === 'Pemain');
+ok('nama berisi tag HTML dibersihkan', !/[<>]/.test(arena.safeDisplayName('<b>Andi</b>')));
+
 // Identitas tidak valid
 const bogus = io.connect();
 bogus.fire('arena:join', { clientId: 'x', name: 'Z' });

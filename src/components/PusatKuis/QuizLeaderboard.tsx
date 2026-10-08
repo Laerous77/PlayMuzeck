@@ -1,6 +1,6 @@
 // src/components/PusatKuis/QuizLeaderboard.tsx
 // Papan Peringkat Pusat Kuis (tab di segmen "Komunitas & Peringkat"): harian, bulanan, dan sepanjang waktu.
-// Isinya HANYA skor dari mode Multiplayer Online. Bisa dilihat siapa saja.
+// Isinya HANYA skor dari multiplayer Arena Global (ruang publik tanpa kode ruangan). Bisa dilihat siapa saja.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Trophy, Crown, Medal, RefreshCw, Play, Users, Info, Clock, AlertTriangle } from 'lucide-react';
 import {
@@ -218,7 +218,7 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
               onClick={onPlayNow}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-black cursor-pointer active:scale-95 transition-all"
             >
-              <Play className="w-3.5 h-3.5 fill-current" /> Main Multiplayer
+              <Play className="w-3.5 h-3.5 fill-current" /> Gabung Arena Global
             </button>
           </div>
         ) : (
@@ -242,13 +242,13 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
         {/* Ajakan bila belum punya skor */}
         {isLoggedIn && data && !data.me && entries.length > 0 && (
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-accent2/10 border border-accent2/30">
-            <p className="text-xs text-gray-200">Kamu belum punya skor di periode ini. Selesaikan satu permainan Multiplayer Online untuk masuk papan peringkat.</p>
+            <p className="text-xs text-gray-200">Kamu belum punya skor di periode ini. Selesaikan satu permainan di Arena Global untuk masuk papan peringkat.</p>
             <button
               type="button"
               onClick={onPlayNow}
               className="shrink-0 px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 text-xs font-black cursor-pointer active:scale-95 transition-all"
             >
-              Main Multiplayer
+              Gabung Arena Global
             </button>
           </div>
         )}
@@ -260,10 +260,13 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
           <Info className="w-4 h-4 text-accent" /> Cara poin dihitung
         </h3>
         <ul className="text-xs text-gray-300 space-y-1.5 leading-relaxed list-disc pl-5">
-          <li>Papan peringkat <strong className="text-white">hanya berasal dari mode Multiplayer Online</strong>. Sesi Solo, Pass &amp; Play, dan Host tidak dihitung.</li>
-          <li>Setiap jawaban benar bernilai 10 poin, ditambah bonus 20% bila semua soal benar. Skor dinilai server dan dicatat otomatis saat permainan selesai sampai soal terakhir (bukan diakhiri host).</li>
+          <li>Papan peringkat <strong className="text-white">hanya berasal dari multiplayer Arena Global</strong>: ruang publik tanpa kode ruangan, tinggal tekan Gabung. Sesi Solo dan Pass &amp; Play tidak dihitung.</li>
+          <li>Setiap jawaban benar bernilai 10 poin, ditambah bonus 20% bila semua soal benar. Skor dinilai server dan dicatat otomatis saat permainan selesai sampai soal terakhir. Keluar di tengah permainan berarti skor tidak dicatat.</li>
           <li>Syaratnya: minimal 5 soal dan minimal 2 pemain yang masuk akun. Per kuis, hanya skor <strong className="text-white">terbaik</strong> dalam periode yang dihitung, jadi mengulang kuis yang sama tidak menggandakan poin. Mainkan kuis lain untuk menambah poin.</li>
-          <li>Berlaku untuk deck bawaan dan starter. Kuis pribadi dan kuis <button type="button" onClick={onOpenCommunity} className="underline text-accent2 hover:text-accent2/80 cursor-pointer">Komunitas</button> tidak dihitung.</li>
+          <li>
+            Berlaku untuk deck bawaan, starter, dan kuis <button type="button" onClick={onOpenCommunity} className="underline text-accent2 hover:text-accent2/80 cursor-pointer">Komunitas</button> yang
+            sudah lolos pemeriksaan. Skor di kuis buatanmu sendiri tidak dihitung. Kuis pribadi tidak pernah tampil di Arena Global.
+          </li>
           <li>Harian dan bulanan mengikuti waktu Indonesia Barat (WIB). Nama dan foto profil pemain tampil di papan ini.</li>
         </ul>
       </div>

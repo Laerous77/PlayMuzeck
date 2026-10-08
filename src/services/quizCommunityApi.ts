@@ -1,6 +1,7 @@
 // src/services/quizCommunityApi.ts
 // Klien untuk papan peringkat & Komunitas Kuis (server/quizCommunityRoutes.ts).
-// Membaca = publik. Membagikan kuis = akun login (cookie sesi dibawa otomatis oleh installAuthFetch).
+// Membaca = publik (hanya kuis yang sudah DISETUJUI). Membagikan kuis = akun login (cookie sesi dibawa otomatis oleh installAuthFetch).
+// Kuis yang dibagikan diperiksa dulu (aturan + AI + admin) sebelum tayang; lihat server/quizModeration.ts.
 import type { Deck, QuizQuestion } from '../types';
 
 export type LeaderboardPeriod = 'daily' | 'monthly' | 'all';
@@ -47,6 +48,9 @@ export interface SharedQuizFull extends SharedQuizSummary {
   settings: { penaltyPercent?: number; scoreUnit?: 'point' | 'percent' };
 }
 
+/** pending = sedang diperiksa / menunggu admin, approved = tayang, rejected = ditolak (alasan di `moderationReason`). */
+export type ShareStatus = 'pending' | 'approved' | 'rejected';
+
 export interface MySharedQuiz {
   id: string;
   deckId: string;
@@ -55,6 +59,29 @@ export interface MySharedQuiz {
   questionCount: number;
   playCount: number;
   updatedAt: string;
+  moderationStatus: ShareStatus;
+  /** Alasan penolakan, atau keterangan mengapa masih menunggu. */
+  moderationReason: string;
+  moderatedAt: string | null;
+}
+
+export interface ShareResult {
+  id: string;
+  deckId: string;
+  /** true = kuis ini sudah pernah dibagikan sebelumnya (diperbarui). */
+  updated: boolean;
+  questionCount: number;
+  moderationStatus: ShareStatus;
+  moderationReason: string;
+}
+
+/** Ringkasan Arena Global (multiplayer publik) untuk kartu di Pusat Kuis. */
+export interface ArenaSummary {
+  playersOnline: number;
+  channels: number;
+  phase: 'lobby' | 'question' | 'reveal' | 'podium';
+  deckTitle: string;
+  phaseEndsAt: number | null;
 }
 
 export interface MySharingState {
@@ -94,7 +121,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 export const fetchLeaderboard = (period: LeaderboardPeriod) =>
   request<LeaderboardData>(`/api/public/quiz-leaderboard?period=${period}`);
 
-// Skor TIDAK dikirim dari klien: server mencatatnya sendiri saat permainan Multiplayer Online selesai.
+// Skor TIDAK dikirim dari klien: server mencatatnya sendiri saat permainan Arena Global selesai.
+
+export const fetchArenaSummary = () => request<ArenaSummary>('/api/public/arena-summary');
 
 /* ───────── Komunitas kuis ───────── */
 
@@ -115,7 +144,7 @@ export const countSharedQuizPlay = (id: string) =>
 export const fetchMySharing = () => request<MySharingState>('/api/user/shared-quizzes/mine');
 
 export const shareQuiz = (deck: Deck) =>
-  request<{ id: string; deckId: string; updated: boolean; questionCount: number }>('/api/user/shared-quizzes', {
+  request<ShareResult>('/api/user/shared-quizzes', {
     method: 'POST',
     body: JSON.stringify({
       deck: {
@@ -132,7 +161,7 @@ export const shareQuiz = (deck: Deck) =>
 export const unshareQuiz = (id: string) =>
   request<{ success: boolean }>(`/api/user/shared-quizzes/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
-/** Ubah kuis komunitas menjadi Deck yang bisa dimainkan QuizPlayer. */
+/** Ubah kuis komunitas menjadi Deck yang bisa dimainkan QuizPlayer (solo). Di Arena Global, server sendiri yang memilih kuis komunitas yang disetujui. */
 export function sharedQuizToDeck(q: SharedQuizFull): Deck {
   const deck: any = {
     id: q.deckId,

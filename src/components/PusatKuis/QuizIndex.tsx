@@ -1,5 +1,5 @@
 // src/components/PusatKuis/QuizIndex.tsx
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Download,
   Play,
@@ -15,6 +15,7 @@ import {
   History,
   Trophy,
   Globe,
+  UserPlus,
 } from 'lucide-react';
 import { QuizInstall } from './QuizInstall';
 import { QuizLibrary } from './QuizLibrary';
@@ -25,6 +26,8 @@ import { QuizResultHistory } from './QuizResultHistory';
 import { QuizCommunityHub } from './QuizCommunityHub';
 import { normalizeQuizSegment, type QuizSegment } from './quizSegments';
 import { MultiplayerArenaModal } from './MultiplayerArenaModal';
+import { MultiplayerInviteModal } from './MultiplayerInviteModal';
+import { fetchArenaSummary, type ArenaSummary } from '../../services/quizCommunityApi';
 import { generateStandaloneQuizHtml } from '../../services/quizStandalone';
 import { Deck, Topic, CartItem } from '../../types';
 import { STARTER_DECKS, BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '../../data/quiz';
@@ -94,13 +97,33 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     shuffleQuestions: boolean;
   } | null>(null);
   const [isMultiplayerOpen, setIsMultiplayerOpen] = useState(false);
-  // Pesan saat dikeluarkan host dari ruangan multiplayer; hilang sendiri setelah 5 detik.
+  // Mode Undangan (ruangan berkode, tidak masuk Papan Peringkat).
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  // Pesan saat dikeluarkan host dari ruangan undangan; hilang sendiri setelah 5 detik.
   const [kickNotice, setKickNotice] = useState('');
-  React.useEffect(() => {
+  useEffect(() => {
     if (!kickNotice) return;
     const t = setTimeout(() => setKickNotice(''), 5000);
     return () => clearTimeout(t);
   }, [kickNotice]);
+  // Jumlah pemain Arena Global yang sedang online (kartu Multiplayer). Gagal diambil = kartu tampil tanpa angka.
+  const [arenaSummary, setArenaSummary] = useState<ArenaSummary | null>(null);
+  useEffect(() => {
+    if (!isOnline) return;
+    let alive = true;
+    const load = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchArenaSummary()
+        .then((s) => alive && setArenaSummary(s))
+        .catch(() => alive && setArenaSummary(null));
+    };
+    load();
+    const t = window.setInterval(load, 20_000);
+    return () => {
+      alive = false;
+      window.clearInterval(t);
+    };
+  }, [isOnline]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // 3 deck gratis permanen selalu berasal dari berkas JSON (src/data/quiz/decks/deck-starter-*.json)
@@ -284,7 +307,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               {activeSection === 'pwa' && 'Pusat instalasi aplikasi web mandiri PWA & berkas aplikasi luring utuh.'}
               {activeSection === 'play' && 'Pilih paket kuis yang dimuat, tentukan 4 mode permainan, dan mainkan langsung.'}
               {activeSection === 'all' && 'Katalog seluruh tema kuis, 3 starter deck bawaan, dan kreator kuis kustom.'}
-              {activeSection === 'community' && 'Mainkan & bagikan kuis buatan pengguna, dan lihat peringkat pemain multiplayer: harian, bulanan, dan sepanjang waktu.'}
+              {activeSection === 'community' && 'Mainkan & bagikan kuis buatan pengguna (setelah lolos pemeriksaan), dan lihat peringkat pemain Arena Global: harian, bulanan, dan sepanjang waktu.'}
             </p>
           </div>
         </div>
@@ -468,7 +491,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                 Pilih Mode Permainan:
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div
                   onClick={() => launchSession('solo')}
                   className="p-5 rounded-2xl bg-black/40 hover:bg-accent2 border border-white/10 hover:border-accent2 transition-all cursor-pointer group flex flex-col justify-between"
@@ -537,9 +560,27 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                     <Users className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-sm font-black text-white group-hover:text-white">3. Multiplayer Online</h4>
+                    <h4 className="text-sm font-black text-white group-hover:text-white">3. Arena Global</h4>
                     <p className="text-[11px] text-gray-400 group-hover:text-white/90 mt-1 leading-relaxed">
-                      Tanding adu cepat dan ketepatan skor bersama teman melalui jaringan online.
+                      Multiplayer publik tanpa kode ruangan: tinggal gabung, lawan pemain lain, skor masuk Papan Peringkat.
+                      {arenaSummary && arenaSummary.playersOnline > 0 && (
+                        <span className="block mt-1 font-bold text-emerald-300 group-hover:text-white">{arenaSummary.playersOnline} pemain online sekarang</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => setIsInviteOpen(true)}
+                  className="p-5 rounded-2xl bg-black/40 hover:bg-accent2 border border-white/10 hover:border-accent2 transition-all cursor-pointer group flex flex-col justify-between"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 group-hover:bg-black text-emerald-400 group-hover:text-white flex items-center justify-center mb-3">
+                    <UserPlus className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white group-hover:text-white">4. Mode Undangan</h4>
+                    <p className="text-[11px] text-gray-400 group-hover:text-white/90 mt-1 leading-relaxed">
+                      Buat ruangan berkode dan ajak teman/kelas main bareng. Seru-seruan saja: skor tidak masuk Papan Peringkat.
                     </p>
                   </div>
                 </div>
@@ -549,7 +590,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                     <div className="w-10 h-10 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center mb-3">
                       <Mic className="w-5 h-5" />
                     </div>
-                    <h4 className="text-sm font-black text-white">4. Host / Kuis Master</h4>
+                    <h4 className="text-sm font-black text-white">5. Host / Kuis Master</h4>
                     <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
                       Bertindak sebagai pemandu kuis dengan kunci jawaban &amp; papan skor hingga 10 regu.
                     </p>
@@ -622,7 +663,8 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
       )}
 
       {/* SEGMEN 4: KOMUNITAS & PERINGKAT (Komunitas Kuis + Papan Peringkat dalam satu tempat).
-          Baca & main: siapa saja; bagikan kuis: pemilik Kuis Editor; catat skor: akun login. */}
+          Baca & main: siapa saja (hanya kuis yang sudah disetujui); bagikan kuis: pemilik Kuis Editor;
+          catat skor: akun login di Arena Global. */}
       {activeSection === 'community' && (
         <QuizCommunityHub
           isLoggedIn={isLoggedIn}
@@ -650,7 +692,8 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
       {/* MODAL RIWAYAT HASIL (rincian jawaban per soal) */}
       {isHistoryOpen && <QuizResultHistory onClose={() => setIsHistoryOpen(false)} />}
 
-      {/* NOTIFIKASI DIKELUARKAN HOST */}
+
+      {/* NOTIFIKASI DIKELUARKAN HOST (Mode Undangan) */}
       {kickNotice && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-60 max-w-[92vw] px-4 py-3 rounded-xl bg-red-900/90 border border-red-500/40 text-xs sm:text-sm text-red-100 font-bold shadow-2xl flex items-center gap-3">
           <span>{kickNotice}</span>
@@ -658,10 +701,20 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
         </div>
       )}
 
-      {/* MODAL MULTIPLAYER */}
+      {/* MODAL ARENA GLOBAL (multiplayer publik, tanpa kode ruangan) */}
       <MultiplayerArenaModal
         isOpen={isMultiplayerOpen}
         onClose={() => setIsMultiplayerOpen(false)}
+        isOnline={isOnline}
+        userNickname={userNickname}
+        userAvatarUrl={userAvatarUrl}
+        userFrameId={userFrameId}
+      />
+
+      {/* MODAL MODE UNDANGAN (ruangan berkode; tidak masuk Papan Peringkat) */}
+      <MultiplayerInviteModal
+        isOpen={isInviteOpen}
+        onClose={() => setIsInviteOpen(false)}
         onKicked={(msg) => {
           onSectionChange?.('play');
           setKickNotice(msg);

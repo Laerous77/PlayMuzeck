@@ -17,6 +17,8 @@
 import type { Server, Socket } from 'socket.io';
 import { randomBytes, randomInt } from 'crypto';
 import { BUILTIN_DECKS } from '../src/data/quiz/index';
+import { ruleScan } from './quizModeration';
+import { isBadName } from './nameFilter';
 
 /* ───────────────────────────── Pengaturan ───────────────────────────── */
 
@@ -135,6 +137,20 @@ const cleanText = (v: unknown, max: number) =>
     .replace(/[\u0000-\u001f\u007f<>]/g, '')
     .trim()
     .slice(0, max);
+/** Nama tampilan di ruang publik: yang memuat kata kasar / SARA / seksual diganti \"Pemain\" (memakai pemindai aturan yang sama dengan moderasi kuis). */
+export function safeDisplayName(raw: unknown): string {
+  const name = cleanText(raw, 40) || 'Pemain';
+  // Filter khusus nama (leetspeak, huruf dipisah, kata kasar sehari-hari) — lihat nameFilter.ts.
+  if (isBadName(name)) return 'Pemain';
+  try {
+    const report = ruleScan({ title: name, description: '', questions: [] });
+    if (report.flags.some((f) => f.severity !== 'low')) return 'Pemain';
+  } catch {
+    /* pemindai gagal: pakai nama apa adanya (sudah dibersihkan dari karakter berbahaya) */
+  }
+  return name;
+}
+
 function cleanAvatar(v: unknown): string {
   const s = String(v ?? '').trim();
   if (!s || s.length > 500) return '';
@@ -542,7 +558,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
         const p = existing.players.get(key)!;
         // Pembaruan nama/foto hanya di lobi supaya identitas tidak berubah di tengah permainan.
         if (existing.phase === 'lobby') {
-          p.name = cleanText(payload?.name, 40) || p.name;
+          p.name = payload?.name ? safeDisplayName(payload.name) : p.name;
           p.avatarUrl = cleanAvatar(payload?.avatarUrl);
           p.frameId = cleanText(payload?.frameId, 40) || 'none';
         }
@@ -553,7 +569,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       if (!ch) return void socket.emit('arena:error', 'Arena Global sedang penuh. Coba lagi beberapa saat.');
 
       const taken = new Set(Array.from(ch.players.values()).map((x) => x.name.toLowerCase()));
-      let name = cleanText(payload?.name, 40) || 'Pemain';
+      let name = safeDisplayName(payload?.name);
       if (taken.has(name.toLowerCase())) {
         const base = name.slice(0, 36);
         let n = 2;

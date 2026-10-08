@@ -1,5 +1,7 @@
 // src/components/PusatKuis/QuizCommunity.tsx
-// Segmen "Komunitas Kuis": semua orang bisa menelusuri & memainkan kuis yang dibagikan pengguna lain.
+// Segmen "Komunitas Kuis": semua orang bisa menelusuri & memainkan kuis yang dibagikan pengguna lain
+// (hanya yang sudah LOLOS PEMERIKSAAN: aturan + AI + admin). Kuis yang disetujui bisa dimainkan solo dan otomatis ikut
+// rotasi Arena Global (multiplayer publik tanpa kode ruangan; server yang memilih kuisnya).
 // Hanya akun yang sudah membuka fitur Kuis Editor yang bisa membagikan kuis buatannya (dicek server).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -17,6 +19,9 @@ import {
   ListOrdered,
   Flame,
   Clock,
+  ShieldCheck,
+  Hourglass,
+  XCircle,
 } from 'lucide-react';
 import type { Deck } from '../../types';
 import {
@@ -30,6 +35,7 @@ import {
   sharedQuizToDeck,
   unshareQuiz,
   type MySharingState,
+  type ShareStatus,
   type SharedQuizSummary,
 } from '../../services/quizCommunityApi';
 import { PlayerAvatar } from './PlayerAvatar';
@@ -38,6 +44,7 @@ interface QuizCommunityProps {
   isLoggedIn: boolean;
   /** Kuis buatan Kuis Editor milik akun ini (kandidat untuk dibagikan). */
   ownDecks: Deck[];
+  /** Main solo. */
   onPlay: (deck: Deck) => void;
   onOpenLibrary: () => void;
   onToast?: (msg: string) => void;
@@ -51,6 +58,12 @@ const DIFF_CLASS: Record<string, string> = {
   Sedang: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
   Sulit: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
   Ekstrem: 'bg-red-500/15 text-red-300 border-red-500/30',
+};
+
+const STATUS_BADGE: Record<ShareStatus, { label: string; cls: string; icon: typeof ShieldCheck }> = {
+  approved: { label: 'Disetujui', cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30', icon: ShieldCheck },
+  pending: { label: 'Diperiksa', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/30', icon: Hourglass },
+  rejected: { label: 'Ditolak', cls: 'bg-red-500/15 text-red-300 border-red-500/30', icon: XCircle },
 };
 
 export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDecks, onPlay, onOpenLibrary, onToast }) => {
@@ -161,14 +174,36 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
   }, [loadSharing]);
 
   const sharedBySource = useMemo(() => new Map((sharing?.items || []).map((s) => [s.sourceDeckId, s])), [sharing]);
+  const hasPending = Boolean(sharing?.items.some((s) => s.moderationStatus === 'pending'));
+
+  // Selama ada kuis yang masih diperiksa, segarkan status tiap 30 detik supaya hasilnya muncul sendiri.
+  useEffect(() => {
+    if (!hasPending) return;
+    const t = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void loadSharing();
+    }, 30_000);
+    return () => window.clearInterval(t);
+  }, [hasPending, loadSharing]);
 
   const handleShare = async (deck: Deck) => {
     const already = sharedBySource.has(deck.id);
-    if (!already && !confirm(`Bagikan "${deck.title}" ke Komunitas Kuis?\n\nSoal, pilihan jawaban, dan kunci jawabannya akan bisa dilihat dan dimainkan siapa saja. Namamu tampil sebagai pembuat.`)) return;
+    if (
+      !already &&
+      !confirm(
+        `Bagikan "${deck.title}" ke Komunitas Kuis?\n\nSoal, pilihan jawaban, dan kunci jawabannya akan bisa dilihat dan dimainkan siapa saja setelah lolos pemeriksaan otomatis (AI) atau admin. Namamu tampil sebagai pembuat.`
+      )
+    )
+      return;
     setBusyDeckId(deck.id);
     try {
       const r = await shareQuiz(deck);
-      onToast?.(r.updated ? `"${deck.title}" diperbarui di Komunitas Kuis.` : `"${deck.title}" berhasil dibagikan ke Komunitas Kuis!`);
+      if (r.moderationStatus === 'approved') {
+        onToast?.(r.updated ? `"${deck.title}" diperbarui dan sudah tayang di Komunitas Kuis.` : `"${deck.title}" lolos pemeriksaan dan sudah tayang di Komunitas Kuis!`);
+      } else if (r.moderationStatus === 'rejected') {
+        onToast?.(`"${deck.title}" ditolak: ${r.moderationReason || 'tidak sesuai pedoman komunitas.'}`);
+      } else {
+        onToast?.(`"${deck.title}" terkirim dan sedang diperiksa. Kamu akan diberi notifikasi begitu ada hasilnya.`);
+      }
       await Promise.all([loadSharing(), loadFirst()]);
     } catch (e: any) {
       onToast?.(e?.message || 'Gagal membagikan kuis.');
@@ -248,6 +283,14 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
             </button>
           </div>
 
+          <p className="flex items-start gap-2 text-[11px] text-gray-400 leading-relaxed p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+            <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span>
+              Semua kuis di sini sudah <strong className="text-gray-200">lolos pemeriksaan otomatis (AI) atau admin</strong>. Bisa dimainkan solo
+              dan otomatis masuk rotasi Arena Global (multiplayer publik) yang skornya masuk Papan Peringkat (kecuali di kuis buatanmu sendiri).
+            </span>
+          </p>
+
           {loading && items.length === 0 ? (
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-3" aria-busy="true">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -265,7 +308,7 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
           ) : items.length === 0 ? (
             <div className="py-10 text-center space-y-2">
               <Users className="w-10 h-10 text-gray-500 mx-auto" />
-              <p className="text-sm font-bold text-white">{query ? 'Tidak ada kuis yang cocok.' : 'Belum ada kuis yang dibagikan.'}</p>
+              <p className="text-sm font-bold text-white">{query ? 'Tidak ada kuis yang cocok.' : 'Belum ada kuis yang disetujui.'}</p>
               <p className="text-xs text-gray-400">
                 {query ? 'Coba kata kunci lain.' : 'Pemilik Kuis Editor bisa jadi yang pertama membagikan kuisnya di sini.'}
               </p>
@@ -338,7 +381,7 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
               <Share2 className="w-4 h-4 text-accent2" /> Bagikan Kuismu
             </h2>
             <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">
-              Kuis buatanmu dari Kuis Editor bisa dimainkan semua orang. Perubahan di kuis asli baru tampil di komunitas setelah kamu menekan <em>Perbarui</em>.
+              Kuis buatanmu dari Kuis Editor akan diperiksa dulu (AI + admin) sebelum tayang. Mengubah isi kuis berarti diperiksa ulang. Tekan <em>Perbarui</em> setelah mengedit kuis asli.
             </p>
           </div>
 
@@ -388,21 +431,34 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
                     const shared = sharedBySource.get(d.id);
                     const busy = busyDeckId === d.id;
                     const qCount = d.questions?.length || 0;
+                    const badge = shared ? STATUS_BADGE[shared.moderationStatus] : null;
                     return (
                       <li key={d.id} className="p-3 rounded-2xl bg-black/45 border border-white/10 space-y-2">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">
                             <p className="text-xs font-black text-white truncate">{d.title}</p>
                             <p className="text-[10px] text-gray-400 font-mono">
-                              {qCount} soal{shared ? ` • ${shared.playCount.toLocaleString('id-ID')} main` : ''}
+                              {qCount} soal{shared?.moderationStatus === 'approved' ? ` • ${shared.playCount.toLocaleString('id-ID')} main` : ''}
                             </p>
                           </div>
-                          {shared && (
-                            <span className="shrink-0 text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-                              Dibagikan
+                          {badge && (
+                            <span className={`shrink-0 inline-flex items-center gap-1 text-[9px] font-mono font-black uppercase px-1.5 py-0.5 rounded-md border ${badge.cls}`}>
+                              <badge.icon className="w-3 h-3" />
+                              {badge.label}
                             </span>
                           )}
                         </div>
+
+                        {shared?.moderationStatus === 'rejected' && (
+                          <p className="text-[10px] text-red-200/90 leading-relaxed">
+                            Alasan: {shared.moderationReason || 'tidak sesuai pedoman komunitas.'} Perbaiki kuisnya, lalu tekan Perbarui.
+                          </p>
+                        )}
+                        {shared?.moderationStatus === 'pending' && (
+                          <p className="text-[10px] text-amber-200/90 leading-relaxed">
+                            {shared.moderationReason || 'Sedang diperiksa.'} Belum tampil untuk publik.
+                          </p>
+                        )}
 
                         <div className="flex items-center gap-2">
                           <button
@@ -412,7 +468,7 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
                             className="flex-1 px-3 py-1.5 rounded-lg bg-accent2 hover:bg-accent2/80 disabled:opacity-50 disabled:cursor-not-allowed text-on-accent2 text-[11px] font-black cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
                           >
                             {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Share2 className="w-3.5 h-3.5" />}
-                            {shared ? 'Perbarui' : 'Bagikan'}
+                            {busy ? 'Memeriksa…' : shared ? 'Perbarui' : 'Bagikan'}
                           </button>
                           {shared && (
                             <button

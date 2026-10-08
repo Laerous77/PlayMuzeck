@@ -95,7 +95,9 @@ const elig = (o: Partial<{ deckId: string; questions: unknown[]; accountCount: n
 ok('multiplayer sah: deck bawaan, 6 soal, 2 akun', elig().ok === true);
 ok('kurang dari 5 soal tidak dihitung', (() => { const r = elig({ questions: real.slice(0, 4) }); return !r.ok && r.reason === 'too_short'; })());
 ok('1 akun saja tidak dihitung', (() => { const r = elig({ accountCount: 1 }); return !r.ok && r.reason === 'few_players'; })());
-ok('kuis komunitas/pribadi tidak dihitung', (() => { const r = elig({ deckId: 'deck-custom-shared-shq_0123456789ab' }); return !r.ok && r.reason === 'not_eligible'; })());
+ok('kuis Komunitas lolos aturan murni (status "disetujui" dicek ke database saat mencatat)', elig({ deckId: 'deck-custom-shared-shq_0123456789ab' }).ok === true);
+ok('kuis pribadi (bukan komunitas) tidak dihitung', (() => { const r = elig({ deckId: 'deck-custom-123' }); return !r.ok && r.reason === 'not_eligible'; })());
+ok('id kuis komunitas yang bentuknya salah tidak dihitung', (() => { const r = elig({ deckId: 'deck-custom-shared-bukan-id' }); return !r.ok && r.reason === 'not_eligible'; })());
 ok('soal dipalsukan pada deck bawaan tidak dihitung', (() => { const r = elig({ questions: [{ question: 'x?', options: ['a', 'b'], correctIndex: 0 }, ...real.slice(1)] }); return !r.ok && r.reason === 'not_eligible'; })());
 
 if (bad) process.exitCode = 1; else console.log('\nSemua tes Komunitas Kuis & papan peringkat multiplayer lulus.');
