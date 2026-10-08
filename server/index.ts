@@ -17,6 +17,7 @@ import cookieParser from 'cookie-parser';
 import { authRouter, requireAuth, originGuard, isAllowedOrigin, sendMailStrict } from './auth/authRoutes';
 import { createThemeRouter, ensureThemeSchema } from './themeRoutes';
 import { createSoundFxRouter, ensureSoundFxSchema } from './soundFxRoutes';
+import { createPadEditorRouter, ensurePadEditorSchema } from './padEditorRoutes';
 import { createToolQuotaRouter, ensureToolQuotaSchema, startToolQuotaSweeper } from './toolQuotaRoutes';
 import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
@@ -190,6 +191,8 @@ Promise.resolve(initDatabase())
   .catch((err) => console.error('[DB] ensureThemeSchema gagal:', err))
   .then(() => ensureSoundFxSchema(pool))
   .catch((err) => console.error('[DB] ensureSoundFxSchema gagal:', err))
+  .then(() => ensurePadEditorSchema(pool))
+  .catch((err) => console.error('[DB] ensurePadEditorSchema gagal:', err))
   .then(() => ensureToolQuotaSchema(pool))
   .catch((err) => console.error('[DB] ensureToolQuotaSchema gagal:', err))
   .then(() => ensureNotificationSchema(pool))
@@ -294,6 +297,7 @@ const requireSuperAdmin = (req: express.Request, res: express.Response, next: ex
 
 app.use(createThemeRouter({ db: pool, requireUser, requireAdmin, requireSuperAdmin }));
 app.use(createSoundFxRouter({ db: pool, requireUser }));
+app.use(createPadEditorRouter({ db: pool, requireUser }));
 app.use(createToolQuotaRouter({ db: pool, resolveEmail: softEmail }));
 startToolQuotaSweeper(pool);
 app.use(createThemeBulkRoutes({ pool, requireAdmin, requireSuperAdmin, requireUser }));

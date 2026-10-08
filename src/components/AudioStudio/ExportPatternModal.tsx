@@ -1,7 +1,8 @@
 // src/components/AudioStudio/ExportPatternModal.tsx
 import React, { useEffect, useState } from 'react';
 import { X, Download, Loader2, Music, Disc, Repeat, Layers } from 'lucide-react';
-import { generateMidiFile, exportAudioFile, downloadBlob } from '../../services/exporters';
+import { exportAudioFile, downloadBlob } from '../../services/exporters';
+import { exportMidiOnServer } from '../../services/padPolicy';
 import { audioEngine, EnvelopeADSR } from '../../services/audioEngine';
 import { ModalPortal } from './ModalPortal';
 import { SoundBankCredits } from './SoundBankCredits';
@@ -72,9 +73,13 @@ interface ExportPatternModalProps {
   adsr?: EnvelopeADSR;
   chordVolume?: number;
   selectedProgram?: number;
-  // Data proyek (dari midiProject.encodeProjectPayload) yang ikut disimpan di dalam berkas MIDI,
+  // Proyek (PadProject) yang dikirim ke SERVER dan disisipkan (terenkripsi) di dalam berkas MIDI,
   // supaya berkas ini bisa dimuat kembali ke Pad Studio dengan semua pengaturan utuh.
-  projectPayload?: Uint8Array;
+  project?: unknown;
+  // Dipanggil sebelum ekspor audio: izin dari server (false = batal). MIDI tidak memakainya karena server sendiri yang menolak.
+  authorize?: () => Promise<boolean>;
+  // Server menolak (tidak punya hak akses): UI menampilkan ajakan membuka Full Editor.
+  onAccessDenied?: () => void;
 }
 
 interface GenericMidiEvent {
@@ -147,7 +152,9 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
   adsr,
   chordVolume,
   selectedProgram,
-  projectPayload,
+  project,
+  authorize,
+  onAccessDenied,
 }) => {
   const scope: ExportScope = exportScope ?? tab;
   const activeDrumAdsr: EnvelopeADSR = drumAdsr ?? DEFAULT_DRUM_ADSR;
@@ -284,21 +291,18 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             : `PlayMuzeck Multi-Track (${bpm} BPM)`;
 
         const programs = activeTracks.map((t) => t.program);
-        const midiBlob = generateMidiFile(
-          bpm,
-          combinedEvents,
-          title,
-          programs[0] ?? 0,
-          programs[1],
-          timeSignature,
-          projectPayload,
-          programs
-        );
-
+        // Berkas MIDI ditulis oleh SERVER; tanpa hak akses server menolak (403) dan tidak ada berkas yang terbentuk.
+        const made = await exportMidiOnServer({ bpm, events: combinedEvents, title, programs, timeSignature, project });
+        if (made.result !== 'ok') {
+          if (made.result === 'denied') onAccessDenied?.();
+          else onSuccessToast(made.message);
+          return;
+        }
         const cleanName = fileName.replace(/[^\w\s.-]/gi, '').trim() || 'PlayMuzeck_Pattern';
-        downloadBlob(midiBlob, `${cleanName}.mid`);
+        downloadBlob(made.value, `${cleanName}.mid`);
         onSuccessToast(`Berkas MIDI "${cleanName}.mid" berhasil diunduh!`);
       } else {
+        if (authorize && !(await authorize())) return;
         if (scope === 'chord' || scope === 'both') {
           const ready = await audioEngine.ensureBankLoaded();
           if (!ready) throw new Error('Bank sampel (SoundFont) gagal dimuat.');
@@ -414,12 +418,12 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
         onSuccessToast(`Berkas ${exported.actualFormat} berhasil diekspor${loopNote}!${exported.note ? ' ' + exported.note : ''}`);
       }
 
-      setIsExporting(false);
       onClose();
     } catch (err: unknown) {
-      setIsExporting(false);
       const errorMsg = err instanceof Error ? err.message : 'Gagal mengekspor berkas.';
       alert(`Gagal mengekspor: ${errorMsg}`);
+    } finally {
+      setIsExporting(false);
     }
   };
 

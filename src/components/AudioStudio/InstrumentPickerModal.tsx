@@ -8,7 +8,8 @@ interface InstrumentPickerModalProps {
   isOpen: boolean;
   title: string; // contoh: "Progresi Akor 2"
   currentProgram: number;
-  isUnlocked: boolean; // pengguna gratis hanya boleh kategori Piano
+  isUnlocked: boolean; // pengguna gratis hanya boleh instrumen di freePrograms (default: Grand Piano)
+  freePrograms?: number[]; // id program yang gratis; default [0] = Grand Piano
   onSelect: (program: number) => void;
   onLockedClick: () => void;
   onClose: () => void;
@@ -21,6 +22,7 @@ export const InstrumentPickerModal: React.FC<InstrumentPickerModalProps> = ({
   title,
   currentProgram,
   isUnlocked,
+  freePrograms = [0],
   onSelect,
   onLockedClick,
   onClose,
@@ -90,7 +92,7 @@ export const InstrumentPickerModal: React.FC<InstrumentPickerModalProps> = ({
         <div className="flex-1 overflow-y-auto overscroll-contain p-2">
           {filtered.length === 0 && <p className="text-center text-xs text-gray-400 py-8">Tidak ada instrumen yang cocok.</p>}
           {filtered.map((inst) => {
-            const locked = !isUnlocked && inst.category !== 'Piano';
+            const locked = !isUnlocked && !freePrograms.includes(inst.id);
             const current = inst.id === currentProgram;
             return (
               <button

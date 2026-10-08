@@ -8,7 +8,8 @@
 //
 // Semua fungsi di sini murni (tanpa React), sehingga mudah diuji.
 
-import { buildHarmonicChord, ChordFormulaDef, CHORD_QUALITIES, CHORD_TENSIONS, NOTE_ROOTS } from '../../services/audioEngine';
+// Hanya teori akor murni (bukan audioEngine) supaya modul ini bisa dipakai di SERVER tanpa Web Audio / DOM.
+import { buildHarmonicChord, ChordFormulaDef, CHORD_QUALITIES, CHORD_TENSIONS, NOTE_ROOTS } from '../../services/chordTheory';
 import { generateMidiFile } from '../../services/exporters';
 import { DRUM_LEVEL_MAX, DRUM_LEVEL_MIDI, emptyTrackData, insertNote, noteGain } from './padModel';
 
@@ -94,26 +95,56 @@ export const tupleToPad = (t: PadTuple): ChordFormulaDef => ({
 
 // ---------------------------------------------------------------------------
 // PAYLOAD (data proyek di dalam berkas MIDI)
-// Format: [0x7D (ID produsen non-komersial)] + "PMZK1" + JSON UTF-8
+// Format lama  : [0x7D] + "PMZK1" + JSON UTF-8                 (terbaca siapa saja; hanya untuk berkas lama)
+// Format resmi : [0x7D] + "PMZK2" + <JSON yang DIENKRIPSI SERVER> (AES-256-GCM; kunci hanya ada di server)
+// Berkas PMZK2 hanya bisa dibuat DAN dibuka oleh server (codec ada di server/padEditorRoutes.ts), jadi Simpan / Muat
+// Proyek tidak bisa dilakukan hanya dengan mengutak-atik JavaScript di browser.
 // ---------------------------------------------------------------------------
 const MFR_ID = 0x7d;
 const MAGIC = 'PMZK1';
+const MAGIC_SEALED = 'PMZK2';
 
-export function encodeProjectPayload(project: PadProject): Uint8Array {
+/** Penyegel payload (dipegang server). seal: teks biasa -> byte terenkripsi. open: kebalikannya, null bila rusak / dipalsukan. */
+export interface PayloadCodec {
+  seal(plain: Uint8Array): Uint8Array;
+  open(sealed: Uint8Array): Uint8Array | null;
+}
+
+const hasMagic = (data: Uint8Array, magic: string): boolean => {
+  if (data.length < 2 + magic.length || data[0] !== MFR_ID) return false;
+  for (let i = 0; i < magic.length; i++) if (data[1 + i] !== magic.charCodeAt(i)) return false;
+  return true;
+};
+
+/** Apakah byte ini payload proyek Pad Studio (format lama atau resmi)? Tidak membuka isinya. */
+export const isProjectPayload = (data: Uint8Array): boolean => hasMagic(data, MAGIC) || hasMagic(data, MAGIC_SEALED);
+
+export function encodeProjectPayload(project: PadProject, codec?: PayloadCodec): Uint8Array {
   const json = JSON.stringify({ app: 'PlayMuzeck PadStudio', version: 2, project });
-  const body = new TextEncoder().encode(json);
-  const out = new Uint8Array(1 + MAGIC.length + body.length);
+  let body: Uint8Array = new TextEncoder().encode(json);
+  const magic = codec ? MAGIC_SEALED : MAGIC;
+  if (codec) body = codec.seal(body);
+  const out = new Uint8Array(1 + magic.length + body.length);
   out[0] = MFR_ID;
-  for (let i = 0; i < MAGIC.length; i++) out[1 + i] = MAGIC.charCodeAt(i);
-  out.set(body, 1 + MAGIC.length);
+  for (let i = 0; i < magic.length; i++) out[1 + i] = magic.charCodeAt(i);
+  out.set(body, 1 + magic.length);
   return out;
 }
 
-export function decodeProjectPayload(data: Uint8Array): unknown | null {
-  if (data.length < 2 + MAGIC.length || data[0] !== MFR_ID) return null;
-  for (let i = 0; i < MAGIC.length; i++) if (data[1 + i] !== MAGIC.charCodeAt(i)) return null;
+export function decodeProjectPayload(data: Uint8Array, codec?: PayloadCodec): unknown | null {
+  let bytes: Uint8Array;
+  if (hasMagic(data, MAGIC_SEALED)) {
+    if (!codec) return null; // tanpa kunci server, berkas resmi tidak bisa dibuka
+    const opened = codec.open(data.subarray(1 + MAGIC_SEALED.length));
+    if (!opened) return null;
+    bytes = opened;
+  } else if (hasMagic(data, MAGIC)) {
+    bytes = data.subarray(1 + MAGIC.length);
+  } else {
+    return null;
+  }
   try {
-    const parsed = JSON.parse(new TextDecoder().decode(data.subarray(1 + MAGIC.length)));
+    const parsed = JSON.parse(new TextDecoder().decode(bytes));
     if (!parsed || typeof parsed !== 'object') return null;
     const project = (parsed as { project?: unknown }).project ?? null;
     // Proyek versi 1 memakai dinamika drum 4 tingkat (1 pp, 2 p, 3 f, 4 ff): petakan ke skala 6 tingkat (3 -> 5, 4 -> 6).
@@ -149,7 +180,7 @@ const DRUM_NOTE_MAP: Record<string, number> = {
   fx: 39,
 };
 
-export function projectToMidiBlob(project: PadProject, title = 'PlayMuzeck Project'): Blob {
+export function projectToMidiBlob(project: PadProject, title = 'PlayMuzeck Project', codec?: PayloadCodec): Blob {
   const [numStr, denStr] = project.timeSig.split('/');
   const timeSignature = { num: Number(numStr) || 4, den: Number(denStr) || 4 };
 
@@ -184,7 +215,7 @@ export function projectToMidiBlob(project: PadProject, title = 'PlayMuzeck Proje
   });
 
   const programs = enabled.map((t) => t.program);
-  return generateMidiFile(project.bpm, events, title, programs[0] ?? 0, programs[1], timeSignature, encodeProjectPayload(project), programs);
+  return generateMidiFile(project.bpm, events, title, programs[0] ?? 0, programs[1], timeSignature, encodeProjectPayload(project, codec), programs);
 }
 
 // ---------------------------------------------------------------------------
@@ -277,7 +308,7 @@ export function parseMidiFile(buf: ArrayBuffer): ParsedMidi {
           p += mlen;
           if (type === 0x51 && mlen === 3) out.tempos.push({ tick, mpqn: (data[0] << 16) | (data[1] << 8) | data[2] });
           else if (type === 0x58 && mlen >= 2) out.timeSigs.push({ tick, num: data[0], den: 2 ** data[1] });
-          else if (type === 0x7f && !out.payload && decodeProjectPayload(data) !== null) out.payload = new Uint8Array(data);
+          else if (type === 0x7f && !out.payload && isProjectPayload(data)) out.payload = new Uint8Array(data);
           else if (type === 0x2f) break;
         } else if (status === 0xf0 || status === 0xf7) {
           running = 0;
@@ -714,11 +745,13 @@ export function convertForeignMidi(m: ParsedMidi, ctx: ImportContext): ForeignIm
 // Pintu masuk tunggal: ArrayBuffer berkas .mid -> proyek siap dimuat.
 export function importMidiBuffer(
   buf: ArrayBuffer,
-  ctx: ImportContext
+  ctx: ImportContext,
+  codec?: PayloadCodec
 ): { project: PadProject; warnings: string[]; source: 'project' | 'foreign'; summary: string } {
   const parsed = parseMidiFile(buf);
   if (parsed.payload) {
-    const raw = decodeProjectPayload(parsed.payload);
+    const raw = decodeProjectPayload(parsed.payload, codec);
+    if (raw === null) throw new MidiProjectError('Berkas proyek ini tidak dapat dibuka (rusak, dimodifikasi, atau bukan dari PlayMuzeck).');
     const project = normalizeProject(raw, ctx);
     return { project, warnings: parsed.warnings, source: 'project', summary: 'Proyek Pad Studio dipulihkan utuh.' };
   }

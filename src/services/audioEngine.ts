@@ -140,131 +140,9 @@ export const INSTRUMENTS_128: InstrumentMeta[] = [
   { id: 127, name: 'Gunshot', category: 'Sound Effects' },
 ];
 
-export const NOTE_ROOTS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'G#', 'A', 'Bb', 'B'];
-export const CHORD_QUALITIES = ['maj', 'min', 'dim', 'sus4', 'sus2', 'aug', 'dyad5', 'dyad3maj', 'dyad3min', 'dyadOct'];
-export const CHORD_TENSIONS = ['none', '7', 'maj7', 'b9', '9', '#9', '11', 'b5/#11', '#5/b13', '6/13'];
-export const CHORD_INVERSIONS = [
-  { id: 0, label: 'Root (Dasar)' },
-  { id: 1, label: '1st Inversion' },
-  { id: 2, label: '2nd Inversion' },
-  { id: 3, label: '3rd Inversion' },
-];
-
-const SEMITONE_MAP: Record<string, number> = {
-  'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3,
-  'E': 4, 'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8,
-  'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
-};
-
-export interface EnvelopeADSR {
-  attack: number;   // detik — batas praktis diatur di UI pemanggil (drum: pendek/perkusif; chord: panjang/mengalun)
-  decay: number;    // detik — waktu transisi dari puncak ke sustain
-  sustain: number;  // 0.0 s/d 1.0 (level volume tahan) — rentang SAMA untuk semua jenis instrumen
-  release: number;  // detik — waktu dengung memudar
-}
-
-export interface ChordFormulaDef {
-  root: string;
-  type: string;
-  tension?: string;
-  bass?: string;
-  inversion?: number; // 0 = Root, 1 = 1st, 2 = 2nd, 3 = 3rd
-  octaveOffset?: number; // -2, -1, 0, 1, 2
-}
-
-export function buildHarmonicChord(def: ChordFormulaDef): { displayName: string; midiNotes: number[] } {
-  const rootOffset = SEMITONE_MAP[def.root] ?? 0;
-  const baseOctave = (def.octaveOffset ?? 0) * 12;
-  
-  // Geser basis ke Oktaf 3 (MIDI 48) agar akor berbunyi tebal dan pas di register tengah
-  const baseMidi = 48 + rootOffset + baseOctave;
-
-  let intervals: number[] = [0, 4, 7]; // default major
-  if (def.type === 'min') intervals = [0, 3, 7];
-  else if (def.type === 'dim') intervals = [0, 3, 6];
-  else if (def.type === 'sus4') intervals = [0, 5, 7];
-  else if (def.type === 'sus2') intervals = [0, 2, 7];
-  else if (def.type === 'aug') intervals = [0, 4, 8];
-  // Dyad (akor dua nada): hanya root + satu interval, TANPA nada ketiga.
-  else if (def.type === 'dyad5') intervals = [0, 7]; // power chord (perfect 5th)
-  else if (def.type === 'dyad3maj') intervals = [0, 4]; // dyad tertian mayor
-  else if (def.type === 'dyad3min') intervals = [0, 3]; // dyad tertian minor
-  else if (def.type === 'dyadOct') intervals = [0, 12]; // dyad oktaf
-
-  const isDyad = def.type.startsWith('dyad');
-
-  const tension = def.tension || 'none';
-  // Dyad murni sengaja TIDAK menerima tension (7th/9th/dst), supaya jumlah
-  // nadanya tetap persis 2 sesuai definisi "dyad".
-  if (isDyad) {
-    // no-op — dyad tetap 2 nada
-  } else if (tension === '7') {
-    intervals.push(def.type === 'dim' ? 9 : 10);
-  } else if (tension === 'maj7' || tension === 'j7') {
-    intervals.push(11);
-  } else if (tension === 'b9') {
-    intervals.push(10, 13);
-  } else if (tension === '9') {
-    intervals.push(10, 14);
-  } else if (tension === '#9') {
-    intervals.push(10, 15);
-  } else if (tension === '11') {
-    intervals.push(10, 17);
-  } else if (tension === 'b5/#11') {
-    intervals.push(6, 18);
-  } else if (tension === '#5/b13') {
-    intervals.push(8, 20);
-  } else if (tension === '6/13') {
-    intervals.push(9);
-  }
-
-  // Bentuk not dasar dan urutkan
-  let notes = Array.from(new Set(intervals))
-    .map((intv) => baseMidi + intv)
-    .sort((a, b) => a - b);
-
-  // Mesin Inversion Presisi (Memindahkan not terbawah ke atas tanpa merusak harmoni)
-  const inv = Math.max(0, Math.min(notes.length - 1, def.inversion || 0));
-  for (let i = 0; i < inv; i++) {
-    const bottomNote = notes.shift();
-    if (bottomNote !== undefined) {
-      notes.push(bottomNote + 12);
-    }
-  }
-  notes.sort((a, b) => a - b);
-
-  // Bass Note (Slash Chord) — dilewati untuk dyad murni supaya tetap 2 nada
-  if (!isDyad && def.bass && def.bass !== 'none' && def.bass !== def.root) {
-    const bassOffset = SEMITONE_MAP[def.bass] ?? 0;
-    const bassMidi = 36 + bassOffset + baseOctave; // Di oktaf 2 yang dalam
-    notes = [bassMidi, ...notes];
-  }
-
-  const DYAD_LABELS: Record<string, string> = {
-    dyad5: '5',
-    dyad3maj: '(dyad M3)',
-    dyad3min: '(dyad m3)',
-    dyadOct: '(dyad 8ve)',
-  };
-
-  let name: string;
-  if (isDyad) {
-    name = `${def.root}${DYAD_LABELS[def.type] || ''}`;
-  } else {
-    name = `${def.root}${def.type === 'maj' ? '' : def.type}`;
-    if (tension !== 'none') {
-      name += tension === 'j7' ? 'maj7' : tension;
-    }
-    if (def.bass && def.bass !== 'none' && def.bass !== def.root) {
-      name += `/${def.bass}`;
-    }
-  }
-  if (inv > 0) {
-    name += ` (inv${inv})`;
-  }
-
-  return { displayName: name, midiNotes: notes };
-}
+import { buildHarmonicChord, ChordFormulaDef, EnvelopeADSR } from './chordTheory';
+export { NOTE_ROOTS, CHORD_QUALITIES, CHORD_TENSIONS, CHORD_INVERSIONS, buildHarmonicChord } from './chordTheory';
+export type { ChordFormulaDef, EnvelopeADSR } from './chordTheory';
 
 interface ActiveVoice {
   source: AudioScheduledSourceNode;
@@ -363,6 +241,7 @@ class AudioEngine {
   // Sample drum yang terbukti tidak ada / gagal didekode. Tanpa ini, setiap ketukan drum yang
   // sample-nya hilang memicu fetch jaringan baru (penyebab lag di sequencer).
   private drumMissing = new Set<string>();
+  private drumLoading: Map<string, Promise<unknown>> = new Map();
   private activeVoices: Set<ActiveVoice> = new Set();
 
   // -------------------------------------------------------------------
@@ -1662,6 +1541,7 @@ class AudioEngine {
       const stopAt = this.applyAdsrEnvelope(gain, useAdsr, startTime, preloadedBuffer.duration, volume);
       src.connect(gain);
       gain.connect(destination);
+      this.releaseOnEnd(src, [src, gain]);
       src.start(startTime);
       src.stop(stopAt);
       return;
@@ -1684,6 +1564,7 @@ class AudioEngine {
       const stopAt = this.applyAdsrEnvelope(gain, adsr ?? this.drumAdsr, now, buf.duration, volume);
       src.connect(gain);
       gain.connect(this.compressor || ctx.destination);
+      this.releaseOnEnd(src, [src, gain]);
       src.start(now);
       src.stop(stopAt);
     };
@@ -1746,6 +1627,7 @@ class AudioEngine {
       const stopAt = this.applyAdsrEnvelope(gain, adsr ?? this.drumAdsr, t, buf.duration, volume);
       src.connect(gain);
       gain.connect(this.compressor || ctx.destination);
+      this.releaseOnEnd(src, [src, gain]);
       src.start(t);
       src.stop(stopAt);
       return;
@@ -1754,7 +1636,20 @@ class AudioEngine {
       this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime));
       return;
     }
-    void this.playDrumSound(part, kitName, volume, adsr);
+    // Sample belum siap: unduh SEKALI saja (bukan tiap ketukan) dan sementara bunyikan suara sintesis.
+    if (!this.drumLoading.has(key)) {
+      const p = this.getDrumSampleBuffer(ctx, kitName, part)
+        .then((buf) => {
+          // Gagal sesaat (jaringan): jangan coba lagi tiap ketukan, tunggu 5 dtk lalu boleh dicoba lagi.
+          if (!buf && !this.drumMissing.has(key)) {
+            this.drumMissing.add(key);
+            window.setTimeout(() => this.drumMissing.delete(key), 5000);
+          }
+        })
+        .finally(() => this.drumLoading.delete(key));
+      this.drumLoading.set(key, p);
+    }
+    this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime));
   }
 
   // NOTE: fallback `this.compressor` HANYA valid kalau `ctx` yang diberikan
@@ -1771,40 +1666,79 @@ class AudioEngine {
 
   // Waveshaper soft-clip untuk memberi karakter "drive" (dipakai kit
   // Industrial/Breakbeat/Electro/80s agar terasa lebih agresif/gahar).
+  private driveCurves: Map<number, Float32Array> = new Map();
   private createDriveShaper(ctx: BaseAudioContext, amount: number): WaveShaperNode {
     const shaper = ctx.createWaveShaper();
-    const samples = 256;
-    const curve = new Float32Array(samples);
-    const k = amount * 20;
-    for (let i = 0; i < samples; i++) {
-      const x = (i / (samples - 1)) * 2 - 1;
-      curve[i] = ((1 + k) * x) / (1 + k * Math.abs(x));
+    let curve = this.driveCurves.get(amount);
+    if (!curve) {
+      const samples = 256;
+      curve = new Float32Array(samples);
+      const k = amount * 20;
+      for (let i = 0; i < samples; i++) {
+        const x = (i / (samples - 1)) * 2 - 1;
+        curve[i] = ((1 + k) * x) / (1 + k * Math.abs(x));
+      }
+      this.driveCurves.set(amount, curve);
     }
-    shaper.curve = curve;
+    shaper.curve = curve as Float32Array<ArrayBuffer>;
     shaper.oversample = '2x';
     return shaper;
   }
 
-  // Ekor delay pendek yang meniru ambience/reverb ringan tanpa perlu file
-  // impulse-response terpisah (dipakai kit Ambient/Jazzy/Hiphop).
-  private applyAmbienceTail(ctx: BaseAudioContext, source: AudioNode, amount: number, now: number, destination?: AudioNode) {
-    if (amount <= 0) return;
+  // Ekor delay pendek yang meniru ambience/reverb ringan tanpa perlu file impulse-response.
+  //
+  // PERBAIKAN (audio makin hancur lalu melambat & berhenti setelah diputar lama):
+  // sebelumnya SETIAP pukulan drum sintesis membuat satu loop umpan-balik baru (delay -> filter -> feedback -> delay)
+  // yang tidak pernah diputus. Loop berputar itu tidak bisa di-garbage-collect, jadi node menumpuk tanpa batas
+  // (satu clap = 4 loop) dan CPU audio habis. Sekarang ekor memakai SATU bus bersama per (tujuan, jumlah ambience):
+  // pukulan hanya mengirim sinyal ke bus itu, sehingga jumlah node tetap konstan berapa lama pun diputar.
+  private ambienceBuses: WeakMap<AudioNode, Map<number, GainNode>> = new WeakMap();
+  private getAmbienceBus(ctx: BaseAudioContext, amount: number, destination: AudioNode): GainNode {
+    let perDest = this.ambienceBuses.get(destination);
+    if (!perDest) {
+      perDest = new Map();
+      this.ambienceBuses.set(destination, perDest);
+    }
+    const key = Math.round(amount * 1000);
+    const existing = perDest.get(key);
+    if (existing) return existing;
+
+    const input = ctx.createGain();
     const delay = ctx.createDelay(1.0);
     delay.delayTime.value = 0.09 + amount * 0.05;
     const feedback = ctx.createGain();
-    feedback.gain.setValueAtTime(Math.min(0.6, amount), now);
+    feedback.gain.value = Math.min(0.6, amount);
     const wetGain = ctx.createGain();
-    wetGain.gain.setValueAtTime(Math.min(0.45, amount), now);
+    wetGain.gain.value = Math.min(0.45, amount);
     const tailFilter = ctx.createBiquadFilter();
     tailFilter.type = 'lowpass';
     tailFilter.frequency.value = 3200;
 
-    source.connect(delay);
+    input.connect(delay);
     delay.connect(tailFilter);
     tailFilter.connect(feedback);
     feedback.connect(delay);
     tailFilter.connect(wetGain);
-    wetGain.connect(destination || this.getOutputNode(ctx));
+    wetGain.connect(destination);
+    perDest.set(key, input);
+    return input;
+  }
+
+  private applyAmbienceTail(ctx: BaseAudioContext, source: AudioNode, amount: number, _now: number, destination?: AudioNode) {
+    if (amount <= 0) return;
+    source.connect(this.getAmbienceBus(ctx, amount, destination || this.getOutputNode(ctx)));
+  }
+
+  // Lepas seluruh rantai node sebuah suara begitu sumbernya selesai, supaya tidak ada node yang tertinggal di graf.
+  private releaseOnEnd(src: AudioScheduledSourceNode, nodes: AudioNode[]) {
+    src.onended = () => {
+      src.onended = null;
+      for (const n of nodes) {
+        try {
+          n.disconnect();
+        } catch {}
+      }
+    };
   }
 
   // Suara berbasis noise (snare/clap/hat/splash/perc/fx) melalui filter +
@@ -1818,7 +1752,8 @@ class AudioEngine {
     destination?: AudioNode
   ) {
     const startAt = now + (opts.delaySec ?? 0);
-    const noise = this.createNoiseBuffer(ctx, opts.bufferDur ?? opts.decay + 0.02);
+    const scaledDecay = Math.max(0.02, opts.decay * profile.decayScale);
+    const noise = this.createNoiseBuffer(ctx, Math.max(opts.bufferDur ?? 0, scaledDecay + 0.02));
     const filter = ctx.createBiquadFilter();
     filter.type = opts.filterType;
     filter.frequency.value = Math.max(80, opts.freq * profile.brightness);
@@ -1841,6 +1776,7 @@ class AudioEngine {
     outNode.connect(destination || this.getOutputNode(ctx));
     this.applyAmbienceTail(ctx, outNode, profile.ambience, startAt, destination);
 
+    this.releaseOnEnd(noise, outNode === gain ? [noise, filter, gain] : [noise, filter, gain, outNode]);
     noise.start(startAt);
   }
 
@@ -1879,6 +1815,7 @@ class AudioEngine {
     outNode.connect(destination || this.getOutputNode(ctx));
     this.applyAmbienceTail(ctx, outNode, profile.ambience, now, destination);
 
+    this.releaseOnEnd(osc, outNode === gain ? [osc, gain] : [osc, gain, outNode]);
     osc.start(now);
     osc.stop(now + decay + 0.05);
   }
@@ -1995,12 +1932,30 @@ class AudioEngine {
     }
   }
 
+  // Buffer noise dipakai ulang (3 variasi per durasi) — sebelumnya tiap pukulan mengalokasikan & mengisi buffer baru
+  // (hingga 0,9 dtk x 44,1 kHz), memicu GC berat saat sequencer jalan lama.
+  private noisePool: WeakMap<BaseAudioContext, Map<string, AudioBuffer[]>> = new WeakMap();
   private createNoiseBuffer(ctx: BaseAudioContext, duration: number): AudioBufferSourceNode {
-    const bufferSize = ctx.sampleRate * duration;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = Math.random() * 2 - 1;
+    let perCtx = this.noisePool.get(ctx);
+    if (!perCtx) {
+      perCtx = new Map();
+      this.noisePool.set(ctx, perCtx);
+    }
+    const len = Math.max(1, Math.ceil(ctx.sampleRate * duration));
+    const key = String(len);
+    let pool = perCtx.get(key);
+    if (!pool) {
+      pool = [];
+      perCtx.set(key, pool);
+    }
+    let buffer: AudioBuffer;
+    if (pool.length < 3) {
+      buffer = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      pool.push(buffer);
+    } else {
+      buffer = pool[Math.floor(Math.random() * pool.length)];
     }
     const noise = ctx.createBufferSource();
     noise.buffer = buffer;

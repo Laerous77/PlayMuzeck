@@ -56,19 +56,41 @@ import {
 } from '../../services/audioEngine';
 import { ExportPatternModal, ChordTrackExportData } from './ExportPatternModal';
 import { downloadBlob } from '../../services/exporters';
+import { PadProject, Adsr4, padToTuple, tupleToPad } from './midiProject';
 import {
-  PadProject,
-  ImportContext,
-  Adsr4,
-  Range4,
-  padToTuple,
-  tupleToPad,
-  encodeProjectPayload,
-  projectToMidiBlob,
-  importMidiBuffer,
-} from './midiProject';
+  FREE_MAX_BARS,
+  FREE_DRUM_KITS,
+  FREE_CHORD_PROGRAMS,
+  FREE_CHORD_SLOTS,
+  PadAction,
+  PadSettings,
+  fetchPadPolicy,
+  loadPadSettings,
+  savePadSettings,
+  authorizePadAction,
+  enforcePadSettings,
+  saveProjectOnServer,
+  loadProjectOnServer,
+} from '../../services/padPolicy';
 import { ModalPortal } from './ModalPortal';
-import { AdsrMini, AdsrRanges, IntField } from './NumberFields';
+import { AdsrMini, IntField } from './NumberFields';
+import {
+  DRUM_KITS,
+  TOTAL_BARS,
+  TIME_SIGNATURES,
+  getTimeSig,
+  stepsPerBarOf,
+  defaultBarsPerView,
+  BARS_PER_VIEW_OPTIONS,
+  makeDefaultPadChords,
+  DEFAULT_DRUM_ADSR,
+  DRUM_ADSR_RANGES,
+  CHORD_ADSR_RANGES,
+  adsrTuple,
+  type TimeSignatureDef,
+} from './padContext';
+export type { TimeSignatureDef };
+export { DRUM_KITS, TOTAL_BARS, TIME_SIGNATURES };
 import { InstrumentPickerModal } from './InstrumentPickerModal';
 import { SoundBankCredits } from './SoundBankCredits';
 import {
@@ -152,17 +174,8 @@ const DRUM_BY_CODE: Record<string, DrumInstrument> = Object.fromEntries(
 const CHORD_KEY_CODES = ['KeyA','KeyS','KeyD','KeyF','KeyG','KeyH','KeyJ','KeyK','KeyL','KeyZ','KeyX','KeyC','KeyV','KeyB','KeyN','KeyM'];
 const CHORD_KEY_LABELS = ['A','S','D','F','G','H','J','K','L','Z','X','C','V','B','N','M'];
 
-export const DRUM_KITS = [
-  '80s Kit',
-  'Ambient',
-  'Industrial',
-  'Breakbeat',
-  'Jazzy',
-  'Electro',
-  'Hiphop',
-];
-
-export const TOTAL_BARS = 16;
+// Batas pengguna gratis (Bar 1, kit, instrumen akor, slot) didefinisikan di src/services/padPolicy.ts dan
+// DIPAKSA di server (server/padEditorRoutes.ts). Ekspor Pola, Simpan Proyek, Muat Proyek = berbayar (izin dari server).
 
 // ---------------------------------------------------------------------------
 // BIRAMA (TIME SIGNATURE)
@@ -172,31 +185,6 @@ export const TOTAL_BARS = 16;
 //   4/4  -> [4,4,4,4]  = 16 step      3/4 -> [4,4,4] = 12 step     6/8 -> [6,6] = 12 step
 //   7/8  -> [4,4,6]    = 14 step      5/4 -> 5 x 4  = 20 step
 // ---------------------------------------------------------------------------
-export interface TimeSignatureDef {
-  id: string;
-  label: string;
-  num: number;
-  den: number;
-  groups: number[];
-}
-
-export const TIME_SIGNATURES: TimeSignatureDef[] = [
-  { id: '2/4', label: '2/4', num: 2, den: 4, groups: [4, 4] },
-  { id: '3/4', label: '3/4', num: 3, den: 4, groups: [4, 4, 4] },
-  { id: '4/4', label: '4/4', num: 4, den: 4, groups: [4, 4, 4, 4] },
-  { id: '5/4', label: '5/4', num: 5, den: 4, groups: [4, 4, 4, 4, 4] },
-  { id: '2/2', label: '2/2', num: 2, den: 2, groups: [8, 8] },
-  { id: '3/8', label: '3/8', num: 3, den: 8, groups: [6] },
-  { id: '5/8', label: '5/8', num: 5, den: 8, groups: [4, 6] },
-  { id: '6/8', label: '6/8', num: 6, den: 8, groups: [6, 6] },
-  { id: '7/8', label: '7/8', num: 7, den: 8, groups: [4, 4, 6] },
-  { id: '9/8', label: '9/8', num: 9, den: 8, groups: [6, 6, 6] },
-  { id: '12/8', label: '12/8', num: 12, den: 8, groups: [6, 6, 6, 6] },
-];
-
-const getTimeSig = (id: string): TimeSignatureDef => TIME_SIGNATURES.find((t) => t.id === id) ?? TIME_SIGNATURES[2];
-const stepsPerBarOf = (ts: TimeSignatureDef): number => ts.groups.reduce((a, b) => a + b, 0);
-
 const INITIAL_TS = getTimeSig('4/4');
 const INITIAL_STEPS_PER_BAR = stepsPerBarOf(INITIAL_TS);
 const INITIAL_TOTAL_STEPS = INITIAL_STEPS_PER_BAR * TOTAL_BARS;
@@ -204,9 +192,7 @@ const DEFAULT_PATTERN_BARS = 4; // pola bawaan mengisi 4 bar pertama
 const DEFAULT_LOOP_END_BAR = 4;
 
 // Jumlah bar yang digambar sekaligus (dipilih supaya sel tetap cukup lebar dan DOM tetap kecil).
-const defaultBarsPerView = (stepsPerBar: number) => Math.max(1, Math.min(8, Math.round(32 / stepsPerBar)));
 const MAX_BARS_PER_VIEW = 8;
-const BARS_PER_VIEW_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 const MAX_SHIFT_BARS = TOTAL_BARS / 2; // sekali geser maksimal separuh dari 16 bar
 
 const INSTRUMENT_CATEGORIES = Array.from(new Set(INSTRUMENTS_128.map((inst) => inst.category)));
@@ -377,35 +363,6 @@ interface LiveSeqState {
 // ---------------------------------------------------------------------------
 export const PADS_PER_BANK = 16;
 export const PAD_BANKS = 8;
-const BASE_PADS: ChordFormulaDef[] = [
-    { root: 'A', type: 'min', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'F', type: 'maj', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'C', type: 'maj', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'G', type: 'maj', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'D', type: 'min', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'E', type: 'min', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'Bb', type: 'maj', tension: 'none', bass: 'none', inversion: 1, octaveOffset: 0 },
-    { root: 'E', type: 'maj', tension: '7', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'C', type: 'maj', tension: '7', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'G', type: 'maj', tension: '7', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'F', type: 'maj', tension: 'maj7', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'D', type: 'min', tension: '7', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'A', type: 'min', tension: '7', bass: 'none', inversion: 1, octaveOffset: 0 },
-    { root: 'Eb', type: 'maj', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-    { root: 'Bb', type: 'maj', tension: '7', bass: 'none', inversion: 0, octaveOffset: -1 },
-    { root: 'G', type: 'min', tension: 'none', bass: 'none', inversion: 0, octaveOffset: 0 },
-  ];
-const BANK_SEMITONES = [0, 5, 7, 2, 10, 3, 8, 4]; // Am, Dm, Em, Bm, Gm, Cm, Fm, C#m
-const transposeNote = (note: string | undefined, semis: number): string | undefined => {
-  if (!note || note === 'none') return note;
-  const i = NOTE_ROOTS.indexOf(note);
-  return i < 0 ? note : NOTE_ROOTS[(i + semis) % 12];
-};
-const makeDefaultPadChords = (): ChordFormulaDef[] =>
-  BANK_SEMITONES.flatMap((semis) =>
-    BASE_PADS.map((c) => ({ ...c, root: transposeNote(c.root, semis) as string, bass: transposeNote(c.bass, semis) }))
-  );
-
 // Dinamika live drum dari posisi klik: makin jauh dari pusat pad, makin lemah. Batas = proporsi dari setengah lebar/tinggi pad
 // (elips), sama persis dengan cincin yang digambar di pad.
 // Jumlah cincin = jumlah tingkat - 1 (6 tingkat: 5 cincin, 4 tingkat: 3 cincin, 2 tingkat: 1 cincin).
@@ -665,20 +622,6 @@ const LABEL_W = 'w-52';
 // Saat Mixer dibuka, panel kiri dilebarkan supaya volume & ADSR lega.
 const LABEL_W_WIDE = 'w-64';
 const labelWidth = (showMixer: boolean) => (showMixer ? LABEL_W_WIDE : LABEL_W);
-
-const DEFAULT_DRUM_ADSR: EnvelopeADSR = { attack: 0.002, decay: 0.15, sustain: 0.3, release: 0.12 };
-const DRUM_ADSR_RANGES: AdsrRanges = {
-  attack: [0.001, 0.1],
-  decay: [0.01, 2],
-  sustain: [0, 1],
-  release: [0.02, 2],
-};
-const CHORD_ADSR_RANGES: AdsrRanges = {
-  attack: [0.005, 5],
-  decay: [0.02, 5],
-  sustain: [0, 1],
-  release: [0.05, 10],
-};
 
 interface DrumMixState {
   volume: number; // 0–100, relatif terhadap volume drum utama
@@ -1751,36 +1694,15 @@ interface ChordTrackState {
   vels?: number[]; // dinamika not (1–6 = pp..ff) yang dimulai di step ini (0 / kosong = volume normal)
 }
 
-// Konteks validasi/konversi untuk impor MIDI (nilai-nilai yang dimiliki Pad Studio).
-const adsrTuple = (a: EnvelopeADSR): Adsr4 => [a.attack, a.decay, a.sustain, a.release];
-const rangesTuple = (r: AdsrRanges): Range4 => [r.attack, r.decay, r.sustain, r.release];
-const IMPORT_CTX: ImportContext = {
-  drumIds: DRUM_INSTRUMENTS.map((i) => i.id),
-  totalBars: TOTAL_BARS,
-  timeSigs: TIME_SIGNATURES.map((t) => ({ id: t.id, num: t.num, den: t.den, steps: stepsPerBarOf(t) })),
-  kits: DRUM_KITS,
-  defaultKit: DRUM_KITS[0],
-  barsPerViewOptions: BARS_PER_VIEW_OPTIONS,
-  defaultBarsPerView,
-  defaultPads: makeDefaultPadChords(),
-  drumAdsr: adsrTuple(DEFAULT_DRUM_ADSR),
-  drumAdsrRanges: rangesTuple(DRUM_ADSR_RANGES),
-  chordAdsrRanges: rangesTuple(CHORD_ADSR_RANGES),
-  chordDefaults: [
-    { label: 'Progresi Akor 1', program: 0, volume: 80, adsr: [0.02, 0.25, 0.65, 0.35] },
-    { label: 'Progresi Akor 2', program: 12, volume: 65, adsr: [0.05, 0.4, 0.8, 0.9] },
-    { label: 'Progresi Akor 3', program: 48, volume: 70, adsr: [0.1, 0.5, 0.75, 1.2] },
-    { label: 'Progresi Akor 4', program: 32, volume: 75, adsr: [0.03, 0.3, 0.7, 0.8] },
-  ],
-  bpmRange: [60, 200],
-};
-
 export const PadStudio: React.FC<PadStudioProps> = ({
   entitlements,
   onUnlockEditor,
   onSuccessToast,
 }) => {
-  const isUnlocked8Bar = entitlements?.fullEditor8Bar;
+  // Berbayar = entitlements (dari server) DAN kebijakan server tidak menyatakan gratis. Server hanya bisa menurunkan.
+  const entitled = Boolean(entitlements?.fullEditor8Bar);
+  const [serverPaid, setServerPaid] = useState<boolean | null>(null);
+  const isUnlocked8Bar = entitled && serverPaid !== false;
   const [activeTab, setActiveTab] = useState<PadTab>('drum');
   const [bpm, setBpm] = useState(115);
 
@@ -1790,26 +1712,32 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const stepsPerBar = stepsPerBarOf(timeSig);
   const totalSteps = stepsPerBar * TOTAL_BARS;
   const beatInfo = useMemo(() => buildBeatInfo(timeSig), [timeSigId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const [barsPerView, setBarsPerView] = useState<number>(defaultBarsPerView(INITIAL_STEPS_PER_BAR));
-  const [viewStartBar, setViewStartBar] = useState<number>(0);
+  const [barsPerViewRaw, setBarsPerView] = useState<number>(defaultBarsPerView(INITIAL_STEPS_PER_BAR));
+  const [viewStartBarRaw, setViewStartBar] = useState<number>(0);
+  // Gratis: jendela tampilan terkunci di Bar 1 (1 bar). Nilai mentah tetap disimpan agar kembali normal setelah membeli.
+  const barsPerView = isUnlocked8Bar ? barsPerViewRaw : FREE_MAX_BARS;
+  const viewStartBar = isUnlocked8Bar ? viewStartBarRaw : 0;
   const [followPlayhead, setFollowPlayhead] = useState(true);
   // Sekali tekan tombol geser kiri / kanan memindahkan tampilan sebanyak ini (bar).
   const [shiftBars, setShiftBars] = useState(1);
 
   // Satu transport untuk semuanya: `isPlaying` = sedang berjalan; `playDrum` / `playChord` = bagian mana yang berbunyi
-  // (boleh keduanya, minimal satu aktif). Pengguna gratis hanya bisa Drum.
+  // (boleh keduanya, minimal satu aktif). Drum dan Akor sama-sama gratis (terbatas Bar 1).
   const [isPlaying, setIsPlaying] = useState(false);
   const [playDrum, setPlayDrum] = useState(true);
   const [playChord, setPlayChord] = useState(true);
-  const effPlayChord = Boolean(isUnlocked8Bar) && playChord;
+  const effPlayChord = playChord;
   const effPlayDrum = !effPlayChord || playDrum;
   const isDrumLoopActive = isPlaying && effPlayDrum;
   const isChordLoopActive = isPlaying && effPlayChord;
   const [isSeqLooping, setIsSeqLooping] = useState(true);
 
-  const [loopStartBar, setLoopStartBar] = useState<number>(1);
+  const [loopStartBarRaw, setLoopStartBar] = useState<number>(1);
   const [loopStartBeat, setLoopStartBeat] = useState<number>(1);
-  const [loopEndBar, setLoopEndBar] = useState<number>(DEFAULT_LOOP_END_BAR);
+  const [loopEndBarRaw, setLoopEndBar] = useState<number>(DEFAULT_LOOP_END_BAR);
+  // Gratis: area main terkunci di Bar 1.
+  const loopStartBar = isUnlocked8Bar ? loopStartBarRaw : 1;
+  const loopEndBar = isUnlocked8Bar ? loopEndBarRaw : FREE_MAX_BARS;
   const [loopEndBeat, setLoopEndBeat] = useState<number>(INITIAL_STEPS_PER_BAR);
   // Grid overlay area main: dipakai untuk menghitung step dari posisi pointer saat pegangan area main ditarik.
   const loopGridRef = useRef<HTMLDivElement>(null);
@@ -2008,12 +1936,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   const [drumGrid, setDrumGrid] = useState<{ [key: string]: number[] }>(() => buildDefaultDrumGrid(INITIAL_TS));
 
-  // Bank SF2 hanya dipakai Chord Pad (drum memakai sample WAV), jadi hanya diunduh untuk pengguna yang
-  // sudah membuka editor penuh. Pengguna gratis tidak lagi dipaksa mengunduh berkas besar yang tak terpakai.
+  // Bank SF2 dipakai Chord Pad (drum memakai sample WAV). Chord Pad kini gratis (Grand Piano, 1 slot, Bar 1),
+  // jadi bank dimuat untuk semua pengguna.
   // Status pemuatan dipantau lewat subscribeBank, jadi tetap tampil walau pemuatan sudah dimulai komponen lain
   // (sebelumnya pemanggil kedua tidak pernah menerima pesan progres, dan kegagalan tidak terlihat).
   useEffect(() => {
-    if (!isUnlocked8Bar) return;
     let hideTimer: number | undefined;
     const apply = (msg: string, state: 'idle' | 'loading' | 'ready' | 'error') => {
       setBankState(state);
@@ -2038,7 +1965,106 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       off();
       if (hideTimer) clearTimeout(hideTimer);
     };
+  }, []);
+
+  // Pengaman: bila hak akses editor penuh tidak ada (mis. berakhir saat sesi berjalan), kembalikan ke batas gratis:
+  // kit drum non-gratis -> 80s Kit; hanya slot akor pertama aktif; instrumen akor -> Grand Piano.
+  useEffect(() => {
+    if (isUnlocked8Bar) return;
+    setSelectedDrumKit((k) => (FREE_DRUM_KITS.includes(k) ? k : FREE_DRUM_KITS[0]));
+    setChordTracks((prev) => {
+      let changed = false;
+      const next = prev.map((t, i) => {
+        const overSlot = i >= FREE_CHORD_SLOTS && t.enabled;
+        const badProgram = t.enabled && !FREE_CHORD_PROGRAMS.includes(t.program);
+        if (!overSlot && !badProgram) return t;
+        changed = true;
+        return {
+          ...t,
+          enabled: overSlot ? false : t.enabled,
+          program: badProgram ? FREE_CHORD_PROGRAMS[0] : t.program,
+        };
+      });
+      return changed ? next : prev;
+    });
+    setLiveSel((v) => (v === 'all' || (typeof v === 'number' && v >= FREE_CHORD_SLOTS) ? 0 : v));
   }, [isUnlocked8Bar]);
+
+  // Kebijakan & pengaturan pad dari SERVER (konsisten di semua perangkat). Kit drum + konfigurasi 4 slot akor disimpan
+  // per akun; server memaksa batas gratis saat membaca & menolak (403) saat menulis bila melanggar.
+  const padSyncRef = useRef<{ loaded: boolean; lastKey: string }>({ loaded: false, lastKey: '' });
+  const padKeyOf = (kit: string, cfg: { enabled: boolean; program: number }[]) =>
+    `${kit}#${cfg.map((c) => `${c.enabled ? 1 : 0}:${c.program}`).join('|')}`;
+  const applyServerSettings = useCallback((raw: PadSettings, paid: boolean) => {
+    const st = enforcePadSettings(raw, paid);
+    padSyncRef.current.lastKey = padKeyOf(st.drumKit, st.chord);
+    padSyncRef.current.loaded = true;
+    setSelectedDrumKit(st.drumKit);
+    setChordTracks((prev) =>
+      prev.map((t, i) => (st.chord[i] ? { ...t, enabled: st.chord[i].enabled, program: st.chord[i].program } : t))
+    );
+    setLiveSel((v) => (v === 'all' || (typeof v === 'number' && !st.chord[v]?.enabled) ? 0 : v));
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const policy = await fetchPadPolicy();
+      if (cancelled) return;
+      setServerPaid(policy ? policy.paid : null);
+      const paid = entitled && policy?.paid !== false;
+      const settings = await loadPadSettings();
+      if (cancelled || !settings) return;
+      applyServerSettings(settings, paid);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [entitled, applyServerSettings]);
+
+  const padCfgKey = padKeyOf(
+    selectedDrumKit,
+    chordTracks.map((t) => ({ enabled: t.enabled, program: t.program }))
+  );
+  useEffect(() => {
+    const sync = padSyncRef.current;
+    if (!sync.loaded || sync.lastKey === padCfgKey) return;
+    const timer = window.setTimeout(async () => {
+      const result = await savePadSettings({
+        v: 1,
+        drumKit: selectedDrumKit,
+        chord: chordTracks.map((t) => ({ enabled: t.enabled, program: t.program })),
+      });
+      if (result === 'ok') {
+        sync.lastKey = padCfgKey;
+      } else if (result === 'denied') {
+        // Server menolak (hak akses tidak ada): ambil keadaan resmi dari server.
+        const policy = await fetchPadPolicy();
+        setServerPaid(policy ? policy.paid : null);
+        const settings = await loadPadSettings();
+        if (settings) applyServerSettings(settings, entitled && policy?.paid !== false);
+      }
+    }, 800);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [padCfgKey]);
+
+  // Izin SERVER untuk aksi berbayar (Ekspor / Simpan / Muat). Gagal verifikasi = ditolak (fail-closed).
+  const requireServerAccess = async (action: PadAction): Promise<boolean> => {
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return false;
+    }
+    const r = await authorizePadAction(action);
+    if (r === 'ok') return true;
+    if (r === 'denied') {
+      setServerPaid(false);
+      onUnlockEditor();
+      return false;
+    }
+    onSuccessToast('Tidak dapat memverifikasi akses ke server. Periksa koneksi lalu coba lagi.');
+    return false;
+  };
 
   const updateTrack = useCallback((trackIndex: number, updates: Partial<ChordTrackState>) => {
     setChordTracks((prev) => {
@@ -2138,6 +2164,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Tambah baris instrumen baru di bawah, lalu langsung buka pemilih instrumennya.
   const addChordTrack = () => {
     if (!isUnlocked8Bar) {
+      onSuccessToast(`Pengguna gratis hanya bisa memakai ${FREE_CHORD_SLOTS} dari 4 slot instrumen akor. Buka editor penuh untuk menambah.`);
       onUnlockEditor();
       return;
     }
@@ -2196,7 +2223,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Rekam akor live: saat pad ditekan, not akor dipasang di step terdekat (panjang awal 1 step) pada track tujuan
   // (instrumen live yang dipilih); saat pad dilepas, panjang not disesuaikan dengan lama pad ditahan.
   const recordChordStart = (padIdx: number, targets: number[], eventTimeStamp?: number, level: number = DEFAULT_LIVE_LEVEL) => {
-    if (!gateRef.current.isUnlocked8Bar) return;
     const t0 = audioTimeOfEvent(eventTimeStamp);
     const step = quantizeToStep(t0);
     if (step < 0) return;
@@ -3450,10 +3476,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Nyalakan / matikan bagian yang diputar (Drum, Akor, atau keduanya). Minimal satu harus tetap aktif. Boleh diganti saat
   // sedang memutar; mematikan Akor memotong akor yang menggantung.
   const togglePlayPart = (part: PlayPart) => {
-    if (part === 'chord' && !isUnlocked8Bar) {
-      onUnlockEditor();
-      return;
-    }
     const cur = { drum: effPlayDrum, chord: effPlayChord };
     const next = { ...cur, [part]: !cur[part] };
     if (!next.drum && !next.chord) {
@@ -3892,7 +3914,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Panaskan sample akor di latar belakang setiap kali instrumen/akor yang dipakai berubah (ditunda 250 ms
   // supaya tidak berulang-ulang saat pengguna sedang mengedit).
   useEffect(() => {
-    if (chordWarmPairs.length === 0 || !isUnlocked8Bar) return;
+    if (chordWarmPairs.length === 0) return;
     let cancelled = false;
     const timer = window.setTimeout(() => {
       audioEngine.prewarmChordSamples(chordWarmPairs, { shouldAbort: () => cancelled }).catch(() => {});
@@ -3902,7 +3924,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       window.clearTimeout(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chordWarmKey, isUnlocked8Bar]);
+  }, [chordWarmKey]);
 
   // Cermin state terbaru untuk scheduler: scheduler membaca dari sini, jadi TIDAK perlu dibuat ulang
   // setiap grid/track/volume/tempo berubah (sebelumnya interval dihentikan & dibuat ulang tiap edit).
@@ -3998,7 +4020,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           });
         }
       }
-      visualQueueRef.current.push({ step, time: when });
+      const vq = visualQueueRef.current;
+      vq.push({ step, time: when });
+      if (vq.length > 256) vq.splice(0, vq.length - 256); // tab di latar: rAF berhenti, jangan biarkan antrean membengkak
     };
 
     const tick = () => {
@@ -4223,10 +4247,18 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Geser jendela tampilan grid per bar (menggantikan scroll horizontal 1560px).
   const shiftView = (direction: 1 | -1) => {
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
     setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - barsPerView, v + direction * shiftBars)));
   };
 
   const changeBarsPerView = (raw: number) => {
+    if (!isUnlocked8Bar) {
+      if (Math.round(raw) > FREE_MAX_BARS) onUnlockEditor();
+      return;
+    }
     const n = Math.max(1, Math.min(MAX_BARS_PER_VIEW, Math.round(raw) || 1));
     setBarsPerView(n);
     setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - n, v)));
@@ -4261,6 +4293,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // batas, nilai yang sedang diubah berhenti di nilai pasangannya (awal dan akhir jadi sama).
   const loopPos = (bar: number, beat: number) => (bar - 1) * stepsPerBar + (beat - 1);
   const changeLoopStart = (bar: number, beat: number) => {
+    if (!isUnlocked8Bar && bar > FREE_MAX_BARS) {
+      onUnlockEditor();
+      return;
+    }
     if (loopPos(bar, beat) > loopPos(loopEndBar, loopEndBeat)) {
       setLoopStartBar(loopEndBar);
       setLoopStartBeat(loopEndBeat);
@@ -4270,6 +4306,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setLoopStartBeat(beat);
   };
   const changeLoopEnd = (bar: number, beat: number) => {
+    if (!isUnlocked8Bar && bar > FREE_MAX_BARS) {
+      onUnlockEditor();
+      return;
+    }
     if (loopPos(bar, beat) < loopPos(loopStartBar, loopStartBeat)) {
       setLoopEndBar(loopStartBar);
       setLoopEndBeat(loopStartBeat);
@@ -4474,21 +4514,44 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setPickerTrack(null);
   };
 
-  const saveProject = () => {
+  // Server menolak karena tidak punya hak akses: samakan UI dengan keadaan resmi lalu tawarkan Full Editor.
+  const handleServerDenied = () => {
+    setServerPaid(false);
+    onUnlockEditor();
+  };
+
+  // Berkas proyek DIBUAT oleh server (divalidasi + dienkripsi). Browser hanya mengirim data dan menyimpan hasilnya.
+  const saveProject = async () => {
     if (!isUnlocked8Bar) {
       onUnlockEditor();
       return;
     }
     try {
-      const blob = projectToMidiBlob(snapshotProject());
+      const made = await saveProjectOnServer(snapshotProject());
+      if (made.result === 'denied') return handleServerDenied();
+      if (made.result !== 'ok') {
+        alert(`Gagal menyimpan proyek: ${made.message}`);
+        return;
+      }
       const d = new Date();
       const two = (n: number) => String(n).padStart(2, '0');
       const name = `PlayMuzeck_Proyek_${d.getFullYear()}${two(d.getMonth() + 1)}${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}.mid`;
-      downloadBlob(blob, name);
+      downloadBlob(made.value, name);
       onSuccessToast(`Proyek disimpan sebagai "${name}". Simpan berkas ini; muat kembali lewat tombol Muat Proyek.`);
     } catch (err) {
       alert(`Gagal menyimpan proyek: ${err instanceof Error ? err.message : 'terjadi kesalahan.'}`);
     }
+  };
+
+  // Ekspor: minta izin server dulu, baru buka modal ekspor.
+  const openExportModal = async (scope: 'drum' | 'chord' | 'both') => {
+    if (!(await requireServerAccess('export'))) {
+      setIsExportMenuOpen(false);
+      return;
+    }
+    setExportScope(scope);
+    setIsExportMenuOpen(false);
+    setIsExportModalOpen(true);
   };
 
   const openProjectPicker = () => {
@@ -4503,17 +4566,26 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     const file = e.target.files?.[0];
     e.target.value = ''; // supaya berkas yang sama bisa dipilih lagi
     if (!file) return;
+    if (!isUnlocked8Bar) {
+      onUnlockEditor();
+      return;
+    }
     if (file.size > 5 * 1024 * 1024) {
       alert('Berkas terlalu besar (maksimal 5 MB).');
       return;
     }
     try {
-      // Baca & validasi dulu; konfirmasi hanya muncul bila berkasnya memang bisa dimuat.
-      const res = importMidiBuffer(await file.arrayBuffer(), IMPORT_CTX);
+      // Server yang membuka & memvalidasi berkas; konfirmasi hanya muncul bila berkasnya memang bisa dimuat.
+      const res = await loadProjectOnServer<PadProject>(file);
+      if (res.result === 'denied') return handleServerDenied();
+      if (res.result !== 'ok') {
+        alert(`Gagal memuat berkas: ${res.message}`);
+        return;
+      }
       if (!window.confirm(`Memuat "${file.name}" akan mengganti seluruh pola dan pengaturan yang sedang ada. Lanjutkan?`)) return;
-      loadProject(res.project);
-      onSuccessToast(`${res.summary} (${file.name})`);
-      if (res.warnings.length > 0) alert(`Catatan impor:\n- ${res.warnings.join('\n- ')}`);
+      loadProject(res.value.project);
+      onSuccessToast(`${res.value.summary} (${file.name})`);
+      if (res.value.warnings.length > 0) alert(`Catatan impor:\n- ${res.value.warnings.join('\n- ')}`);
     } catch (err) {
       alert(`Gagal memuat berkas: ${err instanceof Error ? err.message : 'berkas tidak dapat dibaca.'}`);
     }
@@ -4638,18 +4710,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 Drum Pad
               </button>
               <button
-                onClick={() => {
-                  if (!isUnlocked8Bar) {
-                    onUnlockEditor();
-                    return;
-                  }
-                  setActiveTab('chord');
-                }}
+                onClick={() => setActiveTab('chord')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                   activeTab === 'chord' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
-                {!isUnlocked8Bar && <Lock className="w-3 h-3 text-accent" />}
                 <span>Chord Pad</span>
               </button>
             </div>
@@ -4665,17 +4730,17 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               }}
               className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-accent shadow cursor-pointer shrink-0"
             >
-              <Download className="w-3.5 h-3.5 text-accent" />
+              {isUnlocked8Bar ? <Download className="w-3.5 h-3.5 text-accent" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
               <span>Ekspor Pola</span>
             </button>
 
             <button
               type="button"
-              onClick={saveProject}
+              onClick={() => void saveProject()}
               title="Simpan seluruh proyek (pola, mixer, ADSR, akor) ke berkas MIDI di perangkat Anda"
               className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer shrink-0"
             >
-              <Save className="w-3.5 h-3.5 text-accent" />
+              {isUnlocked8Bar ? <Save className="w-3.5 h-3.5 text-accent" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
               <span>Simpan Proyek</span>
             </button>
 
@@ -4685,7 +4750,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               title="Muat proyek dari berkas MIDI (hasil Simpan Proyek / Ekspor MIDI, atau MIDI lain)"
               className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer shrink-0"
             >
-              <FolderOpen className="w-3.5 h-3.5 text-accent" />
+              {isUnlocked8Bar ? <FolderOpen className="w-3.5 h-3.5 text-accent" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
               <span>Muat Proyek</span>
             </button>
             <input
@@ -4703,19 +4768,32 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           <div className="bg-black/30 p-3.5 rounded-xl border border-white/[0.06]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-gray-300">Pilih Drum Kit:</span>
-              {DRUM_KITS.map((kit) => (
-                <button
-                  key={kit}
-                  onClick={() => setSelectedDrumKit(kit)}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
-                    selectedDrumKit === kit
-                      ? 'bg-accent text-on-accent border-accent font-bold shadow'
-                      : 'bg-black/50 text-gray-300 border-white/[0.08] hover:border-white/20'
-                  }`}
-                >
-                  {kit}
-                </button>
-              ))}
+              {DRUM_KITS.map((kit) => {
+                const kitLocked = !isUnlocked8Bar && !FREE_DRUM_KITS.includes(kit);
+                return (
+                  <button
+                    key={kit}
+                    onClick={() => {
+                      if (kitLocked) {
+                        onUnlockEditor();
+                        return;
+                      }
+                      setSelectedDrumKit(kit);
+                    }}
+                    title={kitLocked ? `Kit ${kit} perlu editor penuh` : undefined}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1 ${
+                      selectedDrumKit === kit
+                        ? 'bg-accent text-on-accent border-accent font-bold shadow'
+                        : kitLocked
+                        ? 'bg-black/50 text-gray-500 border-white/[0.08] hover:border-white/20'
+                        : 'bg-black/50 text-gray-300 border-white/[0.08] hover:border-white/20'
+                    }`}
+                  >
+                    {kitLocked && <Lock className="w-3 h-3 text-accent" />}
+                    {kit}
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -4905,7 +4983,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     title="Tambah instrumen baru (juga muncul sebagai baris di sequencer)"
                     className="flex items-center gap-1 px-2 py-1 rounded-lg border border-dashed border-accent/50 text-accent text-[11px] font-bold hover:bg-accent/10 cursor-pointer"
                   >
-                    <Plus className="w-3 h-3" />
+                    {isUnlocked8Bar ? <Plus className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                     Instrumen
                   </button>
                 )}
@@ -5166,12 +5244,31 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <span className="shrink-0 text-[10px] font-mono text-gray-400">
               Bar {viewStartBar + 1}–{viewStartBar + barsPerView}/{TOTAL_BARS} • {timeSig.label}
             </span>
+            {!isUnlocked8Bar && (
+              <div className="shrink-0 flex items-center gap-[2px]" role="group" aria-label="Peta 16 bar (gratis: hanya Bar 1)">
+                {Array.from({ length: TOTAL_BARS }, (_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={i === 0 ? undefined : onUnlockEditor}
+                    title={i === 0 ? 'Bar 1 (gratis)' : `Bar ${i + 1} terkunci — buka editor penuh`}
+                    className={`w-4 h-4 rounded text-[8px] font-bold leading-none flex items-center justify-center ${
+                      i === 0
+                        ? 'bg-accent text-on-accent cursor-default'
+                        : 'bg-black/50 text-gray-500 border border-white/10 hover:border-accent/50 cursor-pointer'
+                    }`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+              </div>
+            )}
             <div
               className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400"
               title="Banyak bar yang ditampilkan (1–8). Ketik angka atau pakai tombol atas-bawah."
             >
               <span>Tampil</span>
-              <SpinField min={1} max={MAX_BARS_PER_VIEW} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
+              <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
               <span>bar</span>
             </div>
             <div
@@ -5179,12 +5276,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir"
             >
               <span>Bar</span>
-              <SpinField min={1} max={TOTAL_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
+              <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
               <span>Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
               <span>—</span>
               <span>Bar</span>
-              <SpinField min={1} max={TOTAL_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
+              <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
               <span>Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
             </div>
@@ -5399,7 +5496,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 </button>
                 <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/10" role="group" aria-label="Bagian yang diputar">
                   {PLAY_PARTS.map(({ id, label, Icon, tip }) => {
-                    const locked = id === 'chord' && !isUnlocked8Bar;
+                    const locked = false;
                     const on = id === 'drum' ? effPlayDrum : effPlayChord;
                     return (
                       <button
@@ -5866,7 +5963,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onClick={addChordTrack}
                   className="w-full flex items-center justify-center gap-1.5 py-3 rounded-xl border border-dashed border-accent/50 text-accent text-xs font-bold hover:bg-accent/10 cursor-pointer transition-colors"
                 >
-                  <Plus className="w-4 h-4" />
+                  {isUnlocked8Bar ? <Plus className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
                   <span>Tambah baris instrumen ({chordTracks.filter((t) => t.enabled).length + 1}/4)</span>
                 </button>
               )}
@@ -5912,7 +6009,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         title={pickerTrack !== null ? chordTracks[pickerTrack]?.label ?? '' : ''}
         currentProgram={pickerTrack !== null ? chordTracks[pickerTrack]?.program ?? 0 : 0}
         isUnlocked={Boolean(isUnlocked8Bar)}
+        freePrograms={FREE_CHORD_PROGRAMS}
         onSelect={(program) => {
+          if (!isUnlocked8Bar && !FREE_CHORD_PROGRAMS.includes(program)) {
+            onUnlockEditor();
+            return;
+          }
           if (pickerTrack !== null) updateTrack(pickerTrack, { program });
           setPickerTrack(null);
         }}
@@ -6118,11 +6220,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={() => {
-                  setExportScope('drum');
-                  setIsExportMenuOpen(false);
-                  setIsExportModalOpen(true);
-                }}
+                onClick={() => void openExportModal('drum')}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
                 <Disc className="w-4 h-4 text-accent" />
@@ -6130,11 +6228,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setExportScope('chord');
-                  setIsExportMenuOpen(false);
-                  setIsExportModalOpen(true);
-                }}
+                onClick={() => void openExportModal('chord')}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
                 <Music className="w-4 h-4 text-accent" />
@@ -6142,11 +6236,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setExportScope('both');
-                  setIsExportMenuOpen(false);
-                  setIsExportModalOpen(true);
-                }}
+                onClick={() => void openExportModal('both')}
                 className="w-full text-left px-3.5 py-3 rounded-xl bg-black/50 hover:bg-white/10 border border-white/[0.08] text-xs font-bold text-gray-200 flex items-center gap-2.5 cursor-pointer"
               >
                 <Layers className="w-4 h-4 text-accent" />
@@ -6171,7 +6261,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         drumMix={drumMix}
         drumVolume={drumVolume / 100}
         selectedDrumKit={selectedDrumKit}
-        projectPayload={isExportModalOpen ? encodeProjectPayload(snapshotProject()) : undefined}
+        project={isExportModalOpen ? snapshotProject() : undefined}
+        authorize={() => requireServerAccess('export')}
+        onAccessDenied={handleServerDenied}
         onSuccessToast={onSuccessToast}
       />
       <div className="pt-3">
