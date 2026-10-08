@@ -39,6 +39,7 @@ import {
   Timer,
   Save,
   FolderOpen,
+  MousePointer2,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -2275,6 +2276,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   modeRef.current = editMode;
   const getMode = useCallback(() => modeRef.current, []);
   // Saklar "Tambah" (untuk layar sentuh tanpa Shift): saat aktif di mode Pilih, memilih MENAMBAH ke pilihan lama.
+  const [freeSel, setFreeSel] = useState(false);
+  const freeSelRef = useRef(false);
+  freeSelRef.current = freeSel;
   const [addMode, setAddMode] = useState(false);
   const addModeRef = useRef(false);
   addModeRef.current = addMode;
@@ -2492,9 +2496,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Pilih kolom step (semua baris) lewat ruler beat/step di bawah label BAR.
   //  - klik 1x pada step / angka beat = pilih step itu saja
-  //  - klik 2x pada angka beat = pilih seluruh beat
+  //  - klik 2x = pilih satu beat, klik 3x = pilih satu bar (tombol Bebas: mulai dari step yang diklik)
   //  - seret ke samping = pilih rentang step
-  const lastRulerTapRef = useRef<{ idx: number; t: number } | null>(null);
+  const lastRulerTapRef = useRef<{ idx: number; t: number; count: number; base: Set<number> } | null>(null);
   const rulerStepAt = (x: number): number | null => {
     const el = document.querySelector<HTMLElement>('[data-ruler]');
     if (!el) return null;
@@ -2507,23 +2511,41 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const handleRulerPointerDown = (e: React.PointerEvent<HTMLDivElement>, startIdx: number) => {
     const tab = activeTabRef.current;
     e.preventDefault();
-    const S = layoutRef.current.stepsPerBar;
+    const { stepsPerBar: S, totalSteps: total } = layoutRef.current;
     const lastRow = rowCountOf(tab) - 1;
-    const colCells = (a: number, b: number) => buildCells(tab, { r: 0, s: a }, { r: lastRow, s: b });
-    const additive = wantsAdd(e.shiftKey);
-    const base = new Set<number>(additive && selRef.current ? selRef.current.cells : []);
+    const colCells = (a: number, b: number) =>
+      buildCells(tab, { r: 0, s: Math.max(0, a) }, { r: lastRow, s: Math.min(total - 1, b) });
     const now = Date.now();
     const prev = lastRulerTapRef.current;
-    const isDouble = prev !== null && prev.idx === startIdx && now - prev.t < 400;
-    lastRulerTapRef.current = isDouble ? null : { idx: startIdx, t: now };
+    const chained = prev !== null && prev.idx === startIdx && now - prev.t < 450 && prev.count < 3;
+    const count = chained ? (prev as { count: number }).count + 1 : 1;
+    const additive = wantsAdd(e.shiftKey);
+    const base: Set<number> = chained
+      ? (prev as { base: Set<number> }).base
+      : new Set<number>(additive && selRef.current ? selRef.current.cells : []);
+    lastRulerTapRef.current = { idx: startIdx, t: now, count, base };
     anchorRef.current = { r: 0, s: startIdx };
 
-    if (isDouble && beatInfo.isBeatStart[startIdx % S]) {
+    // 1x = step, 2x = beat, 3x = bar. Sama untuk tab Drum dan Akor.
+    // Mode Bebas: beat / bar dimulai dari step yang diklik; mode normal: sejajar garis beat / bar.
+    if (count >= 2) {
       const pos = startIdx % S;
-      let end = pos + 1;
-      while (end < S && !beatInfo.isBeatStart[end]) end++;
+      let bs = pos;
+      while (bs > 0 && !beatInfo.isBeatStart[bs]) bs--;
+      let be = bs + 1;
+      while (be < S && !beatInfo.isBeatStart[be]) be++;
+      const beatLen = Math.max(1, be - bs);
       const barStart = startIdx - pos;
-      setSel(makeSel(tab, [...base, ...colCells(barStart + pos, barStart + end - 1)]));
+      let from: number;
+      let to: number;
+      if (count === 2) {
+        from = freeSelRef.current ? startIdx : barStart + bs;
+        to = from + beatLen - 1;
+      } else {
+        from = freeSelRef.current ? startIdx : barStart;
+        to = from + S - 1;
+      }
+      setSel(makeSel(tab, [...base, ...colCells(from, to)]));
       return;
     }
 
@@ -5311,6 +5333,20 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <span>Tambah</span>
               </button>
 
+              <button
+                type="button"
+                role="switch"
+                aria-checked={freeSel}
+                onClick={() => setFreeSel((v) => !v)}
+                title="Pilih Bebas: klik 2x = satu beat, klik 3x = satu bar, dihitung mulai dari step yang pertama diklik (bukan dari garis beat / bar)"
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                  freeSel ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
+                }`}
+              >
+                <MousePointer2 className="w-3 h-3" />
+                <span>Bebas</span>
+              </button>
+
               <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
 
               <div className="flex items-center gap-1">
@@ -5641,7 +5677,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         title={
                           editMode === 'select'
                             ? isBeat
-                              ? 'Klik = pilih step ini · klik 2x = pilih satu beat · seret = pilih beberapa step'
+                              ? 'Klik = step · 2x = beat · 3x = bar · seret = beberapa step'
                               : 'Klik = pilih step ini · seret ke samping = pilih beberapa step'
                             : undefined
                         }
