@@ -16,7 +16,7 @@ import {
   PencilLine,
   ListOrdered,
   Flame,
-  Sparkles,
+  Clock,
 } from 'lucide-react';
 import type { Deck } from '../../types';
 import {
@@ -100,9 +100,16 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
     try {
       const res = await fetchSharedQuizzes({ q: query, sort, limit: PAGE_SIZE, offset: items.length });
       if (id !== reqId.current) return;
+      const known = new Set(items.map((p) => p.id));
+      const fresh = res.items.filter((r) => !known.has(r.id));
+      if (fresh.length === 0) {
+        // Tidak ada kuis baru (daftar bergeser / sudah habis): hentikan tombol agar tidak memuat berulang tanpa hasil.
+        setTotal(items.length);
+        return;
+      }
       setItems((prev) => {
         const seen = new Set(prev.map((p) => p.id));
-        return [...prev, ...res.items.filter((r) => !seen.has(r.id))];
+        return [...prev, ...fresh.filter((r) => !seen.has(r.id))];
       });
       setTotal(res.total);
     } catch (e: any) {
@@ -208,7 +215,7 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
             </label>
             <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-black/50 border border-white/10 shrink-0" role="group" aria-label="Urutkan">
               {([
-                { k: 'newest', label: 'Terbaru', icon: Sparkles },
+                { k: 'newest', label: 'Terbaru', icon: Clock },
                 { k: 'popular', label: 'Terpopuler', icon: Flame },
               ] as const).map((o) => (
                 <button

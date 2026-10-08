@@ -515,6 +515,10 @@ export function createQuizCommunityRouter({ db, requireUser, requireAdmin, resol
     if (!SHARED_ID_RE.test(id)) return res.status(404).json({ error: 'Kuis tidak ditemukan.' });
     const { rowCount } = await db.query(`DELETE FROM shared_quizzes WHERE id = $1 AND lower(owner_email) = lower($2)`, [id, emailOf(req)]);
     if (!rowCount) return res.status(404).json({ error: 'Kuis tidak ditemukan atau bukan milikmu.' });
+    // Skor dari kuis yang sudah tidak ada ikut dibuang (sama seperti moderasi admin), supaya papan peringkat
+    // tidak memuat poin dari kuis yang tak bisa dimainkan lagi.
+    await db.query(`DELETE FROM quiz_leaderboard_scores WHERE deck_key = $1`, [`shared:${id}`]);
+    lbCache.clear();
     res.json({ success: true });
   }));
 

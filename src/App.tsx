@@ -1,7 +1,8 @@
 // src/App.tsx
 import React, { useState, useEffect, useRef, useMemo, Component, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Header, QuizSegment } from './components/Header';
+import { Header } from './components/Header';
+import { normalizeQuizSegment, type QuizSegment } from './components/PusatKuis/quizSegments';
 import { IndexView } from './components/IndexView';
 import { AudioStudioView } from './components/AudioStudio/AudioStudioView';
 import { QuizIndex } from './components/PusatKuis/QuizIndex';
@@ -143,8 +144,8 @@ function MainApp() {
     return (AUDIO_SECTIONS as readonly string[]).includes(a || '') ? (a as 'assets' | 'pad' | 'tools' | 'pricing') : 'assets';
   });
   const [activeQuizSection, setActiveQuizSection] = useState<QuizSegment>(() => {
-    const q = readSavedNav().quiz;
-    return typeof q === 'string' && /^[a-z-]{1,20}$/.test(q) ? (q as QuizSegment) : 'all';
+    // Nilai lama / tak dikenal (mis. 'leaderboard' sebelum digabung ke Komunitas) dinormalkan agar halaman tidak kosong.
+    return normalizeQuizSegment(readSavedNav().quiz);
   });
 
   // Tautan /alat-audio/... yang belum "dipakai" (tamu harus masuk dulu). Setelah masuk, buka Audio Tools sekali saja.

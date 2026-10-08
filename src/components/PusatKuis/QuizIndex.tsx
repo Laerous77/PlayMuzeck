@@ -22,12 +22,11 @@ import { QuizPlayer } from './QuizPlayer';
 import type { QuizPlayMode } from './QuizPlayer';
 import { MAX_TEAMS } from './QuizPlayer';
 import { QuizResultHistory } from './QuizResultHistory';
-import { QuizLeaderboard } from './QuizLeaderboard';
-import { QuizCommunity } from './QuizCommunity';
+import { QuizCommunityHub } from './QuizCommunityHub';
+import { normalizeQuizSegment, type QuizSegment } from './quizSegments';
 import { MultiplayerArenaModal } from './MultiplayerArenaModal';
 import { generateStandaloneQuizHtml } from '../../services/quizStandalone';
 import { Deck, Topic, CartItem } from '../../types';
-import type { QuizSegment } from '../Header';
 import { STARTER_DECKS, BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '../../data/quiz';
 import { loadCustomQuizJson } from '../../services/quizJsonStore';
 import { usePurchasedDeckIds } from '../../services/quizPurchases';
@@ -69,7 +68,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   userNickname,
   userAvatarUrl,
   userFrameId,
-  activeSection = 'all',
+  activeSection: activeSectionProp = 'all',
   onSectionChange,
   onClaimFreeChoice,
   onAddToCart,
@@ -83,6 +82,9 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   onInstallPwa,
   hasQuizEditor = false,
 }) => {
+  // Nilai segmen lama / tak dikenal dinormalkan supaya halaman tidak pernah kosong.
+  const activeSection = normalizeQuizSegment(activeSectionProp);
+
   const [activeSession, setActiveSession] = useState<{
     deck: Deck;
     mode: QuizPlayMode;
@@ -269,7 +271,6 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
             {activeSection === 'pwa' && <Download className="w-6 h-6 stroke-[2.5]" />}
             {activeSection === 'play' && <Play className="w-6 h-6 stroke-[2.5] fill-current" />}
             {activeSection === 'all' && <Layers className="w-6 h-6 stroke-[2.5]" />}
-            {activeSection === 'leaderboard' && <Trophy className="w-6 h-6 stroke-[2.5]" />}
             {activeSection === 'community' && <Globe className="w-6 h-6 stroke-[2.5]" />}
           </div>
           <div>
@@ -277,15 +278,13 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               {activeSection === 'pwa' && 'Unduh Web App'}
               {activeSection === 'play' && 'Mainkan Kuis'}
               {activeSection === 'all' && 'Perpustakaan Kuis'}
-              {activeSection === 'leaderboard' && 'Papan Peringkat'}
-              {activeSection === 'community' && 'Komunitas Kuis'}
+              {activeSection === 'community' && 'Komunitas & Peringkat'}
             </h1>
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'pwa' && 'Pusat instalasi aplikasi web mandiri PWA & berkas aplikasi luring utuh.'}
               {activeSection === 'play' && 'Pilih paket kuis yang dimuat, tentukan 4 mode permainan, dan mainkan langsung.'}
               {activeSection === 'all' && 'Katalog seluruh tema kuis, 3 starter deck bawaan, dan kreator kuis kustom.'}
-              {activeSection === 'leaderboard' && 'Peringkat pemain terbaik: harian, bulanan, dan sepanjang waktu.'}
-              {activeSection === 'community' && 'Mainkan kuis buatan pengguna lain, dan bagikan kuis buatanmu sendiri.'}
+              {activeSection === 'community' && 'Mainkan & bagikan kuis buatan pengguna, lalu bersaing di papan peringkat harian, bulanan, dan sepanjang waktu.'}
             </p>
           </div>
         </div>
@@ -321,22 +320,12 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
             </div>
           )}
 
-          {activeSection === 'leaderboard' && (
-            <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2 rounded-2xl border border-yellow-400/30 shadow-inner">
-              <Trophy className="w-4 h-4 text-yellow-300" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Peringkat</span>
-                <span className="text-xs font-black text-yellow-300">Harian • Bulanan • Semua</span>
-              </div>
-            </div>
-          )}
-
           {activeSection === 'community' && (
             <div className="flex items-center gap-3.5 bg-black/55 px-4 py-2 rounded-2xl border border-sky-400/30 shadow-inner">
-              <Globe className="w-4 h-4 text-sky-300" />
+              <Trophy className="w-4 h-4 text-yellow-300" />
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Terbuka untuk semua</span>
-                <span className="text-xs font-black text-sky-300">Main & Bagikan Kuis</span>
+                <span className="text-xs font-black text-sky-300">Kuis Komunitas • Peringkat</span>
               </div>
             </div>
           )}
@@ -632,21 +621,14 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
         />
       )}
 
-      {/* SEGMEN 4: PAPAN PERINGKAT (publik: harian, bulanan, sepanjang waktu) */}
-      {activeSection === 'leaderboard' && (
-        <QuizLeaderboard
-          isLoggedIn={isLoggedIn}
-          onPlayNow={() => onSectionChange?.('play')}
-          onOpenCommunity={() => onSectionChange?.('community')}
-        />
-      )}
-
-      {/* SEGMEN 5: KOMUNITAS KUIS (baca & main: siapa saja; bagikan: pemilik Kuis Editor) */}
+      {/* SEGMEN 4: KOMUNITAS & PERINGKAT (Komunitas Kuis + Papan Peringkat dalam satu tempat).
+          Baca & main: siapa saja; bagikan kuis: pemilik Kuis Editor; catat skor: akun login. */}
       {activeSection === 'community' && (
-        <QuizCommunity
+        <QuizCommunityHub
           isLoggedIn={isLoggedIn}
           ownDecks={ownDecks}
           onPlay={playCommunityDeck}
+          onPlayNow={() => onSectionChange?.('play')}
           onOpenLibrary={() => onSectionChange?.('all')}
           onToast={onSuccessToast}
         />
