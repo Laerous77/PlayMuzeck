@@ -648,7 +648,7 @@ const BpmKeyTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = fals
 };
 
 // 3. Perekam Suara + Trim
-const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
+const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void; isActive?: boolean }> = ({ gate, toast, isActive = true }) => {
   const [state, setState] = useState<'idle' | 'recording' | 'processing' | 'ready'>('idle');
   const [elapsed, setElapsed] = useState(0);
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
@@ -660,6 +660,7 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const aliveRef = useRef(true);
+  const discardRef = useRef(false);
   const gateRef = useRef(gate); gateRef.current = gate;
 
   const cleanup = useCallback(() => {
@@ -693,6 +694,7 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
       rec.onstop = async () => {
         cleanup();
         if (!aliveRef.current) return;
+        if (discardRef.current) { discardRef.current = false; return; }
         setState('processing');
         try {
           const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' });
@@ -708,6 +710,7 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
           setBuffer(decoded); setStart(0); setEnd(decoded.duration); setState('ready');
         } catch { setErr('Rekaman tidak bisa diproses. Coba rekam ulang.'); setState('idle'); }
       };
+      discardRef.current = false;
       recRef.current = rec; rec.start(250);
       setElapsed(0); setBuffer(null); setState('recording');
       const t0 = performance.now();
@@ -723,6 +726,15 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
     }
   };
   const stop = () => { if (recRef.current?.state === 'recording') recRef.current.stop(); };
+
+  // Pindah alat / bagian saat merekam: rekaman dibuang, mikrofon ditutup, dan jatah tidak terpakai.
+  useEffect(() => {
+    if (isActive || recRef.current?.state !== 'recording') return;
+    discardRef.current = true;
+    try { recRef.current.stop(); } catch {}
+    cleanup();
+    setState('idle'); setElapsed(0);
+  }, [isActive, cleanup]);
 
   const trimmed = useMemo(() => {
     if (!buffer) return null;
@@ -893,7 +905,7 @@ const DEN_NAME: Record<number, string> = { 1: 'not penuh', 2: 'setengah', 4: 'se
 const SOUND_GROUPS = Array.from(new Set(CLICK_SOUNDS.map((s) => s.group)));
 const SUB_GROUPS = (list: ReturnType<typeof subdivisionsFor>) => Array.from(new Set(list.map((s) => s.group)));
 
-const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
+const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void; isActive?: boolean }> = ({ gate, toast, isActive = true }) => {
   const [bpm, setBpm] = useState(100);
   const [num, setNum] = useState(4);
   const [den, setDen] = useState(4);
@@ -955,6 +967,8 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     setRunning(false); setBeat(-1);
   }, []);
   useEffect(() => stop, [stop]);
+  // Pindah alat / bagian: metronom berhenti supaya klik tidak terus berbunyi di latar belakang.
+  useEffect(() => { if (!isActive) stop(); }, [isActive, stop]);
   useEffect(() => { if (masterRef.current) masterRef.current.gain.value = vol; }, [vol]);
 
   // Sampel klik hasil sintesis (sama persis dengan yang masuk ke berkas unduhan).
@@ -1169,7 +1183,7 @@ const MetronomeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
 // 6. Tuner
 const PRESET_GROUPS = Array.from(new Set(TUNING_PRESETS.map((p) => p.group)));
 
-const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) => {
+const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; isActive?: boolean }> = ({ gate, isActive = true }) => {
   const [preset, setPreset] = useState<TuningPreset>(TUNING_PRESETS.find((p) => p.id === 'guitar') ?? TUNING_PRESETS[1]);
   const [a4, setA4] = useState(440);
   const [running, setRunning] = useState(false);
@@ -1207,6 +1221,9 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
       }
     };
   }, [stop]);
+
+  // Pindah alat / bagian: mikrofon tuner ditutup.
+  useEffect(() => { if (!isActive) stop(); }, [isActive, stop]);
 
   // Tuner: SETIAP penekanan "Mulai tuner" memakai satu jatah, begitu izin mikrofon berhasil didapat (izin ditolak = tidak
   // memakan jatah). Jatah dicatat di server, jadi refresh / ganti perangkat tidak mengembalikannya.
@@ -1798,12 +1815,12 @@ export const ExtraToolPanel: React.FC<{
       {mounted('loop') && <div className={show('loop')} {...guard('loop')}><LoopTool gate={gate} toast={onSuccessToast} isActive={active === 'loop'} onPicker={onPicker} /></div>}
       {mounted('metadata') && <div className={show('metadata')} {...guard('metadata')}><MetadataTool gate={gate} toast={onSuccessToast} isActive={active === 'metadata'} onPicker={onPicker} /></div>}
       {mounted('clean') && <div className={show('clean')} {...guard('clean')}><CleanTool gate={gate} toast={onSuccessToast} isActive={active === 'clean'} onPicker={onPicker} /></div>}
-      {mounted('recorder') && <div className={show('recorder')} {...guard('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('recorder') && <div className={show('recorder')} {...guard('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} isActive={active === 'recorder'} /></div>}
       {mounted('bpm') && <div className={show('bpm')} {...guard('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} isActive={active === 'bpm'} onPicker={onPicker} /></div>}
-      {mounted('metronome') && <div className={show('metronome')} {...guard('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('tuner') && <div className={show('tuner')} {...guard('tuner')}><TunerTool gate={gate} /></div>}
-      {mounted('pitch_detect') && <div className={show('pitch_detect')} {...guard('pitch_detect')}><PitchDetectTool gate={gate} toast={onSuccessToast} /></div>}
-      {mounted('vocal_range') && <div className={show('vocal_range')} {...guard('vocal_range')}><VocalRangeTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('metronome') && <div className={show('metronome')} {...guard('metronome')}><MetronomeTool gate={gate} toast={onSuccessToast} isActive={active === 'metronome'} /></div>}
+      {mounted('tuner') && <div className={show('tuner')} {...guard('tuner')}><TunerTool gate={gate} isActive={active === 'tuner'} /></div>}
+      {mounted('pitch_detect') && <div className={show('pitch_detect')} {...guard('pitch_detect')}><PitchDetectTool gate={gate} toast={onSuccessToast} isActive={active === 'pitch_detect'} /></div>}
+      {mounted('vocal_range') && <div className={show('vocal_range')} {...guard('vocal_range')}><VocalRangeTool gate={gate} toast={onSuccessToast} isActive={active === 'vocal_range'} /></div>}
       {mounted('pitch_match') && <div className={show('pitch_match')} {...guard('pitch_match')}><PitchMatchTool gate={gate} onSuccessToast={onSuccessToast} studioActiveTrack={studioActiveTrack} isActive={active === 'pitch_match'} onPicker={onPicker} /></div>}
     </div>
   );

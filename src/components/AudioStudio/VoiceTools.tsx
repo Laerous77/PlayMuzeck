@@ -289,7 +289,7 @@ const MAX_RECORD_SEC = 300;
 
 const accuracyLabel = (c: number) => (c <= 12 ? 'sangat akurat' : c <= 25 ? 'cukup akurat' : c <= 40 ? 'perlu dilatih' : 'masih sering meleset');
 
-export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) => void }> = ({ gate, toast }) => {
+export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) => void; isActive?: boolean }> = ({ gate, toast, isActive = true }) => {
   const [a4, setA4] = useState(440);
   const [running, setRunning] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -367,6 +367,16 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
     };
   }, []);
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
+
+  // Pindah alat / bagian saat merekam: mikrofon ditutup dan rekaman dibuang tanpa memakai jatah.
+  useEffect(() => {
+    if (isActive || !micRef.current || stoppingRef.current) return;
+    micRef.current.stop(); micRef.current = null;
+    void recRef.current?.stop(); recRef.current = null;
+    segRef.current = null;
+    hist.current = []; recent.current = [];
+    setRunning(false); setLive(null); setLevel(0); setElapsed(0);
+  }, [isActive]);
 
   const start = async () => {
     if (running || busy) return;
@@ -712,7 +722,7 @@ export const VocalRangeResult: React.FC<{
   );
 };
 
-export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) => void }> = ({ gate, toast }) => {
+export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) => void; isActive?: boolean }> = ({ gate, toast, isActive = true }) => {
   const [phase, setPhase] = useState<Phase>('intro');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -757,6 +767,12 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
     goPhase('intro');
     if (message) setErr(message);
   };
+
+  // Pindah alat / bagian di tengah tes: mikrofon ditutup dan tes diulang dari awal tanpa memakai jatah.
+  useEffect(() => {
+    if (isActive || !micRef.current) return;
+    abort();
+  }, [isActive]);
 
   const onFrame = (f: Frame) => {
     setLevel(levelPct(f.rms));
@@ -897,7 +913,7 @@ export const VocalRangeTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =>
           ) : (
             <div className={`${CARD_CLS} flex items-center justify-between gap-3 text-xs`}>
               <span className="text-gray-300 font-bold">Waktu bernada nyaman terekam:</span>
-              <span className="font-mono font-black text-accent text-base tabular-nums">{comfortSeconds.toFixed(0)} dtk{comfortSeconds < 2.5 ? ' (min. 3s)' : ''}</span>
+              <span className="font-mono font-black text-accent text-base tabular-nums">{comfortSeconds.toFixed(0)} dtk{comfortSeconds < 2.5 ? ' (min. 2,5 dtk)' : ''}</span>
             </div>
           )}
 

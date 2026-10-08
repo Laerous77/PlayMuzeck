@@ -66,10 +66,17 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   }, [activeSection]);
 
   // Audio Tools (20 alat dalam satu suite): slug URL /alat-audio/<slug> memilih alat yang dibuka pertama kali.
-  const toolSlug = typeof window !== 'undefined' ? window.location.pathname.split('/')[2] || '' : '';
-  const initialTool = TOOL_SLUG_TO_ID[toolSlug] ?? null;
+  // Slug dibaca sekali saat tampilan dibuka (App.tsx membuka seksi Audio Tools untuk path /alat-audio/...), lalu URL
+  // dikembalikan ke "/" supaya tautan itu tidak terus memaksa Audio Tools setiap kali halaman dimuat ulang.
+  const [initialTool] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const [, root, slug] = window.location.pathname.split('/');
+    return root === 'alat-audio' ? TOOL_SLUG_TO_ID[slug || ''] ?? null : null;
+  });
   useEffect(() => {
+    if (typeof window === 'undefined' || !/^\/alat-audio(\/|$)/.test(window.location.pathname)) return;
     if (initialTool) document.getElementById('audio-tools-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    try { window.history.replaceState({}, '', '/'); } catch {}
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const catalog: AudioTrackItem[] = tracks;
@@ -102,6 +109,13 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     trackOwnership?.audioToolsSuite ||
     Object.values(entitlements?.byTrack || {}).some((t: any) => t?.audioToolsSuite)
   );
+
+  // Latihan Nada boleh memakai trek studio sebagai acuan hanya bila akun memiliki Master-nya: berkas master bisa diunduh
+  // siapa saja yang tahu URL-nya, dan batas pratinjau 7 detik hanya ada di UI, jadi tidak boleh ditawarkan ke semua orang.
+  const studioTrackForTools =
+    trackOwnership.fullMaster && activeTrack.audioUrl
+      ? { id: String(activeTrack.id), title: activeTrack.title, audioUrl: activeTrack.audioUrl }
+      : null;
 
   const handleUnlockAudioTools = () => {
     handleNavigateToPricing('audioToolsSuite');
@@ -186,7 +200,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             </h1>
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'assets' && 'Katalog lagu orisinal, stem mixer & lisensi modular.'}
-              {activeSection === 'pad' && 'Drum pad & chord pad, sequencer 16-bar dengan 11 birama, 4 track akor mandiri, ekspor MIDI/audio.'}
+              {activeSection === 'pad' && 'Drum Pad & Chord Pad (gratis di Bar 1), rekam live ke sequencer, 11 birama, dinamika, undo/redo. Editor penuh: 16 bar, 4 track akor, ekspor, dan simpan proyek.'}
               {activeSection === 'tools' && '20 alat dalam 6 kelompok: potong & susun, perbaiki suara, nada & tempo, format & ukuran, rekam & analisis, latihan musik.'}
               {activeSection === 'pricing' && 'Buka modul produksi lengkap dengan kepemilikan permanen.'}
             </p>
@@ -227,7 +241,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
                   <Activity className="w-3 h-3 text-accent" />
                   <span>Sequencer Clock Sync</span>
                 </span>
-                <span className="text-xs font-black text-accent">16-Bar Grid, 11 Birama & ADSR</span>
+                <span className="text-xs font-black text-accent">Rekam Live, 11 Birama & Dinamika</span>
               </div>
             </div>
           )}
@@ -358,6 +372,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             onSuccessToast={onSuccessToast}
             isActive={activeSection === 'tools'}
             initialTool={initialTool}
+            studioActiveTrack={studioTrackForTools}
           />
         </section>
       )}

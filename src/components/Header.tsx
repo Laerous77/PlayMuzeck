@@ -53,7 +53,7 @@ const INDEX_ITEMS = [
 
 const AUDIO_ITEMS = [
   { key: 'assets', icon: Music, title: 'Aset Audio', desc: 'Katalog lagu, stems & lisensi' },
-  { key: 'pad', icon: Sliders, title: 'Pad Editor', desc: 'Drum pad, chord pad & 11 birama' },
+  { key: 'pad', icon: Sliders, title: 'Pad Editor', desc: 'Drum & chord pad gratis, rekam live, 11 birama' },
   { key: 'tools', icon: Wrench, title: 'Audio Tools', desc: '20 alat: edit, rekam & latihan' },
   { key: 'pricing', icon: CreditCard, title: 'Harga & Lisensi', desc: 'Paket bundle 6 produk lengkap' },
 ] as const;

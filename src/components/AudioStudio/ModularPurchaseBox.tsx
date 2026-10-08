@@ -125,8 +125,8 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     },
     {
       key: 'fullEditor8Bar',
-      title: 'Drum & Chord Pad Editor (Akses Permanen)',
-      description: 'Buka Chord Pad (16 pad akor, 4 track, 128 instrumen GM), sequencer 16 bar dengan 11 birama, serta ekspor MIDI, WAV, MP3, M4A, dan FLAC. Juga membuka mode Nada GM untuk efek suara klik.',
+      title: 'Full 16-Bar Editor (Akses Permanen)',
+      description: 'Lengkapi Pad Editor: sequencer 16 bar (gratis hanya Bar 1), 7 kit drum, 4 track akor dengan 128 instrumen GM (gratis 1 track Grand Piano), ekspor MIDI, WAV, MP3, M4A, dan FLAC per bagian (drum, 4 akor, atau semuanya) termasuk loop, serta simpan dan muat proyek. Juga membuka mode Nada GM untuk efek suara klik. Drum Pad dan Chord Pad Bar 1 tetap gratis.',
       price: pricing.products.fullEditor8Bar,
       isOwned: isEditorOwned,
       icon: Sliders,
@@ -245,7 +245,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
           Pilih item individual sesuai kebutuhan untuk lagu <span className="text-accent font-semibold">{activeTrack?.title}</span>, atau beli paket komplit untuk hemat maksimal.
         </p>
         <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
-          Gratis tanpa membeli: Drum Pad 1 bar dan 20 Audio Tools dengan jatah 2x per alat per hari. Pad Editor dan Audio Tools Suite dibeli sekali dan berlaku untuk akunmu, tidak per lagu.
+          Gratis tanpa membeli: Drum Pad dan Chord Pad di Bar 1, serta 20 Audio Tools dengan jatah 2x per alat per hari. Full 16-Bar Editor dan Audio Tools Suite dibeli sekali dan berlaku untuk akunmu, tidak per lagu.
         </p>
       </div>
 
@@ -365,7 +365,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
           ) : (
             <>
               <p className="text-xs text-gray-300 mt-1.5 leading-relaxed max-w-xl font-medium">
-                Dapatkan kepemilikan permanen untuk seluruh item yang belum Anda miliki (Master, Loop, Stems, Partitur, Pad Editor, & Audio Tools Suite).
+                Dapatkan kepemilikan permanen untuk seluruh item yang belum Anda miliki (Master, Loop, Stems, Partitur, Full 16-Bar Editor, & Audio Tools Suite).
               </p>
               {pricing.totalDiscount > 0 && (
                 <span className="text-xs text-emerald-400 font-extrabold flex items-center gap-1 mt-1.5 animate-pulse">

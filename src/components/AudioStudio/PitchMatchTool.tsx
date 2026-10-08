@@ -144,6 +144,14 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
     if (recordedVocalUrl) URL.revokeObjectURL(recordedVocalUrl);
   }, [recordedVocalUrl]);
 
+  // Pindah alat / bagian di tengah latihan atau pemutaran ulang: mikrofon & suara acuan dihentikan, latihan dibuang
+  // tanpa memakai jatah (practicingRef dimatikan dulu supaya refSrc.onended tidak memanggil finishPractice).
+  useEffect(() => {
+    if (isActive) return;
+    practicingRef.current = false;
+    stopAllMedia();
+  }, [isActive, stopAllMedia]);
+
   // Decode & Analisis Audio Acuan
   const processReferenceAudio = async (arrayBuffer: ArrayBuffer, name: string) => {
     setErrorMsg(null);

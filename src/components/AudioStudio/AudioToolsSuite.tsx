@@ -156,6 +156,7 @@ function toolInfo(id: UnifiedToolId): { name: string; icon: React.ElementType; d
 
 export const TOOL_SLUG_TO_ID: Record<string, UnifiedToolId> = {
   'potong-audio': 'trim',
+  'buat-nada-dering': 'trim',
   'atur-volume-audio': 'volume',
   'ubah-nada-audio': 'pitch',
   'ubah-kecepatan-audio': 'tempo',
@@ -1438,7 +1439,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
         {/* Panel alat tambahan */}
         <ExtraToolPanel
-          active={selectedExtra}
+          active={isActive ? selectedExtra : null}
           gate={extraGate}
           onSuccessToast={onSuccessToast}
           studioActiveTrack={studioActiveTrack}
@@ -1814,6 +1815,27 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       </button>
                     ))}
                   </div>
+                  {vocalExtractTarget === 'both' && (
+                    <div className="flex items-center gap-2 pt-1 flex-wrap" role="group" aria-label="Pilih hasil yang didengarkan">
+                      <span className="text-gray-400 font-bold">Dengarkan hasil:</span>
+                      {(['vocal', 'instrumental'] as const).map((which) => (
+                        <button
+                          key={which}
+                          type="button"
+                          aria-pressed={vocalPreviewChoice === which}
+                          onClick={() => {
+                            if (live.current.selectedTool === 'vocal_separator') stopPlayback();
+                            setVocalPreviewChoice(which);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg font-bold cursor-pointer ${
+                            vocalPreviewChoice === which ? 'bg-white/20 text-white' : 'bg-black/60 text-gray-400 hover:text-white'
+                          }`}
+                        >
+                          {which === 'vocal' ? 'Vokal' : 'Musik'}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1883,30 +1905,63 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                 </div>
 
                 {hasResult && decodedBuffer && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-emerald-400 text-xs font-bold flex items-center gap-1">
                       <CheckCircle className="w-3.5 h-3.5" /> Siap
                     </span>
-                      <button
-                        type="button"
-                        onClick={() => handleDownloadFile()}
-                        disabled={isExporting || Boolean(limitMsg)}
-                        className={BTN_DOWNLOAD}
-                      >
-                        {isExporting ? (
-                          <>
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            <span>
-                              {exportBusyLabel} ({exportProgress}%)...
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Download className="w-3.5 h-3.5" />
-                            <span>Unduh {selectedExportFormat}</span>
-                          </>
-                        )}
-                      </button>
+                      {selectedTool === 'vocal_separator' && vocalExtractTarget === 'both' && currentToolState.vocalBuffers ? (
+                        (['vocal', 'instrumental'] as const).map((which) => (
+                          <button
+                            key={which}
+                            type="button"
+                            onClick={() =>
+                              handleDownloadFile({
+                                buffer: currentToolState.vocalBuffers![which],
+                                suffix: which === 'vocal' ? 'Vocal_Only' : 'Music_Only',
+                              })
+                            }
+                            disabled={isExporting || Boolean(limitMsg)}
+                            className={BTN_DOWNLOAD}
+                          >
+                            {isExporting ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>
+                                  {exportBusyLabel} ({exportProgress}%)...
+                                </span>
+                              </>
+                            ) : (
+                              <>
+                                <Download className="w-3.5 h-3.5" />
+                                <span>
+                                  Unduh {which === 'vocal' ? 'Vokal' : 'Musik'} {selectedExportFormat}
+                                </span>
+                              </>
+                            )}
+                          </button>
+                        ))
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadFile()}
+                          disabled={isExporting || Boolean(limitMsg)}
+                          className={BTN_DOWNLOAD}
+                        >
+                          {isExporting ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>
+                                {exportBusyLabel} ({exportProgress}%)...
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Download className="w-3.5 h-3.5" />
+                              <span>Unduh {selectedExportFormat}</span>
+                            </>
+                          )}
+                        </button>
+                      )}
                   </div>
                 )}
               </div>

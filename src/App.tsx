@@ -102,6 +102,16 @@ function readSavedNav(): SavedNav {
   }
 }
 
+// Tautan langsung dari halaman SEO: /alat-audio atau /alat-audio/<slug> membuka Audio Tools (alat yang dituju dipilih
+// oleh AudioStudioView lewat slug-nya). Tamu diminta masuk dulu; sesudah masuk langsung dibawa ke Audio Tools.
+function isAudioToolsLink(): boolean {
+  try {
+    return /^\/alat-audio(\/|$)/.test(window.location.pathname);
+  } catch {
+    return false;
+  }
+}
+
 function MainApp() {
   const [userSession, setUserSession] = useState<UserSession>(() => {
     try {
@@ -119,6 +129,7 @@ function MainApp() {
     try {
       const s = storage.getUserSession();
       if (!(s?.isLoggedIn && String(s.email || '').trim())) return 'index';
+      if (isAudioToolsLink()) return 'audio';
       const m = readSavedNav().mode;
       return m === 'audio' || m === 'quiz' || m === 'index' ? m : 'audio';
     } catch {
@@ -127,6 +138,7 @@ function MainApp() {
   });
 
   const [activeAudioSection, setActiveAudioSection] = useState<'assets' | 'pad' | 'tools' | 'pricing'>(() => {
+    if (isAudioToolsLink()) return 'tools';
     const a = readSavedNav().audio;
     return (AUDIO_SECTIONS as readonly string[]).includes(a || '') ? (a as 'assets' | 'pad' | 'tools' | 'pricing') : 'assets';
   });
@@ -134,6 +146,15 @@ function MainApp() {
     const q = readSavedNav().quiz;
     return typeof q === 'string' && /^[a-z-]{1,20}$/.test(q) ? (q as QuizSegment) : 'all';
   });
+
+  // Tautan /alat-audio/... yang belum "dipakai" (tamu harus masuk dulu). Setelah masuk, buka Audio Tools sekali saja.
+  const audioToolsLinkPendingRef = useRef(isAudioToolsLink());
+  useEffect(() => {
+    if (!userSession.isLoggedIn || !audioToolsLinkPendingRef.current) return;
+    audioToolsLinkPendingRef.current = false;
+    setActiveAudioSection('tools');
+    setCurrentMode('audio');
+  }, [userSession.isLoggedIn]);
 
   // Simpan posisi terakhir setiap kali berpindah.
   useEffect(() => {
@@ -888,6 +909,7 @@ function MainApp() {
           setUserSession(guest);
           try { storage.setUserSession(guest); } catch {}
           setCurrentMode('index');
+          if (audioToolsLinkPendingRef.current) setIsAuthOpen(true);
         }
       });
     }

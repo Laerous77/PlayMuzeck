@@ -269,9 +269,25 @@ export async function timeStretch(
   opts: DspOptions = {}
 ): Promise<Channels> {
   if (!channels.length) throw new DspError('EMPTY');
+  if (channels[0].length === 0) throw new DspError('EMPTY');
+  if (Math.abs(speed - 1) < 0.005) return channels.map((c) => c.slice());
+  return wsolaStretch(channels, sampleRate, speed, opts);
+}
+
+/**
+ * Inti WSOLA tanpa ambang "abaikan bila hampir 1x". timeStretch() melewati geseran < 0,5% (tidak terdengar), tetapi
+ * pitchShift() dengan Kunci Tempo butuh panjang keluaran yang persis round(panjang / speed) untuk geseran sekecil
+ * apa pun; kalau tidak, resample sesudahnya memendekkan durasi (mis. 0,02 semitone -> sekitar 0,1% lebih pendek).
+ */
+async function wsolaStretch(
+  channels: Channels,
+  sampleRate: number,
+  speed: number,
+  opts: DspOptions = {}
+): Promise<Channels> {
+  if (!channels.length) throw new DspError('EMPTY');
   const len = channels[0].length;
   if (len === 0) throw new DspError('EMPTY');
-  if (Math.abs(speed - 1) < 0.005) return channels.map((c) => c.slice());
   speed = Math.min(4, Math.max(0.25, speed));
 
   let N = Math.round(sampleRate * 0.046);
@@ -389,9 +405,10 @@ export async function pitchShift(
 
   let work = channels;
   if (keepTempo) {
-    work = await timeStretch(channels, sampleRate, 1 / ratio, sub(opts, 0, 92));
+    work = await wsolaStretch(channels, sampleRate, 1 / ratio, sub(opts, 0, 92));
   }
 
+  const targetLen = channels[0]?.length ?? 0;
   const out = work.map((c) => {
     let src = c;
     if (ratio > 1) {
@@ -399,7 +416,14 @@ export async function pitchShift(
       src = c.slice();
       butterworthInPlace(src, sampleRate, 0.45 * (sampleRate / ratio), 'lowpass', 4);
     }
-    return resampleByRatio(src, ratio);
+    const r = resampleByRatio(src, ratio);
+    // Kunci Tempo: durasi harus sama dengan aslinya (selisih pembulatan beberapa sampel dirapikan).
+    if (keepTempo && targetLen > 0 && r.length !== targetLen) {
+      const fixed = new Float32Array(targetLen);
+      fixed.set(r.length > targetLen ? r.subarray(0, targetLen) : r);
+      return fixed;
+    }
+    return r;
   });
   opts.onProgress?.(100);
   return out;
