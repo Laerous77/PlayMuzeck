@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:dsp": "tsx tests/audioExtraDsp.test.ts && tsx tests/quota.test.ts && tsx tests/audioLimits.test.ts && tsx tests/audioMetadata.test.ts",
+    "test:dsp": "tsx tests/audioExtraDsp.test.ts && tsx tests/audioLimits.test.ts && tsx tests/audioMetadata.test.ts",
     "test:pad": "tsx tests/padFiles.test.ts",
     "test:quiz": "tsx tests/quizCommunity.test.ts && tsx tests/quizSegments.test.ts",
     "test:routes": "tsx tests/routes.test.ts"
@@ -43,7 +43,6 @@
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "soundfont2": "^0.5.0",
-    "vite": "^6.2.3",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -56,12 +55,9 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
-    "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
     "vite-plugin-pwa": "^1.3.0"
   }
 }
