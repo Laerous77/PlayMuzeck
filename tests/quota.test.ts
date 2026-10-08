@@ -4,7 +4,7 @@ const fake = { get length() { return mem.size; }, key: (i: number) => [...mem.ke
 let bad = 0; const ok = (n: string, c: boolean) => { console.log(c ? 'ok  ' : 'GAGAL', n); if (!c) bad++; };
 
 ok('batas harian = 2', DAILY_FREE_QUOTA === 2);
-const TOOLS = ['trim', 'volume', 'pitch', 'tempo', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator', 'merge', 'clean', 'recorder', 'bpm', 'metronome', 'tuner'];
+const TOOLS = ['trim', 'volume', 'pitch', 'tempo', 'reverse', 'convert', 'compress', 'noise_reduction', 'vocal_separator', 'merge', 'clean', 'recorder', 'bpm', 'metronome', 'tuner', 'loop', 'metadata'];
 for (const t of TOOLS) {
   ok(`${t}: jatah awal 2`, remainingQuota(t, false, fake) === 2);
   ok(`${t}: pakai #1`, consumeQuota(t, false, fake) === true);

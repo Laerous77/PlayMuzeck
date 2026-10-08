@@ -47,7 +47,7 @@ const PROBLEMS = [
     icon: Wrench,
     problem: 'Hanya perlu edit audio cepat?',
     solution:
-      '18 Audio Tools (potong, gabung, volume, pitch, tempo, konversi, kompres, perekam, deteksi BPM, metronom, tuner, dan lainnya) diproses di perangkatmu. Setiap alat gratis dipakai 2 kali per hari.',
+      '20 Audio Tools (potong, gabung, ulangi, volume, pitch, tempo, konversi, kompres, perekam, deteksi BPM, metronom, tuner, dan lainnya) diproses di perangkatmu. Setiap alat gratis dipakai 2 kali per hari.',
   },
   {
     icon: Brain,
@@ -68,7 +68,7 @@ const AUDIO_POINTS = [
   { title: '4 track akor, 128 instrumen GM', desc: 'Tiap track punya instrumen, volume, mute/solo, dan kurva ADSR sendiri. Suara memakai bank sampel SoundFont.' },
   { title: 'Sequencer 16 bar, 11 birama', desc: 'Dari 2/4 sampai 12/8, tempo 60–200 BPM, dengan wilayah loop yang bisa diatur. Versi gratis: Drum Pad 1 bar. Chord Pad, 16 bar, dan ekspor adalah modul berbayar.' },
   { title: 'Ekspor MIDI, WAV, MP3, M4A, FLAC', desc: 'Ekspor pola drum, akor, atau keduanya. Format audio bisa diulang menjadi satu berkas loop.' },
-  { title: 'Stem mixer & 18 Audio Tools', desc: 'Potong, gabung, volume, pitch, tempo, vokal isolator, konversi, kompres, perekam, deteksi BPM & kunci, metronom, tuner, tes vocal range, dan latihan cocokkan nada.' },
+  { title: 'Stem mixer & 20 Audio Tools', desc: 'Potong, gabung, ulangi, volume, pitch, tempo, vokal isolator, konversi, kompres, edit metadata & cover, perekam, deteksi BPM & kunci, metronom, tuner, tes vocal range, dan latihan cocokkan nada.' },
 ];
 
 const QUIZ_POINTS = [
@@ -89,7 +89,7 @@ const ECOSYSTEM = [
 const FAQ = [
   {
     q: 'Apa saja yang gratis dan apa yang berbayar?',
-    a: 'Gratis: akun, 3 starter deck, Drum Pad 1 bar, dan 2 penggunaan per alat per hari di Audio Tools (18 alat, kuota dicatat di server dengan cadangan di browser). Berbayar (beli sekali): modul per lagu seperti master, loop, stem, dan partitur; Pad Editor penuh (Chord Pad 4 track, 16 bar, 11 birama, ekspor MIDI/audio); Audio Tools tanpa batas harian; serta deck topik tambahan. Donasi bersifat sukarela.',
+    a: 'Gratis: akun, 3 starter deck, Drum Pad 1 bar, dan 2 penggunaan per alat per hari di Audio Tools (20 alat, kuota dicatat di server dengan cadangan di browser). Berbayar (beli sekali): modul per lagu seperti master, loop, stem, dan partitur; Pad Editor penuh (Chord Pad 4 track, 16 bar, 11 birama, ekspor MIDI/audio); Audio Tools tanpa batas harian; serta deck topik tambahan. Donasi bersifat sukarela.',
   },
   {
     q: 'Apakah berkas audio saya diunggah ke server?',
@@ -173,7 +173,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
             </button>
           </div>
           <p className="text-[11px] text-gray-400">
-            Perlu masuk dengan akun gratis. Drum Pad dan 18 Audio Tools bisa dicoba tanpa biaya (2x per alat per hari); Chord Pad dan modul lengkap bersifat berbayar.
+            Perlu masuk dengan akun gratis. Drum Pad dan 20 Audio Tools bisa dicoba tanpa biaya (2x per alat per hari); Chord Pad dan modul lengkap bersifat berbayar.
           </p>
         </motion.div>
       </section>

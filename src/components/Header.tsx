@@ -46,7 +46,7 @@ interface HeaderProps {
 // Urutan menu Halaman Utama = urutan bagian di IndexView: Cara Mulai -> Audio Studio -> Pusat Kuis -> FAQ.
 const INDEX_ITEMS = [
   { id: 'index-steps-section', icon: ListChecks, tone: 'accent', title: 'Cara Mulai', desc: 'Mulai dalam 3 langkah' },
-  { id: 'index-audio-section', icon: Music, tone: 'accent', title: 'Audio Studio', desc: '128 instrumen, 4 track akor & 18 Audio Tools' },
+  { id: 'index-audio-section', icon: Music, tone: 'accent', title: 'Audio Studio', desc: '128 instrumen, 4 track akor & 20 Audio Tools' },
   { id: 'index-quiz-section', icon: Brain, tone: 'accent2', title: 'Pusat Kuis', desc: '4 mode main & 3 starter deck' },
   { id: 'index-faq-section', icon: HelpCircle, tone: 'accent', title: 'Pertanyaan Umum', desc: 'Jawaban singkat seputar layanan' },
 ] as const;
@@ -54,7 +54,7 @@ const INDEX_ITEMS = [
 const AUDIO_ITEMS = [
   { key: 'assets', icon: Music, title: 'Aset Audio', desc: 'Katalog lagu, stems & lisensi' },
   { key: 'pad', icon: Sliders, title: 'Pad Editor', desc: 'Drum pad, chord pad & 11 birama' },
-  { key: 'tools', icon: Wrench, title: 'Audio Tools', desc: '18 alat: edit, rekam & latihan' },
+  { key: 'tools', icon: Wrench, title: 'Audio Tools', desc: '20 alat: edit, rekam & latihan' },
   { key: 'pricing', icon: CreditCard, title: 'Harga & Lisensi', desc: 'Paket bundle 6 produk lengkap' },
 ] as const;
 

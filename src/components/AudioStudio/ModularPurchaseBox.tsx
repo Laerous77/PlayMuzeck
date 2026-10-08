@@ -133,8 +133,8 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
     },
     {
       key: 'audioToolsSuite',
-      title: 'Audio Tools Suite (18 Tools Studio)',
-      description: 'Akses tanpa batas harian untuk seluruh 18 alat: potong, gabung, volume, pitch, tempo, vokal isolator, konversi, kompres, perekam, deteksi BPM, metronom, tuner, dan lainnya.',
+      title: 'Audio Tools Suite (20 Tools Studio)',
+      description: 'Akses tanpa batas harian untuk seluruh 20 alat: potong, gabung, ulangi, volume, pitch, tempo, vokal isolator, konversi, kompres, perekam, deteksi BPM, metronom, tuner, dan lainnya.',
       price: pricing.products.audioToolsSuite,
       isOwned: isToolsOwned,
       icon: Wrench,
@@ -245,7 +245,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
           Pilih item individual sesuai kebutuhan untuk lagu <span className="text-accent font-semibold">{activeTrack?.title}</span>, atau beli paket komplit untuk hemat maksimal.
         </p>
         <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">
-          Gratis tanpa membeli: Drum Pad 1 bar dan 18 Audio Tools dengan jatah 2x per alat per hari. Pad Editor dan Audio Tools Suite dibeli sekali dan berlaku untuk akunmu, tidak per lagu.
+          Gratis tanpa membeli: Drum Pad 1 bar dan 20 Audio Tools dengan jatah 2x per alat per hari. Pad Editor dan Audio Tools Suite dibeli sekali dan berlaku untuk akunmu, tidak per lagu.
         </p>
       </div>
 

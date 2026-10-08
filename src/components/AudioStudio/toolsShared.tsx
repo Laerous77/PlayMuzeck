@@ -1,6 +1,6 @@
 // src/components/AudioStudio/toolsShared.tsx
-// Komponen & gaya yang dipakai bersama oleh AudioToolsSuite (9 alat bawaan) dan AudioExtraTools (6 alat tambahan)
-// supaya tampilan ke-15 alat seragam.
+// Komponen & gaya yang dipakai bersama oleh AudioToolsSuite (9 alat bawaan) dan AudioExtraTools (11 alat tambahan)
+// supaya tampilan ke-20 alat seragam.
 import React, { useEffect, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 
@@ -77,7 +77,7 @@ export const pillCls = (on: boolean) =>
   `px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${on ? 'bg-accent text-on-accent shadow' : 'bg-black/60 text-gray-400 hover:text-white'}`;
 
 // ───────────────────────── Penjaga kuota ─────────────────────────
-// Dipakai ke-15 alat: bila jatah gratis harian alat habis, SEMUA kontrol di panel alat (tombol, slider, kolom isian,
+// Dipakai ke-20 alat: bila jatah gratis harian alat habis, SEMUA kontrol di panel alat (tombol, slider, kolom isian,
 // pemilih berkas, pilihan format, dst.) tidak bekerja dan mengarahkan pengguna ke Harga & Lisensi.
 // Elemen bertanda `data-quota-free` (ikon info, tombol beli) dikecualikan.
 let lastBlockedAt = 0;

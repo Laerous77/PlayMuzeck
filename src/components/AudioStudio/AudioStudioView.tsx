@@ -65,7 +65,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     if (activeSection === 'tools') setToolsMounted(true);
   }, [activeSection]);
 
-  // Audio Tools (18 alat dalam satu suite): slug URL /alat-audio/<slug> memilih alat yang dibuka pertama kali.
+  // Audio Tools (20 alat dalam satu suite): slug URL /alat-audio/<slug> memilih alat yang dibuka pertama kali.
   const toolSlug = typeof window !== 'undefined' ? window.location.pathname.split('/')[2] || '' : '';
   const initialTool = TOOL_SLUG_TO_ID[toolSlug] ?? null;
   useEffect(() => {
@@ -107,10 +107,10 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
     handleNavigateToPricing('audioToolsSuite');
     const toolsItem = {
       id: `audio-tools-${Date.now()}`,
-      title: 'Audio Tools Suite (18 Tools Studio)',
+      title: 'Audio Tools Suite (20 Tools Studio)',
       category: 'audio',
       price: 20000,
-      description: 'Akses penuh permanen tanpa batasan kuota harian untuk seluruh 18 alat studio audio.',
+      description: 'Akses penuh permanen tanpa batasan kuota harian untuk seluruh 20 alat studio audio.',
       itemTypeKey: 'audioToolsSuite',
     } as any;
 
@@ -187,7 +187,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'assets' && 'Katalog lagu orisinal, stem mixer & lisensi modular.'}
               {activeSection === 'pad' && 'Drum pad & chord pad, sequencer 16-bar dengan 11 birama, 4 track akor mandiri, ekspor MIDI/audio.'}
-              {activeSection === 'tools' && '18 alat dalam 6 kelompok: potong & susun, perbaiki suara, nada & tempo, format, rekam & analisis, latihan musik.'}
+              {activeSection === 'tools' && '20 alat dalam 6 kelompok: potong & susun, perbaiki suara, nada & tempo, format & ukuran, rekam & analisis, latihan musik.'}
               {activeSection === 'pricing' && 'Buka modul produksi lengkap dengan kepemilikan permanen.'}
             </p>
           </div>
@@ -242,7 +242,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
                   <span className="w-1.5 h-1.5 rounded-full bg-accent animate-ping" />
                   <span>Client-Side Processing</span>
                 </span>
-                <span className="text-xs font-black text-white">18 Alat: Vokal, Pitch, Tuner, Metronom & Lainnya</span>
+                <span className="text-xs font-black text-white">20 Alat: Vokal, Pitch, Tuner, Metronom & Lainnya</span>
               </div>
             </div>
           )}

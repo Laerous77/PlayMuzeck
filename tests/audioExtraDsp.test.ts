@@ -241,3 +241,42 @@ console.log(`\n${pass} pengujian lulus${process.exitCode ? ' (ADA YANG GAGAL)' :
   for (const rate of [22050, 48000, 96000]) ok(`Bunyi @${rate}: valid`, D.CLICK_SOUNDS.every((x) => D.clickSample(x.id, 'accent', rate).every(Number.isFinite)));
 }
 
+// ── Ulangi audio (loop)
+{
+  const base = [sine(440, 1.5), sine(660, 1.5)];
+  ok('Ulangi: batas 2..5', D.MIN_REPEAT === 2 && D.MAX_REPEAT === 5);
+  for (const n of [2, 3, 4, 5]) {
+    const r = D.repeatChannels(base, sr, n);
+    ok(`Ulangi ${n}x: panjang = ${n} x asli`, r.length === 2 && r[0].length === base[0].length * n && r[1].length === base[1].length * n);
+    ok(`Ulangi ${n}x: tiap salinan identik dengan aslinya`, Array.from({ length: n }, (_, k) => k).every((k) => {
+      const off = k * base[0].length; return base[0].every((v, i) => r[0][off + i] === v);
+    }));
+  }
+  ok('Ulangi: dibatasi maksimal 5x', D.repeatChannels(base, sr, 9)[0].length === base[0].length * 5);
+  ok('Ulangi: 0 / NaN dianggap 1x (salinan)', D.repeatChannels(base, sr, 0)[0].length === base[0].length && D.repeatChannels(base, sr, NaN)[0].length === base[0].length);
+  const one = D.repeatChannels(base, sr, 1);
+  ok('Ulangi 1x: salinan terpisah (tidak berbagi memori)', one[0] !== base[0] && one[0].every((v, i) => v === base[0][i]));
+  ok('Ulangi: audio kosong -> kosong', D.repeatChannels([new Float32Array(0)], sr, 3)[0].length === 0);
+  ok('Ulangi: audio asli tidak berubah', base[0][100] === Math.fround(Math.sin(2 * Math.PI * 440 * 100 / sr)));
+  const cf = D.repeatChannels(base, sr, 3, 0.5);
+  const cfLen = base[0].length * 3 - 2 * Math.round(0.5 * sr);
+  ok('Ulangi + crossfade 0,5 dtk: durasi = 3 x asli - 2 x crossfade', cf[0].length === cfLen, `${cf[0].length} vs ${cfLen}`);
+  ok('Ulangi + crossfade: tidak melewati puncak 1,0 (equal-power)', D.peakOf(cf) <= 1.0001 && cf[0].every(Number.isFinite));
+  const mono = D.repeatChannels([sine(440, 1)], sr, 4);
+  ok('Ulangi mono tetap mono', mono.length === 1 && mono[0].length === sr * 4);
+}
+
+// ── Sample rate & kanal (remixChannels)
+{
+  const L = sine(300, 1, 0.5), R = sine(500, 1, 0.5);
+  ok('Kanal tetap: objek yang sama dikembalikan', D.remixChannels([L, R], 'keep')[0] === L);
+  const m = D.remixChannels([L, R], 'mono');
+  ok('Stereo -> mono: 1 kanal, rata-rata L dan R', m.length === 1 && Math.abs(m[0][1234] - (L[1234] + R[1234]) / 2) < 1e-6);
+  ok('Mono -> mono: tidak berubah', D.remixChannels([L], 'mono').length === 1);
+  const s = D.remixChannels([L], 'stereo');
+  ok('Mono -> stereo: 2 kanal identik, kanal terpisah', s.length === 2 && s[0] === L && s[1] !== L && s[1].every((v, i) => v === L[i]));
+  ok('Stereo -> stereo: tidak berubah', D.remixChannels([L, R], 'stereo').length === 2);
+  const six = [L, R, sine(100, 1), sine(200, 1), sine(400, 1), sine(800, 1)];
+  ok('Multikanal -> stereo: ambil dua kanal pertama', (() => { const o = D.remixChannels(six, 'stereo'); return o.length === 2 && o[0] === L && o[1] === R; })());
+  ok('Multikanal -> mono: 1 kanal', D.remixChannels(six, 'mono').length === 1);
+}

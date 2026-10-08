@@ -17,6 +17,7 @@ import {
 } from '../../services/pitchMatchDsp';
 import { detectPitch } from '../../services/audioExtraDsp';
 import { exportAudioFile, downloadBlob } from '../../services/exporters';
+import { checkInputDuration, checkOutputDuration } from '../../services/audioLimits';
 import {
   BTN_DOWNLOAD, BTN_GHOST, BTN_PRIMARY, CARD_CLS, FORMAT_INFO, InfoTip, PANEL_CLS,
   SLIDER_CLS, pillCls
@@ -144,6 +145,13 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
       const tempCtx = new AudioContextClass();
       const decoded = await tempCtx.decodeAudioData(arrayBuffer);
       await tempCtx.close();
+
+      // Batas panjang audio acuan (60 menit untuk alat ini; lihat services/audioLimits.ts).
+      const tooLong = checkInputDuration('pitch_match', decoded.duration);
+      if (tooLong) {
+        setErrorMsg(tooLong);
+        return;
+      }
 
       setRefBuffer(decoded);
       setRefFileName(name);
@@ -392,6 +400,11 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
   // Unduh Berkas Rekaman Vokal
   const handleExportVocal = async () => {
     if (!recordedVocalBuffer || isExporting) return;
+    const tooLong = checkOutputDuration('pitch_match', recordedVocalBuffer.duration);
+    if (tooLong) {
+      setErrorMsg(tooLong);
+      return;
+    }
     setIsExporting(true);
     setExportProgress(10);
     try {

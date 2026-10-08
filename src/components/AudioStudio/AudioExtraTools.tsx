@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Merge, Activity, Mic, Eraser, Timer, AudioLines, Upload, Download, Play, Square,
   Loader2, Trash2, ArrowUp, ArrowDown, Copy, X, AlertTriangle, CheckCircle, RotateCcw, Music2, Ruler,
-  Target, Sparkles
+  Target, Sparkles, Repeat, Tags, ImagePlus, Image as ImageIcon
 } from 'lucide-react';
 import {
   audioBufferToWav, downloadBlob, exportAudioFile,
@@ -18,11 +18,19 @@ import {
   barSeconds, clickSample, concatChannels, defaultGrouping, detectBpm, detectKey, detectPitch, freqToNote,
   getClickSound, groupingsFor, lowestFreq, makeTimeSignature, measureLufs, midiToFreq, nearestString,
   normalizeLoudness, peaksForDisplay, pulseSeconds, removeSilence, renderMetronome, sliceChannels, subdivisionsFor,
-  tempoMarking, toMono,
+  tempoMarking, toMono, repeatChannels, MIN_REPEAT, MAX_REPEAT,
   type Accent, type Channels, type ClickKind, type FadeCurve, type TempoRef, type TuningPreset,
 } from '../../services/audioExtraDsp';
+import {
+  checkInputDuration, checkOutputDuration, formatDuration, limitLabelFor, maxRepeatsFor, maxSecondsFor, repeatedDuration,
+} from '../../services/audioLimits';
+import {
+  FORMAT_EXT, FORMAT_LABEL, FORMAT_MIME, GENRE_SUGGESTIONS, MAX_COVER_BYTES, MAX_FILE_BYTES, TEXT_FIELDS,
+  emptyTags, imageExtension, readTags, sniffImage, writeTags,
+  type AudioPicture, type AudioTags, type AudioTechInfo, type MetaFormat, type TextField,
+} from '../../services/audioMetadata';
 
-export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner' | 'pitch_detect' | 'vocal_range' | 'pitch_match';
+export type ExtraToolId = 'merge' | 'clean' | 'recorder' | 'bpm' | 'metronome' | 'tuner' | 'pitch_detect' | 'vocal_range' | 'pitch_match' | 'loop' | 'metadata';
 
 export interface QuotaGate {
   use: (toolId: ExtraToolId, sessionKey?: string) => Promise<boolean>;
@@ -42,6 +50,11 @@ export interface AudioExtraToolsProps {
 
 export const EXTRA_SLUG_TO_TOOL: Record<string, ExtraToolId> = {
   'gabung-audio': 'merge',
+  'ulangi-audio': 'loop',
+  'loop-audio': 'loop',
+  'edit-metadata-audio': 'metadata',
+  'edit-tag-mp3': 'metadata',
+  'ganti-cover-mp3': 'metadata',
   'fade-audio': 'merge',
   'deteksi-bpm': 'bpm',
   'deteksi-kunci-nada': 'bpm',
@@ -62,6 +75,8 @@ export interface ExtraToolMeta { id: ExtraToolId; label: string; icon: React.Ele
 
 export const EXTRA_TOOL_META: ExtraToolMeta[] = [
   { id: 'merge', label: 'Gabung & Fade', icon: Merge, desc: 'Gabungkan beberapa audio, crossfade, fade in/out' },
+  { id: 'loop', label: 'Ulangi Audio', icon: Repeat, desc: 'Ulangi audio 2 sampai 5 kali menjadi satu berkas, dengan crossfade opsional agar sambungan mulus' },
+  { id: 'metadata', label: 'Edit Metadata', icon: Tags, desc: 'Ubah judul, artis, album, cover, lirik, dan tag lain di MP3, FLAC, WAV, dan M4A tanpa mengubah kualitas audio' },
   { id: 'clean', label: 'Rapikan Audio', icon: Eraser, desc: 'Hapus jeda hening, samakan loudness (LUFS), ubah stereo ke mono' },
   { id: 'recorder', label: 'Perekam', icon: Mic, desc: 'Rekam suara dari mikrofon, potong awal/akhir, lalu unduh', realtime: true },
   { id: 'bpm', label: 'BPM & Kunci', icon: Activity, desc: 'Deteksi tempo (BPM) dan kunci nada lagu' },
@@ -75,14 +90,16 @@ export const EXTRA_TOOL_META: ExtraToolMeta[] = [
 const AudioCtx: typeof AudioContext = (typeof window !== 'undefined' &&
   (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)) as typeof AudioContext;
 
-async function decodeFile(file: File): Promise<AudioBuffer> {
+/** Baca berkas jadi AudioBuffer. Bila `toolId` diberikan, durasi dibatasi sesuai batas alat itu (lihat audioLimits.ts). */
+async function decodeFile(file: File, toolId?: ExtraToolId): Promise<AudioBuffer> {
   const ctx = new AudioCtx();
+  let buf: AudioBuffer;
   try {
     const data = await file.arrayBuffer();
-    return await new Promise<AudioBuffer>((resolve, reject) => {
+    buf = await new Promise<AudioBuffer>((resolve, reject) => {
       ctx.decodeAudioData(
         data.slice(0),
-        (buf) => resolve(buf),
+        (b) => resolve(b),
         (err) => reject(err)
       ).catch?.(reject);
     });
@@ -91,6 +108,9 @@ async function decodeFile(file: File): Promise<AudioBuffer> {
   } finally {
     try { void ctx.close(); } catch {}
   }
+  const tooLong = toolId ? checkInputDuration(toolId, buf.duration) : null;
+  if (tooLong) throw new Error(tooLong);
+  return buf;
 }
 
 function viewChannels(b: AudioBuffer): Channels {
@@ -170,13 +190,13 @@ const ErrorNote: React.FC<{ msg: string | null }> = ({ msg }) =>
 
 const FilePicker: React.FC<{
   label: string; multiple?: boolean; disabled?: boolean; onFiles: (f: File[]) => void;
-  onBeforePick?: () => boolean;
-}> = ({ label, multiple, disabled, onFiles, onBeforePick }) => {
+  onBeforePick?: () => boolean; accept?: string;
+}> = ({ label, multiple, disabled, onFiles, onBeforePick, accept = 'audio/*,video/*' }) => {
   const ref = useRef<HTMLInputElement>(null);
   return (
     <>
       <input
-        ref={ref} type="file" accept="audio/*,video/*" multiple={multiple} className="hidden"
+        ref={ref} type="file" accept={accept} multiple={multiple} className="hidden"
         onChange={(e) => { const f = Array.from(e.target.files ?? []); e.target.value = ''; if (f.length) onFiles(f); }}
       />
       <button type="button" disabled={disabled} onClick={() => { if (onBeforePick && !onBeforePick()) return; ref.current?.click(); }} className={btnGhost}>
@@ -215,8 +235,9 @@ let exportSeq = 0;
 const ExportPanel: React.FC<{
   buffer: AudioBuffer | null; fileName: string; toolId: ExtraToolId;
   gate?: AudioExtraToolsProps['gate']; onDone?: (m: string) => void; sessionKey?: string;
-}> = ({ buffer, fileName, toolId, gate, onDone, sessionKey }) => {
-  const [fmt, setFmt] = useState<'MP3' | 'WAV' | 'FLAC' | 'M4A'>('MP3');
+  bitDepth?: 16 | 24; defaultFormat?: 'MP3' | 'WAV' | 'FLAC' | 'M4A';
+}> = ({ buffer, fileName, toolId, gate, onDone, sessionKey, bitDepth, defaultFormat = 'MP3' }) => {
+  const [fmt, setFmt] = useState<'MP3' | 'WAV' | 'FLAC' | 'M4A'>(defaultFormat);
   const [busy, setBusy] = useState(false);
   const [pct, setPct] = useState(0);
   const [note, setNote] = useState<string | null>(null);
@@ -225,12 +246,15 @@ const ExportPanel: React.FC<{
   if (!buffer) return null;
   const run = async () => {
     if (busy) return;
+    // Batas panjang berkas keluaran: diperiksa SEBELUM jatah dipakai, jadi berkas yang ditolak tidak memakan kuota.
+    const tooLong = checkOutputDuration(toolId, buffer.duration);
+    if (tooLong) { setErr(tooLong); return; }
     const key = sessionKey ?? resultKey;
     const wasPaid = gate?.has(toolId, key) ?? false;
     setBusy(true); setErr(null); setNote(null); setPct(0);
     if (gate && !(await gate.use(toolId, key))) { setBusy(false); return; }
     try {
-      const r = await exportAudioFile(buffer, fileName, fmt, { mp3Kbps: 192, onProgress: setPct });
+      const r = await exportAudioFile(buffer, fileName, fmt, { mp3Kbps: 192, bitDepth, onProgress: setPct });
       if (r.note) setNote(r.note);
       onDone?.(`Berkas ${r.actualFormat} berhasil diunduh.`);
     } catch (e) {
@@ -282,7 +306,10 @@ const MergeFadeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
     setErr(null); setBusy(true);
     try {
       const added: MergeItem[] = [];
-      for (const f of files) added.push({ id: mergeIdSeq++, name: f.name, buffer: await decodeFile(f) });
+      for (const f of files) added.push({ id: mergeIdSeq++, name: f.name, buffer: await decodeFile(f, 'merge') });
+      const nextTotal = items.reduce((sum, x) => sum + x.buffer.duration, 0) + added.reduce((sum, x) => sum + x.buffer.duration, 0);
+      const tooLong = checkOutputDuration('merge', nextTotal);
+      if (tooLong) { setErr(`Total durasi gabungan ${formatDuration(nextTotal)} melebihi batas ${limitLabelFor('merge')}. Berkas baru tidak ditambahkan.`); return; }
       setItems((prev) => [...prev, ...added]);
       setResult(null);
     } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
@@ -310,7 +337,7 @@ const MergeFadeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
   const total = items.reduce((s, x) => s + x.buffer.duration, 0);
 
   return (
-    <Panel title="Gabung & Fade" info={['Tambahkan satu atau lebih berkas, atur urutannya, lalu gabungkan.', 'Crossfade menumpang-tindihkan sambungan antar lagu.']}>
+    <Panel title="Gabung & Fade" info={['Tambahkan satu atau lebih berkas, atur urutannya, lalu gabungkan.', 'Crossfade menumpang-tindihkan sambungan antar lagu.', `Total durasi hasil gabungan maks. ${limitLabelFor('merge')}.`]}>
       <FilePicker label="Tambah berkas audio" multiple onFiles={addFiles} disabled={busy} />
       {items.length > 0 && (
         <ul className="space-y-2">
@@ -324,7 +351,7 @@ const MergeFadeTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m:
               <button type="button" aria-label="Hapus" onClick={() => remove(it.id)} className="p-1 text-red-300 hover:text-red-200 cursor-pointer"><Trash2 className="w-4 h-4" /></button>
             </li>
           ))}
-          <li className="text-[11px] text-gray-500">Total sebelum efek: {fmtTime(total)}</li>
+          <li className={`text-[11px] ${total > maxSecondsFor('merge') ? 'text-red-300' : 'text-gray-500'}`}>Total sebelum efek: {fmtTime(total)} (maks. {limitLabelFor('merge')})</li>
         </ul>
       )}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -372,7 +399,7 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
     if (gate && !(await gate.use('bpm'))) return;
     setBusy(true); setErr(null); setRes(null); setFileName(file.name);
     try {
-      const buf = await decodeFile(file);
+      const buf = await decodeFile(file, 'bpm');
       await tick();
       const ch = viewChannels(buf);
       const bpm = detectBpm(ch, buf.sampleRate);
@@ -392,7 +419,7 @@ const BpmKeyTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: st
   }, [res, fileName]);
 
   return (
-    <Panel title="BPM & Kunci" info={['Pilih lagu, dan hasilnya langsung dianalisis.', 'Mendeteksi tempo lagu serta kunci nada mayor/minor.']}>
+    <Panel title="BPM & Kunci" info={['Pilih lagu, dan hasilnya langsung dianalisis.', 'Mendeteksi tempo lagu serta kunci nada mayor/minor.', `Durasi berkas maks. ${limitLabelFor('bpm')}.`]}>
       <FilePicker label={busy ? 'Menganalisis…' : 'Pilih lagu untuk dianalisis'} onFiles={onFiles} disabled={busy}
         onBeforePick={() => { if (gate?.exhausted('bpm')) { gate.blocked('bpm'); return false; } return true; }} />
       <ErrorNote msg={err} />
@@ -469,7 +496,12 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
       recRef.current = rec; rec.start(250);
       setElapsed(0); setBuffer(null); setState('recording');
       const t0 = performance.now();
-      timerRef.current = window.setInterval(() => setElapsed((performance.now() - t0) / 1000), 200);
+      const maxRec = maxSecondsFor('recorder');
+      timerRef.current = window.setInterval(() => {
+        const e = (performance.now() - t0) / 1000;
+        setElapsed(e);
+        if (e >= maxRec) { try { if (rec.state === 'recording') rec.stop(); } catch {} }
+      }, 200);
     } catch (e) {
       cleanup();
       setErr((e as DOMException)?.name === 'NotAllowedError' ? 'Izin mikrofon ditolak.' : 'Gagal mengakses mikrofon.');
@@ -486,14 +518,14 @@ const RecorderTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: 
   const dur = buffer?.duration ?? 0;
 
   return (
-    <Panel title="Perekam" info={['Rekam dari mikrofon, potong bagian awal/akhir, lalu unduh.']}>
+    <Panel title="Perekam" info={['Rekam dari mikrofon, potong bagian awal/akhir, lalu unduh.', `Rekaman otomatis berhenti di ${limitLabelFor('recorder')}.`]}>
       <div className="flex flex-wrap items-center gap-3">
         {state !== 'recording' ? (
           <button type="button" onClick={begin} className={btnPrimary}><Mic className="w-4 h-4" /><span>{state === 'ready' ? 'Rekam ulang' : 'Mulai merekam'}</span></button>
         ) : (
           <button type="button" onClick={stop} className="px-4 py-2.5 rounded-xl bg-red-500 hover:bg-red-400 text-white font-black text-sm inline-flex items-center gap-2 cursor-pointer"><Square className="w-4 h-4" /><span>Berhenti</span></button>
         )}
-        {state === 'recording' && <span className="flex items-center gap-2 text-sm text-red-300 tabular-nums"><span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />{fmtTime(elapsed)}</span>}
+        {state === 'recording' && <span className="flex items-center gap-2 text-sm text-red-300 tabular-nums"><span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />{fmtTime(elapsed)} <span className="text-gray-500">/ {limitLabelFor('recorder')}</span></span>}
       </div>
       <ErrorNote msg={err} />
       {state === 'ready' && buffer && (
@@ -539,7 +571,7 @@ const CleanTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: str
 
   const onFiles = async ([f]: File[]) => {
     setBusy(true); setErr(null); setOut(null);
-    try { setBuffer(await decodeFile(f)); setFileName(f.name); }
+    try { setBuffer(await decodeFile(f, 'clean')); setFileName(f.name); }
     catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
     finally { setBusy(false); }
   };
@@ -573,7 +605,7 @@ const CleanTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: str
   };
 
   return (
-    <Panel title="Rapikan Audio" info={['Hapus jeda hening, samakan loudness (LUFS), atau ubah stereo ke mono.']}>
+    <Panel title="Rapikan Audio" info={['Hapus jeda hening, samakan loudness (LUFS), atau ubah stereo ke mono.', `Durasi berkas maks. ${limitLabelFor('clean')}.`]}>
       <FilePicker label={busy ? 'Memproses…' : buffer ? `Ganti berkas (${fileName})` : 'Pilih berkas audio'} onFiles={onFiles} disabled={busy} />
       {buffer && (
         <div className="space-y-4">
@@ -1025,6 +1057,390 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate'] }> = ({ gate }) 
   );
 };
 
+// 7. Ulangi Audio (loop 2 sampai 5 kali)
+const LoopTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
+  const [fileName, setFileName] = useState('');
+  const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
+  const [times, setTimes] = useState(2);
+  const [crossfade, setCrossfade] = useState(0);
+  const [result, setResult] = useState<AudioBuffer | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const dur = buffer?.duration ?? 0;
+  // Jumlah ulangan tertinggi yang hasilnya masih di bawah batas durasi alat (maks. MAX_REPEAT).
+  const allowed = buffer ? maxRepeatsFor('loop', dur, MAX_REPEAT, crossfade) : MAX_REPEAT;
+  const canLoop = !buffer || allowed >= MIN_REPEAT;
+  const useTimes = Math.max(MIN_REPEAT, Math.min(times, allowed));
+  const outSec = buffer ? repeatedDuration(dur, useTimes, crossfade) : 0;
+
+  const onFiles = async ([f]: File[]) => {
+    setBusy(true); setErr(null); setResult(null);
+    try { setBuffer(await decodeFile(f, 'loop')); setFileName(f.name); }
+    catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
+    finally { setBusy(false); }
+  };
+  const pickTimes = (n: number) => { setTimes(n); setResult(null); };
+
+  const run = async () => {
+    if (!buffer || !canLoop) return;
+    const tooLong = checkOutputDuration('loop', outSec);
+    if (tooLong) { setErr(tooLong); return; }
+    setBusy(true); setErr(null); await tick();
+    try {
+      const sr = buffer.sampleRate;
+      setResult(toBuffer(repeatChannels(viewChannels(buffer), sr, useTimes, crossfade), sr));
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal memproses audio.'); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <Panel title="Ulangi Audio" info={[
+      'Unggah satu berkas, pilih diulang 2 sampai 5 kali, lalu unduh sebagai satu berkas.',
+      'Crossfade menyatukan akhir dan awal tiap ulangan supaya loop terdengar mulus.',
+      `Berkas masuk maks. ${limitLabelFor('loop')}, dan hasil pengulangan juga maks. ${limitLabelFor('loop')}.`,
+    ]}>
+      <FilePicker label={busy ? 'Memproses…' : buffer ? `Ganti berkas (${fileName})` : 'Pilih berkas audio'} onFiles={onFiles} disabled={busy} />
+      {buffer && (
+        <div className="space-y-4">
+          <p className="text-[11px] text-gray-400">Durasi asli: {fmtTime(dur)} · maks. {limitLabelFor('loop')} per berkas</p>
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-gray-300">Ulangi berapa kali?</p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Jumlah pengulangan">
+              {Array.from({ length: MAX_REPEAT - MIN_REPEAT + 1 }, (_, i) => i + MIN_REPEAT).map((n) => {
+                const off = n > allowed;
+                return (
+                  <button key={n} type="button" disabled={off} onClick={() => pickTimes(n)} aria-pressed={useTimes === n}
+                    title={off ? `Hasil ${n}x akan lebih dari ${limitLabelFor('loop')}` : undefined}
+                    className={`min-w-[3.5rem] px-3 py-2 rounded-xl text-sm font-black border ${off ? 'border-white/5 text-gray-600 line-through cursor-not-allowed' : useTimes === n ? 'border-accent bg-accent/15 text-white cursor-pointer' : 'border-white/[0.12] text-gray-300 cursor-pointer'}`}>
+                    {n}x
+                  </button>
+                );
+              })}
+            </div>
+            {canLoop && allowed < MAX_REPEAT && (
+              <p className="text-[11px] text-amber-300">Audio sepanjang ini hanya bisa diulang sampai {allowed}x supaya hasilnya tidak melebihi {limitLabelFor('loop')}.</p>
+            )}
+          </div>
+          <Field label={`Crossfade antar ulangan: ${crossfade.toFixed(1)} dtk`} hint="0 = sambung langsung. Naikkan bila akhir dan awal audio terdengar patah.">
+            <input type="range" min={0} max={2} step={0.1} value={crossfade} onChange={(e) => { setCrossfade(+e.target.value); setResult(null); }} className={sliderCls} />
+          </Field>
+          {canLoop ? (
+            <p className="text-[11px] text-gray-400">Perkiraan durasi hasil: {fmtTime(outSec)} ({useTimes}x)</p>
+          ) : (
+            <ErrorNote msg={`Audio ${formatDuration(dur)} terlalu panjang untuk diulang: hasil 2x akan melebihi ${limitLabelFor('loop')}. Gunakan berkas yang lebih pendek (maks. sekitar 30 menit).`} />
+          )}
+          <button type="button" onClick={run} disabled={busy || !canLoop} className={btnPrimary}>
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Repeat className="w-4 h-4" />}
+            <span>{busy ? 'Memproses…' : `Ulangi ${useTimes}x`}</span>
+          </button>
+        </div>
+      )}
+      <ErrorNote msg={err} />
+      {result && (
+        <div className="space-y-3">
+          <p className="text-xs text-emerald-300 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" />Selesai, {useTimes}x ulangan, durasi {fmtTime(result.duration)}.</p>
+          <Preview buffer={result} />
+          <ExportPanel buffer={result} fileName={`PlayMuzeck_Ulang${useTimes}x_${baseName(fileName)}`} toolId="loop" gate={gate} onDone={toast} />
+        </div>
+      )}
+    </Panel>
+  );
+};
+
+// 8. Edit Metadata
+// Tidak men-decode / meng-encode audio: hanya blok tag yang ditulis ulang (lihat services/audioMetadata.ts),
+// jadi kualitas identik dan prosesnya instan walau berkasnya besar.
+const META_ACCEPT = '.mp3,.flac,.wav,.m4a,.mp4,audio/mpeg,audio/flac,audio/x-flac,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a';
+const COVER_MAX_DIM = 1600;
+const COVER_MAX_BYTES = 3 * 1024 * 1024;
+const fmtBytes = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+const safeFileName = (s: string) => s.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '').replace(/\s+/g, ' ').trim();
+let metaSeq = 0;
+
+const FORMAT_HINT: Record<MetaFormat, string> = {
+  mp3: 'Tag ID3v2.3, terbaca di hampir semua pemutar. Jika berkas punya tag ID3v1, ikut disegarkan.',
+  flac: 'Vorbis Comment dan gambar FLAC (standar untuk FLAC).',
+  wav: 'WAV menyimpan tag di LIST INFO (terbaca Windows) dan chunk ID3 (cover, lirik, semua kolom). Dukungan cover & lirik WAV tergantung pemutar.',
+  m4a: 'Atom iTunes (judul, artis, cover, lirik, dan lainnya), terbaca di iTunes, Apple Music, dan Android.',
+};
+
+/** Siapkan gambar cover: JPEG/PNG <= 1600 px dipakai apa adanya; lainnya (WebP, GIF, BMP, atau terlalu besar) dikonversi ke JPEG. */
+async function prepareCover(file: File): Promise<{ pic: AudioPicture; adjusted: boolean }> {
+  const raw = new Uint8Array(await file.arrayBuffer());
+  const sn = sniffImage(raw);
+  if (sn && (sn.mime === 'image/jpeg' || sn.mime === 'image/png') && sn.width && sn.height
+    && Math.max(sn.width, sn.height) <= COVER_MAX_DIM && raw.length <= COVER_MAX_BYTES) {
+    return { pic: { mime: sn.mime, data: raw, width: sn.width, height: sn.height }, adjusted: false };
+  }
+  let bmp: ImageBitmap;
+  try { bmp = await createImageBitmap(file); } catch { throw new Error('Gambar tidak bisa dibaca. Pakai JPG, PNG, WebP, atau GIF.'); }
+  try {
+    const scale = Math.min(1, COVER_MAX_DIM / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const g = canvas.getContext('2d');
+    if (!g) throw new Error('Gambar tidak bisa diproses di browser ini.');
+    g.fillStyle = '#ffffff'; g.fillRect(0, 0, w, h);
+    g.drawImage(bmp, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.9));
+    if (!blob) throw new Error('Gambar tidak bisa diproses di browser ini.');
+    return { pic: { mime: 'image/jpeg', data: new Uint8Array(await blob.arrayBuffer()), width: w, height: h }, adjusted: true };
+  } finally { bmp.close?.(); }
+}
+
+/** "01 - Artis - Judul.mp3" -> { track: '01', artist: 'Artis', title: 'Judul' }. */
+function guessFromFileName(name: string): { track: string; artist: string; title: string } {
+  let base = name.replace(/\.[^.]+$/, '').replace(/_/g, ' ').trim();
+  let track = '';
+  const m = /^(\d{1,3})\s*[-.)]\s+(.+)$/.exec(base);
+  if (m) { track = String(parseInt(m[1], 10)); base = m[2]; }
+  const parts = base.split(/\s+-\s+/);
+  if (parts.length >= 2) return { track, artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() };
+  return { track, artist: '', title: base };
+}
+
+const MetadataTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; toast?: (m: string) => void }> = ({ gate, toast }) => {
+  const [file, setFile] = useState<File | null>(null);
+  const [bytes, setBytes] = useState<Uint8Array | null>(null);
+  const [fmt, setFmt] = useState<MetaFormat>('mp3');
+  const [info, setInfo] = useState<AudioTechInfo>({});
+  const [preserved, setPreserved] = useState(0);
+  const [orig, setOrig] = useState<AudioTags>(emptyTags());
+  const [tags, setTags] = useState<AudioTags>(emptyTags());
+  const [sessionKey, setSessionKey] = useState('');
+  const [renameFromTags, setRenameFromTags] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [coverNote, setCoverNote] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!file) { setAudioUrl(null); return; }
+    const u = URL.createObjectURL(file);
+    setAudioUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+
+  useEffect(() => {
+    if (!tags.cover) { setCoverUrl(null); return; }
+    const u = URL.createObjectURL(new Blob([tags.cover.data as unknown as BlobPart], { type: tags.cover.mime }));
+    setCoverUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [tags.cover]);
+
+  const set = (k: TextField, v: string) => { setTags((t) => ({ ...t, [k]: v })); setSaved(false); };
+
+  const onFiles = async ([f]: File[]) => {
+    setBusy(true); setErr(null); setCoverNote(null); setSaved(false);
+    try {
+      if (f.size > MAX_FILE_BYTES) throw new Error(`Berkas ${fmtBytes(f.size)} melebihi batas ${fmtBytes(MAX_FILE_BYTES)} untuk alat ini.`);
+      await tick();
+      const data = new Uint8Array(await f.arrayBuffer());
+      const r = readTags(data);
+      setFile(f); setBytes(data); setFmt(r.format); setInfo(r.info); setPreserved(r.preservedCount);
+      setOrig(r.tags); setTags(r.tags); setSessionKey(`meta${++metaSeq}`); setRenameFromTags(false);
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca berkas.'); }
+    finally { setBusy(false); }
+  };
+
+  const onCover = async (f: File | undefined) => {
+    if (!f) return;
+    setErr(null); setCoverNote(null);
+    if (!f.type.startsWith('image/')) { setErr('Pilih berkas gambar (JPG, PNG, WebP, atau GIF).'); return; }
+    try {
+      const { pic, adjusted } = await prepareCover(f);
+      if (pic.data.length > MAX_COVER_BYTES) throw new Error('Gambar cover terlalu besar (maks. 8 MB).');
+      setTags((t) => ({ ...t, cover: pic })); setSaved(false);
+      if (adjusted) setCoverNote('Gambar disesuaikan (dikonversi ke JPEG dan/atau diperkecil maks. 1600 px) agar ringan dan kompatibel di semua pemutar.');
+    } catch (e) { setErr(e instanceof Error ? e.message : 'Gagal membaca gambar.'); }
+  };
+
+  const downloadCover = () => {
+    if (!tags.cover) return;
+    downloadBlob(new Blob([tags.cover.data as unknown as BlobPart], { type: tags.cover.mime }), `Cover_${baseName(file?.name ?? 'audio')}.${imageExtension(tags.cover.mime)}`);
+  };
+
+  const dirty = useMemo(() => {
+    if (tags.cover !== orig.cover) return true;
+    return TEXT_FIELDS.some((k) => tags[k] !== orig[k]);
+  }, [tags, orig]);
+
+  const fillFromName = () => {
+    if (!file) return;
+    const g = guessFromFileName(file.name);
+    setTags((t) => ({ ...t, title: t.title || g.title, artist: t.artist || g.artist, track: t.track || g.track }));
+    setSaved(false);
+  };
+
+  const save = async () => {
+    if (!bytes || !file || busy) return;
+    const key = sessionKey;
+    const wasPaid = gate?.has('metadata', key) ?? false;
+    setBusy(true); setErr(null);
+    if (gate && !(await gate.use('metadata', key))) { setBusy(false); return; }
+    try {
+      await tick();
+      const out = writeTags(bytes, tags, fmt);
+      let name = safeFileName(file.name.replace(/\.[^.]+$/, '')) || 'audio';
+      if (renameFromTags && tags.title.trim()) {
+        const n = safeFileName(tags.artist.trim() ? `${tags.artist.trim()} - ${tags.title.trim()}` : tags.title.trim());
+        if (n) name = n;
+      }
+      downloadBlob(new Blob([out as unknown as BlobPart], { type: FORMAT_MIME[fmt] }), `${name}.${FORMAT_EXT[fmt]}`);
+      setSaved(true);
+      toast?.(`Metadata ${FORMAT_LABEL[fmt]} berhasil disimpan dan diunduh.`);
+    } catch (e) {
+      if (!wasPaid) gate?.refund('metadata', key);
+      setErr(e instanceof Error ? e.message : 'Gagal menyimpan metadata.');
+    } finally { setBusy(false); }
+  };
+
+  const dateBad = tags.date.trim() !== '' && !/^\d{4}(-\d{2}(-\d{2})?)?$/.test(tags.date.trim());
+  const cv = tags.cover;
+  const techLine = [
+    FORMAT_LABEL[fmt],
+    file ? fmtBytes(file.size) : '',
+    info.durationSec ? fmtTime(info.durationSec) : '',
+    info.sampleRate ? `${info.sampleRate.toLocaleString('id-ID')} Hz` : '',
+    info.channels ? (info.channels === 1 ? 'Mono' : info.channels === 2 ? 'Stereo' : `${info.channels} kanal`) : '',
+    info.bitDepth ? `${info.bitDepth}-bit` : '',
+  ].filter(Boolean).join(' · ');
+
+  const txt = (k: TextField, label: string, opts: { hint?: string; numeric?: boolean; max?: number; list?: string; placeholder?: string } = {}) => (
+    <Field label={label} hint={opts.hint}>
+      <input
+        type="text" value={tags[k]} maxLength={opts.max ?? 300} list={opts.list} placeholder={opts.placeholder}
+        inputMode={opts.numeric ? 'numeric' : undefined} autoComplete="off" className={inputCls}
+        onChange={(e) => set(k, opts.numeric ? e.target.value.replace(k === 'bpm' ? /[^\d.]/g : /\D/g, '').slice(0, k === 'bpm' ? 6 : 4) : e.target.value)}
+      />
+    </Field>
+  );
+
+  return (
+    <Panel title="Edit Metadata" info={[
+      'Ubah judul, artis, album, cover, lirik, dan tag lain langsung di berkas audio. Audio tidak di-decode atau di-encode ulang, jadi kualitas suara persis sama dan prosesnya cepat.',
+      'Format yang didukung: MP3, FLAC, WAV, dan M4A/MP4. Untuk OGG, Opus, atau AAC mentah, ganti format dulu lewat alat Konversi.',
+      'Tag lain yang tidak ada di formulir (mis. ReplayGain, gambar tambahan) dipertahankan apa adanya. Cover diperkecil otomatis bila lebih dari 1600 px.',
+      `Ukuran berkas maks. ${fmtBytes(MAX_FILE_BYTES)}. Berkas diproses di perangkatmu dan tidak diunggah.`,
+    ]}>
+      <FilePicker label={busy && !bytes ? 'Membaca…' : file ? `Ganti berkas (${file.name})` : 'Pilih berkas audio (MP3, FLAC, WAV, M4A)'} onFiles={onFiles} disabled={busy} accept={META_ACCEPT} />
+      <ErrorNote msg={err} />
+      {file && bytes && (
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-[11px] text-gray-400">{techLine}</p>
+            {audioUrl && <audio controls src={audioUrl} className="w-full" />}
+            <p className="text-[11px] text-gray-500">{FORMAT_HINT[fmt]}</p>
+            {preserved > 0 && <p className="text-[11px] text-gray-500">{preserved} tag tambahan di berkas ini (mis. ReplayGain) tidak ditampilkan, tetapi dipertahankan.</p>}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-[11rem_1fr] gap-4">
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-gray-300">Cover</p>
+              <div className="w-full max-w-[11rem] aspect-square rounded-xl overflow-hidden bg-black/60 border border-white/10 flex items-center justify-center">
+                {coverUrl
+                  ? <img src={coverUrl} alt="Cover album" className="w-full h-full object-cover" />
+                  : <div className="text-center text-gray-500 text-[11px] px-3 space-y-1"><ImageIcon className="w-6 h-6 mx-auto" /><p>Belum ada cover</p></div>}
+              </div>
+              {cv && (
+                <p className="text-[10px] text-gray-500">
+                  {cv.width && cv.height ? `${cv.width}×${cv.height} · ` : ''}{imageExtension(cv.mime).toUpperCase()} · {fmtBytes(cv.data.length)}
+                </p>
+              )}
+              {cv?.width && cv.height && cv.width !== cv.height && <p className="text-[10px] text-amber-300">Cover tidak persegi; sebagian pemutar akan memotongnya.</p>}
+              {cv?.width && cv.height && Math.min(cv.width, cv.height) < 300 && <p className="text-[10px] text-amber-300">Resolusi rendah. Disarankan minimal 500×500 px.</p>}
+              {coverNote && <p className="text-[10px] text-amber-300">{coverNote}</p>}
+              <input ref={coverInput} type="file" accept="image/*" className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; void onCover(f); }} />
+              <div className="flex flex-wrap gap-1.5">
+                <button type="button" onClick={() => coverInput.current?.click()} className={btnGhost}>
+                  <ImagePlus className="w-4 h-4 text-accent" /><span>{cv ? 'Ganti' : 'Pilih cover'}</span>
+                </button>
+                {cv && (
+                  <>
+                    <button type="button" onClick={downloadCover} className={btnGhost} aria-label="Unduh cover"><Download className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => { setTags((t) => ({ ...t, cover: null })); setCoverNote(null); setSaved(false); }} className={btnGhost} aria-label="Hapus cover"><Trash2 className="w-4 h-4" /></button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-4 min-w-0">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="sm:col-span-2">{txt('title', 'Judul')}</div>
+                {txt('artist', 'Artis')}
+                {txt('album', 'Album')}
+                {txt('albumArtist', 'Artis album')}
+                {txt('genre', 'Genre', { list: 'pm-meta-genres' })}
+                <datalist id="pm-meta-genres">{GENRE_SUGGESTIONS.map((g) => <option key={g} value={g} />)}</datalist>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {txt('track', 'Trek ke', { numeric: true })}
+                {txt('trackTotal', 'Dari total', { numeric: true })}
+                {txt('disc', 'Disc ke', { numeric: true })}
+                {txt('discTotal', 'Dari total', { numeric: true })}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  {txt('date', 'Tahun / tanggal rilis', { max: 10, placeholder: '2024 atau 2024-05-17' })}
+                  {dateBad && <p className="text-[10px] text-amber-300 mt-1">Format yang disarankan: 2024 atau 2024-05-17.</p>}
+                </div>
+                {txt('bpm', 'BPM', { numeric: true })}
+                {txt('composer', 'Komposer')}
+                {txt('grouping', 'Grup / seri')}
+                {txt('publisher', 'Label / penerbit')}
+                {txt('isrc', 'ISRC', { max: 15, placeholder: 'mis. IDABC2400001' })}
+                <div className="sm:col-span-2">{txt('copyright', 'Hak cipta', { placeholder: '© 2024 Nama Pemilik' })}</div>
+              </div>
+
+              <Field label="Komentar">
+                <textarea value={tags.comment} rows={2} maxLength={2000} className={`${inputCls} resize-y`} onChange={(e) => set('comment', e.target.value)} />
+              </Field>
+              <Field label="Lirik" hint={`${tags.lyrics.length.toLocaleString('id-ID')} karakter. Satu baris per baris lirik; baris kosong memisahkan bait.`}>
+                <textarea value={tags.lyrics} rows={8} maxLength={60000} className={`${inputCls} resize-y min-h-[8rem]`} onChange={(e) => set('lyrics', e.target.value)} />
+              </Field>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={fillFromName} disabled={busy} className={btnGhost}>Isi kolom kosong dari nama berkas</button>
+            <button type="button" onClick={() => { setTags(orig); setCoverNote(null); setSaved(false); }} disabled={busy || !dirty} className={btnGhost}>
+              <RotateCcw className="w-4 h-4" /><span>Kembalikan ke tag asli</span>
+            </button>
+            <button type="button" onClick={() => { setTags(emptyTags()); setCoverNote(null); setSaved(false); }} disabled={busy} className={btnGhost}>
+              <Eraser className="w-4 h-4" /><span>Kosongkan semua tag</span>
+            </button>
+          </div>
+
+          <div className="pt-3 border-t border-white/[0.06] space-y-3">
+            <label className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+              <input type="checkbox" checked={renameFromTags} onChange={(e) => setRenameFromTags(e.target.checked)} className="accent-accent" />
+              Namai berkas hasil “Artis - Judul”
+            </label>
+            <div className="flex items-center gap-3 flex-wrap">
+              <button type="button" onClick={save} disabled={busy} className={BTN_DOWNLOAD}>
+                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                <span>{busy ? 'Menyimpan…' : `Simpan & unduh ${FORMAT_LABEL[fmt]}`}</span>
+              </button>
+              {saved ? <span className="text-emerald-400 text-xs font-bold flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Berkas terunduh</span>
+                : dirty ? <span className="text-amber-300 text-[11px]">Ada perubahan yang belum diunduh.</span> : null}
+            </div>
+            <p className="text-[10px] text-gray-500">Berkas hasil memakai nama yang sama dengan aslinya, jadi browser bisa menambahkan “(1)”. Mengunduh ulang berkas yang sama setelah mengubah tag tidak memakai jatah lagi.</p>
+          </div>
+        </div>
+      )}
+    </Panel>
+  );
+};
+
 // Panel Gabungan Extra Tools
 export const ExtraToolPanel: React.FC<{
   active: ExtraToolId | null;
@@ -1044,6 +1460,8 @@ export const ExtraToolPanel: React.FC<{
   return (
     <div className={active ? '' : 'hidden'}>
       {mounted('merge') && <div className={show('merge')} {...guard('merge')}><MergeFadeTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('loop') && <div className={show('loop')} {...guard('loop')}><LoopTool gate={gate} toast={onSuccessToast} /></div>}
+      {mounted('metadata') && <div className={show('metadata')} {...guard('metadata')}><MetadataTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('clean') && <div className={show('clean')} {...guard('clean')}><CleanTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('recorder') && <div className={show('recorder')} {...guard('recorder')}><RecorderTool gate={gate} toast={onSuccessToast} /></div>}
       {mounted('bpm') && <div className={show('bpm')} {...guard('bpm')}><BpmKeyTool gate={gate} toast={onSuccessToast} /></div>}

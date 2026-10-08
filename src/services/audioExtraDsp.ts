@@ -76,6 +76,38 @@ export function concatChannels(parts: Channels[], sr: number, crossfadeSec = 0):
   return out;
 }
 
+export const MIN_REPEAT = 2;
+export const MAX_REPEAT = 5;
+
+/**
+ * Ulangi audio `times` kali (dibatasi 1..MAX_REPEAT). `crossfadeSec` > 0 menumpang-tindihkan sambungan antar-ulangan
+ * (berguna untuk loop musik agar akhir dan awal menyatu). Durasi hasil = times * durasi - (times - 1) * crossfade.
+ */
+export function repeatChannels(ch: Channels, sr: number, times: number, crossfadeSec = 0): Channels {
+  const n = Math.max(1, Math.min(MAX_REPEAT, Math.floor(Number.isFinite(times) ? times : 1)));
+  if (!ch[0] || ch[0].length === 0) return [new Float32Array(0)];
+  if (n === 1) return cloneChannels(ch);
+  const out = concatChannels(Array.from({ length: n }, () => ch), sr, crossfadeSec);
+  // Crossfade equal-power bisa menjumlah dua sinyal yang searah hingga ~1,41x. Bila itu melewati 0 dBFS, turunkan
+  // seluruh hasil secukupnya (hanya saat perlu) supaya tidak terpotong saat diekspor.
+  if (crossfadeSec > 0) {
+    const pk = peakOf(out);
+    if (pk > 1) { const g = 1 / pk; for (const c of out) for (let i = 0; i < c.length; i++) c[i] *= g; }
+  }
+  return out;
+}
+
+export type ChannelLayout = 'keep' | 'mono' | 'stereo';
+
+/** Ubah jumlah kanal: mono = rata-rata semua kanal, stereo = kanal tunggal diduplikasi / ambil dua kanal pertama. */
+export function remixChannels(ch: Channels, layout: ChannelLayout): Channels {
+  if (layout === 'keep' || ch.length === 0) return ch;
+  if (layout === 'mono') return ch.length === 1 ? ch : toMono(ch);
+  if (ch.length === 2) return ch;
+  if (ch.length === 1) return [ch[0], new Float32Array(ch[0])];
+  return [ch[0], ch[1]];
+}
+
 export type FadeCurve = 'linear' | 'natural' | 'scurve';
 
 function fadeGain(t: number, curve: FadeCurve): number {

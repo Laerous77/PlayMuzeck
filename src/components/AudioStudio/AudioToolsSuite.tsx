@@ -31,6 +31,7 @@ import {
 import { AudioEntitlements } from '../../types';
 import { InfoTip, FORMAT_INFO, BTN_DOWNLOAD, BTN_PRIMARY, PANEL_CLS, quotaGuardProps } from './toolsShared';
 import { ExtraToolPanel, EXTRA_TOOL_META, EXTRA_SLUG_TO_TOOL, type ExtraToolId, type QuotaGate } from './AudioExtraTools';
+import { checkInputDuration, checkOutputDuration, limitLabelFor } from '../../services/audioLimits';
 import { DAILY_FREE_QUOTA, refreshQuota, refundReservation, remainingQuota, reserveQuota, subscribeQuota, type Reservation } from '../../services/toolQuota';
 import {
   exportAudioFile,
@@ -136,10 +137,10 @@ interface ToolGroup {
 }
 
 const TOOL_GROUPS: ToolGroup[] = [
-  { id: 'cut', label: 'Potong & Susun', icon: Scissors, desc: 'Ubah struktur audio: potong bagian, sambung beberapa file, atau balik urutannya.', tools: ['trim', 'merge', 'reverse'] },
+  { id: 'cut', label: 'Potong & Susun', icon: Scissors, desc: 'Ubah struktur audio: potong bagian, sambung beberapa file, balik urutannya, atau ulangi beberapa kali.', tools: ['trim', 'merge', 'reverse', 'loop'] },
   { id: 'sound', label: 'Perbaiki Suara', icon: Eraser, desc: 'Bersihkan dan seimbangkan suara: volume, jeda hening, loudness, mono, dan noise.', tools: ['volume', 'clean', 'noise_reduction'] },
   { id: 'music', label: 'Nada, Tempo & Vokal', icon: Music, desc: 'Olah unsur musik: ubah nada, ubah kecepatan, atau pisahkan vokal dari musik.', tools: ['pitch', 'tempo', 'vocal_separator'] },
-  { id: 'format', label: 'Format & Ukuran', icon: RefreshCw, desc: 'Ganti format file (termasuk ekstrak audio dari video) atau perkecil ukurannya.', tools: ['convert', 'compress'] },
+  { id: 'format', label: 'Format & Ukuran', icon: RefreshCw, desc: 'Ganti format file (termasuk ekstrak audio dari video), perkecil ukurannya, atau edit metadata: judul, artis, album, cover, dan lirik.', tools: ['convert', 'compress', 'metadata'] },
   { id: 'record', label: 'Rekam & Analisis', icon: Mic2, desc: 'Ambil audio baru dari mikrofon, cari tahu tempo dan kunci nada lagu, atau deteksi nada vokal.', tools: ['recorder', 'bpm', 'pitch_detect'] },
   { id: 'practice', label: 'Latihan Musik', icon: Timer, desc: 'Alat langsung berlatih: jaga tempo dengan metronom, setel instrumen dengan tuner, ukur vocal range, dan latihan cocokkan nada.', tools: ['metronome', 'tuner', 'vocal_range', 'pitch_match'] },
 ];
@@ -484,6 +485,14 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
 
   const isGranularPitchMode = selectedTool === 'pitch' && keepTempoOnPitch;
 
+  // Durasi hasil yang diperkirakan untuk alat `tool` (tempo & pitch tanpa kunci tempo mengubah durasi).
+  const predictedOutputSec = (tool: ToolType): number => {
+    const d = decodedBuffer?.duration ?? 0;
+    if (tool === 'tempo') return d / Math.max(0.01, dynamicTempoSpeed);
+    if (tool === 'pitch' && !keepTempoOnPitch) return d / Math.pow(2, dynamicPitchSemitones / 12);
+    return d;
+  };
+
   const estimatedSourceBitrate = useMemo(() => {
     if (audioFile && decodedBuffer && decodedBuffer.duration > 0) {
       return Math.min(320, Math.round((audioFile.size * 8) / decodedBuffer.duration / 1000));
@@ -718,6 +727,12 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       const decoded = await ctx.decodeAudioData(arrayBuf);
       if (myLoad !== loadIdRef.current) return;
       if (!decoded.length) throw new Error('empty');
+      // Batas tertinggi (90 menit) berlaku untuk semua alat saat berkas dimuat; alat berbatas 60 menit diperiksa lagi per alat.
+      const tooLongForAll = checkInputDuration('trim', decoded.duration);
+      if (tooLongForAll) {
+        setErrorMsg(tooLongForAll);
+        return;
+      }
 
       Object.values(toolStatesRef.current).forEach(revokeStateUrls);
       (Object.keys(runIdsRef.current) as ToolType[]).forEach((t) => (runIdsRef.current[t] += 1));
@@ -838,6 +853,12 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       return;
     }
     if (LIVE_TOOLS.includes(targetTool)) return;
+
+    const inputMsg = checkInputDuration(targetTool, decodedBuffer.duration);
+    if (inputMsg) {
+      setErrorMsg(inputMsg);
+      return;
+    }
 
     const q = readQuota();
     setQuotaMap(q);
@@ -1027,6 +1048,13 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       return;
     }
 
+    // Batas panjang berkas masuk & perkiraan berkas keluar, diperiksa sebelum jatah dipakai.
+    const limitBefore = checkInputDuration(tool, decodedBuffer.duration) ?? checkOutputDuration(tool, predictedOutputSec(tool));
+    if (limitBefore) {
+      setErrorMsg(limitBefore);
+      return;
+    }
+
     const baseName = safeFileBase(audioFile?.name || 'audio');
     const fmt = selectedExportFormat;
     const sr = decodedBuffer.sampleRate;
@@ -1069,6 +1097,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (tool === 'compress') {
         const result = toolStates.compress.resultBuffer;
         if (!result) return;
+        const compressLimit = checkOutputDuration(tool, result.duration);
+        if (compressLimit) {
+          setErrorMsg(compressLimit);
+          return;
+        }
         const tier = compressTiers.find((t) => t.id === selectedCompressTier) || compressTiers[2];
         const fileBase = `${baseName}_compressed_${tier.id}`;
 
@@ -1134,6 +1167,12 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
       if (stale()) return;
       if (!buf) return;
 
+      const outputLimit = checkOutputDuration(tool, buf.duration);
+      if (outputLimit) {
+        setErrorMsg(outputLimit);
+        return;
+      }
+
       const exported = await exportAudioFile(buf, `${baseName}_${suffix}`, fmt, {
         onProgress: (pct) => setExportProgress(Math.round(pct)),
       });
@@ -1153,6 +1192,11 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
   };
 
   const toolMeta = TOOLS.find((t) => t.id === selectedTool)!;
+
+  // Batas panjang audio untuk alat yang sedang dipilih (60 / 90 menit; lihat services/audioLimits.ts).
+  const limitMsg = decodedBuffer
+    ? checkInputDuration(selectedTool, decodedBuffer.duration) ?? checkOutputDuration(selectedTool, predictedOutputSec(selectedTool))
+    : null;
 
   const extraGate: QuotaGate = useMemo(
     () => ({
@@ -1419,6 +1463,13 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
             {!decodedBuffer && (
               <p className="text-[11px] text-gray-400 bg-black/40 border border-white/5 rounded-lg px-3 py-2">
                 Unggah berkas audio (atau video untuk ekstrak audio) terlebih dahulu untuk memakai alat ini.
+              </p>
+            )}
+            <p className="text-[11px] text-gray-500">Durasi berkas maks. {limitLabelFor(selectedTool)} untuk alat ini (berlaku untuk berkas masuk dan hasil unduhan).</p>
+            {limitMsg && (
+              <p role="alert" className="flex items-start gap-1.5 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+                <span>{limitMsg}</span>
               </p>
             )}
 
@@ -1814,7 +1865,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       <button
                         type="button"
                         onClick={() => executeProcessForTool(selectedTool)}
-                        disabled={isProcessing}
+                        disabled={isProcessing || Boolean(limitMsg)}
                         className={BTN_PRIMARY}
                       >
                         {isProcessing ? (
@@ -1873,7 +1924,7 @@ export const AudioToolsSuite: React.FC<AudioToolsSuiteProps> = ({
                       <button
                         type="button"
                         onClick={() => handleDownloadFile()}
-                        disabled={isExporting}
+                        disabled={isExporting || Boolean(limitMsg)}
                         className={BTN_DOWNLOAD}
                       >
                         {isExporting ? (

@@ -70,9 +70,12 @@ const ok = (n: string, c: boolean) => { console.log(c ? 'ok  ' : 'GAGAL', n); if
 
   ok('batas harian = 2', DAILY_FREE_QUOTA === 2);
   ok('pitch_detect & vocal_range termasuk alat berkuota', QUOTA_TOOL_IDS.includes('pitch_detect') && QUOTA_TOOL_IDS.includes('vocal_range'));
+  ok('loop & metadata (alat baru) termasuk alat berkuota', QUOTA_TOOL_IDS.includes('loop') && QUOTA_TOOL_IDS.includes('metadata'));
+  ok('resample sudah diganti Edit Metadata, bukan lagi alat berkuota', !(QUOTA_TOOL_IDS as readonly string[]).includes('resample'));
+  ok('total 19 alat berkuota (pitch_match belum dicatat server)', QUOTA_TOOL_IDS.length === 19);
   ok('hari server mengikuti DB', (await serverDay(db)) === '2026-10-06');
 
-  for (const tool of ['pitch_detect', 'vocal_range', 'trim', 'tuner'] as const) {
+  for (const tool of ['pitch_detect', 'vocal_range', 'trim', 'tuner', 'loop', 'metadata'] as const) {
     const a = await reserve(db, me, tool, `${tool}-1`);
     const b = await reserve(db, me, tool, `${tool}-2`);
     const c = await reserve(db, me, tool, `${tool}-3`);
