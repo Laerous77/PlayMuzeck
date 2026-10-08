@@ -64,12 +64,11 @@ const STEPS = [
 ];
 
 const AUDIO_POINTS = [
-  { title: 'Pad Editor: drum & akor', desc: '10 pad drum dengan 7 kit, plus 8 bank × 16 pad akor (128 akor) yang formulanya bisa diubah (kualitas, tension, inversi, slash bass, oktaf). Drum Pad dan Chord Pad gratis di Bar 1.' },
-  { title: '4 track akor, 128 instrumen GM', desc: 'Tiap track punya instrumen, volume, mute/solo, dan kurva ADSR sendiri. Suara memakai bank sampel SoundFont. Versi gratis: 1 track dengan Grand Piano.' },
-  { title: 'Sequencer 16 bar, 11 birama', desc: 'Dari 2/4 sampai 12/8, tempo 60–200 BPM, dengan wilayah loop yang bisa diatur. Gratis: Bar 1, 3 kit drum, dan 1 track akor Grand Piano. Full 16-Bar Editor membuka 16 bar, 7 kit drum, 4 track akor dengan 128 instrumen, ekspor, serta simpan dan muat proyek.' },
-  { title: 'Rekam live, dinamika, undo/redo', desc: 'Mainkan pad drum dan akor langsung ke sequencer, lengkap dengan hitung mundur dan metronom pengiring. Atur dinamika pukulan (pp sampai ff), lalu rapikan dengan undo/redo serta salin, potong, dan tempel.' },
-  { title: 'Ekspor MIDI, WAV, MP3, M4A, FLAC', desc: 'Ekspor drum saja, akor saja, atau keduanya sekaligus. Format audio bisa diulang menjadi satu berkas loop. Proyek juga bisa disimpan dan dimuat lagi dari perangkatmu (berkas MIDI). Ekspor dan proyek termasuk Full 16-Bar Editor.' },
-  { title: 'Stem mixer & 20 Audio Tools', desc: 'Potong, gabung, ulangi, volume, pitch, tempo, vokal isolator, konversi, kompres, edit metadata & cover, perekam, deteksi BPM & kunci, metronom, tuner, tes vocal range, dan latihan cocokkan nada.' },
+  { title: 'Aset Audio: katalog & lisensi', desc: 'Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Beli per lagu hanya yang dibutuhkan: master (WAV, FLAC, MP3, M4A), versi loop, stem, atau partitur PDF.' },
+  { title: 'Stem mixer interaktif', desc: 'Dengarkan dan campur stem multi-track tiap lagu langsung di browser: atur volume, pan, mute, dan solo per instrumen.' },
+  { title: 'Pad Editor: drum, akor & rekam live', desc: '10 pad drum dengan 7 kit, 8 bank × 16 pad akor (128 akor), 4 track akor dengan 128 instrumen GM, sequencer 16 bar dengan 11 birama, serta rekam live dengan dinamika dan undo/redo. Gratis: Bar 1, 3 kit drum, dan 1 track Grand Piano.' },
+  { title: '20 Audio Tools', desc: 'Potong, gabung, ulangi, volume, pitch, tempo, vokal isolator, konversi, kompres, edit metadata & cover, perekam, deteksi BPM & kunci, metronom, tuner, tes vocal range, dan latihan cocokkan nada. Diproses di perangkatmu, gratis 2x per alat per hari.' },
+  { title: 'Harga & lisensi modular', desc: 'Beli sekali, berlaku permanen: modul per lagu, Full 16-Bar Editor (16 bar, ekspor MIDI/audio, simpan proyek), Audio Tools tanpa batas harian, atau paket bundle 6 produk.' },
 ];
 
 const QUIZ_POINTS = [
