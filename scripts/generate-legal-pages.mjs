@@ -1,14 +1,25 @@
 // generate-legal-pages.mjs
 // Membuat halaman statis hukum PlayMuzeck: /privacy, /terms, /contact, /about, /hak-cipta
-// Pemakaian (jalankan dari FOLDER UTAMA proyek):  node scripts/generate-legal-pages.mjs "email@kamu.com" "Nama Lengkap Pemilik"
-// Hasil: folder public/privacy, public/terms, public/cookie, public/contact, public/about, public/hak-cipta, public/dukung (masing-masing berisi index.html)
-// Jalankan SEKALI, lalu commit folder-folder hasilnya. Tidak perlu menyalin apa pun lagi.
+// Otomatis dijalankan oleh `npm run build` dan `npm run dev` (lihat package.json). Manual: npm run legal
+// Output: public/{privacy,terms,cookie,contact,about,hak-cipta,dukung}/index.html (di-gitignore, dibuat ulang tiap build)
 import fs from 'node:fs';
 import path from 'node:path';
 
-const EMAIL = process.argv[2] || 'GANTI-EMAIL@contoh.com';
-const OWNER = process.argv[3] || 'GANTI NAMA PEMILIK';
-const OUT = path.resolve(process.argv[4] || './public');
+// Konfigurasi dibaca dari legal.config.json di folder utama proyek (email, nama pemilik, biaya bulanan).
+// Argumen CLI (opsional) menimpa: node scripts/generate-legal-pages.mjs "email" "nama"
+const ARGS = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const ALLOW_PLACEHOLDER = process.argv.includes('--allow-placeholder');
+let CFG = {};
+try { CFG = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'legal.config.json'), 'utf8')); } catch {}
+const EMAIL = ARGS[0] || process.env.LEGAL_EMAIL || CFG.email || 'GANTI-EMAIL@contoh.com';
+const OWNER = ARGS[1] || process.env.LEGAL_OWNER || CFG.owner || 'GANTI NAMA PEMILIK';
+const OUT = path.resolve(process.cwd(), 'public');
+const isPlaceholder = (v) => !v || /GANTI|contoh\.com|@example\./i.test(v);
+if (isPlaceholder(EMAIL) || isPlaceholder(OWNER)) {
+  const msg = 'legal.config.json belum diisi: isi "email" (email bisnis) dan "owner" (nama pemilik) lalu jalankan lagi. Halaman hukum TIDAK boleh dipublikasikan dengan data placeholder.';
+  if (!ALLOW_PLACEHOLDER) { console.error('GAGAL: ' + msg); process.exit(1); }
+  console.warn('PERINGATAN (mode dev): ' + msg);
+}
 
 const SITE = 'PlayMuzeck';
 const ORIGIN = 'https://playmuzeck.my.id';
@@ -405,18 +416,19 @@ const about = `
 
 
 // ───────────────────────── DUKUNG ─────────────────────────
-// ISI ANGKA ASLI di bawah (rupiah per bulan). Jika `amount` null, angkanya tidak ditampilkan.
+// Angka biaya diisi di legal.config.json ("costs"). Jika kosong/0, angkanya tidak ditampilkan.
 // Jangan mengisi angka yang bukan tagihan sebenarnya: halaman ini bersifat transparansi ke donatur.
 const COSTS = [
-  { name: 'Server aplikasi dan basis data', note: 'Menjalankan situs, akun, kuis multiplayer, dan pembayaran.', amount: null },
-  { name: 'Penyimpanan berkas', note: 'Katalog aset audio, stem, partitur, dan unggahan.', amount: null },
-  { name: 'Domain playmuzeck.my.id', note: 'Perpanjangan domain tahunan.', amount: null },
-  { name: 'Email transaksional', note: 'Verifikasi akun, reset kata sandi, bukti pembelian.', amount: null },
-  { name: 'Biaya pembayaran', note: 'Potongan penyedia pembayaran pada tiap transaksi.', amount: null },
+  { key: 'server', name: 'Server aplikasi dan basis data', note: 'Menjalankan situs, akun, kuis multiplayer, dan pembayaran.', amount: null },
+  { key: 'storage', name: 'Penyimpanan berkas', note: 'Katalog aset audio, stem, partitur, dan unggahan.', amount: null },
+  { key: 'domain', name: 'Domain playmuzeck.my.id', note: 'Perpanjangan domain tahunan.', amount: null },
+  { key: 'email', name: 'Email transaksional', note: 'Verifikasi akun, reset kata sandi, bukti pembelian.', amount: null },
+  { key: 'payment', name: 'Biaya pembayaran', note: 'Potongan penyedia pembayaran pada tiap transaksi.', amount: null },
 ];
+COSTS.forEach((c) => { const v = Number(CFG.costs && CFG.costs[c.key]); if (Number.isFinite(v) && v > 0) c.amount = v; });
 const rp = (n) => 'Rp' + Math.round(n).toLocaleString('id-ID');
 const costRows = COSTS.map((c) => `<tr><td><strong>${esc(c.name)}</strong><br><span style="color:var(--muted)">${esc(c.note)}</span></td><td style="white-space:nowrap">${c.amount ? rp(c.amount) + ' / bulan' : 'Tagihan bulanan'}</td></tr>`).join('');
-const totalKnown = COSTS.every((c) => Number.isFinite(c.amount)) ? COSTS.reduce((a, c) => a + c.amount, 0) : 0;
+const totalKnown = COSTS.every((c) => Number.isFinite(c.amount) && c.amount > 0) ? COSTS.reduce((a, c) => a + c.amount, 0) : 0;
 
 const dukung = `
 <p>PlayMuzeck dikerjakan oleh satu orang di sela waktu luang. Situs ini <strong>tidak menayangkan iklan</strong>: tidak ada banner, tidak ada pop-up, dan datamu tidak dijual. Satu-satunya "penghasilan" kami adalah penjualan aset audio dan donasi dari pengguna yang merasa PlayMuzeck berguna.</p>
@@ -543,5 +555,5 @@ for (const p of PAGES) {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'index.html'), page(p));
 }
-console.log(`OK: ${PAGES.length} halaman dibuat di ${OUT}  (email=${EMAIL}, pemilik=${OWNER})`);
-if (EMAIL.startsWith('GANTI') || OWNER.startsWith('GANTI')) console.warn('PERINGATAN: email/nama masih placeholder. Jalankan ulang dengan argumen sebenarnya.');
+console.log(`Halaman hukum: ${PAGES.length} halaman dibuat di public/ (${PAGES.map((p) => p.slug).join(', ')})`);
+

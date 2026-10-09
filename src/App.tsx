@@ -38,6 +38,8 @@ import { notifyUserScopeChanged } from './services/userScope';
 import { isBuiltinDeckId } from './data/quiz';
 import { installAuthFetch, clearUserToken, authApi, AUTH_EXPIRED_EVENT } from './services/authToken';
 import { RotateCcw, AlertTriangle } from 'lucide-react';
+import { CookieConsent } from './components/CookieConsent';
+import { openConsentSettings } from './services/consent';
 
 installAuthFetch(); // semua request /api/* otomatis membawa cookie sesi httpOnly
 
@@ -371,6 +373,7 @@ function MainApp() {
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isProfileDashboardOpen, setIsProfileDashboardOpen] = useState(false);
+  const [profileInitialTab, setProfileInitialTab] = useState<'donate' | undefined>(undefined);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isCustomAudioOpen, setIsCustomAudioOpen] = useState(false);
   const [deckToPlay, setDeckToPlay] = useState<Deck | null>(null);
@@ -1132,7 +1135,16 @@ function MainApp() {
                   }
                   setCurrentMode('quiz');
                 }}
-                onOpenProfile={() => setIsProfileDashboardOpen(true)}
+                onOpenProfile={() => { setProfileInitialTab(undefined); setIsProfileDashboardOpen(true); }}
+                onOpenDonation={() => {
+                  if (!userSession?.isLoggedIn) {
+                    setIsAuthOpen(true);
+                    showToast('Masuk dulu agar donasimu tercatat dan bingkai terbuka otomatis.');
+                    return;
+                  }
+                  setProfileInitialTab('donate');
+                  setIsProfileDashboardOpen(true);
+                }}
               />
             </motion.div>
           ) : currentMode === 'audio' ? (
@@ -1229,7 +1241,19 @@ function MainApp() {
 
           <span>&copy; {new Date().getFullYear()} {siteSettings.siteName}</span>
         </div>
+        <nav aria-label="Tautan hukum" className="max-w-7xl mx-auto px-4 sm:px-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-gray-500">
+          <a href="/dukung" className="hover:text-white transition-colors">Dukung Kami</a>
+          <a href="/about" className="hover:text-white transition-colors">Tentang</a>
+          <a href="/contact" className="hover:text-white transition-colors">Kontak</a>
+          <a href="/privacy" className="hover:text-white transition-colors">Privasi</a>
+          <a href="/cookie" className="hover:text-white transition-colors">Kebijakan Cookie</a>
+          <a href="/terms" className="hover:text-white transition-colors">Syarat &amp; Ketentuan</a>
+          <a href="/hak-cipta" className="hover:text-white transition-colors">Hak Cipta</a>
+          <button type="button" onClick={openConsentSettings} className="hover:text-white underline underline-offset-2 transition-colors cursor-pointer">Pengaturan Cookie</button>
+        </nav>
       </footer>
+
+      <CookieConsent />
 
       {/* Modal Pemilih Destinasi Pasca-Login */}
       <DestinationModal
@@ -1271,7 +1295,8 @@ function MainApp() {
 
       <ProfileDashboardModal
         isOpen={isProfileDashboardOpen}
-        onClose={() => setIsProfileDashboardOpen(false)}
+        onClose={() => { setIsProfileDashboardOpen(false); setProfileInitialTab(undefined); }}
+        initialTab={profileInitialTab}
         userSession={userSession}
         catalogTracks={catalog}
         onPlayDeck={(deck) => {

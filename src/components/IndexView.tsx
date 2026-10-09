@@ -22,11 +22,14 @@ import {
   Package,
 } from 'lucide-react';
 import { audioEngine } from '../services/audioEngine';
+import { DonationCard } from './DonationCard';
 
 interface IndexViewProps {
   onNavigateAudio: () => void;
   onNavigateQuiz: () => void;
   onOpenProfile: () => void;
+  /** Buka Dasbor Profil di tab Donasi. Bila tidak diberikan, memakai onOpenProfile. */
+  onOpenDonation?: () => void;
 }
 
 // Semua angka & klaim di bawah mengacu pada isi kode (DRUM_KITS, INSTRUMENTS_128, TOOLS, mode kuis, dsb).
@@ -109,7 +112,7 @@ const FAQ = [
   },
 ];
 
-export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigateQuiz, onOpenProfile }) => {
+export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigateQuiz, onOpenProfile, onOpenDonation }) => {
   const goAudio = () => {
     audioEngine.playClickSound();
     onNavigateAudio();
@@ -350,6 +353,9 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
           </button>
         </div>
       </section>
+
+      {/* 3b. DUKUNG PLAYMUZECK (bebas iklan, ditopang donasi) */}
+      <DonationCard onDonate={onOpenDonation ?? onOpenProfile} className="max-w-3xl mx-auto w-full" />
 
       {/* 4. FAQ */}
       <section id="index-faq-section" className="max-w-3xl mx-auto w-full space-y-4 scroll-mt-20 rounded-3xl p-3 sm:p-4 border border-transparent transition-colors">

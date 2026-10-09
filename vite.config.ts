@@ -51,6 +51,8 @@ export default defineConfig(() => {
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // Halaman statis (hukum, cookie, donasi) harus dimuat dari server, bukan diganti SPA oleh service worker.
+        navigateFallbackDenylist: [/^\/(privacy|terms|cookie|contact|about|hak-cipta|dukung)(\/|$)/, /^\/api\//, /^\/uploads\//],
       },
       devOptions: {
         enabled: true,

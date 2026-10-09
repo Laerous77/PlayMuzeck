@@ -1,7 +1,11 @@
+import { hasConsent } from './consent';
+
 const SESSION_KEY = 'muzeck_analytics_session_v1';
 
 let memorySession: string | null = null;
 function sessionId() {
+  // Pengenal analitik HANYA dibuat/dibaca bila pengguna menyetujui analitik (lihat consent.ts).
+  if (!hasConsent('analytics')) return 'no-consent';
   // localStorage bisa melempar error (mode privat / kuota / diblokir) -> jangan sampai crash.
   try {
     let id = localStorage.getItem(SESSION_KEY);
@@ -16,6 +20,7 @@ function sessionId() {
 }
 
 export function trackEvent(eventType: string, payload: Record<string, unknown> = {}) {
+  if (!hasConsent('analytics')) return; // tanpa persetujuan: tidak ada yang dikirim
   const body = JSON.stringify({
     eventType,
     sessionId: sessionId(),

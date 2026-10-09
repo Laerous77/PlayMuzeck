@@ -346,6 +346,8 @@ interface ProfileDashboardModalProps {
   onLogout: () => void;
   onUpdateProfile?: (updated: { name: string; email: string; avatarUrl?: string; frameId?: string; bio?: string; greeting?: string }) => void;
   onSuccessToast: (msg: string) => void;
+  /** Tab yang dibuka saat modal dibuka (mis. 'donate' dari kartu donasi). */
+  initialTab?: 'collection' | 'sound' | 'theme' | 'frames' | 'donate' | 'contact';
 }
 
 type ProfileTab = 'collection' | 'sound' | 'theme' | 'frames' | 'donate' | 'contact';
@@ -361,8 +363,10 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   onLogout,
   onUpdateProfile,
   onSuccessToast,
+  initialTab,
 }) => {
-  const [activeTab, setActiveTab] = useState<ProfileTab>('collection');
+  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab || 'collection');
+  useEffect(() => { if (isOpen && initialTab) setActiveTab(initialTab); }, [isOpen, initialTab]);
   const [dbData, setDbData] = useState<UserCollectionsData>(EMPTY_COLLECTIONS);
   const [isDbLoading, setIsDbLoading] = useState(true);
 

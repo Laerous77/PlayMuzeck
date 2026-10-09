@@ -33,3 +33,12 @@ yarn-error.log*
 public/*.sf2
 
 repomix-output.xml
+
+# Halaman hukum hasil generate (scripts/generate-legal-pages.mjs, dibuat ulang tiap build)
+public/privacy/
+public/terms/
+public/cookie/
+public/contact/
+public/about/
+public/hak-cipta/
+public/dukung/

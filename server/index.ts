@@ -24,6 +24,7 @@ import { createThemeBulkRoutes } from './themeBulkRoutes';
 import { createAccountDeletionRouter, startDeletionSweeper } from './accountDeletion';
 import { createNotificationsRouter, ensureNotificationSchema } from './notifications';
 import { createAdminOpsRouter } from './adminOpsRoutes';
+import { createDonationGoalRouter } from './donationGoalRoutes';
 import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
 import { isDeliverableEmail } from './auth/emailCheck';
 import { turnstileEnabled } from './auth/turnstile';
@@ -321,6 +322,7 @@ app.use(createPaymentRouter({
   getDonationTiers: () => DONATION_FRAME_TIERS,
 }));
 app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, getDonationTiers: () => DONATION_FRAME_TIERS }));
+app.use(createDonationGoalRouter({ pool }));
 
 // ---- Pusat Kuis: papan peringkat (harian/bulanan/sepanjang waktu) + Komunitas Kuis (server/quizCommunityRoutes.ts) ----
 // Baca = publik; bagikan kuis = hanya pemilik Kuis Editor (dicek di server); catat skor = akun login.
