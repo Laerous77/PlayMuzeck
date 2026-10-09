@@ -1364,25 +1364,35 @@ async function ensurePaymentTables() {
     )`);
 }
 
-// Kirim langsung sitemap.xml resmi dalam format XML ke Google
+// sitemap.xml & robots.txt: sajikan berkas hasil build (dist/) bila ada, supaya sitemap LENGKAP buatan
+// scripts/generate-seo-pages.mjs (beranda + semua Audio Tools + halaman bagian aplikasi) yang sampai ke Google.
+// Sebelumnya rute ini selalu membalas sitemap berisi beranda saja dan mengabaikan berkas hasil build.
+// Isi cadangan di bawah hanya dipakai bila dist/ belum ada (mis. saat pengembangan lokal).
+const seoDistFile = (name: string): string | null => {
+  const p = path.resolve(process.cwd(), 'dist', name);
+  try {
+    return fs.existsSync(p) ? fs.readFileSync(p, 'utf8') : null;
+  } catch {
+    return null;
+  }
+};
+
 app.get('/sitemap.xml', (_req, res) => {
   res.type('application/xml');
+  res.set('Cache-Control', 'public, max-age=3600');
+  const built = seoDistFile('sitemap.xml');
+  if (built) return void res.send(built);
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
-  <url>
-    <loc>https://playmuzeck.my.id/</loc>
-    <lastmod>${new Date().toISOString().slice(0, 10)}</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="id-ID" href="https://playmuzeck.my.id/" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://playmuzeck.my.id/" />
-  </url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://playmuzeck.my.id/</loc><lastmod>${new Date().toISOString().slice(0, 10)}</lastmod></url>
 </urlset>`);
 });
 
-// Kirim robots.txt resmi dalam format Plain Text
 app.get('/robots.txt', (_req, res) => {
   res.type('text/plain');
+  res.set('Cache-Control', 'public, max-age=3600');
+  const built = seoDistFile('robots.txt');
+  if (built) return void res.send(built);
   res.send(`User-agent: *
 Allow: /
 Disallow: /admin
@@ -1477,4 +1487,3 @@ attachMultiplayerSocket(
     onFinished: (game) => recordMultiplayerGame(pool, game),
   }
 );
-

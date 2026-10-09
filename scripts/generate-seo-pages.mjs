@@ -1,6 +1,7 @@
 // scripts/generate-seo-pages.mjs
 // Dijalankan SETELAH `vite build`. Membuat halaman HTML statis per Audio Tool
-// (judul, deskripsi, canonical, dan teks sendiri) + sitemap.xml lengkap di dist/.
+// (judul, deskripsi, canonical, JSON-LD, dan teks sendiri), halaman per bagian aplikasi (Aset Audio, Pad Editor,
+// Harga, Pusat Kuis), + sitemap.xml lengkap di dist/.
 // Cloudflare Pages otomatis menyajikan dist/alat-audio/<slug>/index.html di /alat-audio/<slug>.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -101,16 +102,54 @@ const TOOLS = [
     h1: 'Tuner Gitar Online', body: 'Setel instrumenmu lewat mikrofon perangkat. Pilih mode gitar, bass, ukulele, biola, atau kromatik untuk vokal, lalu ikuti jarumnya.' },
 ];
 
+// Bagian aplikasi yang bisa dibuka langsung lewat URL (lihat src/services/routes.ts).
+const SECTIONS = [
+  { path: 'audio/tools', name: 'Audio Tools', parent: 'Audio Studio',
+    title: 'Audio Tools Online Gratis: Potong, Gabung, Konversi Audio | PlayMuzeck',
+    desc: 'Alat audio online di browser: potong, gabung, ulangi, konversi MP3/WAV/FLAC/M4A, kompres, ubah nada & tempo, deteksi BPM & kunci, metronom, tuner. Gratis dicoba.',
+    h1: 'Audio Tools Online', body: 'Olah file audio langsung di browser: potong, gabung, ulangi, konversi ke MP3, WAV, FLAC, atau M4A, kompres, ubah nada dan tempo, deteksi BPM dan kunci nada, metronom, hingga tuner. File diproses di perangkatmu dan tidak diunggah ke server. Setiap alat gratis dicoba 2 kali per hari.' },
+  { path: 'audio/assets', name: 'Aset Audio', parent: 'Audio Studio',
+    title: 'Aset Audio: Beli Lagu Orisinal Berlisensi Komersial (WAV, FLAC, Stem) | PlayMuzeck',
+    desc: 'Katalog aset audio orisinal berlisensi komersial non-eksklusif. Beli per lagu: master WAV/FLAC/MP3/M4A, versi loop, stem, atau partitur PDF. Dengarkan stem di browser.',
+    h1: 'Aset Audio: Katalog & Lisensi', body: 'Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Beli per lagu hanya yang dibutuhkan: master (WAV, FLAC, MP3, M4A), versi loop, stem, atau partitur PDF. Dengarkan dan campur stem multi-track tiap lagu langsung di browser: atur volume, pan, mute, dan solo per instrumen.' },
+  { path: 'audio/pad', name: 'Pad Editor', parent: 'Audio Studio',
+    title: 'Drum Pad & Chord Pad Online: Buat Beat dan Progresi Akor | PlayMuzeck',
+    desc: '10 pad drum, 128 akor, 4 track akor dengan 128 instrumen GM, sequencer 16 bar, dan rekam live di browser. Gratis Bar 1; ekspor MIDI/audio di editor penuh.',
+    h1: 'Drum Pad & Chord Pad Online', body: 'Susun ritme dan progresi akor langsung di browser: 10 pad drum dengan 7 kit, 128 akor, 4 track akor dengan 128 instrumen GM, sequencer 16 bar, serta rekam live dengan dinamika dan undo/redo. Gratis: Bar 1, 3 kit drum, dan 1 track Grand Piano.' },
+  { path: 'audio/pricing', name: 'Harga & Lisensi', parent: 'Audio Studio',
+    title: 'Harga & Lisensi Audio Studio: Beli Sekali, Berlaku Permanen | PlayMuzeck',
+    desc: 'Beli sekali, berlaku permanen: modul per lagu, Full 16-Bar Editor, Audio Tools tanpa batas harian, atau paket bundle 6 produk. Lisensi komersial non-eksklusif.',
+    h1: 'Harga & Lisensi Audio Studio', body: 'Beli sekali, berlaku permanen: modul per lagu, Full 16-Bar Editor (16 bar, ekspor MIDI/audio, simpan proyek), Audio Tools tanpa batas harian, atau paket bundle 6 produk. Setiap pembelian lagu menyertakan berkas Readme_License.txt berisi ketentuan lisensi komersial non-eksklusif.' },
+  { path: 'quiz/play', name: 'Mainkan Kuis', parent: 'Pusat Kuis',
+    title: 'Main Kuis Multiplayer Online: Solo, Pass & Play, Host 10 Regu | PlayMuzeck',
+    desc: 'Main kuis trivia berbahasa Indonesia: solo (opsional lawan bot), pass & play, host kuis hingga 10 regu, dan kuis multiplayer online dengan timer per soal.',
+    h1: 'Main Kuis Multiplayer Online', body: 'Empat mode permainan: Solo (opsional lawan bot), pass and play, host kuis hingga 10 regu, dan multiplayer online, lengkap dengan timer per soal. Simpan hasil permainan dan tinjau jawaban per soal kapan saja.' },
+  { path: 'quiz/library', name: 'Perpustakaan Kuis', parent: 'Pusat Kuis',
+    title: 'Kuis Trivia Indonesia: Sains, Sejarah, Musik, Seni, Kuliner | PlayMuzeck',
+    desc: 'Perpustakaan kuis trivia berbahasa Indonesia: sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya. 3 starter deck gratis, deck tambahan tersedia.',
+    h1: 'Perpustakaan Kuis Trivia', body: 'Belasan topik trivia: sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya. Tiga starter deck bawaan siap main, deck tambahan tersedia di Perpustakaan.' },
+  { path: 'quiz/hall', name: 'Aula Komunitas', parent: 'Pusat Kuis',
+    title: 'Aula Komunitas Kuis: Kuis Buatan Pengguna & Papan Peringkat | PlayMuzeck',
+    desc: 'Mainkan kuis buatan pengguna lain dan bagikan kuismu lewat Kuis Editor. Papan peringkat harian, bulanan, dan sepanjang waktu dari multiplayer online.',
+    h1: 'Aula Komunitas Kuis', body: 'Mainkan kuis buatan pengguna lain; pemilik Kuis Editor bisa membagikan kuisnya. Papan peringkat harian, bulanan, dan sepanjang waktu berasal dari multiplayer online.' },
+  { path: 'quiz/download', name: 'Pasang Web App', parent: 'Pusat Kuis',
+    title: 'Pasang Pusat Kuis sebagai Aplikasi (PWA) & Main Kuis Luring | PlayMuzeck',
+    desc: 'Pasang Pusat Kuis sebagai PWA atau unduh berkas standalone untuk main kuis tanpa internet. Multiplayer online tetap butuh koneksi.',
+    h1: 'Pasang Pusat Kuis & Main Luring', body: 'Pasang sebagai PWA atau unduh berkas standalone untuk memainkan kuis tanpa internet. Multiplayer online tetap butuh internet.' },
+];
+
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+// Untuk di dalam <script type="application/ld+json">: cegah "</script>" memutus blok.
+const jsonLd = (o) => JSON.stringify(o).replace(/</g, '\\u003c');
 
 function setMeta(html, attr, key, value) {
   const re = new RegExp(`<meta\\s+${attr}="${key}"[\\s\\S]*?>`);
   return html.replace(re, `<meta ${attr}="${key}" content="${esc(value)}" />`);
 }
 
-function buildPage(tpl, { url, title, desc, bodyHtml }) {
+function buildPage(tpl, { url, title, desc, bodyHtml, ld }) {
   let h = tpl;
-  h = h.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(title)}</title>`);
+  h = h.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${esc(title)}</title>`);
   h = setMeta(h, 'name', 'description', desc);
   h = setMeta(h, 'property', 'og:title', title);
   h = setMeta(h, 'property', 'og:description', desc);
@@ -120,24 +159,44 @@ function buildPage(tpl, { url, title, desc, bodyHtml }) {
   h = h.replace(/<link rel="canonical"[^>]*>/, `<link rel="canonical" href="${url}" />`);
   h = h.replace(/<link rel="alternate" hreflang="id-ID"[^>]*>/, `<link rel="alternate" hreflang="id-ID" href="${url}" />`);
   h = h.replace(/<link rel="alternate" hreflang="x-default"[^>]*>/, `<link rel="alternate" hreflang="x-default" href="${url}" />`);
+  // JSON-LD khusus halaman ini menggantikan blok milik beranda (FAQ/ItemList beranda tidak diulang di tiap halaman).
+  h = h.replace(/<script type="application\/ld\+json">[\s\S]*?<\/script>/, () => `<script type="application/ld+json">${jsonLd(ld)}</script>`);
   // Konten statis di dalam #root. createRoot() React akan menimpanya saat JS jalan.
-  h = h.replace('<div id="root"></div>', `<div id="root">${bodyHtml}</div>`);
+  h = h.replace(/<div id="root">[\s\S]*?<\/div>\s*<script type="module"/, () => `<div id="root">${bodyHtml}</div>\n    <script type="module"`);
   return h;
 }
 
 const tpl = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
 
 const toolLinks = TOOLS.map((t) => `<li><a href="/alat-audio/${t.slug}">${esc(t.name)}</a></li>`).join('');
+const sectionLinks = SECTIONS.map((x) => `<li><a href="/${x.path}">${esc(x.parent)}: ${esc(x.name)}</a></li>`).join('');
 const nav = `<nav><a href="/">Beranda</a> · <a href="/alat-audio">Semua Audio Tools</a></nav>`;
+const wrap = (inner) => `<main style="max-width:48rem;margin:2rem auto;padding:1rem;color:#e5e5e5;font-family:system-ui,sans-serif;line-height:1.6">${nav}${inner}</main>`;
+
+const crumbs = (items) => ({
+  '@type': 'BreadcrumbList',
+  itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: it.url })),
+});
+const app = (name, url, description) => ({
+  '@type': 'WebApplication', name, url, description, applicationCategory: 'MultimediaApplication',
+  operatingSystem: 'All', inLanguage: 'id-ID', isPartOf: { '@id': `${ORIGIN}/#website` },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'IDR', availability: 'https://schema.org/InStock' },
+});
+
+const pages = [];
 
 // 1) Halaman hub: /alat-audio
 const hubTitle = '20 Audio Tools Online Gratis: Potong, Gabung, Konversi, BPM, Tuner | PlayMuzeck';
 const hubDesc = '20 alat audio di browser: potong, gabung, konversi, ubah nada & tempo, deteksi BPM, normalisasi, nada dering, metronom, tuner, dan lainnya. Gratis dicoba.';
-const pages = [];
 pages.push({
   dir: 'alat-audio', url: `${ORIGIN}/alat-audio`,
   html: buildPage(tpl, { url: `${ORIGIN}/alat-audio`, title: hubTitle, desc: hubDesc,
-    bodyHtml: `<main style="max-width:48rem;margin:2rem auto;padding:1rem;color:#e5e5e5;font-family:system-ui,sans-serif">${nav}<h1>20 Audio Tools Online</h1><p>Olah file audio milikmu langsung di browser. File diproses di perangkatmu, tidak diunggah ke server. Setiap alat gratis dicoba 2 kali per hari.</p><ul>${toolLinks}</ul></main>` }),
+    ld: { '@context': 'https://schema.org', '@graph': [
+      crumbs([{ name: 'PlayMuzeck', url: `${ORIGIN}/` }, { name: 'Audio Tools', url: `${ORIGIN}/alat-audio` }]),
+      { '@type': 'ItemList', name: 'Audio Tools Online PlayMuzeck',
+        itemListElement: TOOLS.map((t, i) => ({ '@type': 'ListItem', position: i + 1, name: t.name, url: `${ORIGIN}/alat-audio/${t.slug}` })) },
+    ] },
+    bodyHtml: wrap(`<h1>Audio Tools Online</h1><p>Olah file audio milikmu langsung di browser. File diproses di perangkatmu, tidak diunggah ke server. Setiap alat gratis dicoba 2 kali per hari.</p><ul>${toolLinks}</ul><h2>Bagian lain PlayMuzeck</h2><ul>${sectionLinks}</ul>`) }),
 });
 
 // 2) Satu halaman per alat
@@ -146,7 +205,25 @@ for (const t of TOOLS) {
   pages.push({
     dir: `alat-audio/${t.slug}`, url,
     html: buildPage(tpl, { url, title: t.title, desc: t.desc,
-      bodyHtml: `<main style="max-width:48rem;margin:2rem auto;padding:1rem;color:#e5e5e5;font-family:system-ui,sans-serif">${nav}<h1>${esc(t.h1)}</h1><p>${esc(t.body)}</p><p>File diproses di browser kamu dan tidak diunggah ke server. Gratis dicoba 2 kali per hari.</p><h2>Alat audio lainnya</h2><ul>${toolLinks}</ul></main>` }),
+      ld: { '@context': 'https://schema.org', '@graph': [
+        crumbs([{ name: 'PlayMuzeck', url: `${ORIGIN}/` }, { name: 'Audio Tools', url: `${ORIGIN}/alat-audio` }, { name: t.name, url }]),
+        app(t.name, url, t.desc),
+      ] },
+      bodyHtml: wrap(`<h1>${esc(t.h1)}</h1><p>${esc(t.body)}</p><p>File diproses di browser kamu dan tidak diunggah ke server. Gratis dicoba 2 kali per hari.</p><h2>Alat audio lainnya</h2><ul>${toolLinks}</ul>`) }),
+  });
+}
+
+// 3) Halaman per bagian aplikasi (URL yang sama dengan rute di aplikasi)
+for (const x of SECTIONS) {
+  const url = `${ORIGIN}/${x.path}`;
+  pages.push({
+    dir: x.path, url,
+    html: buildPage(tpl, { url, title: x.title, desc: x.desc,
+      ld: { '@context': 'https://schema.org', '@graph': [
+        crumbs([{ name: 'PlayMuzeck', url: `${ORIGIN}/` }, { name: x.parent, url: `${ORIGIN}/${x.path.split('/')[0] === 'audio' ? 'audio/tools' : 'quiz/library'}` }, { name: x.name, url }]),
+        app(`PlayMuzeck ${x.name}`, url, x.desc),
+      ] },
+      bodyHtml: wrap(`<h1>${esc(x.h1)}</h1><p>${esc(x.body)}</p><h2>Jelajahi PlayMuzeck</h2><ul>${sectionLinks}</ul><h2>Audio Tools</h2><ul>${toolLinks}</ul>`) }),
   });
 }
 
@@ -156,7 +233,7 @@ for (const p of pages) {
   fs.writeFileSync(path.join(dir, 'index.html'), p.html);
 }
 
-// 3) sitemap.xml lengkap (menimpa public/sitemap.xml yang hanya berisi beranda)
+// 4) sitemap.xml lengkap (menimpa public/sitemap.xml)
 const urls = [`${ORIGIN}/`, ...pages.map((p) => p.url)];
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

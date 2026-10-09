@@ -2,6 +2,8 @@ User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /api/
+Disallow: /verify-email
+Disallow: /reset-password
 
-# Search Engine Sitemaps (Google, Bing, Yandex, Yahoo, DuckDuckGo)
+# Sitemap lengkap (dibuat otomatis saat build oleh scripts/generate-seo-pages.mjs)
 Sitemap: https://playmuzeck.my.id/sitemap.xml

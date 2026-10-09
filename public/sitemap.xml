@@ -1,11 +1,35 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
-  <url>
-    <loc>https://playmuzeck.my.id/</loc>
-    <lastmod>2026-10-04</lastmod>
-    <changefreq>daily</changefreq>
-    <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="id-ID" href="https://playmuzeck.my.id/" />
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://playmuzeck.my.id/" />
-  </url>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://playmuzeck.my.id/</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/potong-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/atur-volume-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/ubah-nada-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/ubah-kecepatan-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/balik-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/konversi-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/kompres-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/kurangi-noise-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/pisahkan-vokal</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/gabung-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/ulangi-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/edit-metadata-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/fade-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/deteksi-bpm</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/deteksi-kunci-nada</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/rekam-suara</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/buat-nada-dering</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/hapus-hening-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/normalisasi-volume-audio</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/stereo-ke-mono</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/metronom-online</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/alat-audio/tuner-online</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/audio/tools</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/audio/assets</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/audio/pad</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/audio/pricing</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/quiz/play</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/quiz/library</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/quiz/hall</loc><lastmod>2026-10-09</lastmod></url>
+  <url><loc>https://playmuzeck.my.id/quiz/download</loc><lastmod>2026-10-09</lastmod></url>
 </urlset>

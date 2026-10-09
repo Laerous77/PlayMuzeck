@@ -3,12 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <title>PlayMuzeck - Audio Studio & Pusat Kuis Indonesia</title>
+    <title>PlayMuzeck: Audio Tools Online, Aset Audio &amp; Kuis Multiplayer</title>
     <meta
       name="description"
-      content="Platform audio interaktif Indonesia dengan web stem mixer, audio tools suite, dan Pusat Kuis edukatif bernuansa gelap elegan."
+      content="Olah audio gratis di browser: potong, gabung, konversi MP3/WAV, deteksi BPM. Beli aset audio berlisensi komersial dan main kuis multiplayer Indonesia di PlayMuzeck."
     />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="keywords" content="playmuzeck, play muzeck, audio tools online, konversi audio online, convert audio, potong audio, gabung audio, deteksi bpm, aset audio, lisensi komersial lagu, stem mixer, drum pad online, chord pad online, kuis multiplayer, kuis trivia indonesia, pusat kuis" />
+    <meta name="author" content="PlayMuzeck" />
+    <!-- GOOGLE SEARCH CONSOLE: bila memilih verifikasi "Tag HTML", ganti KODE_DARI_SEARCH_CONSOLE lalu hapus tanda komentar baris di bawah.
+    <meta name="google-site-verification" content="KODE_DARI_SEARCH_CONSOLE" />
+    -->
 
     <!-- Target Wilayah Indonesia Only (Geo & Language Tags) -->
     <meta name="geo.region" content="ID" />
@@ -24,10 +29,10 @@
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="id_ID" />
     <meta property="og:site_name" content="PlayMuzeck" />
-    <meta property="og:title" content="PlayMuzeck - Audio Studio & Pusat Kuis Indonesia" />
+    <meta property="og:title" content="PlayMuzeck: Audio Tools Online, Aset Audio & Kuis Multiplayer" />
     <meta
       property="og:description"
-      content="Platform audio interaktif Indonesia dengan web stem mixer, audio tools suite, dan Pusat Kuis edukatif bernuansa gelap elegan."
+      content="Olah audio gratis di browser: potong, gabung, konversi MP3/WAV, deteksi BPM. Beli aset audio berlisensi komersial dan main kuis multiplayer Indonesia di PlayMuzeck."
     />
     <meta property="og:url" content="https://playmuzeck.my.id/" />
     <meta property="og:image" content="https://playmuzeck.my.id/PlayMuzeck-logo.png" />
@@ -35,10 +40,10 @@
 
     <!-- Twitter / X Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="PlayMuzeck - Audio Studio & Pusat Kuis Indonesia" />
+    <meta name="twitter:title" content="PlayMuzeck: Audio Tools Online, Aset Audio & Kuis Multiplayer" />
     <meta
       name="twitter:description"
-      content="Platform audio interaktif Indonesia dengan web stem mixer, audio tools suite, dan Pusat Kuis edukatif bernuansa gelap elegan."
+      content="Olah audio gratis di browser: potong, gabung, konversi MP3/WAV, deteksi BPM. Beli aset audio berlisensi komersial dan main kuis multiplayer Indonesia di PlayMuzeck."
     />
     <meta name="twitter:image" content="https://playmuzeck.my.id/PlayMuzeck-logo.png" />
 
@@ -53,40 +58,281 @@
 
     <!-- Schema.org Structured Data (JSON-LD) for Search Engines -->
     <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
     {
-      "@context": "https://schema.org",
-      "@graph": [
+      "@type": "Organization",
+      "@id": "https://playmuzeck.my.id/#org",
+      "name": "PlayMuzeck",
+      "alternateName": [
+        "Play Muzeck",
+        "PlayMuzeck Indonesia"
+      ],
+      "url": "https://playmuzeck.my.id/",
+      "logo": {
+        "@type": "ImageObject",
+        "url": "https://playmuzeck.my.id/PlayMuzeck-logo.png"
+      }
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://playmuzeck.my.id/#website",
+      "url": "https://playmuzeck.my.id/",
+      "name": "PlayMuzeck",
+      "alternateName": [
+        "Play Muzeck",
+        "PlayMuzeck Indonesia"
+      ],
+      "inLanguage": "id-ID",
+      "description": "Audio Tools online, aset audio berlisensi, dan Pusat Kuis multiplayer berbahasa Indonesia",
+      "publisher": {
+        "@id": "https://playmuzeck.my.id/#org"
+      }
+    },
+    {
+      "@type": "WebApplication",
+      "@id": "https://playmuzeck.my.id/#webapp",
+      "name": "PlayMuzeck",
+      "url": "https://playmuzeck.my.id/",
+      "description": "Platform audio interaktif dan Pusat Kuis edukatif berbahasa Indonesia dengan stem mixer, pad editor, 20 Audio Tools, dan kuis multiplayer.",
+      "applicationCategory": "MultimediaApplication",
+      "operatingSystem": "All",
+      "inLanguage": "id-ID",
+      "browserRequirements": "Requires JavaScript and HTML5 Audio support",
+      "publisher": {
+        "@id": "https://playmuzeck.my.id/#org"
+      },
+      "featureList": [
+        "Aset audio berlisensi komersial non-eksklusif (WAV, FLAC, MP3, M4A, loop, stem, partitur PDF)",
+        "Stem mixer interaktif di browser",
+        "Drum Pad dan Chord Pad dengan sequencer 16 bar",
+        "20 Audio Tools online: potong, gabung, konversi, kompres, ubah nada dan tempo, deteksi BPM dan kunci, metronom, tuner",
+        "Kuis multiplayer online, pass and play, dan host kuis hingga 10 regu",
+        "Perpustakaan kuis trivia dan Aula Komunitas",
+        "Bisa dipasang sebagai PWA dan dimainkan luring"
+      ],
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "IDR",
+        "availability": "https://schema.org/InStock",
+        "description": "Gratis dicoba; modul lengkap berbayar (beli sekali)."
+      }
+    },
+    {
+      "@type": "ItemList",
+      "@id": "https://playmuzeck.my.id/#audio-tools",
+      "name": "Audio Tools Online PlayMuzeck",
+      "itemListElement": [
         {
-          "@type": "WebApplication",
-          "@id": "https://playmuzeck.my.id/#webapp",
-          "name": "PlayMuzeck",
-          "url": "https://playmuzeck.my.id/",
-          "description": "Platform audio interaktif dan Pusat Kuis edukatif berbahasa Indonesia dengan stem mixer, pad sequencer, dan game multiplayer.",
-          "applicationCategory": "MultimediaApplication, EducationalApplication",
-          "operatingSystem": "All",
-          "inLanguage": "id-ID",
-          "browserRequirements": "Requires JavaScript and HTML5 Audio support",
-          "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "IDR",
-            "availability": "https://schema.org/InStock"
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Potong Audio (Trim / Cut)",
+          "url": "https://playmuzeck.my.id/alat-audio/potong-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Atur Volume Audio (Gain)",
+          "url": "https://playmuzeck.my.id/alat-audio/atur-volume-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 3,
+          "name": "Ubah Nada Lagu (Pitch)",
+          "url": "https://playmuzeck.my.id/alat-audio/ubah-nada-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 4,
+          "name": "Ubah Kecepatan Audio (Tempo)",
+          "url": "https://playmuzeck.my.id/alat-audio/ubah-kecepatan-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 5,
+          "name": "Balik Audio (Reverse)",
+          "url": "https://playmuzeck.my.id/alat-audio/balik-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 6,
+          "name": "Konversi Audio (MP3, WAV, FLAC, M4A)",
+          "url": "https://playmuzeck.my.id/alat-audio/konversi-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 7,
+          "name": "Kompres Ukuran Audio",
+          "url": "https://playmuzeck.my.id/alat-audio/kompres-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 8,
+          "name": "Kurangi Noise Audio",
+          "url": "https://playmuzeck.my.id/alat-audio/kurangi-noise-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 9,
+          "name": "Pisahkan Vokal & Musik",
+          "url": "https://playmuzeck.my.id/alat-audio/pisahkan-vokal"
+        },
+        {
+          "@type": "ListItem",
+          "position": 10,
+          "name": "Gabung Audio (Merge)",
+          "url": "https://playmuzeck.my.id/alat-audio/gabung-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 11,
+          "name": "Ulangi Audio (Loop)",
+          "url": "https://playmuzeck.my.id/alat-audio/ulangi-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 12,
+          "name": "Edit Metadata & Cover Audio (Tag ID3)",
+          "url": "https://playmuzeck.my.id/alat-audio/edit-metadata-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 13,
+          "name": "Fade In & Fade Out Audio",
+          "url": "https://playmuzeck.my.id/alat-audio/fade-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 14,
+          "name": "Deteksi BPM Lagu",
+          "url": "https://playmuzeck.my.id/alat-audio/deteksi-bpm"
+        },
+        {
+          "@type": "ListItem",
+          "position": 15,
+          "name": "Deteksi Kunci Nada Lagu",
+          "url": "https://playmuzeck.my.id/alat-audio/deteksi-kunci-nada"
+        },
+        {
+          "@type": "ListItem",
+          "position": 16,
+          "name": "Rekam Suara + Potong",
+          "url": "https://playmuzeck.my.id/alat-audio/rekam-suara"
+        },
+        {
+          "@type": "ListItem",
+          "position": 17,
+          "name": "Pembuat Nada Dering",
+          "url": "https://playmuzeck.my.id/alat-audio/buat-nada-dering"
+        },
+        {
+          "@type": "ListItem",
+          "position": 18,
+          "name": "Hapus Jeda Hening",
+          "url": "https://playmuzeck.my.id/alat-audio/hapus-hening-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 19,
+          "name": "Normalisasi Volume (LUFS)",
+          "url": "https://playmuzeck.my.id/alat-audio/normalisasi-volume-audio"
+        },
+        {
+          "@type": "ListItem",
+          "position": 20,
+          "name": "Stereo ke Mono",
+          "url": "https://playmuzeck.my.id/alat-audio/stereo-ke-mono"
+        },
+        {
+          "@type": "ListItem",
+          "position": 21,
+          "name": "Metronom Online",
+          "url": "https://playmuzeck.my.id/alat-audio/metronom-online"
+        },
+        {
+          "@type": "ListItem",
+          "position": 22,
+          "name": "Tuner Gitar Online",
+          "url": "https://playmuzeck.my.id/alat-audio/tuner-online"
+        }
+      ]
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://playmuzeck.my.id/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Apa saja yang gratis dan apa yang berbayar?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Gratis: akun, 3 starter deck, Drum Pad dan Chord Pad di Bar 1 (3 kit drum, 1 track akor Grand Piano, rekam live, dinamika, undo/redo), dan 2 penggunaan per alat per hari di Audio Tools (20 alat). Kuota Audio Tools dicatat di server; bila server tidak terjangkau, alat belum bisa dipakai sampai koneksi pulih. Berbayar (beli sekali): modul per lagu seperti master, loop, stem, dan partitur; Full 16-Bar Editor (16 bar, 7 kit drum, 4 track akor dengan 128 instrumen, ekspor MIDI/audio, simpan dan muat proyek); Audio Tools tanpa batas harian; serta deck topik tambahan. Donasi bersifat sukarela."
           }
         },
         {
-          "@type": "WebSite",
-          "@id": "https://playmuzeck.my.id/#website",
-          "url": "https://playmuzeck.my.id/",
-          "name": "PlayMuzeck Indonesia",
-          "inLanguage": "id-ID",
-          "description": "Workstation Audio Interaktif & Pusat Kuis Edukatif Indonesia"
+          "@type": "Question",
+          "name": "Apakah berkas audio saya diunggah ke server?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Untuk Audio Tools, tidak. Berkas dibaca dan diproses langsung di browser kamu. Yang dicatat server hanya hitungan pemakaian harian per alat."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Kenapa Chord Pad butuh waktu memuat suara?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Chord Pad memakai bank sampel SoundFont yang berukuran besar, diunduh sekali lalu disimpan di cache browser. Selama belum selesai, pad tetap berbunyi dengan suara sintesis sementara, dan otomatis pindah ke suara instrumen asli begitu bank siap."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Apakah Vokal Isolator memakai AI?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Tidak. Alat ini memakai teknik center-phase: memisahkan suara yang berada di tengah stereo. Hasil terbaik pada rekaman stereo dengan vokal di tengah. Bass, kick, atau snare yang juga di tengah bisa ikut terbawa ke hasil vokal."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Bagaimana lisensi lagunya?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Setiap pembelian lagu membuka berkas Readme_License.txt yang memuat ketentuan lisensi komersial non-eksklusif. Baca isinya sebelum memakai lagu untuk proyekmu."
+          }
         }
       ]
     }
+  ]
+}
     </script>
   </head>
   <body class="bg-black text-[#E5E5E5] antialiased">
-    <div id="root"></div>
+    <div id="root"><!--prerender--><main style="max-width:48rem;margin:0 auto;padding:2rem 1rem;color:#e5e5e5;font-family:system-ui,sans-serif;line-height:1.6">
+<h1>PlayMuzeck: Audio Tools Online, Aset Audio &amp; Kuis Multiplayer Indonesia</h1>
+<p>PlayMuzeck adalah platform audio interaktif dan pusat kuis berbahasa Indonesia. Olah file audio langsung di browser, beli aset audio berlisensi komersial, susun beat dan akor, atau tantang teman lewat kuis multiplayer.</p>
+<nav aria-label="Navigasi utama"><ul>
+<li><a href="/audio/tools">Audio Tools: 20 alat audio online</a></li>
+<li><a href="/audio/assets">Aset Audio: lagu orisinal berlisensi komersial</a></li>
+<li><a href="/audio/pad">Drum Pad &amp; Chord Pad</a></li>
+<li><a href="/audio/pricing">Harga &amp; Lisensi</a></li>
+<li><a href="/quiz/play">Main Kuis Multiplayer</a></li>
+<li><a href="/quiz/library">Perpustakaan Kuis Trivia</a></li>
+<li><a href="/quiz/hall">Aula Komunitas Kuis</a></li>
+<li><a href="/quiz/download">Pasang Pusat Kuis (PWA)</a></li>
+</ul></nav>
+<h2>Audio Tools Online: potong, gabung, konversi audio</h2>
+<p>Potong, gabung, ulangi, konversi ke MP3, WAV, FLAC, atau M4A, kompres, ubah nada dan tempo, deteksi BPM dan kunci nada, metronom, hingga tuner. File diproses di perangkatmu dan tidak diunggah ke server.</p>
+<ul><li><a href="/alat-audio/potong-audio">Potong Audio (Trim / Cut)</a></li><li><a href="/alat-audio/atur-volume-audio">Atur Volume Audio (Gain)</a></li><li><a href="/alat-audio/ubah-nada-audio">Ubah Nada Lagu (Pitch)</a></li><li><a href="/alat-audio/ubah-kecepatan-audio">Ubah Kecepatan Audio (Tempo)</a></li><li><a href="/alat-audio/balik-audio">Balik Audio (Reverse)</a></li><li><a href="/alat-audio/konversi-audio">Konversi Audio (MP3, WAV, FLAC, M4A)</a></li><li><a href="/alat-audio/kompres-audio">Kompres Ukuran Audio</a></li><li><a href="/alat-audio/kurangi-noise-audio">Kurangi Noise Audio</a></li><li><a href="/alat-audio/pisahkan-vokal">Pisahkan Vokal &amp; Musik</a></li><li><a href="/alat-audio/gabung-audio">Gabung Audio (Merge)</a></li><li><a href="/alat-audio/ulangi-audio">Ulangi Audio (Loop)</a></li><li><a href="/alat-audio/edit-metadata-audio">Edit Metadata &amp; Cover Audio (Tag ID3)</a></li><li><a href="/alat-audio/fade-audio">Fade In &amp; Fade Out Audio</a></li><li><a href="/alat-audio/deteksi-bpm">Deteksi BPM Lagu</a></li><li><a href="/alat-audio/deteksi-kunci-nada">Deteksi Kunci Nada Lagu</a></li><li><a href="/alat-audio/rekam-suara">Rekam Suara + Potong</a></li><li><a href="/alat-audio/buat-nada-dering">Pembuat Nada Dering</a></li><li><a href="/alat-audio/hapus-hening-audio">Hapus Jeda Hening</a></li><li><a href="/alat-audio/normalisasi-volume-audio">Normalisasi Volume (LUFS)</a></li><li><a href="/alat-audio/stereo-ke-mono">Stereo ke Mono</a></li><li><a href="/alat-audio/metronom-online">Metronom Online</a></li><li><a href="/alat-audio/tuner-online">Tuner Gitar Online</a></li></ul>
+<h2>Aset Audio berlisensi komersial</h2>
+<p>Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Beli per lagu: master (WAV, FLAC, MP3, M4A), versi loop, stem, atau partitur PDF.</p>
+<h2>Pusat Kuis: kuis multiplayer online</h2>
+<p>Empat mode permainan: solo, pass and play, host kuis hingga 10 regu, dan multiplayer online. Pilih topik sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya.</p>
+<h2>Pertanyaan umum</h2>
+<h3>Apa saja yang gratis dan apa yang berbayar?</h3><p>Gratis: akun, 3 starter deck, Drum Pad dan Chord Pad di Bar 1 (3 kit drum, 1 track akor Grand Piano, rekam live, dinamika, undo/redo), dan 2 penggunaan per alat per hari di Audio Tools (20 alat). Kuota Audio Tools dicatat di server; bila server tidak terjangkau, alat belum bisa dipakai sampai koneksi pulih. Berbayar (beli sekali): modul per lagu seperti master, loop, stem, dan partitur; Full 16-Bar Editor (16 bar, 7 kit drum, 4 track akor dengan 128 instrumen, ekspor MIDI/audio, simpan dan muat proyek); Audio Tools tanpa batas harian; serta deck topik tambahan. Donasi bersifat sukarela.</p><h3>Apakah berkas audio saya diunggah ke server?</h3><p>Untuk Audio Tools, tidak. Berkas dibaca dan diproses langsung di browser kamu. Yang dicatat server hanya hitungan pemakaian harian per alat.</p><h3>Kenapa Chord Pad butuh waktu memuat suara?</h3><p>Chord Pad memakai bank sampel SoundFont yang berukuran besar, diunduh sekali lalu disimpan di cache browser. Selama belum selesai, pad tetap berbunyi dengan suara sintesis sementara, dan otomatis pindah ke suara instrumen asli begitu bank siap.</p><h3>Apakah Vokal Isolator memakai AI?</h3><p>Tidak. Alat ini memakai teknik center-phase: memisahkan suara yang berada di tengah stereo. Hasil terbaik pada rekaman stereo dengan vokal di tengah. Bass, kick, atau snare yang juga di tengah bisa ikut terbawa ke hasil vokal.</p><h3>Bagaimana lisensi lagunya?</h3><p>Setiap pembelian lagu membuka berkas Readme_License.txt yang memuat ketentuan lisensi komersial non-eksklusif. Baca isinya sebelum memakai lagu untuk proyekmu.</p>
+</main><!--/prerender--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
