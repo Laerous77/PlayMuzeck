@@ -39,7 +39,6 @@ import { isBuiltinDeckId } from './data/quiz';
 import { installAuthFetch, clearUserToken, authApi, AUTH_EXPIRED_EVENT } from './services/authToken';
 import { RotateCcw, AlertTriangle } from 'lucide-react';
 import { CookieConsent } from './components/CookieConsent';
-import { openConsentSettings } from './services/consent';
 
 installAuthFetch(); // semua request /api/* otomatis membawa cookie sesi httpOnly
 
@@ -1257,14 +1256,13 @@ function MainApp() {
             </nav>
 
             <nav aria-label="Tautan hukum" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-gray-500">
-              <a href="/dukung" className="hover:text-white transition-colors">Dukung Kami</a>
+              <a href="/support" className="hover:text-white transition-colors">Dukung Kami</a>
               <a href="/about" className="hover:text-white transition-colors">Tentang</a>
               <a href="/contact" className="hover:text-white transition-colors">Kontak</a>
               <a href="/privacy" className="hover:text-white transition-colors">Privasi</a>
               <a href="/cookie" className="hover:text-white transition-colors">Kebijakan Cookie</a>
               <a href="/terms" className="hover:text-white transition-colors">Syarat &amp; Ketentuan</a>
-              <a href="/hak-cipta" className="hover:text-white transition-colors">Hak Cipta</a>
-              <button type="button" onClick={openConsentSettings} className="hover:text-white underline underline-offset-2 transition-colors cursor-pointer">Pengaturan Cookie</button>
+              <a href="/copyright" className="hover:text-white transition-colors">Hak Cipta</a>
             </nav>
           </div>
 

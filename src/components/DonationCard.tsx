@@ -76,7 +76,7 @@ export const DonationCard: React.FC<Props> = ({ onDonate, variant = 'card', clas
         <button type="button" onClick={onDonate} className="px-3.5 py-1.5 rounded-lg bg-accent text-on-accent text-xs font-extrabold cursor-pointer hover:bg-accent/90">
           Donasi
         </button>
-        <a href="/dukung" className="text-xs text-accent underline">Ke mana dananya?</a>
+        <a href="/support" className="text-xs text-accent underline">Ke mana dananya?</a>
         <button
           type="button" aria-label="Tutup"
           onClick={() => { setHidden(true); try { localStorage.setItem(DISMISS_KEY, '1'); } catch {} }}
@@ -121,7 +121,7 @@ export const DonationCard: React.FC<Props> = ({ onDonate, variant = 'card', clas
           className="px-5 py-2.5 rounded-xl bg-accent hover:bg-accent/90 text-on-accent text-sm font-extrabold inline-flex items-center gap-2 cursor-pointer shadow-md">
           <Heart className="w-4 h-4" aria-hidden /> Donasi sekarang
         </button>
-        <a href="/dukung" className="text-xs text-accent underline inline-flex items-center gap-1">
+        <a href="/support" className="text-xs text-accent underline inline-flex items-center gap-1">
           Lihat ke mana dananya <ExternalLink className="w-3 h-3" aria-hidden />
         </a>
       </div>

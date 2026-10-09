@@ -277,7 +277,7 @@ for (const p of pages) {
 }
 
 // 4) sitemap.xml lengkap (menimpa public/sitemap.xml)
-const LEGAL = ['dukung', 'about', 'contact', 'privacy', 'cookie', 'terms', 'hak-cipta'].map((s) => `${ORIGIN}/${s}`);
+const LEGAL = ['support', 'about', 'contact', 'privacy', 'cookie', 'terms', 'copyright'].map((s) => `${ORIGIN}/${s}`);
 const urls = [`${ORIGIN}/`, ...pages.map((p) => p.url), ...LEGAL];
 const sitemap = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

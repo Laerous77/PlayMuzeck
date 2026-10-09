@@ -64,7 +64,7 @@ export function onConsentChange(cb: (s: ConsentState | null) => void): () => voi
   return () => { window.removeEventListener(CHANGE_EVENT, h); window.removeEventListener('storage', h); };
 }
 
-/** Dipanggil dari tautan footer "Pengaturan Cookie". */
+/** Membuka panel pengaturan cookie bawaan aplikasi (dipakai bila ada pemanggil di dalam aplikasi). Footer tidak lagi punya tautan sendiri; pengaturan ada di /cookie. */
 export function openConsentSettings(): void {
   try { window.dispatchEvent(new Event(OPEN_SETTINGS_EVENT)); } catch {}
 }

@@ -1,1 +1,7 @@
+# URL lama -> URL baru (permanen). Harus di atas aturan SPA.
+/dukung      /support    301
+/dukung/     /support    301
+/hak-cipta   /copyright  301
+/hak-cipta/  /copyright  301
+
 /*    /index.html   200

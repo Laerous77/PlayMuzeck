@@ -2,7 +2,8 @@
 // Banner + panel pengaturan persetujuan cookie. Pasang SEKALI di App.tsx (di luar router), mis.
 //   <CookieConsent />
 // Prinsip: tombol Tolak setara dengan Terima (ukuran & visibilitas sama), analitik default mati,
-// pilihan bisa diubah kapan saja lewat tautan footer "Pengaturan Cookie" (openConsentSettings()).
+// pilihan bisa diubah kapan saja di halaman Kebijakan Cookie (/cookie), bagian "Pengaturan cookie".
+// (Tidak ada lagi tautan "Pengaturan Cookie" terpisah di footer: kebijakan dan pengaturannya satu halaman.)
 import React, { useEffect, useRef, useState } from 'react';
 import { Cookie, X } from 'lucide-react';
 import { getConsent, setConsent, OPEN_SETTINGS_EVENT, browserSaysNoTracking } from '../services/consent';
@@ -104,7 +105,7 @@ export const CookieConsent: React.FC = () => {
               <button type="button" className={btn} onClick={() => decide(analytics)}>Simpan pilihan</button>
               <button type="button" className={btn} onClick={() => decide(true)} disabled={gpc} style={gpc ? { opacity: .5, cursor: 'not-allowed' } : undefined}>Terima semua</button>
             </div>
-            <p className="mt-3 text-[11px] text-gray-500">Kamu bisa mengubah pilihan kapan saja lewat "Pengaturan Cookie" di bagian bawah situs. Detail lengkap ada di <a href="/cookie" className="text-accent underline">Kebijakan Cookie</a>.</p>
+            <p className="mt-3 text-[11px] text-gray-500">Kamu bisa mengubah pilihan kapan saja di halaman <a href="/cookie#consent-box" className="text-accent underline">Kebijakan Cookie</a>, bagian Pengaturan cookie. Daftar lengkap cookie juga ada di sana.</p>
           </div>
         </div>
       )}

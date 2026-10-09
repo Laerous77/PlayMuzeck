@@ -1,7 +1,12 @@
 // generate-legal-pages.mjs
-// Membuat halaman statis PlayMuzeck: /privacy, /terms, /contact, /about, /hak-cipta, /cookie, /dukung
+// Membuat halaman statis PlayMuzeck: /about, /contact, /privacy, /terms, /cookie, /copyright, /support
+// (semua path berbahasa Inggris dan seragam; label di layar tetap Indonesia).
 // Otomatis dijalankan oleh `npm run build` dan `npm run dev` (lihat package.json). Manual: npm run legal
-// Output: public/{privacy,terms,cookie,contact,about,hak-cipta,dukung}/index.html (di-gitignore, dibuat ulang tiap build)
+// Output: public/{privacy,terms,cookie,contact,about,copyright,support}/index.html (di-gitignore, dibuat ulang tiap build)
+// URL lama (/dukung, /hak-cipta) dialihkan 301 lewat public/_redirects; folder lamanya dihapus otomatis di sini.
+//
+// Tata letak: header dan footer meniru aplikasi. Header hanya berisi logo + tombol "Buka PlayMuzeck";
+// SEMUA tautan navigasi ada di footer (sama seperti di aplikasi), jadi tidak ada menu yang muncul dua kali.
 //
 // Tema: halaman-halaman ini memakai variabel warna yang SAMA dengan aplikasi (--t-surface, --t-accent, dst).
 // Skrip kecil di <head> membaca palet tersimpan di localStorage ('pm_palette', ditulis oleh aplikasi saat
@@ -63,24 +68,32 @@ html[data-mode="light"]{
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--t-bg);color:var(--t-fg);font:16px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--t-bg);color:var(--t-fg);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:var(--t-accent)}
 code{font-size:.85em;word-break:break-all}
 
-/* Header: sama dengan header aplikasi (logo + nama + menu) */
-header.top{position:sticky;top:0;z-index:40;background:var(--t-surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
-header.top .in{max-width:80rem;margin:0 auto;padding:.65rem 1rem;display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;justify-content:space-between}
+/* Header: sama dengan header aplikasi (bg panel + blur, logo + nama di kiri, satu tombol aksi di kanan).
+   Menu navigasi TIDAK ditaruh di sini: semuanya ada di footer, persis seperti di aplikasi. */
+header.top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--t-surface) 95%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:max(.625rem,env(safe-area-inset-top,0px)) .75rem .625rem}
+header.top .in{max-width:80rem;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .brand{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--ink);min-width:0}
-.brand .logo{width:2.5rem;height:2.5rem;flex:none;border-radius:1rem;overflow:hidden;padding:.25rem;background:var(--t-surface);border:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center}
+.brand .logo{width:2.25rem;height:2.25rem;flex:none;border-radius:1rem;overflow:hidden;padding:.25rem;background:var(--t-surface);border:1px solid var(--line);box-shadow:0 4px 6px -1px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;transition:transform .15s}
+.brand:hover .logo{transform:scale(1.05)}
 .brand .logo img{width:100%;height:100%;object-fit:contain;border-radius:.75rem;display:block}
 .brand .name{display:flex;flex-direction:column;min-width:0}
-.brand .name b{font-size:1.1rem;font-weight:900;letter-spacing:-.01em;line-height:1;color:var(--ink)}
+.brand .name b{font-size:1rem;font-weight:900;letter-spacing:-.025em;line-height:1;color:var(--ink);white-space:nowrap}
 .brand .name b i{font-style:normal;color:var(--t-accent)}
-.brand .name small{font:600 .625rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:var(--muted);margin-top:.2rem;white-space:nowrap}
-@media (max-width:399px){.brand .name{display:none}}
-header.top nav{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;font-size:.9rem}
-header.top nav a{color:var(--t-fg);text-decoration:none}
-header.top nav a:hover,header.top nav a[aria-current]{color:var(--t-accent)}
+.brand .name small{font:400 .625rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
+@media (max-width:399px){header.top .brand .name{display:none}}
+/* Tombol di header: ukuran & gaya sama dengan tombol "Tentang Kami" di header aplikasi */
+.hbtn{display:inline-flex;align-items:center;height:2.5rem;padding:0 .75rem;border-radius:.75rem;border:1px solid var(--t-accent);background:var(--t-accent);color:var(--t-on-accent);font-size:.75rem;font-weight:900;text-decoration:none;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.hbtn:hover{opacity:.9}
+@media (min-width:640px){
+  header.top{padding-left:2rem;padding-right:2rem}
+  .brand .logo{width:2.5rem;height:2.5rem}
+  .brand .name b{font-size:1.125rem}
+  .hbtn{height:2.25rem;padding:0 .875rem}
+}
 
 main{width:100%;max-width:52rem;margin:0 auto;padding:2rem 1rem 3rem;flex:1 0 auto}
 h1{font-size:1.9rem;line-height:1.25;margin:.2rem 0 .3rem;color:var(--ink)}
@@ -111,9 +124,11 @@ footer.bot .row{display:flex;flex-wrap:wrap;align-items:center;justify-content:c
 footer.bot .row.legal{color:var(--faint)}
 footer.bot a{color:inherit;text-decoration:none}
 footer.bot a:hover{color:var(--ink)}
-footer.bot a.ul{text-decoration:underline;text-underline-offset:2px}
+footer.bot a[aria-current]{color:var(--ink)}
+@media (min-width:640px){footer.bot .in{padding-left:2rem;padding-right:2rem}}
 footer.bot .brand .name b{font-size:.875rem;font-weight:800}
 footer.bot .brand .name{display:flex}
+footer.bot .brand:hover .logo{transform:none}
 @media (min-width:1024px){
   footer.bot .in{display:grid;grid-template-columns:1fr minmax(0,auto) 1fr;align-items:center;gap:1.5rem}
   footer.bot .brand{justify-self:start}
@@ -122,29 +137,22 @@ footer.bot .brand .name{display:flex}
 @media (max-width:480px){h1{font-size:1.5rem}}
 `;
 
-const NAV = [
-  ['/', 'Beranda'],
-  ['/audio/tools', 'Audio Tools'],
-  ['/quiz/library', 'Pusat Kuis'],
-  ['/dukung', 'Dukung Kami'],
-  ['/about', 'Tentang'],
-  ['/contact', 'Kontak'],
-];
 // Footer baris 1 (sama dengan footer aplikasi)
 const FOOT_MAIN = [
   ['/', 'Beranda'],
   ['/audio/tools', 'Audio Studio'],
   ['/quiz/library', 'Pusat Kuis'],
 ];
-// Footer baris 2 (sama dengan footer aplikasi)
+// Footer baris 2 (sama dengan footer aplikasi). Pengaturan cookie sengaja TIDAK jadi tautan terpisah:
+// pengaturannya ada di halaman Kebijakan Cookie (/cookie), satu sumber yang sama dengan kebijakannya.
 const FOOT_LEGAL = [
-  ['/dukung', 'Dukung Kami'],
+  ['/support', 'Dukung Kami'],
   ['/about', 'Tentang'],
   ['/contact', 'Kontak'],
   ['/privacy', 'Privasi'],
   ['/cookie', 'Kebijakan Cookie'],
   ['/terms', 'Syarat & Ketentuan'],
-  ['/hak-cipta', 'Hak Cipta'],
+  ['/copyright', 'Hak Cipta'],
 ];
 
 // withTagline = true -> versi header (ikon logo + nama + tagline). false -> versi footer (teks nama saja, tanpa ikon).
@@ -161,8 +169,7 @@ function page({ slug, title, desc, h1, body }) {
     isPartOf: { '@type': 'WebSite', name: SITE, url: `${ORIGIN}/` },
     dateModified: UPDATED_ISO,
   };
-  const navLink = ([h, t]) => `<a href="${h}"${h === '/' + slug ? ' aria-current="page"' : ''}>${esc(t)}</a>`;
-  const plain = ([h, t]) => `<a href="${h}">${esc(t)}</a>`;
+  const plain = ([h, t]) => `<a href="${h}"${h === '/' + slug ? ' aria-current="page"' : ''}>${esc(t)}</a>`;
   return `<!doctype html>
 <html lang="id" data-mode="dark">
 <head>
@@ -189,7 +196,7 @@ function page({ slug, title, desc, h1, body }) {
 <body>
 <header class="top"><div class="in">
 ${brandBlock(true)}
-<nav aria-label="Navigasi utama">${NAV.map(navLink).join('')}</nav>
+<a class="hbtn" href="/">Buka PlayMuzeck</a>
 </div></header>
 <main>
 <h1>${esc(h1)}</h1>
@@ -200,7 +207,7 @@ ${body}
 ${brandBlock(false)}
 <div class="mid">
 <nav class="row" aria-label="Navigasi footer">${FOOT_MAIN.map(plain).join('')}</nav>
-<nav class="row legal" aria-label="Tautan hukum">${FOOT_LEGAL.map(plain).join('')}<a class="ul" href="/cookie#consent-box">Pengaturan Cookie</a></nav>
+<nav class="row legal" aria-label="Tautan hukum">${FOOT_LEGAL.map(plain).join('')}</nav>
 </div>
 <span class="copy">&copy; ${new Date().getFullYear()} ${SITE}</span>
 </div></footer>
@@ -254,12 +261,12 @@ const privacy = `
 <p>Kami memakai dua jenis:</p>
 <ul>
 <li><strong>Wajib</strong> (tanpa persetujuan, karena layanan tidak bisa berjalan tanpanya): cookie sesi login <code>muzeck_sid</code>, cookie pengikat pendaftaran <code>muzeck_signup</code>, serta data di <em>localStorage</em>/<em>sessionStorage</em> untuk keranjang, progres kuis, tema dan suara pilihanmu, dan catatan pilihan cookie-mu sendiri. Anti-bot Cloudflare Turnstile dan penyedia pembayaran juga bekerja saat kamu mendaftar atau membayar.</li>
-<li><strong>Analitik</strong> (opsional, <strong>default mati</strong>): hanya aktif jika kamu menekan "Terima" di banner cookie atau mengaktifkannya di Pengaturan Cookie.</li>
+<li><strong>Analitik</strong> (opsional, <strong>default mati</strong>): hanya aktif jika kamu menekan "Terima" di banner cookie atau mengaktifkannya di bagian Pengaturan Cookie pada halaman <a href="/cookie">Kebijakan Cookie</a>.</li>
 </ul>
-<p>Kamu dapat <strong>menolak, menerima, atau mengubah pilihan kapan saja</strong> lewat tautan "Pengaturan Cookie" di bagian bawah situs atau di halaman <a href="/cookie">Kebijakan Cookie</a>. Menolak tidak mengurangi fitur apa pun. Peramban yang mengirim sinyal Global Privacy Control atau "Do Not Track" kami anggap sebagai penolakan analitik. Daftar lengkap setiap cookie dan penyimpanan lokal ada di <a href="/cookie">Kebijakan Cookie</a>.</p>
+<p>Kamu dapat <strong>menolak, menerima, atau mengubah pilihan kapan saja</strong> lewat bagian Pengaturan Cookie di halaman <a href="/cookie#consent-box">Kebijakan Cookie</a>. Menolak tidak mengurangi fitur apa pun. Peramban yang mengirim sinyal Global Privacy Control atau "Do Not Track" kami anggap sebagai penolakan analitik. Daftar lengkap setiap cookie dan penyimpanan lokal ada di <a href="/cookie">Kebijakan Cookie</a>.</p>
 
 <h2>5. Tanpa iklan</h2>
-<p>${SITE} <strong>tidak menayangkan iklan</strong> dan tidak menjual data pribadimu kepada pengiklan atau pialang data. Karena itu kami tidak memasang cookie iklan atau pelacak periklanan pihak ketiga. Biaya operasional ditopang dari penjualan aset/modul dan donasi sukarela (lihat <a href="/dukung">Dukung PlayMuzeck</a>). Bila di masa depan kebijakan ini berubah, kami akan memperbarui halaman ini lebih dulu dan memberi tahu pengguna.</p>
+<p>${SITE} <strong>tidak menayangkan iklan</strong> dan tidak menjual data pribadimu kepada pengiklan atau pialang data. Karena itu kami tidak memasang cookie iklan atau pelacak periklanan pihak ketiga. Biaya operasional ditopang dari penjualan aset/modul dan donasi sukarela (lihat <a href="/support">Dukung PlayMuzeck</a>). Bila di masa depan kebijakan ini berubah, kami akan memperbarui halaman ini lebih dulu dan memberi tahu pengguna.</p>
 
 <h2>5b. Data donasi</h2>
 <p>Data donasi (nominal, waktu, dan akun donatur) kami simpan untuk memberikan bingkai profil, mencatat total donasi, dan pembukuan. Hanya <strong>total dan jumlah donatur</strong> yang ditampilkan ke publik, tanpa nama atau email. Pembayaran diproses oleh Midtrans (lihat bagian 2d).</p>
@@ -350,7 +357,7 @@ const terms = `
 <li>Harga dalam Rupiah (IDR) dan dapat berubah sewaktu-waktu; harga yang berlaku adalah yang tampil saat checkout. Modul bersifat "beli sekali, berlaku permanen" selama Layanan beroperasi.</li>
 <li>Pembayaran diproses oleh Midtrans dan mitra pembayarannya. Pesanan aktif setelah pembayaran terkonfirmasi.</li>
 <li><strong>Produk digital.</strong> Karena berupa produk digital yang aksesnya langsung terbuka, pembelian pada dasarnya <strong>tidak dapat dikembalikan</strong> setelah berkas diunduh atau akses dibuka, kecuali: (i) pembayaran ganda, (ii) produk tidak dapat diakses atau diunduh karena kesalahan dari pihak kami dan tidak dapat kami perbaiki, atau (iii) produk sangat berbeda dari yang dijelaskan. Ajukan dalam <strong>7 hari</strong> sejak pembelian lewat ${mail} dengan menyertakan bukti pembayaran. Hak konsumenmu menurut UU Perlindungan Konsumen tidak berkurang oleh ketentuan ini.</li>
-<li><strong>Donasi</strong> bersifat sukarela dan tidak dapat dikembalikan, kecuali pembayaran ganda atau salah nominal yang kamu laporkan dalam 7 hari. Donasi bukan pembelian barang/jasa, bukan investasi, dan bukan sumbangan yang dapat dikurangkan dari pajak. Bingkai profil yang terbuka setelah berdonasi adalah ucapan terima kasih digital tanpa nilai tukar, dan dapat berubah bentuk atau tampilannya. Lihat <a href="/dukung">Dukung PlayMuzeck</a>.</li>
+<li><strong>Donasi</strong> bersifat sukarela dan tidak dapat dikembalikan, kecuali pembayaran ganda atau salah nominal yang kamu laporkan dalam 7 hari. Donasi bukan pembelian barang/jasa, bukan investasi, dan bukan sumbangan yang dapat dikurangkan dari pajak. Bingkai profil yang terbuka setelah berdonasi adalah ucapan terima kasih digital tanpa nilai tukar, dan dapat berubah bentuk atau tampilannya. Lihat <a href="/support">Dukung PlayMuzeck</a>.</li>
 </ul>
 
 <h2>6. Konten buatan pengguna</h2>
@@ -371,7 +378,7 @@ const terms = `
 <p>Nama dan logo ${SITE}, tampilan, kode, teks, katalog musik, serta konten kuis bawaan dilindungi hukum. Selain yang diizinkan secara tegas oleh Syarat ini atau lisensi aset, tidak ada hak yang dialihkan kepadamu. Pustaka suara pihak ketiga yang dipakai di Layanan tunduk pada lisensinya masing-masing (lihat bagian kredit di aplikasi).</p>
 
 <h2>10. Pelanggaran hak cipta</h2>
-<p>Kami menghormati hak kekayaan intelektual. Tata cara pelaporan dan sanggahan ada di halaman <a href="/hak-cipta">Hak Cipta &amp; Pelaporan</a>.</p>
+<p>Kami menghormati hak kekayaan intelektual. Tata cara pelaporan dan sanggahan ada di halaman <a href="/copyright">Hak Cipta &amp; Pelaporan</a>.</p>
 
 <h2>11. Tautan pihak ketiga</h2>
 <p>Layanan dapat memuat tautan ke situs lain. Kami tidak bertanggung jawab atas konten, produk, atau kebijakan pihak ketiga tersebut. ${SITE} tidak menayangkan iklan.</p>
@@ -399,7 +406,7 @@ const terms = `
 `;
 
 // ───────────────────────── HAK CIPTA & PELAPORAN ─────────────────────────
-const hakcipta = `
+const copyright = `
 <p>${SITE} menghormati hak kekayaan intelektual dan mengharapkan pengguna melakukan hal yang sama. Halaman ini menjelaskan kebijakan hak cipta kami dan cara melapor bila kamu menemukan konten yang melanggar haknya. Kebijakan ini mengacu pada UU No. 28 Tahun 2014 tentang Hak Cipta, UU ITE, dan prinsip <em>notice-and-takedown</em> (termasuk DMCA bagi pemegang hak di luar Indonesia).</p>
 
 <h2>1. Konten kami sendiri</h2>
@@ -451,7 +458,7 @@ const contact = `
 <li><strong>Pembayaran dan lisensi:</strong> sertakan email akun dan nomor/bukti pesanan. Lihat kebijakan di <a href="/terms">Syarat &amp; Ketentuan</a>.</li>
 <li><strong>Custom audio dan kerja sama.</strong></li>
 <li><strong>Laporan bug atau ide fitur.</strong></li>
-<li><strong>Hak cipta atau konten bermasalah:</strong> ikuti panduan di <a href="/hak-cipta">Hak Cipta &amp; Pelaporan</a>.</li>
+<li><strong>Hak cipta atau konten bermasalah:</strong> ikuti panduan di <a href="/copyright">Hak Cipta &amp; Pelaporan</a>.</li>
 <li><strong>Data pribadi dan penghapusan akun:</strong> lihat <a href="/privacy">Kebijakan Privasi</a>. Kamu juga bisa menghapus akun sendiri lewat Dasbor Profil (dihapus permanen setelah masa tunggu 3 hari).</li>
 </ul>
 
@@ -484,7 +491,7 @@ const about = `
 <ul>
 <li><strong>Jujur soal gratis dan berbayar.</strong> Batas versi gratis dan harga modul dijelaskan terbuka, tanpa langganan tersembunyi.</li>
 <li><strong>Musik orisinal, lisensi jelas.</strong> Kami tidak menjual atau menyediakan lagu berhak cipta milik orang lain.</li>
-<li><strong>Bebas iklan.</strong> Tidak ada banner atau pop-up. Operasional ditopang pembelian aset dan donasi sukarela, lihat <a href="/dukung">Dukung PlayMuzeck</a>.</li>
+<li><strong>Bebas iklan.</strong> Tidak ada banner atau pop-up. Operasional ditopang pembelian aset dan donasi sukarela, lihat <a href="/support">Dukung PlayMuzeck</a>.</li>
 <li><strong>Privasi.</strong> File audiomu diolah di perangkatmu. Lihat <a href="/privacy">Kebijakan Privasi</a>.</li>
 <li><strong>Masukanmu didengar.</strong> Kirim ide atau aduan lewat <a href="/contact">halaman Kontak</a>.</li>
 </ul>
@@ -521,7 +528,7 @@ const totalLine = known.length
   ? `<p>Biaya tetap yang sudah pasti sekitar <strong>${rp(monthlyTotal)} per bulan</strong> (${known.map((c) => `${rp(c.amount)} per ${c.per} untuk ${esc(c.name.toLowerCase())}`).join(', ditambah ')}). Pos lain mengikuti pemakaian dan jumlah transaksi.</p>`
   : '';
 
-const dukung = `
+const support = `
 <p>PlayMuzeck dikelola secara mandiri. Situs ini <strong>tidak menayangkan iklan</strong>: tidak ada banner, tidak ada pop-up, dan datamu tidak dijual. Satu-satunya "penghasilan" kami adalah penjualan aset audio dan donasi dari pengguna yang merasa PlayMuzeck berguna.</p>
 
 <div class="card">
@@ -583,9 +590,9 @@ const COOKIE_ROWS = [
 const cookieTable = `<table><tr><th>Nama</th><th>Jenis</th><th>Pihak</th><th>Tujuan</th><th>Durasi</th><th>Kategori</th></tr>${COOKIE_ROWS.map((r) => `<tr>${r.map((c, i) => `<td>${i === 0 ? '<code>' + esc(c) + '</code>' : esc(c)}</td>`).join('')}</tr>`).join('')}</table>`;
 
 const cookiepage = `
-<p>Halaman ini menjelaskan cookie dan penyimpanan lokal yang dipakai ${SITE}. ${SITE} <strong>tidak memasang cookie iklan atau pelacak pihak ketiga</strong>. Satu-satunya yang membutuhkan persetujuanmu adalah <strong>analitik</strong>, dan itu <strong>mati secara bawaan</strong>.</p>
+<p>Halaman ini menjelaskan cookie dan penyimpanan lokal yang dipakai ${SITE}. ${SITE} <strong>tidak memasang cookie iklan atau pelacak pihak ketiga</strong>. Satu-satunya yang membutuhkan persetujuanmu adalah <strong>analitik</strong>, dan itu <strong>mati secara bawaan</strong>. Pengaturannya ada di halaman ini, jadi kebijakan dan pilihanmu selalu satu sumber.</p>
 
-<h2>Pilihan cookie-mu</h2>
+<h2>Pengaturan cookie</h2>
 <div class="card" id="consent-box">
 <p style="margin:.2rem 0 .6rem">Status analitik saat ini: <strong id="c-status">memuat...</strong><span id="c-when" class="muted"></span></p>
 <p id="c-gpc" class="muted" style="display:none;margin:.2rem 0 .6rem">Peramban kamu mengirim sinyal "jangan lacak", jadi analitik tetap nonaktif.</p>
@@ -603,7 +610,7 @@ const cookiepage = `
 
 <h2>Cara mengelola</h2>
 <ul>
-<li>Ubah pilihan analitik kapan saja di kotak di atas, atau lewat tautan <strong>Pengaturan Cookie</strong> di bagian bawah situs.</li>
+<li>Ubah pilihan analitik kapan saja di kotak <strong>Pengaturan cookie</strong> di bagian atas halaman ini.</li>
 <li>Hapus cookie dan data situs lewat pengaturan peramban. Kamu akan keluar dari akun dan pengaturan lokal akan hilang.</li>
 <li>Nyalakan <em>Global Privacy Control</em> di peramban untuk menolak analitik secara otomatis.</li>
 </ul>
@@ -635,12 +642,15 @@ const cookiepage = `
 const PAGES = [
   { slug: 'privacy', title: 'Kebijakan Privasi | PlayMuzeck', desc: 'Kebijakan Privasi PlayMuzeck: data apa yang dikumpulkan, kebijakan tanpa iklan, pihak ketiga, penyimpanan, penghapusan akun, dan hak pengguna menurut UU PDP.', h1: 'Kebijakan Privasi', body: privacy },
   { slug: 'terms', title: 'Syarat & Ketentuan | PlayMuzeck', desc: 'Syarat & Ketentuan penggunaan PlayMuzeck: akun, Audio Tools, lisensi aset audio, pembayaran dan pengembalian dana, konten pengguna, dan batasan tanggung jawab.', h1: 'Syarat & Ketentuan', body: terms },
-  { slug: 'hak-cipta', title: 'Hak Cipta & Pelaporan Pelanggaran | PlayMuzeck', desc: 'Kebijakan hak cipta PlayMuzeck dan cara melapor pelanggaran atau mengajukan sanggahan (notice-and-takedown, UU Hak Cipta, DMCA).', h1: 'Hak Cipta & Pelaporan Pelanggaran', body: hakcipta },
+  { slug: 'copyright', title: 'Hak Cipta & Pelaporan Pelanggaran | PlayMuzeck', desc: 'Kebijakan hak cipta PlayMuzeck dan cara melapor pelanggaran atau mengajukan sanggahan (notice-and-takedown, UU Hak Cipta, DMCA).', h1: 'Hak Cipta & Pelaporan Pelanggaran', body: copyright },
   { slug: 'contact', title: 'Kontak | PlayMuzeck', desc: 'Hubungi PlayMuzeck untuk bantuan akun, pembayaran, lisensi, custom audio, laporan bug, atau pertanyaan lain. Respons umumnya 1-3 hari kerja.', h1: 'Hubungi Kami', body: contact },
-  { slug: 'dukung', title: 'Dukung PlayMuzeck: Bebas Iklan, Ditopang Donasi', desc: 'PlayMuzeck bebas iklan dan ditopang pembelian aset serta donasi pengguna. Lihat ke mana dana dipakai, cara berdonasi mulai Rp1.000, dan bingkai ucapan terima kasih.', h1: 'Dukung PlayMuzeck', body: dukung },
+  { slug: 'support', title: 'Dukung PlayMuzeck: Bebas Iklan, Ditopang Donasi', desc: 'PlayMuzeck bebas iklan dan ditopang pembelian aset serta donasi pengguna. Lihat ke mana dana dipakai, cara berdonasi mulai Rp1.000, dan bingkai ucapan terima kasih.', h1: 'Dukung PlayMuzeck', body: support },
   { slug: 'cookie', title: 'Kebijakan Cookie | PlayMuzeck', desc: 'Kebijakan Cookie PlayMuzeck: cookie dan penyimpanan lokal yang dipakai, mana yang wajib, mana yang opsional (analitik), dan cara menolak atau mengubah pilihan.', h1: 'Kebijakan Cookie', body: cookiepage },
   { slug: 'about', title: 'Tentang PlayMuzeck | Audio Tools, Aset Audio & Kuis', desc: 'Tentang PlayMuzeck: platform audio interaktif dan pusat kuis berbahasa Indonesia dengan Audio Tools, aset audio berlisensi, Pad Editor, dan kuis multiplayer.', h1: 'Tentang PlayMuzeck', body: about },
 ];
+
+// Folder URL lama yang sudah dipindah (jangan sampai halaman lama tersisa dan bentrok dengan pengalihan 301).
+for (const old of ['dukung', 'hak-cipta']) fs.rmSync(path.join(OUT, old), { recursive: true, force: true });
 
 for (const p of PAGES) {
   const dir = path.join(OUT, p.slug);

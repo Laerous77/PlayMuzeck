@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+dev-dist/
+build/
+
+# Environment variables (otomatis cover root & server/.env)
+.env*
+!.env.example
+
+# Uploads & User files (root & folder data)
+uploads/
+data/uploads/
+data/*.sqlite
+data/*.sqlite-*
+
+# Editor & System files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+*.sf2
+public/*.sf2
+
+repomix-output.xml
+
+# Halaman hukum hasil generate (scripts/generate-legal-pages.mjs, dibuat ulang tiap build)
+public/privacy/
+public/terms/
+public/cookie/
+public/contact/
+public/about/
+public/copyright/
+public/support/
