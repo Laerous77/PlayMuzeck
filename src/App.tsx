@@ -1204,53 +1204,75 @@ function MainApp() {
       </main>
 
       <footer className="w-full border-t border-white/[0.08] bg-black/30 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 text-xs text-gray-400 text-center">
-          <span className="font-extrabold text-white text-sm tracking-tight">
-            {siteSettings.siteName}<span className="text-accent">.</span>
-          </span>
+        {/* Tata letak: kiri = logo, tengah = dua baris tautan, kanan = hak cipta.
+            Kiri dan kanan berada di tengah-tengah secara vertikal terhadap SELURUH blok tautan (dua baris). */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-4 lg:grid lg:grid-cols-[1fr_minmax(0,auto)_1fr] lg:items-center lg:gap-6 text-xs text-gray-400 text-center">
+          {/* Logo PlayMuzeck (sama seperti di header) */}
+          <button
+            type="button"
+            onClick={() => {
+              audioEngine.playClickSound();
+              dropPendingRoute();
+              setCurrentMode('index');
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            aria-label="Ke Halaman Utama PlayMuzeck"
+            title="Ke Halaman Utama PlayMuzeck"
+            className="flex items-center gap-2 cursor-pointer select-none group text-left rounded-2xl lg:justify-self-start"
+          >
+            <div className="w-9 h-9 shrink-0 rounded-2xl overflow-hidden p-1 bg-surface border border-white/10 shadow-md flex items-center justify-center group-hover:scale-105 transition-transform">
+              <img src="/PlayMuzeck-logo.png" alt="PlayMuzeck Logo" className="w-full h-full object-contain rounded-xl" />
+            </div>
+            <span className="font-extrabold text-white text-sm tracking-tight leading-none">
+              {siteSettings.siteName}<span className="text-accent">.</span>
+            </span>
+          </button>
 
-          <nav aria-label="Navigasi footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            {([
-              { label: 'Beranda', mode: 'index' as const },
-              { label: 'Audio Studio', mode: 'audio' as const },
-              { label: 'Pusat Kuis', mode: 'quiz' as const },
-            ]).map((l) => (
-              <button
-                key={l.mode}
-                type="button"
-                onClick={() => {
-                  if (l.mode !== 'index' && !userSession?.isLoggedIn) {
-                    setIsAuthOpen(true);
-                    return;
-                  }
-                  audioEngine.playClickSound();
-                  setCurrentMode(l.mode);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-                className="hover:text-white transition-colors cursor-pointer"
-              >
-                {l.label}
-              </button>
-            ))}
-            {isAdmin && (
-              <a href="/admin" className="text-accent font-bold hover:underline">
-                Admin
-              </a>
-            )}
-          </nav>
+          <div className="flex flex-col items-center gap-3 min-w-0">
+            <nav aria-label="Navigasi footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+              {([
+                { label: 'Beranda', mode: 'index' as const },
+                { label: 'Audio Studio', mode: 'audio' as const },
+                { label: 'Pusat Kuis', mode: 'quiz' as const },
+              ]).map((l) => (
+                <button
+                  key={l.mode}
+                  type="button"
+                  onClick={() => {
+                    if (l.mode !== 'index' && !userSession?.isLoggedIn) {
+                      setIsAuthOpen(true);
+                      return;
+                    }
+                    audioEngine.playClickSound();
+                    setCurrentMode(l.mode);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  className="hover:text-white transition-colors cursor-pointer"
+                >
+                  {l.label}
+                </button>
+              ))}
+              {isAdmin && (
+                <a href="/admin" className="text-accent font-bold hover:underline">
+                  Admin
+                </a>
+              )}
+            </nav>
 
-          <span>&copy; {new Date().getFullYear()} {siteSettings.siteName}</span>
+            <nav aria-label="Tautan hukum" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-gray-500">
+              <a href="/dukung" className="hover:text-white transition-colors">Dukung Kami</a>
+              <a href="/about" className="hover:text-white transition-colors">Tentang</a>
+              <a href="/contact" className="hover:text-white transition-colors">Kontak</a>
+              <a href="/privacy" className="hover:text-white transition-colors">Privasi</a>
+              <a href="/cookie" className="hover:text-white transition-colors">Kebijakan Cookie</a>
+              <a href="/terms" className="hover:text-white transition-colors">Syarat &amp; Ketentuan</a>
+              <a href="/hak-cipta" className="hover:text-white transition-colors">Hak Cipta</a>
+              <button type="button" onClick={openConsentSettings} className="hover:text-white underline underline-offset-2 transition-colors cursor-pointer">Pengaturan Cookie</button>
+            </nav>
+          </div>
+
+          <span className="lg:justify-self-end">&copy; {new Date().getFullYear()} {siteSettings.siteName}</span>
         </div>
-        <nav aria-label="Tautan hukum" className="max-w-7xl mx-auto px-4 sm:px-8 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-xs text-gray-500">
-          <a href="/dukung" className="hover:text-white transition-colors">Dukung Kami</a>
-          <a href="/about" className="hover:text-white transition-colors">Tentang</a>
-          <a href="/contact" className="hover:text-white transition-colors">Kontak</a>
-          <a href="/privacy" className="hover:text-white transition-colors">Privasi</a>
-          <a href="/cookie" className="hover:text-white transition-colors">Kebijakan Cookie</a>
-          <a href="/terms" className="hover:text-white transition-colors">Syarat &amp; Ketentuan</a>
-          <a href="/hak-cipta" className="hover:text-white transition-colors">Hak Cipta</a>
-          <button type="button" onClick={openConsentSettings} className="hover:text-white underline underline-offset-2 transition-colors cursor-pointer">Pengaturan Cookie</button>
-        </nav>
       </footer>
 
       <CookieConsent />

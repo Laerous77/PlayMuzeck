@@ -1,11 +1,15 @@
 // generate-legal-pages.mjs
-// Membuat halaman statis hukum PlayMuzeck: /privacy, /terms, /contact, /about, /hak-cipta
+// Membuat halaman statis PlayMuzeck: /privacy, /terms, /contact, /about, /hak-cipta, /cookie, /dukung
 // Otomatis dijalankan oleh `npm run build` dan `npm run dev` (lihat package.json). Manual: npm run legal
 // Output: public/{privacy,terms,cookie,contact,about,hak-cipta,dukung}/index.html (di-gitignore, dibuat ulang tiap build)
+//
+// Tema: halaman-halaman ini memakai variabel warna yang SAMA dengan aplikasi (--t-surface, --t-accent, dst).
+// Skrip kecil di <head> membaca palet tersimpan di localStorage ('pm_palette', ditulis oleh aplikasi saat
+// pengguna memilih/mendapat tema), jadi halaman ini ikut tema pengguna, termasuk mode terang.
 import fs from 'node:fs';
 import path from 'node:path';
 
-// Konfigurasi dibaca dari legal.config.json di folder utama proyek (email, nama pemilik, biaya bulanan).
+// Konfigurasi dibaca dari legal.config.json di folder utama proyek (email, nama pemilik, biaya).
 // Argumen CLI (opsional) menimpa: node scripts/generate-legal-pages.mjs "email" "nama"
 const ARGS = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const ALLOW_PLACEHOLDER = process.argv.includes('--allow-placeholder');
@@ -16,7 +20,7 @@ const OWNER = ARGS[1] || process.env.LEGAL_OWNER || CFG.owner || 'GANTI NAMA PEM
 const OUT = path.resolve(process.cwd(), 'public');
 const isPlaceholder = (v) => !v || /GANTI|contoh\.com|@example\./i.test(v);
 if (isPlaceholder(EMAIL) || isPlaceholder(OWNER)) {
-  const msg = 'legal.config.json belum diisi: isi "email" (email bisnis) dan "owner" (nama pemilik) lalu jalankan lagi. Halaman hukum TIDAK boleh dipublikasikan dengan data placeholder.';
+  const msg = 'legal.config.json belum diisi: isi "email" (email bisnis) dan "owner" (nama pemilik atau nama brand/tim) lalu jalankan lagi. Halaman hukum TIDAK boleh dipublikasikan dengan data placeholder.';
   if (!ALLOW_PLACEHOLDER) { console.error('GAGAL: ' + msg); process.exit(1); }
   console.warn('PERINGATAN (mode dev): ' + msg);
 }
@@ -28,37 +32,94 @@ const UPDATED_ISO = '2026-10-09';
 
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+// ───────────────────────── TEMA ─────────────────────────
+// Skrip ini berjalan SEBELUM <body> digambar supaya tidak ada kedipan warna.
+// Rumusnya sama persis dengan paletteVars() di src/theme/theme.ts.
+const THEME_SCRIPT = `(function(){try{
+var p=JSON.parse(localStorage.getItem('pm_palette')||'null');
+var H=/^#[0-9a-fA-F]{6}$/;
+if(!p||!H.test(p.surface)||!H.test(p.accent)||!H.test(p.accent2))return;
+function rgb(x){var n=parseInt(x.slice(1),16);return[n>>16,(n>>8)&255,n&255];}
+function lum(x){var c=rgb(x);return .299*c[0]+.587*c[1]+.114*c[2];}
+function mix(a,b,t){var A=rgb(a),B=rgb(b);return '#'+A.map(function(v,i){return Math.round(v+(B[i]-v)*t).toString(16).padStart(2,'0');}).join('');}
+function on(x){return lum(x)>150?'#000000':'#ffffff';}
+var light=lum(p.surface)>140,r=document.documentElement;
+var v={'--t-surface':p.surface,'--t-accent':p.accent,'--t-accent2':p.accent2,'--t-on-accent':on(p.accent),'--t-on-accent2':on(p.accent2),
+'--t-deep':mix(p.surface,'#000000',light?0.035:0.35),'--t-bg':light?mix(p.surface,'#000000',0.05):'#000000','--t-fg':light?'#1f2937':'#E5E5E5'};
+for(var k in v)r.style.setProperty(k,v[k]);
+r.setAttribute('data-mode',light?'light':'dark');
+}catch(e){}})();`;
+
 const CSS = `
-:root{--bg:#0b1326;--panel:#14213D;--text:#e5e7eb;--muted:#9ca3af;--accent:#FCA311;--line:rgba(255,255,255,.1)}
+:root{
+  --t-surface:#14213D;--t-accent:#FCA311;--t-accent2:#FC1212;--t-on-accent:#000000;--t-on-accent2:#ffffff;
+  --t-deep:#0d1628;--t-bg:#000000;--t-fg:#E5E5E5;
+  --ink:#ffffff;--muted:#9ca3af;--faint:#6b7280;--line:rgba(255,255,255,.1);--foot-bg:rgba(0,0,0,.3);
+  color-scheme:dark;
+}
+html[data-mode="light"]{
+  --ink:#0f172a;--muted:#4b5563;--faint:#6b7280;--line:rgba(15,23,42,.14);--foot-bg:rgba(15,23,42,.04);
+  color-scheme:light;
+}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:var(--accent)}
-header.top{background:var(--panel);border-bottom:1px solid var(--line)}
-header.top .in{max-width:52rem;margin:0 auto;padding:.9rem 1rem;display:flex;flex-wrap:wrap;gap:.6rem 1.2rem;align-items:center;justify-content:space-between}
-header.top .brand{font-weight:800;color:#fff;text-decoration:none;font-size:1.15rem;letter-spacing:.2px}
-header.top nav{display:flex;flex-wrap:wrap;gap:.4rem 1rem;font-size:.9rem}
-header.top nav a{color:var(--text);text-decoration:none}
-header.top nav a:hover{color:var(--accent)}
-main{max-width:52rem;margin:0 auto;padding:2rem 1rem 3rem}
-h1{font-size:1.9rem;line-height:1.25;margin:.2rem 0 .3rem;color:#fff}
-h2{font-size:1.25rem;margin:2.1rem 0 .5rem;color:#fff;padding-top:.4rem;border-top:1px solid var(--line)}
-h3{font-size:1.02rem;margin:1.2rem 0 .3rem;color:#fff}
-p,li{color:var(--text)}
+body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--t-bg);color:var(--t-fg);font:16px/1.7 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--t-accent)}
+code{font-size:.85em;word-break:break-all}
+
+/* Header: sama dengan header aplikasi (logo + nama + menu) */
+header.top{position:sticky;top:0;z-index:40;background:var(--t-surface);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top,0px)}
+header.top .in{max-width:80rem;margin:0 auto;padding:.65rem 1rem;display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--ink);min-width:0}
+.brand .logo{width:2.5rem;height:2.5rem;flex:none;border-radius:1rem;overflow:hidden;padding:.25rem;background:var(--t-surface);border:1px solid var(--line);box-shadow:0 1px 3px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center}
+.brand .logo img{width:100%;height:100%;object-fit:contain;border-radius:.75rem;display:block}
+.brand .name{display:flex;flex-direction:column;min-width:0}
+.brand .name b{font-size:1.1rem;font-weight:900;letter-spacing:-.01em;line-height:1;color:var(--ink)}
+.brand .name b i{font-style:normal;color:var(--t-accent)}
+.brand .name small{font:600 .625rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;color:var(--muted);margin-top:.2rem;white-space:nowrap}
+@media (max-width:399px){.brand .name{display:none}}
+header.top nav{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;font-size:.9rem}
+header.top nav a{color:var(--t-fg);text-decoration:none}
+header.top nav a:hover,header.top nav a[aria-current]{color:var(--t-accent)}
+
+main{width:100%;max-width:52rem;margin:0 auto;padding:2rem 1rem 3rem;flex:1 0 auto}
+h1{font-size:1.9rem;line-height:1.25;margin:.2rem 0 .3rem;color:var(--ink)}
+h2{font-size:1.25rem;margin:2.1rem 0 .5rem;color:var(--ink);padding-top:.4rem;border-top:1px solid var(--line)}
+h3{font-size:1.02rem;margin:1.2rem 0 .3rem;color:var(--ink)}
+p,li{color:var(--t-fg)}
 ul,ol{padding-left:1.3rem}
 li{margin:.25rem 0}
 .meta{color:var(--muted);font-size:.9rem;margin-bottom:1.4rem}
-.note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:.6rem;padding:.8rem 1rem;margin:1rem 0}
+.note{background:var(--t-surface);border:1px solid var(--line);border-left:3px solid var(--t-accent);border-radius:.6rem;padding:.8rem 1rem;margin:1rem 0}
 table{width:100%;border-collapse:collapse;margin:.8rem 0;font-size:.92rem}
 th,td{border:1px solid var(--line);padding:.5rem .6rem;text-align:left;vertical-align:top}
-th{background:var(--panel);color:#fff}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:.8rem;padding:1rem 1.1rem;margin:1rem 0}
-.btn{display:inline-block;background:var(--accent);color:#14213D;font-weight:800;text-decoration:none;padding:.6rem 1.1rem;border-radius:.6rem}
-footer.bot{border-top:1px solid var(--line);background:var(--panel)}
-footer.bot .in{max-width:52rem;margin:0 auto;padding:1.4rem 1rem;color:var(--muted);font-size:.88rem}
-footer.bot .links{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin-bottom:.6rem}
-footer.bot a{color:var(--text);text-decoration:none}
-footer.bot a:hover{color:var(--accent)}
+th{background:var(--t-surface);color:var(--ink)}
+.card{background:var(--t-surface);border:1px solid var(--line);border-radius:.8rem;padding:1rem 1.1rem;margin:1rem 0}
+.btn{display:inline-block;background:var(--t-accent);color:var(--t-on-accent);font-weight:800;text-decoration:none;padding:.6rem 1.1rem;border-radius:.6rem}
+button.btn{border:0;cursor:pointer;font:inherit;font-weight:800;line-height:1.4}
+button.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.muted{color:var(--muted)}
+
+/* Footer: sama dengan footer aplikasi.
+   Kiri = logo, tengah = dua baris tautan, kanan = hak cipta.
+   Kiri dan kanan berada di tengah vertikal terhadap SELURUH blok tautan. */
+footer.bot{border-top:1px solid var(--line);background:var(--foot-bg);margin-top:auto}
+footer.bot .in{max-width:80rem;margin:0 auto;padding:1.5rem 1rem max(1.5rem,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:1rem;font-size:.75rem;line-height:1.5;color:var(--muted);text-align:center}
+footer.bot .mid{display:flex;flex-direction:column;align-items:center;gap:.75rem;min-width:0}
+footer.bot .row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.5rem 1.25rem}
+footer.bot .row.legal{color:var(--faint)}
+footer.bot a{color:inherit;text-decoration:none}
+footer.bot a:hover{color:var(--ink)}
+footer.bot a.ul{text-decoration:underline;text-underline-offset:2px}
+footer.bot .brand .logo{width:2.25rem;height:2.25rem}
+footer.bot .brand .name b{font-size:.875rem;font-weight:800}
+footer.bot .brand .name{display:flex}
+@media (min-width:1024px){
+  footer.bot .in{display:grid;grid-template-columns:1fr minmax(0,auto) 1fr;align-items:center;gap:1.5rem}
+  footer.bot .brand{justify-self:start}
+  footer.bot .copy{justify-self:end}
+}
 @media (max-width:480px){h1{font-size:1.5rem}}
 `;
 
@@ -70,15 +131,27 @@ const NAV = [
   ['/about', 'Tentang'],
   ['/contact', 'Kontak'],
 ];
-const FOOT = [
-  ['/dukung', 'Dukung PlayMuzeck'],
-  ['/about', 'Tentang Kami'],
+// Footer baris 1 (sama dengan footer aplikasi)
+const FOOT_MAIN = [
+  ['/', 'Beranda'],
+  ['/audio/tools', 'Audio Studio'],
+  ['/quiz/library', 'Pusat Kuis'],
+];
+// Footer baris 2 (sama dengan footer aplikasi)
+const FOOT_LEGAL = [
+  ['/dukung', 'Dukung Kami'],
+  ['/about', 'Tentang'],
   ['/contact', 'Kontak'],
-  ['/privacy', 'Kebijakan Privasi'],
+  ['/privacy', 'Privasi'],
   ['/cookie', 'Kebijakan Cookie'],
   ['/terms', 'Syarat & Ketentuan'],
-  ['/hak-cipta', 'Hak Cipta & Pelaporan'],
+  ['/hak-cipta', 'Hak Cipta'],
 ];
+
+const brandBlock = (withTagline) => `<a class="brand" href="/" aria-label="Ke Halaman Utama ${SITE}" title="Ke Halaman Utama ${SITE}">
+<span class="logo"><img src="/PlayMuzeck-logo.png" alt="${SITE} Logo" width="40" height="40" /></span>
+<span class="name"><b>${SITE}<i>.</i></b>${withTagline ? '<small>AUDIO &amp; KUIS</small>' : ''}</span>
+</a>`;
 
 function page({ slug, title, desc, h1, body }) {
   const url = `${ORIGIN}/${slug}`;
@@ -89,11 +162,13 @@ function page({ slug, title, desc, h1, body }) {
     isPartOf: { '@type': 'WebSite', name: SITE, url: `${ORIGIN}/` },
     dateModified: UPDATED_ISO,
   };
+  const navLink = ([h, t]) => `<a href="${h}"${h === '/' + slug ? ' aria-current="page"' : ''}>${esc(t)}</a>`;
+  const plain = ([h, t]) => `<a href="${h}">${esc(t)}</a>`;
   return `<!doctype html>
-<html lang="id">
+<html lang="id" data-mode="dark">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}" />
 <meta name="robots" content="index, follow" />
@@ -104,15 +179,18 @@ function page({ slug, title, desc, h1, body }) {
 <meta property="og:title" content="${esc(title)}" />
 <meta property="og:description" content="${esc(desc)}" />
 <meta property="og:url" content="${url}" />
+<meta property="og:image" content="${ORIGIN}/PlayMuzeck-logo.png" />
 <meta name="theme-color" content="#14213D" />
 <link rel="icon" type="image/png" href="/PlayMuzeck-logo.png" />
+<link rel="apple-touch-icon" href="/PlayMuzeck-logo.png" />
 <script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>
+<script>${THEME_SCRIPT}</script>
 <style>${CSS}</style>
 </head>
 <body>
 <header class="top"><div class="in">
-<a class="brand" href="/">${SITE}</a>
-<nav aria-label="Navigasi utama">${NAV.map(([h, t]) => `<a href="${h}">${t}</a>`).join('')}</nav>
+${brandBlock(true)}
+<nav aria-label="Navigasi utama">${NAV.map(navLink).join('')}</nav>
 </div></header>
 <main>
 <h1>${esc(h1)}</h1>
@@ -120,8 +198,12 @@ function page({ slug, title, desc, h1, body }) {
 ${body}
 </main>
 <footer class="bot"><div class="in">
-<div class="links">${FOOT.map(([h, t]) => `<a href="${h}">${t}</a>`).join('')}</div>
-<div>&copy; ${new Date().getFullYear()} ${SITE}. Seluruh hak dilindungi. Dikelola oleh ${esc(OWNER)}, Indonesia.</div>
+${brandBlock(false)}
+<div class="mid">
+<nav class="row" aria-label="Navigasi footer">${FOOT_MAIN.map(plain).join('')}</nav>
+<nav class="row legal" aria-label="Tautan hukum">${FOOT_LEGAL.map(plain).join('')}<a class="ul" href="/cookie#consent-box">Pengaturan Cookie</a></nav>
+</div>
+<span class="copy">&copy; ${new Date().getFullYear()} ${SITE}</span>
 </div></footer>
 </body>
 </html>
@@ -148,13 +230,13 @@ const privacy = `
 </ul>
 <h3>b. Data yang dikumpulkan otomatis</h3>
 <ul>
-<li><strong>Aktivitas penggunaan:</strong> hasil dan riwayat kuis, skor papan peringkat, koleksi aset, pemakaian kuota harian Audio Tools, serta, <strong>hanya bila kamu menyetujuinya</strong> lewat banner cookie, peristiwa analitik ringan (misalnya kuis dimulai atau selesai) yang dikaitkan dengan <em>ID sesi acak</em> di perangkatmu.</li>
+<li><strong>Aktivitas penggunaan:</strong> hasil dan riwayat kuis, skor papan peringkat, koleksi aset, pemakaian kuota harian Audio Tools (dicatat per akun), serta, <strong>hanya bila kamu menyetujuinya</strong> lewat banner cookie, peristiwa analitik ringan (misalnya kuis dimulai atau selesai) yang dikaitkan dengan <em>ID sesi acak</em> di perangkatmu.</li>
 <li><strong>Data teknis:</strong> alamat IP, jenis peramban/perangkat, dan waktu akses pada log server. Kami memakainya untuk keamanan, pembatasan laju permintaan (<em>rate limiting</em>), dan pencegahan penyalahgunaan.</li>
 </ul>
 <h3>c. File audio yang kamu olah</h3>
-<div class="note">Alat di Audio Tools (potong, gabung, konversi, kompres, ubah nada, deteksi BPM, dan sebagainya) berjalan <strong>di dalam peramban/perangkatmu</strong>. File yang kamu pilih untuk diolah <strong>tidak diunggah ke server kami</strong>. Pengecualian hanya bila kamu sendiri mengirim berkas lewat fitur yang jelas meminta unggahan, misalnya permintaan custom audio.</div>
+<div class="note">Alat di Audio Tools (potong, gabung, konversi, kompres, ubah nada, deteksi BPM, dan sebagainya) berjalan <strong>di dalam peramban/perangkatmu</strong>. File yang kamu pilih untuk diolah <strong>tidak diunggah ke server kami</strong>. Server hanya mencatat jumlah pemakaian alat untuk kuota harian. Pengecualian hanya bila kamu sendiri mengirim berkas lewat fitur yang jelas meminta unggahan, misalnya permintaan custom audio.</div>
 <h3>d. Pembayaran</h3>
-<p>Pembayaran diproses oleh <strong>Midtrans</strong> (kartu, QRIS, e-wallet, transfer bank). Nomor kartu, PIN, dan kredensial pembayaranmu diproses langsung oleh Midtrans dan penyedia pembayaran terkait; <strong>kami tidak menyimpannya</strong>. Kami hanya menerima status transaksi dan rincian pesanan.</p>
+<p>Pembayaran diproses oleh <strong>Midtrans</strong>. Pembayaran dilakukan di jendela pembayaran Midtrans, terutama lewat QRIS, dan metode lain mengikuti yang tersedia di sana. Kredensial pembayaranmu (misalnya nomor kartu atau PIN, bila memakai metode itu) diproses langsung oleh Midtrans dan penyedia pembayaran terkait; <strong>kami tidak menyimpannya</strong>. Kami hanya menerima status transaksi dan rincian pesanan.</p>
 
 <h2>3. Untuk apa data dipakai</h2>
 <table>
@@ -187,12 +269,12 @@ const privacy = `
 <p>Kami memakai penyedia layanan berikut untuk menjalankan ${SITE}. Mereka hanya memproses data sebatas yang diperlukan untuk layanannya:</p>
 <table>
 <tr><th>Penyedia</th><th>Fungsi</th></tr>
+<tr><td>Railway</td><td>Hosting server aplikasi dan basis data (menyimpan data akun, pesanan, dan aktivitas)</td></tr>
 <tr><td>Google (Sign-In)</td><td>Masuk dengan Google</td></tr>
-<tr><td>Cloudflare</td><td>Hosting situs, jaringan pengiriman konten, anti-bot (Turnstile)</td></tr>
+<tr><td>Cloudflare (Turnstile)</td><td>Anti-bot pada formulir daftar, masuk, dan lupa kata sandi</td></tr>
 <tr><td>Midtrans</td><td>Pemrosesan pembayaran</td></tr>
-<tr><td>Resend</td><td>Pengiriman email (verifikasi, reset kata sandi, notifikasi)</td></tr>
+<tr><td>Resend</td><td>Pengiriman email (verifikasi, reset kata sandi, notifikasi, bukti pembelian)</td></tr>
 <tr><td>Supabase</td><td>Penyimpanan berkas</td></tr>
-<tr><td>Penyedia hosting server dan basis data</td><td>Menjalankan aplikasi dan menyimpan data akun</td></tr>
 </table>
 <p>Kami juga dapat mengungkapkan data bila diwajibkan oleh hukum, putusan pengadilan, atau permintaan resmi aparat berwenang, atau untuk melindungi hak, keamanan, dan properti kami maupun pengguna. Bila usaha ini dialihkan ke pihak lain, data dapat ikut dialihkan dengan perlindungan yang setara.</p>
 
@@ -206,7 +288,7 @@ const privacy = `
 </ul>
 
 <h2>8. Keamanan</h2>
-<p>Kami menerapkan langkah wajar: koneksi HTTPS, hash kata sandi, pembatasan laju permintaan, anti-bot, kontrol akses admin, dan header keamanan peramban. Tidak ada sistem yang 100% aman, jadi kami tidak dapat menjamin keamanan mutlak. Jaga kerahasiaan kata sandimu dan segera hubungi kami bila menduga akunmu disalahgunakan.</p>
+<p>Kami menerapkan langkah wajar: koneksi HTTPS, hash kata sandi, cookie sesi HttpOnly, pembatasan laju permintaan, anti-bot, kontrol akses admin, dan header keamanan peramban. Tidak ada sistem yang 100% aman, jadi kami tidak dapat menjamin keamanan mutlak. Jaga kerahasiaan kata sandimu dan segera hubungi kami bila menduga akunmu disalahgunakan.</p>
 
 <h2>9. Hakmu atas data pribadi</h2>
 <p>Sesuai UU PDP, kamu berhak untuk: mengakses dan meminta salinan datamu; memperbaiki data yang keliru; meminta penghapusan atau penghentian pemrosesan; menarik persetujuan; mengajukan keberatan atas pemrosesan tertentu; dan menunda atau membatasi pemrosesan. Kirim permintaan ke ${mail} dari email akunmu. Kami berupaya menjawab dalam <strong>3 x 24 jam kerja</strong> untuk konfirmasi dan menyelesaikan permintaan sesuai batas waktu hukum yang berlaku.</p>
@@ -215,7 +297,7 @@ const privacy = `
 <p>${SITE} tidak ditujukan untuk anak di bawah 13 tahun. Pengguna di bawah 18 tahun harus memakai layanan dengan izin dan pengawasan orang tua atau wali. Bila kamu orang tua dan mengetahui anakmu memberi data tanpa izin, hubungi kami agar data tersebut dihapus.</p>
 
 <h2>11. Transfer data lintas negara</h2>
-<p>Sebagian penyedia layanan kami (misalnya Google, Cloudflare, Resend, Supabase) memproses data di server di luar Indonesia. Kami memilih penyedia yang menerapkan perlindungan data yang memadai dan hanya mengirim data yang diperlukan.</p>
+<p>Sebagian penyedia layanan kami (misalnya Railway, Google, Cloudflare, Resend, Supabase) memproses data di server di luar Indonesia. Server aplikasi dan basis data kami berada di kawasan Asia Tenggara. Kami memilih penyedia yang menerapkan perlindungan data yang memadai dan hanya mengirim data yang diperlukan.</p>
 
 <h2>12. Tautan ke situs lain</h2>
 <p>${SITE} dapat memuat tautan ke situs pihak ketiga. Kami tidak mengendalikan dan tidak bertanggung jawab atas kebijakan privasi situs tersebut.</p>
@@ -239,7 +321,7 @@ const terms = `
 
 <h2>2. Akun</h2>
 <ul>
-<li>Beberapa fitur memerlukan akun. Data yang kamu berikan harus benar dan terbaru.</li>
+<li>Beberapa fitur, termasuk Audio Tools dan Pusat Kuis, memerlukan akun. Data yang kamu berikan harus benar dan terbaru.</li>
 <li>Kamu bertanggung jawab atas kerahasiaan kata sandi dan seluruh aktivitas di akunmu.</li>
 <li>Pengguna di bawah 18 tahun memakai Layanan dengan izin orang tua atau wali.</li>
 <li>Satu orang sebaiknya memakai satu akun. Kami dapat menggabungkan, membatasi, atau menutup akun ganda atau yang disalahgunakan.</li>
@@ -250,7 +332,7 @@ const terms = `
 <li>File yang kamu olah diproses di perangkatmu dan tidak diunggah ke server kami (lihat Kebijakan Privasi).</li>
 <li><strong>Kamu menyatakan dan menjamin</strong> bahwa kamu memiliki file tersebut atau memiliki izin/lisensi yang sah untuk mengolahnya dan memakai hasilnya. Memotong, mengonversi, memisahkan vokal, atau membuat nada dering dari karya orang lain tanpa hak yang sah dapat melanggar hukum hak cipta, dan itu sepenuhnya tanggung jawabmu.</li>
 <li>Kami tidak menyediakan, menyimpan, atau mendistribusikan lagu berhak cipta pihak lain lewat Audio Tools.</li>
-<li>Versi gratis dibatasi (saat ini 2 kali per alat per hari). Batas dan fitur dapat berubah. Hasil alat otomatis (misalnya deteksi BPM dan kunci nada, pemisah vokal berbasis center-phase) berupa perkiraan dan tidak dijamin akurat.</li>
+<li>Versi gratis dibatasi (saat ini 2 kali per alat per hari untuk setiap akun). Batas dan fitur dapat berubah. Hasil alat otomatis (misalnya deteksi BPM dan kunci nada, pemisah vokal berbasis center-phase) berupa perkiraan dan tidak dijamin akurat.</li>
 </ul>
 
 <h2>4. Aset Audio dan lisensi</h2>
@@ -391,11 +473,11 @@ const about = `
 
 <h2>Apa yang ada di ${SITE}</h2>
 <h3>Audio Tools</h3>
-<p>Lebih dari 20 alat audio yang berjalan langsung di peramban: potong, gabung, ulangi, konversi (MP3, WAV, FLAC, M4A), kompres, ubah nada dan tempo, deteksi BPM dan kunci nada, normalisasi volume, hapus jeda hening, rekam suara, pembuat nada dering, metronom, dan tuner. File diproses di perangkatmu dan tidak diunggah ke server kami.</p>
+<p>20 alat audio yang berjalan langsung di peramban: potong, gabung, ulangi, konversi (MP3, WAV, FLAC, M4A), kompres, ubah nada dan tempo, deteksi BPM dan kunci nada, normalisasi volume, hapus jeda hening, rekam suara, pembuat nada dering, metronom, tuner, dan lainnya. File diproses di perangkatmu dan tidak diunggah ke server kami. Pemakaian gratis dibatasi 2 kali per alat per hari untuk setiap akun, dan untuk memakainya kamu perlu masuk dengan akun.</p>
 <h3>Aset Audio</h3>
-<p>Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Kamu bisa membeli hanya yang dibutuhkan: master, versi loop, stem, atau partitur PDF. Setiap pembelian menyertakan berkas lisensi yang jelas dibaca sebelum dipakai di proyekmu.</p>
+<p>Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Kamu bisa membeli hanya yang dibutuhkan: master, versi loop, stem, atau partitur PDF. Setiap pembelian menyertakan berkas lisensi yang sebaiknya dibaca sebelum dipakai di proyekmu.</p>
 <h3>Pad Editor</h3>
-<p>Drum pad dan chord pad dengan sequencer 16 bar, banyak instrumen General MIDI, dan rekam live, untuk menyusun ritme dan progresi akor langsung di browser.</p>
+<p>Drum pad dan chord pad dengan sequencer hingga 16 bar, banyak instrumen General MIDI, dan rekam live, untuk menyusun ritme dan progresi akor langsung di browser.</p>
 <h3>Pusat Kuis</h3>
 <p>Perpustakaan kuis trivia berbahasa Indonesia (sains, sejarah, musik, seni, kuliner, dan lainnya), mode solo, pass and play, host kuis hingga 10 regu, multiplayer online, serta Aula Komunitas untuk kuis buatan pengguna dan papan peringkat.</p>
 
@@ -414,40 +496,50 @@ const about = `
 <p><a class="btn" href="/">Mulai di beranda</a></p>
 `;
 
-
 // ───────────────────────── DUKUNG ─────────────────────────
 // Angka biaya diisi di legal.config.json ("costs"). Jika kosong/0, angkanya tidak ditampilkan.
 // Jangan mengisi angka yang bukan tagihan sebenarnya: halaman ini bersifat transparansi ke donatur.
+//   serverDb : server aplikasi + basis data (satu penyedia), Rupiah per BULAN
+//   domain   : perpanjangan domain, Rupiah per TAHUN
+//   storage  : penyimpanan berkas, Rupiah per bulan (0 = sesuai pemakaian)
+//   email    : email transaksional, Rupiah per bulan (0 = sesuai pemakaian)
+//   payment  : biaya pembayaran dipotong per transaksi, jadi tidak ditampilkan sebagai angka bulanan
 const COSTS = [
-  { key: 'server', name: 'Server aplikasi dan basis data', note: 'Menjalankan situs, akun, kuis multiplayer, dan pembayaran.', amount: null },
-  { key: 'storage', name: 'Penyimpanan berkas', note: 'Katalog aset audio, stem, partitur, dan unggahan.', amount: null },
-  { key: 'domain', name: 'Domain playmuzeck.my.id', note: 'Perpanjangan domain tahunan.', amount: null },
-  { key: 'email', name: 'Email transaksional', note: 'Verifikasi akun, reset kata sandi, bukti pembelian.', amount: null },
-  { key: 'payment', name: 'Biaya pembayaran', note: 'Potongan penyedia pembayaran pada tiap transaksi.', amount: null },
+  { key: 'serverDb', name: 'Server aplikasi dan basis data', note: 'Satu penyedia hosting yang menjalankan situs, akun, kuis multiplayer, pembayaran, dan menyimpan seluruh datanya.', per: 'bulan', unit: 'month', empty: 'Sesuai pemakaian', amount: null },
+  { key: 'domain', name: 'Domain playmuzeck.my.id', note: 'Perpanjangan domain tahunan.', per: 'tahun', unit: 'year', empty: 'Tagihan tahunan', amount: null },
+  { key: 'storage', name: 'Penyimpanan berkas', note: 'Katalog aset audio, stem, partitur, dan unggahan.', per: 'bulan', unit: 'month', empty: 'Sesuai pemakaian', amount: null },
+  { key: 'email', name: 'Email transaksional', note: 'Verifikasi akun, reset kata sandi, bukti pembelian.', per: 'bulan', unit: 'month', empty: 'Sesuai pemakaian', amount: null },
+  { key: 'payment', name: 'Biaya pembayaran', note: 'Potongan penyedia pembayaran pada tiap transaksi.', per: 'bulan', unit: 'month', empty: 'Dipotong per transaksi', amount: null },
 ];
-COSTS.forEach((c) => { const v = Number(CFG.costs && CFG.costs[c.key]); if (Number.isFinite(v) && v > 0) c.amount = v; });
+const COST_CFG = CFG.costs || {};
+if (COST_CFG.serverDb === undefined && COST_CFG.server !== undefined) COST_CFG.serverDb = COST_CFG.server; // kompatibel dengan format lama
+COSTS.forEach((c) => { const v = Number(COST_CFG[c.key]); if (Number.isFinite(v) && v > 0) c.amount = v; });
 const rp = (n) => 'Rp' + Math.round(n).toLocaleString('id-ID');
-const costRows = COSTS.map((c) => `<tr><td><strong>${esc(c.name)}</strong><br><span style="color:var(--muted)">${esc(c.note)}</span></td><td style="white-space:nowrap">${c.amount ? rp(c.amount) + ' / bulan' : 'Tagihan bulanan'}</td></tr>`).join('');
-const totalKnown = COSTS.every((c) => Number.isFinite(c.amount) && c.amount > 0) ? COSTS.reduce((a, c) => a + c.amount, 0) : 0;
+const costRows = COSTS.map((c) => `<tr><td><strong>${esc(c.name)}</strong><br><span class="muted">${esc(c.note)}</span></td><td style="white-space:nowrap">${c.amount ? rp(c.amount) + ' / ' + c.per : esc(c.empty)}</td></tr>`).join('');
+const known = COSTS.filter((c) => c.amount);
+const monthlyTotal = known.reduce((a, c) => a + (c.unit === 'year' ? c.amount / 12 : c.amount), 0);
+const totalLine = known.length
+  ? `<p>Biaya tetap yang sudah pasti sekitar <strong>${rp(monthlyTotal)} per bulan</strong> (${known.map((c) => `${rp(c.amount)} per ${c.per} untuk ${esc(c.name.toLowerCase())}`).join(', ditambah ')}). Pos lain mengikuti pemakaian dan jumlah transaksi.</p>`
+  : '';
 
 const dukung = `
-<p>PlayMuzeck dikerjakan oleh satu orang di sela waktu luang. Situs ini <strong>tidak menayangkan iklan</strong>: tidak ada banner, tidak ada pop-up, dan datamu tidak dijual. Satu-satunya "penghasilan" kami adalah penjualan aset audio dan donasi dari pengguna yang merasa PlayMuzeck berguna.</p>
+<p>PlayMuzeck dikelola secara mandiri. Situs ini <strong>tidak menayangkan iklan</strong>: tidak ada banner, tidak ada pop-up, dan datamu tidak dijual. Satu-satunya "penghasilan" kami adalah penjualan aset audio dan donasi dari pengguna yang merasa PlayMuzeck berguna.</p>
 
 <div class="card">
 <h3 style="margin-top:0">Kenapa donasi?</h3>
-<p style="margin:.3rem 0 0">Server, penyimpanan berkas, domain, dan email tetap ada tagihannya setiap bulan, dan makin besar seiring bertambahnya pengguna. Donasi berapa pun menjaga PlayMuzeck tetap online, tetap bebas iklan, dan tetap bisa dicoba gratis.</p>
+<p style="margin:.3rem 0 0">Server, basis data, domain, dan layanan pendukung tetap ada tagihannya, dan makin besar seiring bertambahnya pengguna. Donasi berapa pun menjaga PlayMuzeck tetap online, tetap bebas iklan, dan tetap bisa dicoba gratis.</p>
 </div>
 
 <h2>Ke mana uangnya dipakai</h2>
 <table><tr><th>Pos biaya</th><th>Perkiraan</th></tr>${costRows}</table>
-${totalKnown ? `<p>Total biaya operasional sekitar <strong>${rp(totalKnown)} per bulan</strong>.</p>` : ''}
+${totalLine}
 <p>Kalau donasi bulan tertentu melebihi kebutuhan operasional, kelebihannya dipakai untuk menambah kapasitas, membuat fitur baru, dan memperbarui katalog.</p>
 
 <h2>Cara berdonasi</h2>
 <ol>
 <li><a href="/">Masuk ke akunmu</a> di PlayMuzeck (donasi tercatat di akunmu agar bingkai terbuka otomatis).</li>
 <li>Buka <strong>Dasbor Profil &rarr; Donasi &amp; Dukungan</strong>.</li>
-<li>Pilih nominal (minimal Rp1.000) dan bayar lewat QRIS, e-wallet, atau metode lain yang tersedia di Midtrans.</li>
+<li>Pilih nominal (minimal Rp1.000) dan bayar lewat QRIS di jendela pembayaran Midtrans.</li>
 </ol>
 <p><a class="btn" href="/">Buka PlayMuzeck untuk berdonasi</a></p>
 
@@ -478,10 +570,11 @@ const COOKIE_ROWS = [
   ['muzeck_sid', 'Cookie', 'Kami (first-party)', 'Menjaga kamu tetap masuk. HttpOnly, Secure, SameSite=Lax.', '30 hari', 'Wajib'],
   ['muzeck_signup', 'Cookie', 'Kami (first-party)', 'Mengikat tautan verifikasi email ke peramban yang dipakai mendaftar (anti pembajakan akun). HttpOnly.', '24 jam', 'Wajib'],
   ['muzeck_consent_v1', 'localStorage', 'Kami', 'Mengingat pilihan cookie-mu.', 'Sampai kamu menghapusnya / versi kebijakan berubah', 'Wajib'],
-  ['muzeck_user_session_v1, muzeck_cart_v1, muzeck_audio_entitlements_v1, muzeck_unlocked_*, muzeck_custom_*', 'localStorage', 'Kami', 'Status masuk di antarmuka, keranjang, dan akses produk yang kamu miliki.', 'Sampai keluar / dihapus', 'Wajib'],
+  ['muzeck_user_session_v1, muzeck_cart_v1, muzeck_audio_entitlements_v1, muzeck_unlocked_*, muzeck_user_choice_claimed_v1, muzeck_custom_*', 'localStorage', 'Kami', 'Status masuk di antarmuka, keranjang, dan akses produk yang kamu miliki.', 'Sampai keluar / dihapus', 'Wajib'],
   ['muzeck_quiz_*, muzeck_selected_quiz_deck_id, muzeck_active_quiz_segment, muzeck_last_nav, muzeck_standalone_*', 'localStorage', 'Kami', 'Progres, hasil, dan pilihan kuis; halaman terakhir yang dibuka; mode luring.', 'Sampai dihapus', 'Wajib'],
+  ['muzeck_cms_*', 'localStorage', 'Kami', 'Salinan sementara katalog dan pengaturan situs agar halaman terbuka lebih cepat.', 'Sampai dihapus / diperbarui', 'Wajib'],
   ['muzeck_mp_client_id', 'localStorage', 'Kami', 'Pengenal perangkat untuk sesi multiplayer.', 'Sampai dihapus', 'Wajib'],
-  ['muzeck_theme_*, pm_palette, muzeck_sound_theme, padstudio.*, muzeck_pwa_installed', 'localStorage', 'Kami', 'Tema warna, pengaturan suara, dan preferensi editor yang kamu pilih sendiri.', 'Sampai dihapus', 'Wajib'],
+  ['muzeck_theme_*, pm_palette, pm_theme_api_mode, muzeck_sound_theme, padstudio.*, muzeck_pwa_installed, muzeck_donation_banner_dismissed_v1', 'localStorage', 'Kami', 'Tema warna (dipakai juga oleh halaman statis ini), pengaturan suara, preferensi editor, dan banner yang sudah kamu tutup.', 'Sampai dihapus', 'Wajib'],
   ['muzeck_deletion_notice', 'sessionStorage', 'Kami', 'Menampilkan pemberitahuan penghapusan akun sekali per sesi.', 'Sampai tab ditutup', 'Wajib'],
   ['Cloudflare Turnstile', 'Skrip pihak ketiga', 'Cloudflare', 'Anti-bot saat masuk/daftar. Dimuat hanya di formulir itu.', 'Sesuai kebijakan Cloudflare', 'Wajib (keamanan)'],
   ['Google Sign-In', 'Skrip pihak ketiga', 'Google', 'Tombol Masuk dengan Google. Dimuat saat kamu membuka formulir masuk.', 'Sesuai kebijakan Google', 'Wajib bila dipakai'],
@@ -495,10 +588,10 @@ const cookiepage = `
 
 <h2>Pilihan cookie-mu</h2>
 <div class="card" id="consent-box">
-<p style="margin:.2rem 0 .6rem">Status analitik saat ini: <strong id="c-status">memuat...</strong><span id="c-when" style="color:var(--muted)"></span></p>
-<p id="c-gpc" style="display:none;color:var(--muted);margin:.2rem 0 .6rem">Peramban kamu mengirim sinyal "jangan lacak", jadi analitik tetap nonaktif.</p>
-<button class="btn" id="c-accept" type="button" style="border:0;cursor:pointer;margin-right:.5rem">Terima analitik</button>
-<button class="btn" id="c-reject" type="button" style="border:0;cursor:pointer;background:#2a3a63;color:#fff">Tolak / tarik persetujuan</button>
+<p style="margin:.2rem 0 .6rem">Status analitik saat ini: <strong id="c-status">memuat...</strong><span id="c-when" class="muted"></span></p>
+<p id="c-gpc" class="muted" style="display:none;margin:.2rem 0 .6rem">Peramban kamu mengirim sinyal "jangan lacak", jadi analitik tetap nonaktif.</p>
+<button class="btn" id="c-accept" type="button" style="margin-right:.5rem">Terima analitik</button>
+<button class="btn alt" id="c-reject" type="button">Tolak / tarik persetujuan</button>
 <noscript><p>Aktifkan JavaScript untuk mengubah pilihan di sini.</p></noscript>
 </div>
 
@@ -556,4 +649,3 @@ for (const p of PAGES) {
   fs.writeFileSync(path.join(dir, 'index.html'), page(p));
 }
 console.log(`Halaman hukum: ${PAGES.length} halaman dibuat di public/ (${PAGES.map((p) => p.slug).join(', ')})`);
-

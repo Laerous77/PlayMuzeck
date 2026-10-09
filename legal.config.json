@@ -2,9 +2,9 @@
   "email": "frfrareu@gmail.com",
   "owner": "Tim PlayMuzeck",
   "costs": {
-    "server": 90000,
-    "storage": 90000,
+    "serverDb": 90000,
     "domain": 35000,
+    "storage": 0,
     "email": 0,
     "payment": 0
   }
