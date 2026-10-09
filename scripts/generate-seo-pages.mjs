@@ -211,7 +211,8 @@ const tpl = fs.readFileSync(path.join(DIST, 'index.html'), 'utf8');
 const toolLinks = TOOLS.map((t) => `<li><a href="/alat-audio/${t.slug}">${esc(t.name)}</a></li>`).join('');
 const sectionLinks = SECTIONS.map((x) => `<li><a href="/${x.path}">${esc(x.parent)}: ${esc(x.name)}</a></li>`).join('');
 const nav = `<nav><a href="/">Beranda</a> · <a href="/alat-audio">Semua Audio Tools</a></nav>`;
-const wrap = (inner) => `<main style="max-width:48rem;margin:2rem auto;padding:1rem;color:#e5e5e5;font-family:system-ui,sans-serif;line-height:1.6">${nav}${inner}</main>`;
+// data-prerender: disembunyikan secara visual lewat <style> di <head> (lihat index.html) agar tidak berkedip saat JS memuat.
+const wrap = (inner) => `<main data-prerender>${nav}${inner}</main>`;
 
 const crumbs = (items) => ({
   '@type': 'BreadcrumbList',

@@ -308,9 +308,43 @@
   ]
 }
     </script>
+
+    <!-- Konten prerender SEO di dalam #root disembunyikan secara visual (tetap ada di DOM untuk crawler)
+         supaya tidak "berkedip" sebagai teks mentah selama JS belum selesai dimuat. -->
+    <style>
+      main[data-prerender] {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        margin: -1px !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+    </style>
+    <noscript>
+      <style>
+        main[data-prerender] {
+          position: static !important;
+          width: auto !important;
+          height: auto !important;
+          margin: 0 auto !important;
+          padding: 2rem 1rem !important;
+          overflow: visible !important;
+          clip: auto !important;
+          white-space: normal !important;
+          max-width: 48rem;
+          color: #e5e5e5;
+          font-family: system-ui, sans-serif;
+          line-height: 1.6;
+        }
+      </style>
+    </noscript>
   </head>
   <body class="bg-black text-[#E5E5E5] antialiased">
-    <div id="root"><!--prerender--><main style="max-width:48rem;margin:0 auto;padding:2rem 1rem;color:#e5e5e5;font-family:system-ui,sans-serif;line-height:1.6">
+    <div id="root"><!--prerender--><main data-prerender>
 <h1>PlayMuzeck: Audio Tools Online, Aset Audio &amp; Kuis Multiplayer Indonesia</h1>
 <p>PlayMuzeck adalah platform audio interaktif dan pusat kuis berbahasa Indonesia. Olah file audio langsung di browser, beli aset audio berlisensi komersial, susun beat dan akor, atau tantang teman lewat kuis multiplayer.</p>
 <nav aria-label="Navigasi utama"><ul>
