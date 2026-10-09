@@ -3,8 +3,8 @@
   "owner": "",
   "costs": {
     "server": 90000,
-    "storage": 0,
-    "domain": 0,
+    "storage": 90000,
+    "domain": 35000,
     "email": 0,
     "payment": 0
   }
