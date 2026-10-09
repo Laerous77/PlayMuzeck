@@ -40,6 +40,8 @@ import {
   Save,
   FolderOpen,
   MousePointer2,
+  Eraser,
+  Hand,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -1607,7 +1609,7 @@ function usePersistedDynMode(key: string, initial: DynMode): [DynMode, (m: DynMo
 }
 
 const SPIN_INPUT_CLASS =
-  'w-9 bg-black/80 rounded-l-md border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+  'w-11 bg-black/80 rounded-l-lg border border-white/15 px-1 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
 // Dua tombol kecil atas / bawah di sisi kanan kolom angka.
 const SpinButtons: React.FC<{ onUp: () => void; onDown: () => void; upDisabled?: boolean; downDisabled?: boolean; label: string }> = ({
@@ -1624,9 +1626,9 @@ const SpinButtons: React.FC<{ onUp: () => void; onDown: () => void; upDisabled?:
       disabled={upDisabled}
       aria-label={`${label}: naikkan`}
       title="Naikkan"
-      className="flex items-center justify-center px-0.5 h-3.5 rounded-tr-md border border-white/15 bg-white/5 hover:bg-white/15 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+      className="flex items-center justify-center px-1 h-[15px] rounded-tr-lg border border-white/15 bg-white/5 hover:bg-white/15 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
     >
-      <ChevronUp className="w-2.5 h-2.5" />
+      <ChevronUp className="w-3 h-3" />
     </button>
     <button
       type="button"
@@ -1634,9 +1636,9 @@ const SpinButtons: React.FC<{ onUp: () => void; onDown: () => void; upDisabled?:
       disabled={downDisabled}
       aria-label={`${label}: turunkan`}
       title="Turunkan"
-      className="flex items-center justify-center px-0.5 h-3.5 -mt-px rounded-br-md border border-white/15 bg-white/5 hover:bg-white/15 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+      className="flex items-center justify-center px-1 h-[15px] -mt-px rounded-br-lg border border-white/15 bg-white/5 hover:bg-white/15 text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
     >
-      <ChevronDown className="w-2.5 h-2.5" />
+      <ChevronDown className="w-3 h-3" />
     </button>
   </div>
 );
@@ -1661,16 +1663,26 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
   </div>
 );
 
-// Tempo: bisa diketik manual (ketik angka lalu Enter / klik di luar), tombol − / +, tahan tombol untuk mengubah terus-menerus,
-// dan tombol keyboard ↑ / ↓ (Shift = ±10) saat kolom angka aktif.
+// Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
+const BAR_BOX = 'shrink-0 flex items-center gap-2 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5';
+
+// Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–200), (2) tombol − / + (tahan = terus berubah),
+// (3) panah ↑ / ↓ di keyboard (Shift = ±10), (4) Tap Tempo: ketuk tombol Tap sesuai ketukan lagu (minimal 2 kali).
 const TEMPO_MIN = 60;
 const TEMPO_MAX = 200;
+const TAP_RESET_MS = 2000;
 const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStateAction<number>> }> = ({ bpm, setBpm }) => {
+  const [draft, setDraft] = useState<string | null>(null);
+  const [tapCount, setTapCount] = useState(0);
+  const tapsRef = useRef<number[]>([]);
+  const tapTimerRef = useRef<number | null>(null);
   const holdRef = useRef<{ delay: number | null; tick: number | null }>({ delay: null, tick: null });
-  const bump = useCallback(
-    (d: number) => setBpm((p) => Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, p + d))),
-    [setBpm]
-  );
+
+  const clampBpm = (n: number) => Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, n));
+  const bump = useCallback((d: number) => {
+    setDraft(null);
+    setBpm((p) => Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, p + d)));
+  }, [setBpm]);
   const stopHold = useCallback(() => {
     if (holdRef.current.delay !== null) window.clearTimeout(holdRef.current.delay);
     if (holdRef.current.tick !== null) window.clearInterval(holdRef.current.tick);
@@ -1683,7 +1695,14 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
       holdRef.current.tick = window.setInterval(() => bump(d), 70);
     }, 400);
   };
-  useEffect(() => stopHold, [stopHold]);
+  useEffect(
+    () => () => {
+      stopHold();
+      if (tapTimerRef.current !== null) window.clearTimeout(tapTimerRef.current);
+    },
+    [stopHold]
+  );
+
   const holdProps = (d: number) => ({
     onPointerDown: (e: React.PointerEvent) => {
       e.preventDefault();
@@ -1699,50 +1718,117 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
       }
     },
   });
+
+  const commitDraft = () => {
+    if (draft !== null) {
+      const n = parseInt(draft, 10);
+      if (!Number.isNaN(n)) setBpm(clampBpm(n));
+    }
+    setDraft(null);
+  };
+
+  // Tap tempo: rata-rata jarak antar ketukan terakhir (maks 8 ketukan). Jeda > 2 detik memulai hitungan baru.
+  const tap = () => {
+    const now = performance.now();
+    const taps = tapsRef.current;
+    if (taps.length > 0 && now - taps[taps.length - 1] > TAP_RESET_MS) taps.length = 0;
+    taps.push(now);
+    if (taps.length > 8) taps.shift();
+    setTapCount(taps.length);
+    if (taps.length >= 2) {
+      const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
+      setDraft(null);
+      setBpm(clampBpm(Math.round(60000 / avg)));
+    }
+    if (tapTimerRef.current !== null) window.clearTimeout(tapTimerRef.current);
+    tapTimerRef.current = window.setTimeout(() => {
+      tapsRef.current = [];
+      setTapCount(0);
+    }, TAP_RESET_MS);
+  };
+
+  const stepBtn =
+    'p-1.5 rounded-lg bg-white/5 hover:bg-white/15 active:bg-accent active:text-black text-gray-200 border border-white/10 disabled:opacity-40 cursor-pointer touch-none select-none';
   return (
-    <div
-      className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0"
-      onKeyDown={(e) => {
-        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-          e.preventDefault();
-          bump((e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
-        }
-      }}
-    >
-      <span className="text-xs font-bold text-gray-400 mr-0.5">TEMPO</span>
+    <div className={BAR_BOX}>
+      <span className="text-xs font-bold text-gray-400 select-none">TEMPO</span>
       <button
         type="button"
         {...holdProps(-1)}
         disabled={bpm <= TEMPO_MIN}
         aria-label="Kurangi tempo (tahan untuk terus menurun)"
         title="Kurangi tempo (tahan untuk terus menurun)"
-        className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300 disabled:opacity-40 cursor-pointer touch-none"
+        className={stepBtn}
       >
-        <Minus className="w-3.5 h-3.5" />
+        <Minus className="w-4 h-4" />
       </button>
-      {/* IntField: boleh dihapus & diketik bebas, baru dibatasi 60–200 saat Enter / klik di luar. */}
-      <IntField
-        value={bpm}
-        min={TEMPO_MIN}
-        max={TEMPO_MAX}
-        onChange={setBpm}
-        ariaLabel="Tempo (BPM), ketik angka 60–200, atau tekan panah atas / bawah"
-        className="w-12 bg-transparent text-center font-mono font-black text-sm text-accent focus:outline-none"
+      <input
+        type="text"
+        inputMode="numeric"
+        value={draft ?? String(bpm)}
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => {
+          const d = e.target.value.replace(/\D/g, '').slice(0, 3);
+          setDraft(d);
+          const n = parseInt(d, 10);
+          if (!Number.isNaN(n) && n >= TEMPO_MIN && n <= TEMPO_MAX) setBpm(n);
+        }}
+        onBlur={commitDraft}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.currentTarget.blur();
+          else if (e.key === 'Escape') {
+            setDraft(null);
+            e.currentTarget.blur();
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            bump((e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+          }
+        }}
+        aria-label="Tempo (BPM): klik lalu ketik angka 60–200, atau tekan panah atas / bawah"
+        title="Klik lalu ketik tempo (60–200 BPM). Panah ↑ / ↓ = ±1, Shift + panah = ±10"
+        className="w-16 py-1 text-center font-mono font-black text-base text-accent bg-black/70 border border-white/20 rounded-lg outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 cursor-text select-text"
       />
-      <span className="text-[10px] text-gray-400 mr-0.5">BPM</span>
+      <span className="text-[11px] text-gray-400 select-none">BPM</span>
       <button
         type="button"
         {...holdProps(1)}
         disabled={bpm >= TEMPO_MAX}
         aria-label="Tambah tempo (tahan untuk terus menaik)"
         title="Tambah tempo (tahan untuk terus menaik)"
-        className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300 disabled:opacity-40 cursor-pointer touch-none"
+        className={stepBtn}
       >
-        <Plus className="w-3.5 h-3.5" />
+        <Plus className="w-4 h-4" />
+      </button>
+      <span aria-hidden="true" className="w-px h-6 bg-white/10" />
+      <button
+        type="button"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          tap();
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            tap();
+          }
+        }}
+        title="Tap Tempo: ketuk berulang sesuai ketukan lagu (minimal 2 kali). Tempo dihitung otomatis dari jeda antar ketukan."
+        aria-label="Tap tempo"
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer select-none touch-none transition-colors ${
+          tapCount > 0 ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 hover:bg-white/15 text-gray-200 border-white/10'
+        }`}
+      >
+        <Hand className="w-4 h-4" />
+        <span>{tapCount > 0 ? `Tap ×${tapCount}` : 'Tap'}</span>
       </button>
     </div>
   );
 };
+
+const TOOL_BTN =
+  'flex flex-1 items-center justify-center gap-2 min-w-[92px] px-3 py-2 rounded-lg text-xs font-bold border transition-colors cursor-pointer disabled:cursor-not-allowed';
+const TOOL_BTN_IDLE = 'bg-white/5 hover:bg-white/15 text-gray-200 border-white/10 disabled:opacity-35 disabled:hover:bg-white/5';
+const TOOL_BTN_ON = 'bg-accent/20 text-accent border-accent/40';
 
 const ToolBtn: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
@@ -1751,14 +1837,8 @@ const ToolBtn: React.FC<{
   disabled?: boolean;
   title?: string;
 }> = ({ icon: Icon, label, onClick, disabled, title }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={disabled}
-    title={title}
-    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold bg-white/5 hover:bg-white/15 text-gray-200 border border-white/10 transition-colors cursor-pointer disabled:opacity-35 disabled:cursor-not-allowed"
-  >
-    <Icon className="w-3 h-3" />
+  <button type="button" onClick={onClick} disabled={disabled} title={title} className={`${TOOL_BTN} ${TOOL_BTN_IDLE}`}>
+    <Icon className="w-4 h-4 shrink-0" />
     <span>{label}</span>
   </button>
 );
@@ -3930,13 +4010,13 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   // Kontrol panjang akor (tab Akor): diletakkan di baris atas toolbar, di tempat teks jumlah pilihan sebelumnya.
   const chordLenControls = (
     <div className="flex flex-nowrap items-center justify-end gap-2.5 whitespace-nowrap">
-      <label className="flex items-center gap-1 text-[10px] font-bold text-gray-300" title="Panjang akor baru: panjang default akor yang baru dipasang">
+      <label className="flex items-center gap-1 text-xs font-bold text-gray-300" title="Panjang akor baru: panjang default akor yang baru dipasang">
         Panjang baru
         <select
           value={newChordLen}
           onChange={(e) => setNewChordLen(Number(e.target.value))}
           aria-label="Panjang akor baru (step)"
-          className="bg-black/70 border border-white/15 rounded-md px-1 py-0.5 text-[11px] font-mono text-accent focus:outline-none cursor-pointer"
+          className="bg-black/70 border border-white/15 rounded-md px-2 py-1 text-xs font-mono text-accent focus:outline-none cursor-pointer"
         >
           {Array.from(new Set([1, 2, 4, 8, stepsPerBar, stepsPerBar * 2, stepsPerBar * 4, newChordLen]))
             .filter((n) => n >= 1 && n <= totalSteps)
@@ -3950,7 +4030,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         </select>
         <span className="font-mono text-gray-500 font-normal">step</span>
       </label>
-      <label className="flex items-center gap-1 text-[10px] font-bold text-gray-300" title="Panjang akor terpilih: ubah panjang semua akor yang sedang dipilih">
+      <label className="flex items-center gap-1 text-xs font-bold text-gray-300" title="Panjang akor terpilih: ubah panjang semua akor yang sedang dipilih">
         Terpilih
         <IntField
           value={selectedNoteInfo.len}
@@ -5286,15 +5366,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
           {/* Satu baris, tidak pernah turun ke baris bawah: bila layar terlalu sempit, baris ini bisa digulir ke samping. */}
-          <div className="flex flex-nowrap items-center justify-between gap-2 overflow-x-auto pb-1 whitespace-nowrap">
+          <div className="flex flex-nowrap items-center justify-between gap-3 overflow-x-auto pb-1 whitespace-nowrap">
             <TempoControl bpm={bpm} setBpm={setBpm} />
-            <div className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0">
-              <span className="text-xs font-bold text-gray-400 mr-0.5">BIRAMA</span>
+            <div className={BAR_BOX}>
+              <span className="text-xs font-bold text-gray-400 select-none">BIRAMA</span>
               <select
                 value={timeSigId}
                 onChange={(e) => changeTimeSignature(e.target.value)}
                 title="Birama. BPM dihitung per not seperempat; 1 step = 1/16 not."
-                className="bg-transparent font-mono font-black text-sm text-accent focus:outline-none cursor-pointer"
+                className="bg-black/70 border border-white/20 rounded-lg px-2 py-1 font-mono font-black text-base text-accent focus:outline-none focus:border-accent cursor-pointer"
               >
                 {TIME_SIGNATURES.map((ts) => (
                   <option key={ts.id} value={ts.id} className="bg-black text-white">
@@ -5303,10 +5383,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 ))}
               </select>
             </div>
-
-            <span className="shrink-0 text-[10px] font-mono text-gray-400">
-              Bar {viewStartBar + 1}–{viewStartBar + barsPerView}/{TOTAL_BARS} • {timeSig.label}
-            </span>
             {!isUnlocked8Bar && (
               <div className="shrink-0 flex items-center gap-[2px]" role="group" aria-label="Peta 16 bar (gratis: hanya Bar 1)">
                 {Array.from({ length: TOTAL_BARS }, (_, i) => (
@@ -5326,26 +5402,32 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 ))}
               </div>
             )}
-            <div
-              className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400"
-              title="Banyak bar yang ditampilkan (1–8). Ketik angka atau pakai tombol atas-bawah."
-            >
-              <span>Tampil</span>
-              <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
-              <span>bar</span>
+            <div className={BAR_BOX} role="group" aria-label="Jendela tampilan grid">
+              <div className="flex items-baseline gap-1.5" title="Bar yang sedang tampil di grid dari total bar proyek, beserta birama">
+                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Menampilkan</span>
+                <span className="text-sm font-mono font-black text-white">
+                  Bar {viewStartBar + 1}–{viewStartBar + barsPerView}
+                </span>
+                <span className="text-xs text-gray-400">dari {TOTAL_BARS}</span>
+                <span className="ml-1 px-1.5 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/30 text-[11px] font-mono font-bold">{timeSig.label}</span>
+              </div>
+              <span aria-hidden="true" className="w-px h-6 bg-white/10" />
+              <div className="flex items-center gap-1.5" title="Banyak bar yang ditampilkan (1–8). Ketik angka atau pakai tombol atas-bawah.">
+                <span className="text-gray-400">Tampil</span>
+                <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
+                <span className="text-gray-400">bar</span>
+              </div>
             </div>
-            <div
-              className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1"
-              title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir"
-            >
-              <span>Bar</span>
+            <div className={BAR_BOX} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
+              <span className="font-bold text-gray-400 uppercase tracking-wide">Loop</span>
+              <span className="text-gray-400">Bar</span>
               <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
-              <span>Step</span>
+              <span className="text-gray-400">Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
-              <span>—</span>
-              <span>Bar</span>
+              <span className="text-gray-500">—</span>
+              <span className="text-gray-400">Bar</span>
               <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
-              <span>Step</span>
+              <span className="text-gray-400">Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
             </div>
             {!isUnlocked8Bar && (
@@ -5354,11 +5436,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             )}
             <div
-              className="shrink-0 flex items-center gap-1 text-[10px] text-gray-400 bg-black/40 border border-white/10 rounded-lg px-2 py-1"
+              className={BAR_BOX}
               title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
             >
-              <span className="font-bold text-accent">Posisi</span>
-              <span>Bar</span>
+              <span className="font-bold text-accent uppercase tracking-wide">Posisi</span>
+              <span className="text-gray-400">Bar</span>
               <div className="flex items-stretch">
                 <input
                   ref={posBarRef}
@@ -5369,7 +5451,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={seekToPosition}
                   onBlur={syncPositionFields}
                   aria-label="Posisi bar"
-                  className="w-9 bg-black/80 rounded-l-md border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="w-11 bg-black/80 rounded-l-lg border border-white/15 px-1 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <SpinButtons
                   label="Posisi bar"
@@ -5377,7 +5459,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onDown={() => nudgePosition(posBarRef.current, -1, 1, TOTAL_BARS)}
                 />
               </div>
-              <span>Step</span>
+              <span className="text-gray-400">Step</span>
               <div className="flex items-stretch">
                 <input
                   ref={posStepRef}
@@ -5388,7 +5470,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={seekToPosition}
                   onBlur={syncPositionFields}
                   aria-label="Posisi step"
-                  className="w-9 bg-black/80 rounded-l-md border border-white/15 px-1 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="w-11 bg-black/80 rounded-l-lg border border-white/15 px-1 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <SpinButtons
                   label="Posisi step"
@@ -5400,7 +5482,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 type="button"
                 onClick={jumpToPlayhead}
                 title="Tampilkan halaman grid yang memuat posisi ini"
-                className="px-1.5 py-0.5 rounded border border-white/10 bg-white/5 hover:bg-white/15 text-gray-300 cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/15 text-gray-200 font-bold cursor-pointer"
               >
                 Lihat
               </button>
@@ -5410,42 +5492,43 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               onClick={() => setFollowPlayhead((f) => !f)}
               aria-pressed={followPlayhead}
               title="Halaman grid otomatis mengikuti playhead saat diputar"
-              className={`shrink-0 px-2.5 py-1.5 rounded-md text-[10px] font-bold border transition-colors cursor-pointer ${
-                followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10'
+              className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
               }`}
             >
               Ikuti
             </button>
-            <div className="shrink-0 flex items-center gap-1 bg-black/60 border border-white/10 rounded-lg p-0.5 pr-1">
+            <div className={BAR_BOX}>
               <button
                 type="button"
                 onClick={() => shiftView(-1)}
                 disabled={viewStartBar <= 0}
                 title={`Geser ${shiftBars} bar ke kiri`}
                 aria-label="Geser ke kiri"
-                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-accent hover:text-on-accent text-gray-200 border border-white/10 transition-colors disabled:opacity-40 cursor-pointer"
               >
-                <ChevronLeft className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-[10px] text-gray-400">Geser</span>
+              <span className="text-gray-400">Geser</span>
               <SpinField min={1} max={MAX_SHIFT_BARS} value={shiftBars} onChange={setShiftBars} ariaLabel="Jumlah bar sekali geser (maksimal 8)" />
-              <span className="text-[10px] text-gray-400">bar</span>
+              <span className="text-gray-400">bar</span>
               <button
                 type="button"
                 onClick={() => shiftView(1)}
                 disabled={viewStartBar >= TOTAL_BARS - barsPerView}
                 title={`Geser ${shiftBars} bar ke kanan`}
                 aria-label="Geser ke kanan"
-                className="p-1.5 rounded-md bg-white/5 hover:bg-accent hover:text-on-accent text-gray-300 transition-colors disabled:opacity-40 cursor-pointer"
+                className="p-1.5 rounded-lg bg-white/5 hover:bg-accent hover:text-on-accent text-gray-200 border border-white/10 transition-colors disabled:opacity-40 cursor-pointer"
               >
-                <ChevronRight className="w-3.5 h-3.5" />
+                <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
 
-          <div className="flex flex-col gap-2 rounded-xl bg-black/40 border border-white/[0.06] p-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center bg-black/60 border border-white/10 rounded-lg p-0.5" role="tablist" aria-label="Mode editor">
+          <div className="flex flex-col gap-2.5 rounded-xl bg-black/40 border border-white/[0.06] p-3">
+            {/* Baris 1: mode & edit. Semua tombol melebar rata mengisi lebar toolbar. */}
+            <div className="flex flex-wrap items-stretch gap-2">
+              <div className="flex flex-[1.4] items-stretch min-w-[200px] bg-black/60 border border-white/10 rounded-lg p-0.5" role="tablist" aria-label="Mode editor">
                 {([
                   { id: 'edit', label: 'Edit', Icon: Pencil, tip: 'Klik sel untuk memasang / mengubah' },
                   {
@@ -5462,11 +5545,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     aria-selected={editMode === id}
                     title={tip}
                     onClick={() => setEditMode(id)}
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                    className={`flex flex-1 items-center justify-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-colors cursor-pointer ${
                       editMode === id ? 'bg-accent text-on-accent shadow' : 'text-gray-300 hover:bg-white/10'
                     }`}
                   >
-                    <Icon className="w-3 h-3" />
+                    <Icon className="w-4 h-4" />
                     <span>{label}</span>
                   </button>
                 ))}
@@ -5483,13 +5566,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   } else setAddMode((v) => !v);
                 }}
                 title="Saklar Tambah (untuk HP / tanpa Shift): aktif = memilih MENAMBAH ke pilihan sebelumnya, nonaktif = pilihan baru menggantikan yang lama"
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                  addMode && editMode === 'select'
-                    ? 'bg-accent/20 text-accent border-accent/40'
-                    : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
-                }`}
+                className={`${TOOL_BTN} ${addMode && editMode === 'select' ? TOOL_BTN_ON : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'}`}
               >
-                <Plus className="w-3 h-3" />
+                <Plus className="w-4 h-4 shrink-0" />
                 <span>Tambah</span>
               </button>
 
@@ -5499,20 +5578,22 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 aria-checked={freeSel}
                 onClick={() => setFreeSel((v) => !v)}
                 title="Pilih Bebas: klik 2x = satu beat, klik 3x = satu bar, dihitung mulai dari step yang pertama diklik (bukan dari garis beat / bar)"
-                className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                  freeSel ? 'bg-accent/20 text-accent border-accent/40' : 'bg-black/60 text-gray-400 border-white/10 hover:border-white/25'
-                }`}
+                className={`${TOOL_BTN} ${freeSel ? TOOL_BTN_ON : 'bg-black/60 text-gray-300 border-white/10 hover:border-white/25'}`}
               >
-                <MousePointer2 className="w-3 h-3" />
+                <MousePointer2 className="w-4 h-4 shrink-0" />
                 <span>Bebas</span>
               </button>
 
-              <div className="flex items-center gap-1">
+              <span aria-hidden="true" className="hidden lg:block w-px self-stretch bg-white/10" />
+
+              <div className="contents">
                 <ToolBtn icon={Undo2} label="Undo" title="Ctrl+Z" onClick={undo} disabled={!canUndo} />
                 <ToolBtn icon={Redo2} label="Redo" title="Ctrl+Shift+Z atau Ctrl+Y" onClick={redo} disabled={!canRedo} />
               </div>
 
-              <div className="flex flex-wrap items-center gap-1">
+              <span aria-hidden="true" className="hidden lg:block w-px self-stretch bg-white/10" />
+
+              <div className="contents">
                 <ToolBtn
                   icon={Layers}
                   label="Semua"
@@ -5538,24 +5619,23 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg p-1">
+            {/* Baris 2: pemutaran & rekaman. Tombol juga melebar rata. */}
+            <div className="flex flex-wrap items-stretch gap-2">
+              <div className="flex flex-[2.4] items-stretch gap-1.5 min-w-[300px] bg-black/60 border border-white/10 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() => void togglePlay()}
                   aria-pressed={isPlaying}
                   title={`${isPlaying ? 'Hentikan' : 'Putar'} ${effPlayDrum && effPlayChord ? 'Drum + Akor' : effPlayChord ? 'Akor' : 'Drum'} (loop)`}
-                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
+                  className={`flex flex-1 items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
                     isPlaying ? 'bg-accent text-on-accent border-accent shadow-md' : 'bg-white/5 text-gray-200 border-white/10 hover:bg-white/10'
                   }`}
                 >
-                  {isPlaying ? <Square className="w-3 h-3 fill-current" /> : <Play className="w-3 h-3 fill-current" />}
+                  {isPlaying ? <Square className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
                   <span>{isPlaying ? 'Stop' : 'Putar'}</span>
                 </button>
-                <div className="flex items-center gap-1.5 pl-1.5 border-l border-white/10" role="group" aria-label="Bagian yang diputar">
+                <div className="flex flex-[1.3] items-stretch gap-1.5 pl-1.5 border-l border-white/10" role="group" aria-label="Bagian yang diputar">
                   {PLAY_PARTS.map(({ id, label, Icon, tip }) => {
-                    const locked = false;
                     const on = id === 'drum' ? effPlayDrum : effPlayChord;
                     return (
                       <button
@@ -5563,40 +5643,39 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         type="button"
                         role="checkbox"
                         aria-checked={on}
-                        title={locked ? 'Fitur akor perlu editor penuh' : tip}
+                        title={tip}
                         onClick={() => togglePlayPart(id)}
-                        className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-bold transition-colors cursor-pointer ${
+                        className={`flex flex-1 items-center justify-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
                           on ? 'bg-accent text-on-accent shadow' : 'text-gray-300 hover:bg-white/10'
                         }`}
                       >
-                        {locked ? <Lock className="w-3 h-3 text-accent" /> : <Icon className="w-3 h-3" />}
+                        <Icon className="w-4 h-4" />
                         <span>{label}</span>
                       </button>
                     );
                   })}
                 </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={resetToBeginning}
-                  title="Mulai dari awal wilayah loop"
-                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold bg-white/5 hover:bg-white/15 text-gray-200 border border-white/10 transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  <span>Awal</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsSeqLooping(!isSeqLooping)}
-                  aria-pressed={isSeqLooping}
-                  title={isSeqLooping ? 'Ulangi (loop) aktif: klik untuk mematikan' : 'Ulangi (loop) mati: klik untuk menyalakan'}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-all cursor-pointer ${
-                    isSeqLooping ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  <Repeat className="w-3 h-3" />
-                  <span>Ulangi</span>
-                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={resetToBeginning}
+                title="Mulai dari awal wilayah loop"
+                className={`${TOOL_BTN} ${TOOL_BTN_IDLE}`}
+              >
+                <RotateCcw className="w-4 h-4 shrink-0" />
+                <span>Awal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsSeqLooping(!isSeqLooping)}
+                aria-pressed={isSeqLooping}
+                title={isSeqLooping ? 'Ulangi (loop) aktif: klik untuk mematikan' : 'Ulangi (loop) mati: klik untuk menyalakan'}
+                className={`${TOOL_BTN} ${isSeqLooping ? TOOL_BTN_ON : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+              >
+                <Repeat className="w-4 h-4 shrink-0" />
+                <span>Ulangi</span>
+              </button>
               <button
                 type="button"
                 onClick={toggleRecording}
@@ -5608,7 +5687,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     ? 'Hentikan rekaman'
                     : 'Rekam: pukulan pad drum dan akor yang kamu mainkan masuk ke sequencer'
                 }
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
+                className={`${TOOL_BTN} ${
                   countdownLeft !== null
                     ? 'bg-amber-500/20 text-amber-300 border-amber-500/60'
                     : isRecording
@@ -5617,17 +5696,17 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }`}
               >
                 <Circle
-                  className={`w-3 h-3 ${
+                  className={`w-4 h-4 shrink-0 ${
                     isRecording || countdownLeft !== null ? 'fill-red-500 text-red-500 animate-pulse' : 'fill-red-500/80 text-red-500/80'
                   }`}
                 />
                 <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
               </button>
               <label
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold text-gray-300 bg-black/60 border border-white/10"
+                className="flex flex-1 items-center justify-center gap-2 min-w-[110px] px-3 py-2 rounded-lg text-xs font-bold text-gray-300 bg-black/60 border border-white/10"
                 title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
               >
-                <Timer className="w-3 h-3 text-gray-400" />
+                <Timer className="w-4 h-4 text-gray-400" />
                 <IntField
                   value={recCountdownSec}
                   min={0}
@@ -5635,107 +5714,106 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={setRecCountdownSec}
                   disabled={isRecording || countdownLeft !== null}
                   ariaLabel="Hitung mundur sebelum rekam (detik, maksimal 15)"
-                  className="w-8 bg-black/80 rounded border border-white/15 px-0.5 py-0.5 text-[11px] font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
+                  className="w-10 bg-black/80 rounded-md border border-white/15 px-1 py-0.5 text-xs font-mono text-accent text-center outline-none focus:border-accent disabled:opacity-50"
                 />
-                <span className="font-mono text-[10px] text-gray-400">dtk</span>
+                <span className="font-mono text-gray-400">dtk</span>
               </label>
-                <button
-                  type="button"
-                  onClick={() => setMetronomeOn((v) => !v)}
-                  aria-pressed={metronomeOn}
-                  title="Metronom: klik ketukan saat memutar dan merekam"
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
-                    metronomeOn ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'
-                  }`}
-                >
-                  <Activity className="w-3 h-3" />
-                  <span>Metronom</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleClearGrid}
-                  className="px-3 py-2 rounded-xl bg-black/60 hover:bg-black/90 text-gray-300 hover:text-white border border-white/[0.08] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5 text-red-400" />
-                  <span>Bersihkan Grid</span>
-                </button>
+              <button
+                type="button"
+                onClick={() => setMetronomeOn((v) => !v)}
+                aria-pressed={metronomeOn}
+                title="Metronom: klik ketukan saat memutar dan merekam"
+                className={`${TOOL_BTN} ${metronomeOn ? TOOL_BTN_ON : 'bg-white/5 text-gray-400 border-white/10 hover:bg-white/10'}`}
+              >
+                <Activity className="w-4 h-4 shrink-0" />
+                <span>Metronom</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleClearGrid}
+                title="Bersihkan Grid: hapus seluruh isi pola"
+                className={`${TOOL_BTN} ${TOOL_BTN_IDLE} hover:text-white`}
+              >
+                <Eraser className="w-4 h-4 shrink-0 text-red-400" />
+                <span>Bersihkan Grid</span>
+              </button>
+            </div>
 
-              </div>
-
-              <div className="ml-auto flex flex-col items-end gap-1">
-                {activeTab === 'chord' && chordLenControls}
-                <div className="flex items-center gap-2">
+            {/* Baris 3: status pilihan (kiri) dan kontrol panjang akor + bantuan (kanan). */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/[0.06]">
+              <div className="flex items-center gap-3">
                 {isRecording && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-red-300">
-                    <Circle className="w-2.5 h-2.5 fill-red-500 text-red-500 animate-pulse" />
+                  <span className="flex items-center gap-1 text-xs font-mono font-bold text-red-300">
+                    <Circle className="w-3 h-3 fill-red-500 text-red-500 animate-pulse" />
                     Merekam
                   </span>
                 )}
-                <span className="text-[10px] font-mono text-gray-400">{selectionLabel}</span>
+                <span className="text-xs font-mono text-gray-300">{selectionLabel}</span>
+              </div>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                {activeTab === 'chord' && chordLenControls}
                 <InfoTip title="Cara memakai sequencer">
-                  {activeTab === 'drum' ? (
-                    dynamicsOn ? (
-                      <p>
-                        <b className="text-gray-100">Edit:</b> klik pad untuk menaikkan dinamika bertahap sesuai tingkat yang dipilih (6: pp → p → mp
-                        → mf → f → ff, 4: p → mp → mf → f, 2: p → f), lalu kosong. Klik kanan (atau tahan lama di HP) untuk memilih dinamika
-                        langsung. Warna makin pekat = makin keras.
-                      </p>
-                    ) : (
-                      <p>
-                        <b className="text-gray-100">Edit:</b> klik pad untuk memasang, klik lagi untuk menghapus. Dinamika mati, jadi semua pad
-                        dibunyikan sama keras (dinamika yang sudah tersimpan kembali muncul bila dinamika dinyalakan lagi).
-                      </p>
-                    )
-                  ) : (
-                    <p>
-                      <b className="text-gray-100">Edit:</b> klik sel kosong untuk memasang akor. Seret pegangan di tepi kanan blok akor untuk
-                      memanjangkan atau memendekkan.
-                    </p>
-                  )}
-                  <p>
-                    <b className="text-gray-100">Pilih:</b> ketuk atau seret untuk memilih area (klik label BAR dan nama baris juga hanya memilih di mode ini); memilih lagi menggantikan pilihan sebelumnya.
-                    Ketuk pad yang sudah terpilih untuk melepasnya. Tahan <b className="text-gray-100">Shift</b> (atau nyalakan saklar{' '}
-                    <b className="text-gray-100">Tambah</b> di HP) untuk menambahkan pad atau area ke pilihan tanpa melepas yang lama (ketuk pad
-                    terpilih = lepas). Shift+seret di mode Edit juga memilih area.
-                  </p>
-                  <p>
-                    <b className="text-gray-100">Pindahkan:</b> di mode Pilih, seret salah satu pad yang sudah terpilih ke tempat lain; seluruh
-                    pilihan ikut berpindah dan dijatuhkan saat dilepas (bisa pindah baris maupun antar bar). Satu pemindahan = satu langkah Undo.
-                  </p>
-                  <p>
-                    {activeTab === 'drum'
-                      ? 'Klik nama drum (Kick, Snare, …) untuk memilih seluruh instrumen drum itu; tombol Semua memilih semua bagian drum.'
-                      : 'Klik nama progresi akor untuk memilih seluruh instrumen itu; tombol Semua memilih semua instrumen akor.'}
-                  </p>
-                  <p>
-                    <b className="text-gray-100">Salin ke instrumen lain:</b> Salin pilihan, klik nama instrumen tujuan, lalu Tempel.
-                    {activeTab === 'chord' && (
-                      <>
-                        {' '}
-                        <b className="text-gray-100">Duplikat instrumen:</b> tombol Duplikat di bawah nama instrumen (atau Duplikat saat instrumen
-                        utuh terpilih) membuat instrumen baru lengkap dengan isi, suara, volume, dan ADSR-nya (maksimal 4 instrumen).{' '}
-                        <b className="text-gray-100">Ganti nama &amp; urutan:</b> ikon pensil (atau klik dua kali nama) mengganti nama progresi;
-                        tombol panah atas / bawah menukar urutannya; tombol Hapus menghapus progresi (minimal satu harus tersisa).
-                      </>
-                    )}
-                  </p>
-                  <p>
-                    <b className="text-gray-100">Putar:</b> tombol Putar memutar bagian yang dicentang di sebelahnya: Drum, Akor, atau
-                    keduanya (minimal satu harus aktif). Pilihan boleh diganti saat sedang diputar. Metronom (bila aktif) ikut berbunyi.
-                  </p>
-                  <p>
-                    Di mode Pilih, klik label BAR untuk memilih satu bar (dengan Shift, bar ditambahkan ke pilihan; Shift juga berlaku di mode Edit). Klik area kosong di luar pad untuk melepas semua
-                    pilihan.
-                  </p>
-                  <p>
-                    <b className="text-gray-100">Pintasan:</b> Ctrl+Z / Ctrl+Shift+Z untuk undo / redo; Ctrl+C / X / V / D untuk salin, potong,
-                    tempel, duplikat; Delete untuk hapus; Esc untuk melepas pilihan.
-                  </p>
-                </InfoTip>
-                </div>
+          {activeTab === 'drum' ? (
+            dynamicsOn ? (
+              <p>
+                <b className="text-gray-100">Edit:</b> klik pad untuk menaikkan dinamika bertahap sesuai tingkat yang dipilih (6: pp → p → mp
+                → mf → f → ff, 4: p → mp → mf → f, 2: p → f), lalu kosong. Klik kanan (atau tahan lama di HP) untuk memilih dinamika
+                langsung. Warna makin pekat = makin keras.
+              </p>
+            ) : (
+              <p>
+                <b className="text-gray-100">Edit:</b> klik pad untuk memasang, klik lagi untuk menghapus. Dinamika mati, jadi semua pad
+                dibunyikan sama keras (dinamika yang sudah tersimpan kembali muncul bila dinamika dinyalakan lagi).
+              </p>
+            )
+          ) : (
+            <p>
+              <b className="text-gray-100">Edit:</b> klik sel kosong untuk memasang akor. Seret pegangan di tepi kanan blok akor untuk
+              memanjangkan atau memendekkan.
+            </p>
+          )}
+          <p>
+            <b className="text-gray-100">Pilih:</b> ketuk atau seret untuk memilih area (klik label BAR dan nama baris juga hanya memilih di mode ini); memilih lagi menggantikan pilihan sebelumnya.
+            Ketuk pad yang sudah terpilih untuk melepasnya. Tahan <b className="text-gray-100">Shift</b> (atau nyalakan saklar{' '}
+            <b className="text-gray-100">Tambah</b> di HP) untuk menambahkan pad atau area ke pilihan tanpa melepas yang lama (ketuk pad
+            terpilih = lepas). Shift+seret di mode Edit juga memilih area.
+          </p>
+          <p>
+            <b className="text-gray-100">Pindahkan:</b> di mode Pilih, seret salah satu pad yang sudah terpilih ke tempat lain; seluruh
+            pilihan ikut berpindah dan dijatuhkan saat dilepas (bisa pindah baris maupun antar bar). Satu pemindahan = satu langkah Undo.
+          </p>
+          <p>
+            {activeTab === 'drum'
+              ? 'Klik nama drum (Kick, Snare, …) untuk memilih seluruh instrumen drum itu; tombol Semua memilih semua bagian drum.'
+              : 'Klik nama progresi akor untuk memilih seluruh instrumen itu; tombol Semua memilih semua instrumen akor.'}
+          </p>
+          <p>
+            <b className="text-gray-100">Salin ke instrumen lain:</b> Salin pilihan, klik nama instrumen tujuan, lalu Tempel.
+            {activeTab === 'chord' && (
+              <>
+                {' '}
+                <b className="text-gray-100">Duplikat instrumen:</b> tombol Duplikat di bawah nama instrumen (atau Duplikat saat instrumen
+                utuh terpilih) membuat instrumen baru lengkap dengan isi, suara, volume, dan ADSR-nya (maksimal 4 instrumen).{' '}
+                <b className="text-gray-100">Ganti nama &amp; urutan:</b> ikon pensil (atau klik dua kali nama) mengganti nama progresi;
+                tombol panah atas / bawah menukar urutannya; tombol Hapus menghapus progresi (minimal satu harus tersisa).
+              </>
+            )}
+          </p>
+          <p>
+            <b className="text-gray-100">Putar:</b> tombol Putar memutar bagian yang dicentang di sebelahnya: Drum, Akor, atau
+            keduanya (minimal satu harus aktif). Pilihan boleh diganti saat sedang diputar. Metronom (bila aktif) ikut berbunyi.
+          </p>
+          <p>
+            Di mode Pilih, klik label BAR untuk memilih satu bar (dengan Shift, bar ditambahkan ke pilihan; Shift juga berlaku di mode Edit). Klik area kosong di luar pad untuk melepas semua
+            pilihan.
+          </p>
+          <p>
+            <b className="text-gray-100">Pintasan:</b> Ctrl+Z / Ctrl+Shift+Z untuk undo / redo; Ctrl+C / X / V / D untuk salin, potong,
+            tempel, duplikat; Delete untuk hapus; Esc untuk melepas pilihan.
+          </p>
+        </InfoTip>
               </div>
             </div>
-
           </div>
 
           <div
