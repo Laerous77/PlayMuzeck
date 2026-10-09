@@ -112,7 +112,6 @@ footer.bot .row.legal{color:var(--faint)}
 footer.bot a{color:inherit;text-decoration:none}
 footer.bot a:hover{color:var(--ink)}
 footer.bot a.ul{text-decoration:underline;text-underline-offset:2px}
-footer.bot .brand .logo{width:2.25rem;height:2.25rem}
 footer.bot .brand .name b{font-size:.875rem;font-weight:800}
 footer.bot .brand .name{display:flex}
 @media (min-width:1024px){
@@ -148,9 +147,9 @@ const FOOT_LEGAL = [
   ['/hak-cipta', 'Hak Cipta'],
 ];
 
+// withTagline = true -> versi header (ikon logo + nama + tagline). false -> versi footer (teks nama saja, tanpa ikon).
 const brandBlock = (withTagline) => `<a class="brand" href="/" aria-label="Ke Halaman Utama ${SITE}" title="Ke Halaman Utama ${SITE}">
-<span class="logo"><img src="/PlayMuzeck-logo.png" alt="${SITE} Logo" width="40" height="40" /></span>
-<span class="name"><b>${SITE}<i>.</i></b>${withTagline ? '<small>AUDIO &amp; KUIS</small>' : ''}</span>
+${withTagline ? `<span class="logo"><img src="/PlayMuzeck-logo.png" alt="${SITE} Logo" width="40" height="40" /></span>\n` : ''}<span class="name"><b>${SITE}<i>.</i></b>${withTagline ? '<small>AUDIO &amp; KUIS</small>' : ''}</span>
 </a>`;
 
 function page({ slug, title, desc, h1, body }) {

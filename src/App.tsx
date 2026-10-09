@@ -1207,7 +1207,7 @@ function MainApp() {
         {/* Tata letak: kiri = logo, tengah = dua baris tautan, kanan = hak cipta.
             Kiri dan kanan berada di tengah-tengah secara vertikal terhadap SELURUH blok tautan (dua baris). */}
         <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-4 lg:grid lg:grid-cols-[1fr_minmax(0,auto)_1fr] lg:items-center lg:gap-6 text-xs text-gray-400 text-center">
-          {/* Logo PlayMuzeck (sama seperti di header) */}
+          {/* Nama PlayMuzeck (teks saja, tanpa ikon logo) */}
           <button
             type="button"
             onClick={() => {
@@ -1220,9 +1220,6 @@ function MainApp() {
             title="Ke Halaman Utama PlayMuzeck"
             className="flex items-center gap-2 cursor-pointer select-none group text-left rounded-2xl lg:justify-self-start"
           >
-            <div className="w-9 h-9 shrink-0 rounded-2xl overflow-hidden p-1 bg-surface border border-white/10 shadow-md flex items-center justify-center group-hover:scale-105 transition-transform">
-              <img src="/PlayMuzeck-logo.png" alt="PlayMuzeck Logo" className="w-full h-full object-contain rounded-xl" />
-            </div>
             <span className="font-extrabold text-white text-sm tracking-tight leading-none">
               {siteSettings.siteName}<span className="text-accent">.</span>
             </span>
