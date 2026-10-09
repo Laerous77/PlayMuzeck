@@ -12,6 +12,9 @@
 import { buildHarmonicChord, ChordFormulaDef, CHORD_QUALITIES, CHORD_TENSIONS, NOTE_ROOTS } from '../../services/chordTheory';
 import { generateMidiFile } from '../../services/exporters';
 import { DRUM_LEVEL_MAX, DRUM_LEVEL_MIDI, emptyTrackData, insertNote, noteGain } from './padModel';
+// Efek (Equalizer, Reverb, ...) ikut disimpan di proyek. Modul ini murni (tanpa Web Audio), aman dipakai di server.
+import { normalizeProjectFx, type ProjectFx } from '../../services/padFxModel';
+export type { ProjectFx };
 
 // ---------------------------------------------------------------------------
 // MODEL PROYEK
@@ -51,6 +54,8 @@ export interface PadProject {
   drum: Record<string, string>; // id drum -> deretan digit kekuatan 0–4, satu digit per step
   drumMix: Record<string, ProjectDrumMix>;
   chords: ProjectChordTrack[];
+  // Pengaturan efek (opsional: proyek lama tanpa efek tetap valid).
+  fx?: ProjectFx;
 }
 
 export type Range4 = [[number, number], [number, number], [number, number], [number, number]];
@@ -430,6 +435,7 @@ export function normalizeProject(raw: unknown, ctx: ImportContext): PadProject {
   const loop = r.loop ?? {};
   const bpmMin = ctx.bpmRange[0];
   const bpmMax = ctx.bpmRange[1];
+  const fx = normalizeProjectFx(r.fx, ctx.drumIds, ctx.chordDefaults.length);
   return {
     bpm: clampInt(r.bpm, bpmMin, bpmMax, 115),
     timeSig: ts.id,
@@ -448,6 +454,7 @@ export function normalizeProject(raw: unknown, ctx: ImportContext): PadProject {
     drum,
     drumMix,
     chords,
+    ...(fx ? { fx } : {}),
   };
 }
 

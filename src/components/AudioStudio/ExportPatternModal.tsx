@@ -6,6 +6,8 @@ import { exportMidiOnServer } from '../../services/padPolicy';
 import { audioEngine, EnvelopeADSR } from '../../services/audioEngine';
 import { ModalPortal } from './ModalPortal';
 import { SoundBankCredits } from './SoundBankCredits';
+import { createOfflineFx } from '../../services/padFxRuntime';
+import { FX_DEFS, FX_UI_ORDER, fxTailSec, isFxStateActive, type FxChain, type PadFxState } from '../../services/padFxModel';
 import { IntField } from './NumberFields';
 import { DRUM_LEVEL_GAIN, DRUM_LEVEL_MIDI, clampLevel } from './padModel';
 
@@ -80,6 +82,8 @@ interface ExportPatternModalProps {
   authorize?: () => Promise<boolean>;
   // Server menolak (tidak punya hak akses): UI menampilkan ajakan membuka Full Editor.
   onAccessDenied?: () => void;
+  // Pengaturan efek Pad Studio (Equalizer, Reverb, Delay, ...). Ikut dirender ke ekspor audio.
+  effects?: PadFxState;
 }
 
 interface GenericMidiEvent {
@@ -155,6 +159,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
   project,
   authorize,
   onAccessDenied,
+  effects,
 }) => {
   const scope: ExportScope = exportScope ?? tab;
   const activeDrumAdsr: EnvelopeADSR = drumAdsr ?? DEFAULT_DRUM_ADSR;
@@ -193,6 +198,27 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
       ? `PlayMuzeck_Chord_${mainInstName}`
       : `PlayMuzeck_DrumChord_${mainInstName}`;
   };
+
+  // Ringkasan efek aktif yang relevan dengan cakupan ekspor (ditampilkan di popup dan ikut dirender ke audio).
+  const fxNames = (c?: FxChain) => FX_UI_ORDER.filter((id) => c?.[id]?.on).map((id) => FX_DEFS[id].label).join(', ');
+  const fxSummary: Array<{ label: string; names: string }> = [];
+  if (effects) {
+    if (scope === 'drum' || scope === 'both') {
+      if (fxNames(effects.drumAll)) fxSummary.push({ label: 'Semua Drum', names: fxNames(effects.drumAll) });
+      Object.keys(effects.drumParts).forEach((k) => {
+        if (fxNames(effects.drumParts[k])) fxSummary.push({ label: DRUM_LABELS[k] ?? k, names: fxNames(effects.drumParts[k]) });
+      });
+    }
+    if (scope === 'chord' || scope === 'both') {
+      if (fxNames(effects.chordAll)) fxSummary.push({ label: 'Semua Instrumen Akor', names: fxNames(effects.chordAll) });
+      Object.keys(effects.chordTracks).forEach((k) => {
+        if (fxNames(effects.chordTracks[k])) {
+          const tr = tracks.find((t) => String(t.id) === k);
+          fxSummary.push({ label: tr?.name || `Instrumen ${k}`, names: fxNames(effects.chordTracks[k]) });
+        }
+      });
+    }
+  }
 
   const [fileName, setFileName] = useState(buildDefaultName(scope));
   const [selectedFormat, setSelectedFormat] = useState<'MIDI' | 'WAV' | 'MP3' | 'M4A' | 'FLAC'>('MIDI');
@@ -324,7 +350,15 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
               ...activeTracks.map((t) => t.adsr.release)
             ));
 
-        const durationSec = musicalDurationSec + tailSec;
+        // Efek berekor (Reverb / Delay): tambah waktu render supaya gema tidak terpotong.
+        // - Ekspor biasa : ekor ditaruh setelah pola (durasi lebih panjang).
+        // - Ekspor LOOP  : ekor dirender lalu "dilipat" ke awal berkas, jadi loop tetap mulus dan efeknya tetap terdengar.
+        const fxActive = !!effects && isFxStateActive(effects);
+        const fxTail = fxActive && effects ? fxTailSec(effects, scope === 'drum' || scope === 'both', scope === 'chord' || scope === 'both') : 0;
+        const finalTailSec = exportAsLoop ? 0 : Math.max(tailSec, fxTail);
+        const wrapTailSec = exportAsLoop ? fxTail : 0;
+
+        const durationSec = musicalDurationSec + finalTailSec + wrapTailSec;
         const sampleRate = 44100;
         const offlineCtx = new OfflineAudioContext(2, Math.ceil(sampleRate * durationSec), sampleRate);
 
@@ -346,6 +380,9 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
         master.connect(limiter);
         limiter.connect(offlineCtx.destination);
 
+        // Rantai efek yang sama persis dengan pemutaran live (padFxRuntime), keluarannya ke master.
+        const fx = fxActive && effects ? createOfflineFx(offlineCtx, master, effects) : null;
+
         const drumParts = scope === 'drum' || scope === 'both' ? Object.keys(drumGrid) : [];
         const drumBufferByPart: Record<string, AudioBuffer | null> = {};
         await Promise.all(
@@ -361,7 +398,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             if (level > 0 && partGain > 0) {
               audioEngine.renderDrumHitToDestination(
                 offlineCtx,
-                master,
+                fx ? fx.drumInput(part) : master,
                 part,
                 selectedDrumKit,
                 time,
@@ -397,7 +434,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
                   notes.forEach((note) => {
                     audioEngine.renderChordNoteToDestination(
                       offlineCtx,
-                      master,
+                      fx ? fx.chordInput(track.id) : master,
                       note,
                       track.program,
                       time,
@@ -412,7 +449,20 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
           }
         }
 
-        const buffer = await offlineCtx.startRendering();
+        let buffer = await offlineCtx.startRendering();
+        if (wrapTailSec > 0) {
+          // Lipat ekor efek ke awal berkas (loop mulus): sampel melewati batas loop ditambahkan ke awalnya.
+          const loopLen = Math.min(buffer.length, Math.max(1, Math.round(musicalDurationSec * sampleRate)));
+          const folded = new AudioBuffer({ length: loopLen, numberOfChannels: buffer.numberOfChannels, sampleRate: buffer.sampleRate });
+          for (let ch = 0; ch < buffer.numberOfChannels; ch++) {
+            const src = buffer.getChannelData(ch);
+            const dst = folded.getChannelData(ch);
+            dst.set(src.subarray(0, loopLen));
+            for (let i = loopLen; i < src.length; i++) dst[(i - loopLen) % loopLen] += src[i];
+            for (let i = 0; i < loopLen; i++) dst[i] = Math.max(-1, Math.min(1, dst[i]));
+          }
+          buffer = folded;
+        }
         const exported = await exportAudioFile(buffer, fileName, selectedFormat, { bitDepth: 24, mp3Kbps: 320 });
         const loopNote = effectiveRepeatCount > 1 ? ` (diulang ${effectiveRepeatCount}x)` : '';
         onSuccessToast(`Berkas ${exported.actualFormat} berhasil diekspor${loopNote}!${exported.note ? ' ' + exported.note : ''}`);
@@ -502,6 +552,26 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
             </div>
           )}
         </div>
+
+        {fxSummary.length > 0 && (
+          <div className="mb-4 bg-black/40 border border-white/[0.08] rounded-xl p-3 text-[11px] space-y-1.5">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Efek aktif:</span>
+            {fxSummary.map((row, i) => (
+              <div
+                key={`${row.label}-${i}`}
+                className="flex flex-col sm:flex-row sm:items-center justify-between text-gray-300 bg-white/[0.02] px-2.5 py-1.5 rounded-lg border border-white/[0.04]"
+              >
+                <span className="font-bold text-[#FCA311]">{row.label}:</span>
+                <span className="font-mono text-gray-300 text-[10.5px]">{row.names}</span>
+              </div>
+            ))}
+            <p className="text-[10.5px] text-gray-500 leading-snug">
+              {selectedFormat === 'MIDI'
+                ? 'Berkas MIDI tidak membawa suara, jadi efek tidak terdengar di DAW. Pengaturan efek tetap tersimpan di dalam data proyek, dan ikut kembali saat proyek dimuat.'
+                : 'Efek ikut dirender ke berkas audio ini.'}
+            </p>
+          </div>
+        )}
 
         <div className="space-y-1.5 mb-4">
           <label className="text-xs font-semibold text-gray-300">Nama Berkas</label>

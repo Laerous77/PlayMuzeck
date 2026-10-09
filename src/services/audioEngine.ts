@@ -2,6 +2,8 @@
 import { SoundFont2, GeneratorType, Generator } from 'soundfont2';
 import { getActiveClickEffect, ClickEffect } from './sfxSettings';
 import { playBuiltinClick, playGmClick } from './clickSfx';
+import { PadFxRouter } from './padFxRuntime';
+import { emptyFx, type PadFxState } from './padFxModel';
 
 export interface InstrumentMeta {
   id: number;
@@ -262,6 +264,37 @@ class AudioEngine {
   private warmQueue: Array<[number, number]> = [];
   private warmQueued: Set<string> = new Set();
   private warmTimer: number | null = null;
+
+  // -------------------------------------------------------------------
+  // EFEK PAD STUDIO (Equalizer, Reverb, Delay, Chorus, Filter, Distortion, Limiter)
+  // Semua suara drum & akor Pad Studio dialirkan lewat rantai efek permanen:
+  //   drum : [bagian] -> [semua drum]      -> kompresor master
+  //   akor : [instrumen] -> [semua akor]   -> chordBus -> kompresor master
+  // Tanpa efek menyala, rantai hanya berisi gain 1.0 (lolos apa adanya). Ekspor audio memakai
+  // kelas rantai yang sama (createOfflineFx) sehingga hasilnya identik dengan yang terdengar.
+  // -------------------------------------------------------------------
+  private fx: PadFxRouter | null = null;
+  private fxState: PadFxState = emptyFx();
+
+  private getFx(): PadFxRouter {
+    const ctx = this.getAudioContext();
+    if (!this.fx) {
+      this.fx = new PadFxRouter(ctx, this.compressor || ctx.destination, this.getChordBus(), this.fxState);
+    }
+    return this.fx;
+  }
+
+  /** Dipanggil Pad Studio setiap pengaturan efek berubah (nilai diterapkan langsung, tanpa memutus suara yang sedang berbunyi). */
+  public setPadEffects(state: PadFxState) {
+    this.fxState = state;
+    if (this.fx) this.fx.setState(state);
+  }
+
+  // Kunci track sequencer: `t<id>` (pemutaran) atau `live<id>-p<pad>` (main langsung) -> id instrumen akor.
+  private chordTrackIdFromKey(trackKey: string): string {
+    const m = /^(?:live|t)(\d+)/.exec(trackKey);
+    return m ? m[1] : '0';
+  }
 
   // Envelope Pengguna Default — khusus CHORD (dipakai playChordNotes &
   // renderChordNoteToDestination default).
@@ -1107,7 +1140,7 @@ class AudioEngine {
         gain.gain.exponentialRampToValueAtTime(0.0001, holdUntil + r);
 
         bufSrc.connect(gain);
-        gain.connect(this.compressor || ctx.destination);
+        gain.connect(this.getFx().chordInput('0'));
 
         totalStop = holdUntil + r + 0.05;
         bufSrc.start(now);
@@ -1116,7 +1149,7 @@ class AudioEngine {
       } else {
         // Bank belum siap (masih diunduh / gagal) atau nada ini belum bisa diproses:
         // bunyikan suara sintesis sementara supaya pad TIDAK pernah diam.
-        const fb = this.createFallbackVoice(ctx, this.compressor || ctx.destination, midiNote, programNumber, now, noteDurationSec, volume, adsr);
+        const fb = this.createFallbackVoice(ctx, this.getFx().chordInput('0'), midiNote, programNumber, now, noteDurationSec, volume, adsr);
         src = fb.src;
         gain = fb.gain;
         totalStop = fb.stopAt;
@@ -1448,7 +1481,7 @@ class AudioEngine {
 
     const groupGain = ctx.createGain();
     groupGain.gain.value = 1.0;
-    groupGain.connect(this.getChordBus());
+    groupGain.connect(this.getFx().chordInput(this.chordTrackIdFromKey(opts.trackKey)));
     const rec: SeqChordGroup = { gain: groupGain, voices: new Set(), release: Math.max(0.04, opts.adsr.release) };
     this.seqGroups.set(opts.trackKey, rec);
 
@@ -1563,7 +1596,7 @@ class AudioEngine {
       const now = ctx.currentTime;
       const stopAt = this.applyAdsrEnvelope(gain, adsr ?? this.drumAdsr, now, buf.duration, volume);
       src.connect(gain);
-      gain.connect(this.compressor || ctx.destination);
+      gain.connect(this.getFx().drumInput(part));
       this.releaseOnEnd(src, [src, gain]);
       src.start(now);
       src.stop(stopAt);
@@ -1595,7 +1628,7 @@ class AudioEngine {
       }
     }
 
-    this.synthesizeDrum(part, folder, ctx, volume);
+    this.synthesizeDrum(part, folder, ctx, volume, undefined, this.getFx().drumInput(part));
   }
 
   // Unduh & dekode semua sample sebuah kit sebelum dimainkan, supaya ketukan pertama sequencer
@@ -1626,14 +1659,14 @@ class AudioEngine {
       const t = Math.max(when, ctx.currentTime);
       const stopAt = this.applyAdsrEnvelope(gain, adsr ?? this.drumAdsr, t, buf.duration, volume);
       src.connect(gain);
-      gain.connect(this.compressor || ctx.destination);
+      gain.connect(this.getFx().drumInput(part));
       this.releaseOnEnd(src, [src, gain]);
       src.start(t);
       src.stop(stopAt);
       return;
     }
     if (this.drumMissing.has(key)) {
-      this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime));
+      this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime), this.getFx().drumInput(part));
       return;
     }
     // Sample belum siap: unduh SEKALI saja (bukan tiap ketukan) dan sementara bunyikan suara sintesis.
@@ -1649,7 +1682,7 @@ class AudioEngine {
         .finally(() => this.drumLoading.delete(key));
       this.drumLoading.set(key, p);
     }
-    this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime));
+    this.synthesizeDrum(part, folder, ctx, volume, Math.max(when, ctx.currentTime), this.getFx().drumInput(part));
   }
 
   // NOTE: fallback `this.compressor` HANYA valid kalau `ctx` yang diberikan

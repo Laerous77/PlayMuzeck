@@ -42,6 +42,7 @@ import {
   MousePointer2,
   Eraser,
   Hand,
+  Sparkles,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -57,6 +58,8 @@ import {
   SOUND_BANK_READY_MESSAGE,
 } from '../../services/audioEngine';
 import { ExportPatternModal, ChordTrackExportData } from './ExportPatternModal';
+import { PadEffectsModal } from './PadEffectsModal';
+import { emptyFx, serializeFx, deserializeFx, totalActiveFx, type PadFxState } from '../../services/padFxModel';
 import { downloadBlob } from '../../services/exporters';
 import { PadProject, Adsr4, padToTuple, tupleToPad } from './midiProject';
 import {
@@ -2017,6 +2020,17 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [exportScope, setExportScope] = useState<'drum' | 'chord' | 'both'>('both');
 
+  // Efek (Equalizer, Reverb, Delay, Chorus, Filter, Distortion, Limiter): per bagian drum / instrumen akor, atau semuanya.
+  // Disimpan di proyek, dirender saat ekspor audio, dan diteruskan ke engine untuk pemutaran live.
+  const [fx, setFx] = useState<PadFxState>(() => emptyFx());
+  const [isFxOpen, setIsFxOpen] = useState(false);
+  const fxCount = totalActiveFx(fx);
+  useEffect(() => {
+    audioEngine.setPadEffects(fx);
+  }, [fx]);
+  // Engine bersifat global (dipakai halaman lain juga): lepas efek Pad Studio saat editor ditutup.
+  useEffect(() => () => audioEngine.setPadEffects(emptyFx()), []);
+
   const sequencerScrollRef = useRef<HTMLDivElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const stepRef = useRef(0); // ketukan BERIKUTNYA yang akan dijadwalkan
@@ -2636,7 +2650,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const sectionRef = useRef<HTMLElement | null>(null);
   const focusInsideRef = useRef(false);
   const modalOpenRef = useRef(false);
-  modalOpenRef.current = editingPadIndex !== null || pickerTrack !== null || isExportModalOpen || isExportMenuOpen || drumPicker !== null;
+  modalOpenRef.current = editingPadIndex !== null || pickerTrack !== null || isExportModalOpen || isExportMenuOpen || drumPicker !== null || isFxOpen;
   const activeTabRef = useRef<PadTab>(activeTab);
   activeTabRef.current = activeTab;
 
@@ -4582,6 +4596,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const m = drumMix[inst.id];
       mix[inst.id] = { v: m.volume, m: m.muted, s: m.solo, a: adsrTuple(m.adsr) };
     });
+    const fxData = serializeFx(fx);
     return {
       bpm,
       timeSig: timeSigId,
@@ -4608,6 +4623,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           return (vel > 0 ? [n.start, n.len, n.pad, vel] : [n.start, n.len, n.pad]) as [number, number, number] | [number, number, number, number];
         }),
       })),
+      ...(fxData ? { fx: fxData } : {}),
     };
   };
 
@@ -4678,6 +4694,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setBarsPerView(p.barsPerView);
     setViewStartBar(0);
     setNewChordLen(p.newChordLen);
+    setFx(deserializeFx(p.fx));
     setPadBank(0);
     setLiveSel(0);
     setSel(null);
@@ -4712,6 +4729,41 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     } catch (err) {
       alert(`Gagal menyimpan proyek: ${err instanceof Error ? err.message : 'terjadi kesalahan.'}`);
     }
+  };
+
+  // Contoh suara di popup Efek: satu rangkaian pukulan drum, atau satu akor (nada pad pertama) per instrumen target.
+  const auditionFx = (domain: 'drum' | 'chord', target: string) => {
+    const ctx = audioEngine.getAudioContext();
+    void ctx.resume();
+    const t0 = ctx.currentTime + 0.03;
+    if (domain === 'drum') {
+      const ids = target === 'all' ? ['kick', 'snare', 'closedhat', 'snare'] : [target];
+      ids.forEach((id, i) => {
+        const m = drumMix[id];
+        audioEngine.scheduleDrumSound(
+          id,
+          selectedDrumKit,
+          (drumVolume / 100) * ((m?.volume ?? 100) / 100) * DRUM_LEVEL_GAIN[DEFAULT_LIVE_LEVEL],
+          t0 + i * 0.24,
+          m?.adsr
+        );
+      });
+      return;
+    }
+    const info = padInfo[0];
+    if (!info) return;
+    const targets = target === 'all' ? chordTracks.filter((t) => t.enabled) : chordTracks.filter((t) => String(t.id) === target);
+    targets.forEach((t) => {
+      audioEngine.scheduleChordEvent({
+        trackKey: `live${t.id}-fxtest`,
+        midiNotes: info.midiNotes,
+        program: t.program,
+        when: t0,
+        holdSec: 0.9,
+        volume: (t.volume / 100) * (chordMasterVolume / 100) * CHORD_LEVEL_GAIN[DEFAULT_LIVE_LEVEL],
+        adsr: t.adsr,
+      });
+    });
   };
 
   // Ekspor: minta izin server dulu, baru buka modal ekspor.
@@ -5726,6 +5778,21 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <Eraser className="w-4 h-4 shrink-0 text-red-400" />
                 <span>Bersihkan Grid</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setIsFxOpen(true)}
+                aria-haspopup="dialog"
+                title="Efek: Equalizer, Reverb, Delay, Chorus, Filter, Distortion, Limiter (per bagian drum / instrumen, atau semuanya)"
+                className={`${TOOL_BTN} ${fxCount > 0 ? TOOL_BTN_ON : `${TOOL_BTN_IDLE} hover:text-white`}`}
+              >
+                <Sparkles className="w-4 h-4 shrink-0" />
+                <span>Efek</span>
+                {fxCount > 0 && (
+                  <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-accent text-on-accent text-[10px] font-black flex items-center justify-center">
+                    {fxCount}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Baris 3: status pilihan (kiri) dan kontrol panjang akor + bantuan (kanan). */}
@@ -6382,6 +6449,20 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         </ModalPortal>
       )}
 
+      {isFxOpen && (
+        <PadEffectsModal
+          onClose={() => setIsFxOpen(false)}
+          fx={fx}
+          onChange={setFx}
+          initialDomain={activeTab}
+          drumParts={DRUM_INSTRUMENTS.map((d) => ({ id: d.id, label: d.label }))}
+          chordTracks={chordTracks.filter((t) => t.enabled).map((t) => ({ id: t.id, label: t.label }))}
+          isPlaying={isPlaying}
+          onTogglePlay={() => void togglePlay()}
+          onAudition={auditionFx}
+        />
+      )}
+
       <ExportPatternModal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
@@ -6397,6 +6478,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         drumVolume={drumVolume / 100}
         selectedDrumKit={selectedDrumKit}
         project={isExportModalOpen ? snapshotProject() : undefined}
+        effects={fx}
         authorize={() => requireServerAccess('export')}
         onAccessDenied={handleServerDenied}
         onSuccessToast={onSuccessToast}
