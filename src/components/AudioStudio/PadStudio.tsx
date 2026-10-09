@@ -3886,7 +3886,18 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     () => ({ gridTemplateColumns: `repeat(${viewSteps}, minmax(0, 1fr))` }),
     [viewSteps]
   );
-  const gridMinWidth = viewSteps * 10 + (showMixer ? 320 : 260);
+  // Layar sentuh (HP/tablet): sel step minimal 20px supaya bisa diketuk dengan jari; kursor mouse tetap 10px.
+  const [coarsePointer, setCoarsePointer] = useState<boolean>(
+    () => typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches
+  );
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const onChange = () => setCoarsePointer(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  const gridMinWidth = viewSteps * (coarsePointer ? 20 : 10) + (showMixer ? 320 : 260);
 
   // Pasangan (program, nada) yang dipakai grid akor + semua pad track utama (untuk bermain live).
   const chordWarmPairs = useMemo<Array<[number, number]>>(() => {
@@ -4653,23 +4664,26 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <button
                 type="button"
                 onClick={() => setBpm((p) => Math.max(60, p - 1))}
-                className="p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
+                aria-label="Kurangi tempo"
+                className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
-              <input
-                type="number"
-                min="60"
-                max="200"
+              {/* IntField: boleh dihapus & diketik bebas, baru dibatasi 60–200 saat selesai (sebelumnya mengetik "1" langsung menjadi 60). */}
+              <IntField
                 value={bpm}
-                onChange={(e) => setBpm(Math.max(60, Math.min(200, Number(e.target.value))))}
-                className="w-11 bg-transparent text-center font-mono font-black text-sm text-accent focus:outline-none"
+                min={60}
+                max={200}
+                onChange={setBpm}
+                ariaLabel="Tempo (BPM), ketik angka 60–200"
+                className="w-12 bg-transparent text-center font-mono font-black text-sm text-accent focus:outline-none"
               />
               <span className="text-[10px] text-gray-400 mr-0.5">BPM</span>
               <button
                 type="button"
                 onClick={() => setBpm((p) => Math.min(200, p + 1))}
-                className="p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
+                aria-label="Tambah tempo"
+                className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
@@ -4703,7 +4717,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <div className="flex items-center bg-black/60 p-1 rounded-xl border border-white/[0.08] shrink-0">
               <button
                 onClick={() => setActiveTab('drum')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'drum' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
@@ -4711,7 +4725,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
               <button
                 onClick={() => setActiveTab('chord')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                   activeTab === 'chord' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
@@ -5064,7 +5078,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           )}
 
           {activeTab === 'drum' ? (
-            <div className="grid grid-cols-5 lg:grid-cols-10 gap-2">
+            <div className="grid grid-cols-5 lg:grid-cols-10 gap-1.5 sm:gap-2">
               {DRUM_INSTRUMENTS.map((inst) => {
                 const hit = drumHit && drumHit.id === inst.id ? drumHit.level : 0;
                 const hover = dynamicsOn && drumHover && drumHover.id === inst.id ? drumHover.level : 0;
@@ -5099,13 +5113,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                         triggerDrum(inst.id, DEFAULT_LIVE_LEVEL, e.timeStamp);
                       }
                     }}
-                    className={`group relative h-24 rounded-xl border overflow-hidden select-none touch-manipulation transition-all cursor-pointer ${
+                    onContextMenu={(e) => e.preventDefault()}
+                    className={`group relative h-24 rounded-xl border overflow-hidden select-none touch-none transition-all cursor-pointer ${
                       activePadAnim === inst.id
                         ? 'bg-accent/25 border-accent scale-[1.03] shadow-lg'
                         : 'bg-surface text-white border-white/[0.08] hover:border-accent/60'
                     }`}
                   >
-                    <span className="absolute top-1.5 inset-x-1 text-xs font-black tracking-tight text-center leading-tight pointer-events-none">
+                    <span className="absolute top-1.5 inset-x-0.5 sm:inset-x-1 text-[9.5px] min-[400px]:text-[11px] sm:text-xs font-black tracking-tight text-center leading-tight pointer-events-none [overflow-wrap:anywhere]">
                       {inst.label}
                     </span>
                     {/* Cincin dinamika: batas tiap cincin = batas level (ff di tengah → pp di tepi). Hanya saat dinamika menyala. */}
@@ -5188,11 +5203,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     <button
                       type="button"
                       title="Edit akor pad ini"
+                      aria-label="Edit akor pad ini"
                       onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => openHarmonicEditor(idx, e)}
-                      className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 hover:bg-accent text-gray-300 hover:text-on-accent transition-colors"
+                      className="absolute top-0.5 right-0.5 p-2 rounded-md bg-black/40 hover:bg-accent text-gray-300 hover:text-on-accent transition-colors"
                     >
-                      <Sliders className="w-3 h-3" />
+                      <Sliders className="w-3.5 h-3.5" />
                     </button>
                     {/* Cincin dinamika: ff di tengah → pp di tepi (sama dengan pad drum). Hanya saat dinamika menyala. */}
                     {chordDynamicsOn &&
@@ -5252,7 +5268,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                     type="button"
                     onClick={i === 0 ? undefined : onUnlockEditor}
                     title={i === 0 ? 'Bar 1 (gratis)' : `Bar ${i + 1} terkunci — buka editor penuh`}
-                    className={`w-4 h-4 rounded text-[8px] font-bold leading-none flex items-center justify-center ${
+                    className={`w-5 h-5 sm:w-4 sm:h-4 rounded text-[8px] font-bold leading-none flex items-center justify-center ${
                       i === 0
                         ? 'bg-accent text-on-accent cursor-default'
                         : 'bg-black/50 text-gray-500 border border-white/10 hover:border-accent/50 cursor-pointer'

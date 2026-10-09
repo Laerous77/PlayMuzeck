@@ -953,7 +953,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
       <div className="w-full max-w-2xl max-h-[92dvh] rounded-3xl bg-surface border border-white/[0.12] shadow-2xl relative flex flex-col overflow-hidden">
-        <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-xl bg-black/40 text-gray-400 hover:text-white hover:bg-black/70 transition-colors z-20 cursor-pointer">
+        <button onClick={onClose} className="absolute top-3 right-3 sm:top-4 sm:right-4 p-3 sm:p-2 rounded-xl bg-black/40 text-gray-400 hover:text-white hover:bg-black/70 transition-colors z-20 cursor-pointer">
           <X className="w-4 h-4" />
         </button>
 

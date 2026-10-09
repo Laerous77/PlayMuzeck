@@ -693,8 +693,8 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
 
       {/* Dialog Kunci Pembelian */}
       {isLockedPromptOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-surface border border-accent2/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="w-full max-w-md my-auto bg-surface border border-accent2/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="w-14 h-14 rounded-2xl bg-accent2/20 border border-accent2/40 text-accent2 mx-auto flex items-center justify-center">
               <Lock className="w-7 h-7" />
             </div>

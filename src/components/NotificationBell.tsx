@@ -226,7 +226,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
         onClick={toggle}
         aria-label="Notifikasi"
         title="Notifikasi"
-        className="h-9 w-9 flex items-center justify-center rounded-xl bg-black/50 hover:bg-black/80 border border-white/[0.08] text-gray-300 hover:text-white relative transition-colors cursor-pointer"
+        className="h-10 w-10 sm:h-9 sm:w-9 flex items-center justify-center rounded-xl bg-black/50 hover:bg-black/80 border border-white/[0.08] text-gray-300 hover:text-white relative transition-colors cursor-pointer"
       >
         <Bell className="w-4 h-4" />
         {badge > 0 && (
@@ -247,7 +247,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
             )}
           </div>
 
-          <div className="max-h-[65vh] overflow-y-auto p-3 space-y-2">
+          <div className="max-h-[65dvh] overflow-y-auto overscroll-contain p-3 space-y-2">
             {deletion && (
               <div className="p-3 rounded-xl bg-orange-500/10 border border-orange-400/50 space-y-2">
                 <div className="flex items-center gap-2 text-orange-300 font-black text-xs">
@@ -330,7 +330,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
             aria-modal="true"
             aria-label={selected.title}
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md max-h-[85vh] flex flex-col rounded-2xl bg-surface border border-white/[0.15] shadow-2xl overflow-hidden"
+            className="w-full max-w-md max-h-[85dvh] flex flex-col rounded-2xl bg-surface border border-white/[0.15] shadow-2xl overflow-hidden"
           >
             <div className="flex items-start gap-3 px-5 py-4 border-b border-white/[0.08] bg-black/40">
               <div className="w-9 h-9 rounded-xl bg-black/40 flex items-center justify-center shrink-0">{iconFor(selected.type)}</div>
@@ -344,7 +344,7 @@ export const NotificationBell: React.FC<{ isLoggedIn: boolean; userKey?: string 
                 type="button"
                 onClick={() => setSelected(null)}
                 aria-label="Tutup"
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/50 cursor-pointer shrink-0"
+                className="p-2.5 -m-1 rounded-lg text-gray-400 hover:text-white hover:bg-black/50 cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>

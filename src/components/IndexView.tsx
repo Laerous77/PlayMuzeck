@@ -64,11 +64,11 @@ const STEPS = [
 ];
 
 const AUDIO_POINTS = [
-  { title: 'Aset Audio: katalog & lisensi', desc: 'Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Beli per lagu hanya yang dibutuhkan: master (WAV, FLAC, MP3, M4A), versi loop, stem, atau partitur PDF.' },
-  { title: 'Stem mixer interaktif', desc: 'Dengarkan dan campur stem multi-track tiap lagu langsung di browser: atur volume, pan, mute, dan solo per instrumen.' },
-  { title: 'Pad Editor: drum, akor & rekam live', desc: '10 pad drum dengan 7 kit, 8 bank × 16 pad akor (128 akor), 4 track akor dengan 128 instrumen GM, sequencer 16 bar dengan 11 birama, serta rekam live dengan dinamika dan undo/redo. Gratis: Bar 1, 3 kit drum, dan 1 track Grand Piano.' },
-  { title: '20 Audio Tools', desc: 'Potong, gabung, ulangi, volume, pitch, tempo, vokal isolator, konversi, kompres, edit metadata & cover, perekam, deteksi BPM & kunci, metronom, tuner, tes vocal range, dan latihan cocokkan nada. Diproses di perangkatmu, gratis 2x per alat per hari.' },
-  { title: 'Harga & lisensi modular', desc: 'Beli sekali, berlaku permanen: modul per lagu, Full 16-Bar Editor (16 bar, ekspor MIDI/audio, simpan proyek), Audio Tools tanpa batas harian, atau paket bundle 6 produk.' },
+  { title: 'Aset Audio: katalog & lisensi', desc: 'Lagu orisinal berlisensi komersial non-eksklusif. Beli per lagu: master (WAV, FLAC, MP3, M4A), loop, stem, atau partitur PDF.' },
+  { title: 'Stem mixer interaktif', desc: 'Campur stem multi-track tiap lagu di browser: atur volume, pan, mute, dan solo per instrumen.' },
+  { title: 'Pad Editor: drum, akor & rekam live', desc: '10 pad drum, 128 akor, 4 track akor 128 instrumen GM, sequencer 16 bar, rekam live. Gratis: Bar 1, 3 kit drum, 1 track Grand Piano.' },
+  { title: '20 Audio Tools', desc: 'Potong, gabung, pitch, tempo, vokal isolator, konversi, kompres, deteksi BPM & kunci, tuner, dan lainnya. Diproses di perangkatmu, gratis 2x per alat per hari.' },
+  { title: 'Harga & lisensi modular', desc: 'Beli sekali, berlaku permanen: modul per lagu, Full 16-Bar Editor, Audio Tools tanpa batas harian, atau paket bundle 6 produk.' },
 ];
 
 const QUIZ_POINTS = [
@@ -275,9 +275,9 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
                     <span className={`text-[11px] font-bold uppercase tracking-wider font-mono ${a ? 'text-accent' : 'text-accent2'}`}>{c.label}</span>
                     <h3 className="text-xl sm:text-2xl font-black text-white">{c.title}</h3>
                   </div>
-                  <ul className="space-y-3 text-xs text-gray-300">
+                  <ul className="space-y-3 text-[13px] sm:text-xs leading-relaxed text-gray-300">
                     {c.points.map((pt) => (
-                      <li key={pt.title} className="flex items-start gap-2.5">
+                      <li key={pt.title} className="flex items-start gap-2.5 sm:min-h-[2.5rem]">
                         <CheckCircle2 className={`w-4 h-4 shrink-0 mt-0.5 ${a ? 'text-accent' : 'text-accent2'}`} />
                         <span>
                           <strong className="text-white">{pt.title}:</strong> {pt.desc}
@@ -288,7 +288,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
                 </div>
                 <button
                   onClick={c.onClick}
-                  className={`pm-shine mt-6 w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 ${
+                  className={`pm-shine mt-6 w-full min-h-12 py-3 px-4 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg active:scale-95 ${
                     a
                       ? 'bg-accent hover:bg-accent/80 text-on-accent shadow-accent/20'
                       : 'bg-accent2 hover:bg-accent2/80 text-on-accent2 shadow-accent2/20'

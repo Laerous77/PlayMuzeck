@@ -231,3 +231,32 @@ select option {
   background-color: var(--t-surface);
   color: var(--t-fg);
 }
+
+/* ── Optimasi layar sentuh / ponsel ────────────────────────────────────── */
+
+/* Saat ada popup layar penuh (latar gelap bg-black/NN), kunci scroll halaman di belakangnya
+   dan cegah scroll "tembus" ke halaman. Berlaku untuk semua popup tanpa mengubah komponennya. */
+html:has(.fixed.inset-0[class*="bg-black/"]),
+html:has(.fixed.inset-0[class*="bg-black/"]) body { overflow: hidden; }
+.fixed.inset-0[class*="bg-black/"] { overscroll-behavior: contain; }
+
+/* Popup tidak boleh tertutup notch / bilah gestur di ponsel */
+@media (max-width: 640px) {
+  .fixed.inset-0[class*="bg-black/"] {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Teks super kecil sulit dibaca di ponsel: naikkan 1px */
+@media (max-width: 640px) {
+  [class*="text-[10px]"] { font-size: 11px; }
+  [class*="text-[9px]"]  { font-size: 10px; }
+  [class*="text-[8px]"]  { font-size: 9px; }
+}
+
+/* Layar sentuh: beri umpan balik visual saat tombol ditekan */
+@media (hover: none) {
+  button:active, [role="button"]:active { opacity: 0.85; }
+}

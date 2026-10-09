@@ -86,7 +86,7 @@ const QUIZ_ITEMS = [
 ] as const;
 
 const ITEM_BASE =
-  'w-full text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98]';
+  'w-full min-h-11 text-left px-3 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2.5 transition-all cursor-pointer active:scale-[0.98]';
 
 // Gulir mulus ke sebuah bagian halaman lalu beri efek "spotlight" (cincin cahaya + kilau tombol)
 // supaya mata pengguna langsung tertuju ke kartu/bagian yang dituju dari menu navigasi.
@@ -285,7 +285,7 @@ export const Header: React.FC<HeaderProps> = ({
                 aria-haspopup="menu"
                 aria-expanded={isSectionMenuOpen}
                 aria-label={`Buka navigasi: ${menuLabel}`}
-                className={`h-9 px-2.5 sm:px-3 rounded-xl border text-xs font-black flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer shadow-sm ${
+                className={`h-10 sm:h-9 px-3 sm:px-3 rounded-xl border text-xs font-black flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer shadow-sm ${
                   isSectionMenuOpen
                     ? 'bg-accent text-on-accent border-accent'
                     : 'bg-black/60 text-gray-200 hover:text-white border-white/[0.12] hover:border-accent/50'
@@ -328,7 +328,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <it.icon className={`w-4 h-4 shrink-0 stroke-[2.5] ${on ? 'text-on-accent' : 'text-accent'}`} />
                           <div className="min-w-0">
                             <div className="leading-tight">{it.title}</div>
-                            <div className={`text-[10px] font-normal ${on ? 'text-on-accent/80' : 'text-gray-400'}`}>{it.desc}</div>
+                            <div className={`text-[11px] font-normal ${on ? 'text-on-accent/80' : 'text-gray-400'}`}>{it.desc}</div>
                           </div>
                         </button>
                       );
@@ -351,7 +351,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <it.icon className={`w-4 h-4 shrink-0 stroke-[2.5] ${on ? 'text-on-accent2' : it.iconIdle}`} />
                           <div className="min-w-0">
                             <div className="leading-tight">{it.title}</div>
-                            <div className={`text-[10px] font-normal ${on ? 'text-on-accent2/80' : 'text-gray-400'}`}>{it.desc}</div>
+                            <div className={`text-[11px] font-normal ${on ? 'text-on-accent2/80' : 'text-gray-400'}`}>{it.desc}</div>
                           </div>
                         </button>
                       );
@@ -374,7 +374,7 @@ export const Header: React.FC<HeaderProps> = ({
                           <it.icon className={`w-4 h-4 shrink-0 ${it.tone === 'accent2' ? 'text-accent2' : 'text-accent'}`} />
                           <div className="min-w-0">
                             <div className="leading-tight">{it.title}</div>
-                            <div className="text-[10px] font-normal text-gray-400">{it.desc}</div>
+                            <div className="text-[11px] font-normal text-gray-400">{it.desc}</div>
                           </div>
                         </button>
                       );
@@ -385,9 +385,11 @@ export const Header: React.FC<HeaderProps> = ({
           )}
 
           {/* Logo PlayMuzeck */}
-          <div
+          <button
+            type="button"
             onClick={onNavigateIndex}
-            className="flex items-center gap-2 cursor-pointer select-none group min-w-0"
+            aria-label="Ke Halaman Utama PlayMuzeck"
+            className="flex items-center gap-2 cursor-pointer select-none group min-w-0 text-left rounded-2xl"
             title="Ke Halaman Utama PlayMuzeck"
           >
             <div className="w-9 h-9 sm:w-10 sm:h-10 shrink-0 rounded-2xl overflow-hidden p-1 bg-surface border border-white/10 shadow-md flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -402,7 +404,7 @@ export const Header: React.FC<HeaderProps> = ({
               </span>
               <span className="text-[10px] text-gray-400 font-mono tracking-wider whitespace-nowrap">AUDIO & KUIS</span>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* SISI KANAN: TENTANG KAMI + NOTIFIKASI + KERANJANG + AVATAR */}
@@ -411,7 +413,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={onNavigateIndex}
             aria-label="Tentang Platform PlayMuzeck"
-            className={`h-9 px-2.5 sm:px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+            className={`h-10 sm:h-9 px-3 sm:px-3.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
               currentMode === 'index'
                 ? 'bg-accent text-on-accent border-accent shadow font-black'
                 : 'bg-black/50 text-accent hover:text-accent/80 border-white/[0.1] hover:border-accent/40'
@@ -429,7 +431,7 @@ export const Header: React.FC<HeaderProps> = ({
             type="button"
             onClick={onOpenCart}
             aria-label="Keranjang Belanja"
-            className="h-9 w-9 flex items-center justify-center rounded-xl bg-black/50 hover:bg-black/80 border border-white/[0.08] text-gray-300 hover:text-white relative transition-colors cursor-pointer"
+            className="h-10 w-10 sm:h-9 sm:w-9 flex items-center justify-center rounded-xl bg-black/50 hover:bg-black/80 border border-white/[0.08] text-gray-300 hover:text-white relative transition-colors cursor-pointer"
             title="Keranjang Belanja"
           >
             <ShoppingBag className="w-4 h-4" />
@@ -443,7 +445,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             type="button"
             onClick={onOpenProfileDashboard}
-            className="flex items-center gap-2.5 bg-black/60 hover:bg-black/90 border border-white/[0.1] hover:border-accent/50 rounded-2xl p-1 sm:p-1.5 sm:pr-3.5 transition-all cursor-pointer group"
+            className="flex items-center gap-2.5 bg-black/60 hover:bg-black/90 border border-white/[0.1] hover:border-accent/50 rounded-2xl p-1.5 sm:p-1.5 sm:pr-3.5 transition-all cursor-pointer group"
             title={`Buka Dasbor Profil (Bingkai: ${currentFrameObj.name})`}
             aria-label="Buka Dasbor Profil"
           >
