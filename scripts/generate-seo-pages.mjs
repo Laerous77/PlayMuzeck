@@ -102,6 +102,46 @@ const TOOLS = [
     h1: 'Tuner Gitar Online', body: 'Setel instrumenmu lewat mikrofon perangkat. Pilih mode gitar, bass, ukulele, biola, atau kromatik untuk vokal, lalu ikuti jarumnya.' },
 ];
 
+
+// Isi tambahan untuk alat dengan kata kunci paling diperebutkan: langkah singkat + FAQ.
+// Teks FAQ tampil di halaman DAN dipakai untuk schema FAQPage (harus selalu sama, sesuai pedoman Google).
+// Hanya memuat hal yang memang dilakukan alatnya; sesuaikan bila fitur alat berubah.
+const EXTRA = {
+  'konversi-audio': {
+    steps: ['Pilih file audio atau video dari perangkatmu.', 'Pilih format tujuan: MP3, WAV, FLAC, atau M4A.', 'Proses berjalan di browser, lalu unduh hasilnya.'],
+    faq: [
+      ['Format apa saja yang bisa dipilih untuk konversi audio?', 'Kamu bisa mengubah audio ke MP3, WAV, FLAC, atau M4A. M4A bergantung dukungan browser dan kadang menjadi .webm/.ogg.'],
+      ['Apakah file saya diunggah ke server saat konversi?', 'Tidak. File dibaca dan diproses langsung di browser kamu, bukan di server PlayMuzeck.'],
+      ['Bisakah mengambil audio dari file video?', 'Bisa. Alat ini dapat mengekstrak suara dari file video milikmu ke format audio pilihanmu.'],
+      ['Apakah konversi audio ini gratis?', 'Gratis dicoba 2 kali per alat per hari. Untuk pemakaian tanpa batas harian tersedia paket Audio Tools berbayar (beli sekali).'],
+    ],
+  },
+  'potong-audio': {
+    steps: ['Pilih file lagu atau rekaman.', 'Tentukan titik awal dan akhir bagian yang ingin disimpan.', 'Dengarkan hasilnya, lalu unduh.'],
+    faq: [
+      ['Bagaimana cara memotong lagu atau rekaman di browser?', 'Pilih file, tentukan titik awal dan akhir, dengarkan hasilnya, lalu unduh potongannya. Tidak perlu memasang aplikasi.'],
+      ['Apakah file saya diunggah ke server?', 'Tidak. Pemotongan berjalan di browser kamu dan file tidak diunggah ke server.'],
+      ['Apakah potong audio ini gratis?', 'Gratis dicoba 2 kali per alat per hari; pemakaian tanpa batas harian memerlukan paket Audio Tools.'],
+    ],
+  },
+  'gabung-audio': {
+    steps: ['Tambahkan beberapa file audio.', 'Atur urutannya dan, bila perlu, tambahkan crossfade.', 'Unduh hasil gabungan sebagai MP3 atau WAV.'],
+    faq: [
+      ['Bagaimana cara menggabungkan beberapa lagu menjadi satu file?', 'Tambahkan file-filenya, atur urutan, pilih crossfade bila ingin sambungan halus, lalu unduh sebagai MP3 atau WAV.'],
+      ['Apakah file saya diunggah ke server?', 'Tidak. Penggabungan diproses di browser kamu.'],
+      ['Apakah gabung audio ini gratis?', 'Gratis dicoba 2 kali per alat per hari; pemakaian tanpa batas harian memerlukan paket Audio Tools.'],
+    ],
+  },
+  'kompres-audio': {
+    steps: ['Pilih file audio yang ingin diperkecil.', 'Pilih satu dari 5 tingkat kompresi dan lihat estimasi ukuran serta bitrate.', 'Unduh versi yang lebih kecil.'],
+    faq: [
+      ['Bagaimana cara memperkecil ukuran file audio?', 'Pilih satu dari 5 tingkat kompresi, lihat estimasi ukuran dan bitrate sebelum mengunduh, lalu unduh versi yang lebih kecil.'],
+      ['Apakah file saya diunggah ke server?', 'Tidak. Kompresi berjalan di browser kamu.'],
+      ['Apakah kompres audio ini gratis?', 'Gratis dicoba 2 kali per alat per hari; pemakaian tanpa batas harian memerlukan paket Audio Tools.'],
+    ],
+  },
+};
+
 // Bagian aplikasi yang bisa dibuka langsung lewat URL (lihat src/services/routes.ts).
 const SECTIONS = [
   { path: 'audio/tools', name: 'Audio Tools', parent: 'Audio Studio',
@@ -202,14 +242,16 @@ pages.push({
 // 2) Satu halaman per alat
 for (const t of TOOLS) {
   const url = `${ORIGIN}/alat-audio/${t.slug}`;
+  const ex = EXTRA[t.slug];
   pages.push({
     dir: `alat-audio/${t.slug}`, url,
     html: buildPage(tpl, { url, title: t.title, desc: t.desc,
       ld: { '@context': 'https://schema.org', '@graph': [
         crumbs([{ name: 'PlayMuzeck', url: `${ORIGIN}/` }, { name: 'Audio Tools', url: `${ORIGIN}/alat-audio` }, { name: t.name, url }]),
         app(t.name, url, t.desc),
+        ...(ex ? [{ '@type': 'FAQPage', mainEntity: ex.faq.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) }] : []),
       ] },
-      bodyHtml: wrap(`<h1>${esc(t.h1)}</h1><p>${esc(t.body)}</p><p>File diproses di browser kamu dan tidak diunggah ke server. Gratis dicoba 2 kali per hari.</p><h2>Alat audio lainnya</h2><ul>${toolLinks}</ul>`) }),
+      bodyHtml: wrap(`<h1>${esc(t.h1)}</h1><p>${esc(t.body)}</p><p>File diproses di browser kamu dan tidak diunggah ke server. Gratis dicoba 2 kali per hari.</p>${ex ? `<h2>Cara menggunakan</h2><ol>${ex.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol><h2>Pertanyaan umum</h2>${ex.faq.map(([q, a]) => `<h3>${esc(q)}</h3><p>${esc(a)}</p>`).join('')}` : ''}<h2>Alat audio lainnya</h2><ul>${toolLinks}</ul>`) }),
   });
 }
 
