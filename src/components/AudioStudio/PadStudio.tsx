@@ -1661,6 +1661,89 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
   </div>
 );
 
+// Tempo: bisa diketik manual (ketik angka lalu Enter / klik di luar), tombol − / +, tahan tombol untuk mengubah terus-menerus,
+// dan tombol keyboard ↑ / ↓ (Shift = ±10) saat kolom angka aktif.
+const TEMPO_MIN = 60;
+const TEMPO_MAX = 200;
+const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStateAction<number>> }> = ({ bpm, setBpm }) => {
+  const holdRef = useRef<{ delay: number | null; tick: number | null }>({ delay: null, tick: null });
+  const bump = useCallback(
+    (d: number) => setBpm((p) => Math.max(TEMPO_MIN, Math.min(TEMPO_MAX, p + d))),
+    [setBpm]
+  );
+  const stopHold = useCallback(() => {
+    if (holdRef.current.delay !== null) window.clearTimeout(holdRef.current.delay);
+    if (holdRef.current.tick !== null) window.clearInterval(holdRef.current.tick);
+    holdRef.current = { delay: null, tick: null };
+  }, []);
+  const startHold = (d: number) => {
+    stopHold();
+    bump(d);
+    holdRef.current.delay = window.setTimeout(() => {
+      holdRef.current.tick = window.setInterval(() => bump(d), 70);
+    }, 400);
+  };
+  useEffect(() => stopHold, [stopHold]);
+  const holdProps = (d: number) => ({
+    onPointerDown: (e: React.PointerEvent) => {
+      e.preventDefault();
+      startHold(d);
+    },
+    onPointerUp: stopHold,
+    onPointerLeave: stopHold,
+    onPointerCancel: stopHold,
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        bump(d);
+      }
+    },
+  });
+  return (
+    <div
+      className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0"
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          bump((e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
+        }
+      }}
+    >
+      <span className="text-xs font-bold text-gray-400 mr-0.5">TEMPO</span>
+      <button
+        type="button"
+        {...holdProps(-1)}
+        disabled={bpm <= TEMPO_MIN}
+        aria-label="Kurangi tempo (tahan untuk terus menurun)"
+        title="Kurangi tempo (tahan untuk terus menurun)"
+        className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300 disabled:opacity-40 cursor-pointer touch-none"
+      >
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      {/* IntField: boleh dihapus & diketik bebas, baru dibatasi 60–200 saat Enter / klik di luar. */}
+      <IntField
+        value={bpm}
+        min={TEMPO_MIN}
+        max={TEMPO_MAX}
+        onChange={setBpm}
+        ariaLabel="Tempo (BPM), ketik angka 60–200, atau tekan panah atas / bawah"
+        className="w-12 bg-transparent text-center font-mono font-black text-sm text-accent focus:outline-none"
+      />
+      <span className="text-[10px] text-gray-400 mr-0.5">BPM</span>
+      <button
+        type="button"
+        {...holdProps(1)}
+        disabled={bpm >= TEMPO_MAX}
+        aria-label="Tambah tempo (tahan untuk terus menaik)"
+        title="Tambah tempo (tahan untuk terus menaik)"
+        className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300 disabled:opacity-40 cursor-pointer touch-none"
+      >
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+};
+
 const ToolBtn: React.FC<{
   icon: React.ComponentType<{ className?: string }>;
   label: string;
@@ -4658,62 +4741,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <div className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0">
-              <span className="text-xs font-bold text-gray-400 mr-0.5">TEMPO</span>
-              <button
-                type="button"
-                onClick={() => setBpm((p) => Math.max(60, p - 1))}
-                aria-label="Kurangi tempo"
-                className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              {/* IntField: boleh dihapus & diketik bebas, baru dibatasi 60–200 saat selesai (sebelumnya mengetik "1" langsung menjadi 60). */}
-              <IntField
-                value={bpm}
-                min={60}
-                max={200}
-                onChange={setBpm}
-                ariaLabel="Tempo (BPM), ketik angka 60–200"
-                className="w-12 bg-transparent text-center font-mono font-black text-sm text-accent focus:outline-none"
-              />
-              <span className="text-[10px] text-gray-400 mr-0.5">BPM</span>
-              <button
-                type="button"
-                onClick={() => setBpm((p) => Math.min(200, p + 1))}
-                aria-label="Tambah tempo"
-                className="p-2 sm:p-1 rounded-md bg-white/5 hover:bg-white/10 active:bg-accent active:text-black text-gray-300"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            <div className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0">
-              <span className="text-xs font-bold text-gray-400 mr-0.5">BIRAMA</span>
-              <select
-                value={timeSigId}
-                onChange={(e) => changeTimeSignature(e.target.value)}
-                title="Birama. BPM dihitung per not seperempat; 1 step = 1/16 not."
-                className="bg-transparent font-mono font-black text-sm text-accent focus:outline-none cursor-pointer"
-              >
-                {TIME_SIGNATURES.map((ts) => (
-                  <option key={ts.id} value={ts.id} className="bg-black text-white">
-                    {ts.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleClearGrid}
-              className="px-3 py-2 rounded-xl bg-black/60 hover:bg-black/90 text-gray-300 hover:text-white border border-white/[0.08] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-red-400" />
-              <span>Bersihkan Grid</span>
-            </button>
-
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
             <div className="flex items-center bg-black/60 p-1 rounded-xl border border-white/[0.08] shrink-0">
               <button
                 onClick={() => setActiveTab('drum')}
@@ -4733,6 +4761,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             </div>
 
+            <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
             <button
               type="button"
               onClick={() => {
@@ -4775,6 +4804,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               className="hidden"
               aria-label="Pilih berkas MIDI proyek"
             />
+            </div>
           </div>
         </div>
 
@@ -5256,7 +5286,24 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
           {/* Satu baris, tidak pernah turun ke baris bawah: bila layar terlalu sempit, baris ini bisa digulir ke samping. */}
-          <div className="flex flex-nowrap items-center gap-2 overflow-x-auto pb-1 whitespace-nowrap">
+          <div className="flex flex-nowrap items-center justify-between gap-2 overflow-x-auto pb-1 whitespace-nowrap">
+            <TempoControl bpm={bpm} setBpm={setBpm} />
+            <div className="flex items-center bg-black/60 px-2.5 py-1.5 rounded-xl border border-white/[0.08] gap-1.5 select-none shrink-0">
+              <span className="text-xs font-bold text-gray-400 mr-0.5">BIRAMA</span>
+              <select
+                value={timeSigId}
+                onChange={(e) => changeTimeSignature(e.target.value)}
+                title="Birama. BPM dihitung per not seperempat; 1 step = 1/16 not."
+                className="bg-transparent font-mono font-black text-sm text-accent focus:outline-none cursor-pointer"
+              >
+                {TIME_SIGNATURES.map((ts) => (
+                  <option key={ts.id} value={ts.id} className="bg-black text-white">
+                    {ts.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <span className="shrink-0 text-[10px] font-mono text-gray-400">
               Bar {viewStartBar + 1}–{viewStartBar + barsPerView}/{TOTAL_BARS} • {timeSig.label}
             </span>
@@ -5397,7 +5444,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           </div>
 
           <div className="flex flex-col gap-2 rounded-xl bg-black/40 border border-white/[0.06] p-2.5">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center bg-black/60 border border-white/10 rounded-lg p-0.5" role="tablist" aria-label="Mode editor">
                 {([
                   { id: 'edit', label: 'Edit', Icon: Pencil, tip: 'Klik sel untuk memasang / mengubah' },
@@ -5460,14 +5507,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <span>Bebas</span>
               </button>
 
-              <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
-
               <div className="flex items-center gap-1">
                 <ToolBtn icon={Undo2} label="Undo" title="Ctrl+Z" onClick={undo} disabled={!canUndo} />
                 <ToolBtn icon={Redo2} label="Redo" title="Ctrl+Shift+Z atau Ctrl+Y" onClick={redo} disabled={!canRedo} />
               </div>
-
-              <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
 
               <div className="flex flex-wrap items-center gap-1">
                 <ToolBtn
@@ -5493,9 +5536,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <ToolBtn icon={Trash2} label="Hapus" title="Delete" onClick={deleteSelection} disabled={!activeSel} />
                 <ToolBtn icon={X} label="Lepas" title="Esc — batalkan semua pilihan" onClick={clearSelection} disabled={!activeSel} />
               </div>
+            </div>
 
-              <span aria-hidden="true" className="hidden sm:block w-px h-5 bg-white/10" />
-
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1.5 bg-black/60 border border-white/10 rounded-lg p-1">
                 <button
@@ -5608,6 +5651,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   <Activity className="w-3 h-3" />
                   <span>Metronom</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={handleClearGrid}
+                  className="px-3 py-2 rounded-xl bg-black/60 hover:bg-black/90 text-gray-300 hover:text-white border border-white/[0.08] text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 text-red-400" />
+                  <span>Bersihkan Grid</span>
+                </button>
+
               </div>
 
               <div className="ml-auto flex flex-col items-end gap-1">
