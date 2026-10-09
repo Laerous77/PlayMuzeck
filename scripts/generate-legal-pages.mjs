@@ -74,8 +74,8 @@ code{font-size:.85em;word-break:break-all}
 
 /* Header: sama dengan header aplikasi (bg panel + blur, logo + nama di kiri, satu tombol aksi di kanan).
    Menu navigasi TIDAK ditaruh di sini: semuanya ada di footer, persis seperti di aplikasi. */
-header.top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--t-surface) 95%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:max(.625rem,env(safe-area-inset-top,0px)) .75rem .625rem}
-header.top .in{max-width:80rem;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+header.top{position:sticky;top:0;z-index:40;background:color-mix(in srgb,var(--t-surface) 95%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid var(--line);padding:max(.625rem,env(safe-area-inset-top,0px)) 10px .625rem}
+header.top .in{width:100%;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
 .brand{display:flex;align-items:center;gap:.5rem;text-decoration:none;color:var(--ink);min-width:0}
 .brand .logo{width:2.25rem;height:2.25rem;flex:none;border-radius:1rem;overflow:hidden;padding:.25rem;background:var(--t-surface);border:1px solid var(--line);box-shadow:0 4px 6px -1px rgba(0,0,0,.25);display:flex;align-items:center;justify-content:center;transition:transform .15s}
 .brand:hover .logo{transform:scale(1.05)}
@@ -89,13 +89,12 @@ header.top .in{max-width:80rem;margin:0 auto;display:flex;align-items:center;jus
 .hbtn{display:inline-flex;align-items:center;height:2.5rem;padding:0 .75rem;border-radius:.75rem;border:1px solid var(--t-accent);background:var(--t-accent);color:var(--t-on-accent);font-size:.75rem;font-weight:900;text-decoration:none;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.25)}
 .hbtn:hover{opacity:.9}
 @media (min-width:640px){
-  header.top{padding-left:2rem;padding-right:2rem}
   .brand .logo{width:2.5rem;height:2.5rem}
   .brand .name b{font-size:1.125rem}
   .hbtn{height:2.25rem;padding:0 .875rem}
 }
 
-main{width:100%;max-width:52rem;margin:0 auto;padding:2rem 1rem 3rem;flex:1 0 auto}
+main{width:100%;padding:2rem 10px 3rem;flex:1 0 auto}
 h1{font-size:1.9rem;line-height:1.25;margin:.2rem 0 .3rem;color:var(--ink)}
 h2{font-size:1.25rem;margin:2.1rem 0 .5rem;color:var(--ink);padding-top:.4rem;border-top:1px solid var(--line)}
 h3{font-size:1.02rem;margin:1.2rem 0 .3rem;color:var(--ink)}
@@ -118,14 +117,13 @@ button.btn:disabled{opacity:.5;cursor:not-allowed}
    Kiri = logo, tengah = dua baris tautan, kanan = hak cipta.
    Kiri dan kanan berada di tengah vertikal terhadap SELURUH blok tautan. */
 footer.bot{border-top:1px solid var(--line);background:var(--foot-bg);margin-top:auto}
-footer.bot .in{max-width:80rem;margin:0 auto;padding:1.5rem 1rem max(1.5rem,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:1rem;font-size:.75rem;line-height:1.5;color:var(--muted);text-align:center}
+footer.bot .in{width:100%;padding:1.5rem 10px max(1.5rem,env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;align-items:center;gap:1rem;font-size:.75rem;line-height:1.5;color:var(--muted);text-align:center}
 footer.bot .mid{display:flex;flex-direction:column;align-items:center;gap:.75rem;min-width:0}
 footer.bot .row{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:.5rem 1.25rem}
 footer.bot .row.legal{color:var(--faint)}
 footer.bot a{color:inherit;text-decoration:none}
 footer.bot a:hover{color:var(--ink)}
 footer.bot a[aria-current]{color:var(--ink)}
-@media (min-width:640px){footer.bot .in{padding-left:2rem;padding-right:2rem}}
 footer.bot .brand .name b{font-size:.875rem;font-weight:800}
 footer.bot .brand .name{display:flex}
 footer.bot .brand:hover .logo{transform:none}

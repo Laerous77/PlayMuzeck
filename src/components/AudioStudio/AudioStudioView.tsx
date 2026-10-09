@@ -85,7 +85,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   // pesan alih-alih crash (activeTrack.id di bawah akan error kalau undefined).
   if (!activeTrack) {
     return (
-      <div className="w-full max-w-7xl mx-auto px-4 py-20 text-center text-gray-400">
+      <div className="w-full py-20 text-center text-gray-400">
         <Music className="w-10 h-10 mx-auto mb-3 text-accent" />
         <p className="font-bold text-white">Katalog audio belum tersedia</p>
         <p className="text-xs mt-1">Sedang memuat, atau belum ada lagu yang dipublikasikan di database.</p>
@@ -177,7 +177,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-7 pb-20">
+    <div className="w-full py-2 space-y-7 pb-20">
       
       {/* BANNER JUDUL SEGMEN DENGAN WIDGET STATUS KANAN */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-surface via-surface/80 to-surface border-2 border-accent/40 p-5 sm:p-6 shadow-[0_10px_35px_color-mix(in_srgb,var(--t-accent)_15%,transparent)] flex flex-col md:flex-row md:items-center justify-between gap-5">

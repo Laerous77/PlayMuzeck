@@ -117,19 +117,6 @@ export const SoundFxSettings: React.FC<Props> = ({ isLoggedIn, onGetPadEditor })
     if (preview) previewGm({ ...slot, randomPitch: false });
   };
 
-  const randomizeAll = () => {
-    const next: SfxSettings = { ...s };
-    if (s.gmLinked) next.gmShared = { ...s.gmShared, ...randomSlotValues() };
-    else
-      next.gm = {
-        audio: { ...s.gm.audio, ...randomSlotValues() },
-        quiz: { ...s.gm.quiz, ...randomSlotValues() },
-        other: { ...s.gm.other, ...randomSlotValues() },
-      };
-    updateSfx(next);
-    previewGm(s.gmLinked ? next.gmShared : next.gm.audio);
-  };
-
   const pill = (active: boolean) =>
     `px-3 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer flex items-center gap-1.5 ${
       active ? 'bg-accent/20 border-accent text-accent' : 'bg-black/40 border-white/10 text-gray-300 hover:border-white/30 hover:text-white'
@@ -352,14 +339,6 @@ export const SoundFxSettings: React.FC<Props> = ({ isLoggedIn, onGetPadEditor })
             : SFX_SECTIONS.map((section) => (
                 <React.Fragment key={section}>{renderSlot(SFX_SECTION_LABEL[section], sectionHint[section], section)}</React.Fragment>
               ))}
-
-          <button
-            type="button"
-            onClick={randomizeAll}
-            className="w-full px-3 py-2 rounded-xl bg-white/10 hover:bg-accent text-white hover:text-on-accent text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-colors"
-          >
-            <Shuffle className="w-3.5 h-3.5" /> Acak {s.gmLinked ? 'efek' : 'semua efek'}
-          </button>
 
           <SoundBankCredits />
         </div>

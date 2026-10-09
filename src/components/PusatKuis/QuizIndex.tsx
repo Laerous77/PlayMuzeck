@@ -286,7 +286,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 space-y-7 pb-20">
+    <div className="w-full py-2 space-y-7 pb-20">
       {/* BANNER SEGMEN KUIS DINAMIS */}
       <div className="relative overflow-hidden rounded-3xl bg-linear-to-r from-accent2/15 via-surface to-accent2/10 border-2 border-accent2/40 p-5 sm:p-6 shadow-[0_10px_35px_color-mix(in_srgb,var(--t-accent2)_15%,transparent)] flex flex-col md:flex-row md:items-center justify-between gap-5">
         <div className="flex items-center gap-3.5 z-10">
