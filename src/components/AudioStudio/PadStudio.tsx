@@ -1609,7 +1609,7 @@ function usePersistedDynMode(key: string, initial: DynMode): [DynMode, (m: DynMo
 }
 
 const SPIN_INPUT_CLASS =
-  'w-11 bg-black/80 rounded-l-lg border border-white/15 px-1 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
+  'w-9 bg-black/80 rounded-l-lg border border-white/15 px-0.5 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none';
 
 // Dua tombol kecil atas / bawah di sisi kanan kolom angka.
 const SpinButtons: React.FC<{ onUp: () => void; onDown: () => void; upDisabled?: boolean; downDisabled?: boolean; label: string }> = ({
@@ -1664,7 +1664,7 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
 );
 
 // Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
-const BAR_BOX = 'shrink-0 whitespace-nowrap flex items-center gap-2 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5';
+const BAR_BOX = 'shrink-0 whitespace-nowrap flex items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
 
 // Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–300), (2) tombol − / + (tahan = terus berubah),
 // (3) panah ↑ / ↓ di keyboard (Shift = ±10), (4) Tap Tempo: ketuk tombol Tap sesuai ketukan lagu (minimal 2 kali).
@@ -1748,7 +1748,7 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
     'p-1.5 rounded-lg bg-white/5 hover:bg-white/15 active:bg-accent active:text-black text-gray-200 border border-white/10 disabled:opacity-40 cursor-pointer touch-none select-none';
   return (
     <div className={BAR_BOX}>
-      <span className="text-xs font-bold text-gray-400 select-none">TEMPO</span>
+      <span className="text-[11px] font-bold text-gray-400 select-none">TEMPO</span>
       <button
         type="button"
         {...holdProps(-1)}
@@ -1783,9 +1783,9 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
         }}
         aria-label="Tempo (BPM): klik lalu ketik angka 60–300, atau tekan panah atas / bawah"
         title="Klik lalu ketik tempo (60–300 BPM). Panah ↑ / ↓ = ±1, Shift + panah = ±10"
-        className="w-16 py-1 text-center font-mono font-black text-base text-accent bg-black/70 border border-white/20 rounded-lg outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 cursor-text select-text"
+        className="w-12 py-1 text-center font-mono font-black text-base text-accent bg-black/70 border border-white/20 rounded-lg outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 cursor-text select-text"
       />
-      <span className="text-[11px] text-gray-400 select-none">BPM</span>
+      <span className="text-[10px] text-gray-400 select-none">BPM</span>
       <button
         type="button"
         {...holdProps(1)}
@@ -1811,7 +1811,7 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
         }}
         title="Tap Tempo: ketuk berulang sesuai ketukan lagu (minimal 2 kali). Tempo dihitung otomatis dari jeda antar ketukan."
         aria-label="Tap tempo"
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer select-none touch-none transition-colors bg-white/5 hover:bg-white/15 active:bg-accent active:text-on-accent text-gray-200 border-white/10"
+        className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-bold border cursor-pointer select-none touch-none transition-colors bg-white/5 hover:bg-white/15 active:bg-accent active:text-on-accent text-gray-200 border-white/10"
       >
         <Hand className="w-4 h-4" />
         <span>Tap</span>
@@ -5360,15 +5360,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
-          {/* Grup kontrol otomatis turun ke baris berikutnya bila layar sempit, jadi tidak perlu scroll horizontal. */}
-          <div className="flex flex-wrap items-center justify-start gap-x-2 gap-y-2">
+          {/* Satu baris, dirapatkan supaya muat di layar laptop tanpa scroll. Gulir ke samping hanya jadi cadangan di layar sangat sempit. */}
+          <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
             <TempoControl bpm={bpm} setBpm={setBpm} />
             <div className={BAR_BOX}>
-              <span className="text-xs font-bold text-gray-400 select-none">BIRAMA</span>
               <select
                 value={timeSigId}
                 onChange={(e) => changeTimeSignature(e.target.value)}
-                title="Birama. BPM dihitung per not seperempat; 1 step = 1/16 not."
+                aria-label="Birama" title="Birama. BPM dihitung per not seperempat; 1 step = 1/16 not."
                 className="bg-black/70 border border-white/20 rounded-lg px-2 py-1 font-mono font-black text-base text-accent focus:outline-none focus:border-accent cursor-pointer"
               >
                 {TIME_SIGNATURES.map((ts) => (
@@ -5397,32 +5396,27 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 ))}
               </div>
             )}
-            <div className={BAR_BOX} role="group" aria-label="Jendela tampilan grid">
-              <div className="flex items-baseline gap-1.5" title="Bar yang sedang tampil di grid dari total bar proyek, beserta birama">
-                <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Menampilkan</span>
-                <span className="text-sm font-mono font-black text-white">
-                  Bar {viewStartBar + 1}–{viewStartBar + barsPerView}
-                </span>
-                <span className="text-xs text-gray-400">dari {TOTAL_BARS}</span>
-                <span className="ml-1 px-1.5 py-0.5 rounded-md bg-accent/15 text-accent border border-accent/30 text-[11px] font-mono font-bold">{timeSig.label}</span>
-              </div>
-              <span aria-hidden="true" className="w-px h-6 bg-white/10" />
+            <div
+              className={BAR_BOX}
+              role="group"
+              aria-label="Jendela tampilan grid"
+              title={`Sedang menampilkan Bar ${viewStartBar + 1}–${viewStartBar + barsPerView} dari ${TOTAL_BARS} (${timeSig.label})`}
+            >
               <div className="flex items-center gap-1.5" title="Banyak bar yang ditampilkan (1–8). Ketik angka atau pakai tombol atas-bawah.">
                 <span className="text-gray-400">Tampil</span>
                 <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
-                <span className="text-gray-400">bar</span>
               </div>
             </div>
             <div className={BAR_BOX} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
-              <span className="font-bold text-gray-400 uppercase tracking-wide">Loop</span>
-              <span className="text-gray-400">Bar</span>
+              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Loop</span>
+              <span className="text-[10px] text-gray-400">Bar</span>
               <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
-              <span className="text-gray-400">Step</span>
+              <span className="text-[10px] text-gray-400">Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
               <span className="text-gray-500">—</span>
-              <span className="text-gray-400">Bar</span>
+              <span className="text-[10px] text-gray-400">Bar</span>
               <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
-              <span className="text-gray-400">Step</span>
+              <span className="text-[10px] text-gray-400">Step</span>
               <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
             </div>
             {!isUnlocked8Bar && (
@@ -5434,8 +5428,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               className={BAR_BOX}
               title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
             >
-              <span className="font-bold text-accent uppercase tracking-wide">Posisi</span>
-              <span className="text-gray-400">Bar</span>
+              <span className="text-[11px] font-bold text-accent uppercase tracking-wide">Pos</span>
+              <span className="text-[10px] text-gray-400">Bar</span>
               <div className="flex items-stretch">
                 <input
                   ref={posBarRef}
@@ -5446,7 +5440,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={seekToPosition}
                   onBlur={syncPositionFields}
                   aria-label="Posisi bar"
-                  className="w-11 bg-black/80 rounded-l-lg border border-white/15 px-1 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="w-9 bg-black/80 rounded-l-lg border border-white/15 px-0.5 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <SpinButtons
                   label="Posisi bar"
@@ -5454,7 +5448,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onDown={() => nudgePosition(posBarRef.current, -1, 1, TOTAL_BARS)}
                 />
               </div>
-              <span className="text-gray-400">Step</span>
+              <span className="text-[10px] text-gray-400">Step</span>
               <div className="flex items-stretch">
                 <input
                   ref={posStepRef}
@@ -5465,7 +5459,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onChange={seekToPosition}
                   onBlur={syncPositionFields}
                   aria-label="Posisi step"
-                  className="w-11 bg-black/80 rounded-l-lg border border-white/15 px-1 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  className="w-9 bg-black/80 rounded-l-lg border border-white/15 px-0.5 py-1 text-sm font-mono font-bold text-accent text-center outline-none focus:border-accent [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 />
                 <SpinButtons
                   label="Posisi step"
@@ -5477,7 +5471,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 type="button"
                 onClick={jumpToPlayhead}
                 title="Tampilkan halaman grid yang memuat posisi ini"
-                className="px-2.5 py-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/15 text-gray-200 font-bold cursor-pointer"
+                className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/15 text-gray-200 font-bold cursor-pointer"
               >
                 Lihat
               </button>
@@ -5487,7 +5481,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               onClick={() => setFollowPlayhead((f) => !f)}
               aria-pressed={followPlayhead}
               title="Halaman grid otomatis mengikuti playhead saat diputar"
-              className={`shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+              className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                 followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
               }`}
             >
@@ -5504,9 +5498,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-gray-400">Geser</span>
               <SpinField min={1} max={MAX_SHIFT_BARS} value={shiftBars} onChange={setShiftBars} ariaLabel="Jumlah bar sekali geser (maksimal 8)" />
-              <span className="text-gray-400">bar</span>
               <button
                 type="button"
                 onClick={() => shiftView(1)}
