@@ -1665,6 +1665,8 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
 
 // Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
 const BAR_BOX = 'shrink-0 whitespace-nowrap flex items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
+// Varian untuk kotak yang ikut melebar supaya baris kontrol sejajar dengan lebar toolbar di bawahnya.
+const BAR_BOX_GROW = `${BAR_BOX} flex-1 justify-center`;
 
 // Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–300), (2) tombol − / + (tahan = terus berubah),
 // (3) panah ↑ / ↓ di keyboard (Shift = ±10), (4) Tap Tempo: ketuk tombol Tap sesuai ketukan lagu (minimal 2 kali).
@@ -5361,7 +5363,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
           {/* Satu baris, dirapatkan supaya muat di layar laptop tanpa scroll. Gulir ke samping hanya jadi cadangan di layar sangat sempit. */}
-          <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
+          <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
             <TempoControl bpm={bpm} setBpm={setBpm} />
             <div className={BAR_BOX}>
               <select
@@ -5407,7 +5409,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
               </div>
             </div>
-            <div className={BAR_BOX} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
+            <div className={BAR_BOX_GROW} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Loop</span>
               <span className="text-[10px] text-gray-400">Bar</span>
               <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
@@ -5425,7 +5427,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             )}
             <div
-              className={BAR_BOX}
+              className={BAR_BOX_GROW}
               title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
             >
               <span className="text-[11px] font-bold text-accent uppercase tracking-wide">Pos</span>
