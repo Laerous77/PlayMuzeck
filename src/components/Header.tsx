@@ -273,7 +273,7 @@ export const Header: React.FC<HeaderProps> = ({
       : 'SEGMEN HALAMAN UTAMA:';
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-surface/95 backdrop-blur-md border-b border-white/[0.08] px-[10px] pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
+    <header className="sticky top-0 z-40 w-full bg-surface/95 backdrop-blur-md border-b border-white/[0.08] px-[20px] pb-2.5 pt-[max(0.625rem,env(safe-area-inset-top))]">
       <div className="w-full flex items-center justify-between gap-2 sm:gap-3">
         {/* SISI KIRI: DROPDOWN SEGMEN HALAMAN AKTIF + LOGO */}
         <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">

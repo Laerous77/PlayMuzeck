@@ -133,14 +133,14 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
       {/* 1. HERO: mengajak & menawarkan solusi */}
       <section
         id="index-hero-section"
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-surface/40 to-black border border-white/[0.1] px-4 py-8 sm:p-12 text-center shadow-2xl scroll-mt-20"
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-surface/40 to-black border border-white/[0.1] px-4 py-8 sm:p-8 lg:p-10 text-center shadow-2xl scroll-mt-20"
       >
         <div className="absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 sm:w-96 sm:h-96 bg-accent/15 blur-3xl rounded-full pointer-events-none" />
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="relative z-10 max-w-3xl mx-auto space-y-5"
+          className="relative z-10 max-w-5xl mx-auto space-y-5"
         >
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-accent/10 border border-accent/30 text-accent text-xs font-bold tracking-wide">
             <Headphones className="w-3.5 h-3.5" />
@@ -183,7 +183,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
 
       {/* 1b. MASALAH -> SOLUSI */}
       <section id="index-solutions-section" className="space-y-5 scroll-mt-20">
-        <div className="text-center max-w-xl mx-auto space-y-2">
+        <div className="text-center max-w-3xl mx-auto space-y-2">
           <span className="text-[11px] font-bold text-accent uppercase tracking-wider font-mono">Solusi</span>
           <h2 className="text-2xl sm:text-3xl font-black text-white">Kenali kebutuhanmu, kami siapkan jalannya</h2>
         </div>
@@ -224,7 +224,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
 
       {/* 2. FITUR UNGGULAN */}
       <section id="index-features-section" className="space-y-6 scroll-mt-20">
-        <div className="text-center max-w-xl mx-auto space-y-2">
+        <div className="text-center max-w-3xl mx-auto space-y-2">
           <span className="text-[11px] font-bold text-accent uppercase tracking-wider font-mono">Fitur Unggulan</span>
           <h2 className="text-2xl sm:text-3xl font-black text-white">Dua ruang, satu akun</h2>
         </div>
@@ -320,9 +320,9 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
       {/* 3. TENTANG KAMI */}
       <section
         id="index-about-section"
-        className="rounded-3xl bg-gradient-to-b from-surface/50 to-black/70 border border-white/[0.1] p-4 sm:p-10 space-y-6 scroll-mt-20"
+        className="rounded-3xl bg-gradient-to-b from-surface/50 to-black/70 border border-white/[0.1] p-4 sm:p-6 lg:p-8 space-y-6 scroll-mt-20"
       >
-        <div className="max-w-2xl mx-auto text-center space-y-3">
+        <div className="max-w-4xl mx-auto text-center space-y-3">
           <span className="text-[11px] font-bold text-accent uppercase tracking-wider font-mono">Tentang Kami</span>
           <h2 className="text-2xl sm:text-3xl font-black text-white">Musik dan kuis, di satu tempat yang sama</h2>
           <p className="text-sm text-gray-300 leading-relaxed">
@@ -355,10 +355,10 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
       </section>
 
       {/* 3b. DUKUNG PLAYMUZECK (bebas iklan, ditopang donasi) */}
-      <DonationCard onDonate={onOpenDonation ?? onOpenProfile} className="max-w-3xl mx-auto w-full" />
+      <DonationCard onDonate={onOpenDonation ?? onOpenProfile} className="w-full" />
 
       {/* 4. FAQ */}
-      <section id="index-faq-section" className="max-w-3xl mx-auto w-full space-y-4 scroll-mt-20 rounded-3xl p-3 sm:p-4 border border-transparent transition-colors">
+      <section id="index-faq-section" className="w-full space-y-4 scroll-mt-20 rounded-3xl p-3 sm:p-4 border border-transparent transition-colors">
         <h2 className="text-xl sm:text-2xl font-black text-white text-center">Pertanyaan yang sering muncul</h2>
         <div className="space-y-2.5">
           {FAQ.map((f) => (

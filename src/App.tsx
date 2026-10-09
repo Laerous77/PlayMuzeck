@@ -1109,7 +1109,7 @@ function MainApp() {
         accentQuiz={siteSettings.accentQuiz}
       />
 
-      <main className="flex-1 min-w-0 w-full px-[10px] pt-4 sm:pt-6">
+      <main className="flex-1 min-w-0 w-full px-[20px] pt-4 sm:pt-6">
         <AnimatePresence mode="wait">
           {currentMode === 'index' ? (
             <motion.div
@@ -1205,7 +1205,7 @@ function MainApp() {
       <footer className="w-full border-t border-white/[0.08] bg-black/30 mt-auto">
         {/* Tata letak: kiri = logo, tengah = dua baris tautan, kanan = hak cipta.
             Kiri dan kanan berada di tengah-tengah secara vertikal terhadap SELURUH blok tautan (dua baris). */}
-        <div className="w-full px-[10px] pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-4 lg:grid lg:grid-cols-[1fr_minmax(0,auto)_1fr] lg:items-center lg:gap-6 text-xs text-gray-400 text-center">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col items-center gap-4 lg:grid lg:grid-cols-[1fr_minmax(0,auto)_1fr] lg:items-center lg:gap-6 text-xs text-gray-400 text-center">
           {/* Nama PlayMuzeck (teks saja, tanpa ikon logo) */}
           <button
             type="button"
