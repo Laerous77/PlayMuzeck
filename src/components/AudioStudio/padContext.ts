@@ -124,6 +124,5 @@ export const IMPORT_CTX: ImportContext = {
     { label: 'Progresi Akor 3', program: 48, volume: 70, adsr: [0.1, 0.5, 0.75, 1.2] },
     { label: 'Progresi Akor 4', program: 32, volume: 75, adsr: [0.03, 0.3, 0.7, 0.8] },
   ],
-  bpmRange: [60, 200],
+  bpmRange: [60, 300],
 };
-

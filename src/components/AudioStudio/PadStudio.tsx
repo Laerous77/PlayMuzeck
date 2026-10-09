@@ -1664,16 +1664,15 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
 );
 
 // Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
-const BAR_BOX = 'shrink-0 flex items-center gap-2 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5';
+const BAR_BOX = 'shrink-0 whitespace-nowrap flex items-center gap-2 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-3 py-1.5';
 
-// Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–200), (2) tombol − / + (tahan = terus berubah),
+// Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–300), (2) tombol − / + (tahan = terus berubah),
 // (3) panah ↑ / ↓ di keyboard (Shift = ±10), (4) Tap Tempo: ketuk tombol Tap sesuai ketukan lagu (minimal 2 kali).
 const TEMPO_MIN = 60;
-const TEMPO_MAX = 200;
+const TEMPO_MAX = 300;
 const TAP_RESET_MS = 2000;
 const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStateAction<number>> }> = ({ bpm, setBpm }) => {
   const [draft, setDraft] = useState<string | null>(null);
-  const [tapCount, setTapCount] = useState(0);
   const tapsRef = useRef<number[]>([]);
   const tapTimerRef = useRef<number | null>(null);
   const holdRef = useRef<{ delay: number | null; tick: number | null }>({ delay: null, tick: null });
@@ -1734,7 +1733,6 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
     if (taps.length > 0 && now - taps[taps.length - 1] > TAP_RESET_MS) taps.length = 0;
     taps.push(now);
     if (taps.length > 8) taps.shift();
-    setTapCount(taps.length);
     if (taps.length >= 2) {
       const avg = (taps[taps.length - 1] - taps[0]) / (taps.length - 1);
       setDraft(null);
@@ -1743,7 +1741,6 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
     if (tapTimerRef.current !== null) window.clearTimeout(tapTimerRef.current);
     tapTimerRef.current = window.setTimeout(() => {
       tapsRef.current = [];
-      setTapCount(0);
     }, TAP_RESET_MS);
   };
 
@@ -1784,8 +1781,8 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
             bump((e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1));
           }
         }}
-        aria-label="Tempo (BPM): klik lalu ketik angka 60–200, atau tekan panah atas / bawah"
-        title="Klik lalu ketik tempo (60–200 BPM). Panah ↑ / ↓ = ±1, Shift + panah = ±10"
+        aria-label="Tempo (BPM): klik lalu ketik angka 60–300, atau tekan panah atas / bawah"
+        title="Klik lalu ketik tempo (60–300 BPM). Panah ↑ / ↓ = ±1, Shift + panah = ±10"
         className="w-16 py-1 text-center font-mono font-black text-base text-accent bg-black/70 border border-white/20 rounded-lg outline-none focus:border-accent focus:ring-1 focus:ring-accent/50 cursor-text select-text"
       />
       <span className="text-[11px] text-gray-400 select-none">BPM</span>
@@ -1814,12 +1811,10 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
         }}
         title="Tap Tempo: ketuk berulang sesuai ketukan lagu (minimal 2 kali). Tempo dihitung otomatis dari jeda antar ketukan."
         aria-label="Tap tempo"
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer select-none touch-none transition-colors ${
-          tapCount > 0 ? 'bg-accent text-on-accent border-accent' : 'bg-white/5 hover:bg-white/15 text-gray-200 border-white/10'
-        }`}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border cursor-pointer select-none touch-none transition-colors bg-white/5 hover:bg-white/15 active:bg-accent active:text-on-accent text-gray-200 border-white/10"
       >
         <Hand className="w-4 h-4" />
-        <span>{tapCount > 0 ? `Tap ×${tapCount}` : 'Tap'}</span>
+        <span>Tap</span>
       </button>
     </div>
   );
@@ -5365,8 +5360,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           <h4 className="text-xs font-bold text-gray-200 uppercase tracking-wider">
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
-          {/* Satu baris, tidak pernah turun ke baris bawah: bila layar terlalu sempit, baris ini bisa digulir ke samping. */}
-          <div className="flex flex-nowrap items-center justify-between gap-3 overflow-x-auto pb-1 whitespace-nowrap">
+          {/* Grup kontrol otomatis turun ke baris berikutnya bila layar sempit, jadi tidak perlu scroll horizontal. */}
+          <div className="flex flex-wrap items-center justify-start gap-x-2 gap-y-2">
             <TempoControl bpm={bpm} setBpm={setBpm} />
             <div className={BAR_BOX}>
               <span className="text-xs font-bold text-gray-400 select-none">BIRAMA</span>
