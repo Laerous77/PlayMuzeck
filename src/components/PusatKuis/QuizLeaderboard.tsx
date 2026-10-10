@@ -130,10 +130,14 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
 
   return (
     <section className="space-y-5 animate-in fade-in duration-200">
-      <div className="rounded-3xl bg-surface border border-white/10 p-5 sm:p-7 shadow-2xl space-y-5">
-        {/* Tab periode */}
+      <div className="rounded-3xl bg-surface border border-white/10 p-4 sm:p-7 shadow-2xl space-y-5">
+        {/* Tab periode + info reset + tombol muat ulang */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div role="tablist" aria-label="Periode papan peringkat" className="grid grid-cols-3 gap-1 sm:gap-1.5 p-1 rounded-2xl bg-black/50 border border-white/10 min-w-0">
+          <div
+            role="tablist"
+            aria-label="Periode papan peringkat"
+            className="grid grid-cols-3 gap-1 sm:gap-1.5 p-1 rounded-2xl bg-black/50 border border-white/10 min-w-0 sm:min-w-[360px]"
+          >
             {TABS.map((t) => {
               const on = t.key === period;
               return (
@@ -143,7 +147,7 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
                   role="tab"
                   aria-selected={on}
                   onClick={() => setPeriod(t.key)}
-                  className={`min-w-0 px-1.5 sm:px-5 py-2 rounded-xl text-[11px] sm:text-xs leading-tight text-center font-black transition-all cursor-pointer sm:whitespace-nowrap ${
+                  className={`min-w-0 px-1.5 sm:px-4 py-2.5 rounded-xl text-[11px] sm:text-xs leading-tight text-center font-black transition-all cursor-pointer ${
                     on ? 'bg-accent2 text-on-accent2 shadow' : 'text-gray-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
@@ -153,36 +157,44 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
             })}
           </div>
 
-          <div className="flex items-center gap-2 text-[11px] text-gray-400 self-start sm:self-auto">
-            {data?.resetsAt && (
-              <span className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/50 border border-white/10">
-                <Clock className="w-3.5 h-3.5 text-accent2" />
-                Reset {formatResetIn(data.resetsAt, now)}
+          <div className="flex items-center justify-between sm:justify-end gap-2 text-[11px] text-gray-400">
+            {data?.resetsAt ? (
+              <span className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-black/50 border border-white/10 whitespace-nowrap min-w-0">
+                <Clock className="w-3.5 h-3.5 shrink-0 text-accent2" />
+                <span className="truncate">Reset {formatResetIn(data.resetsAt, now)}</span>
               </span>
+            ) : (
+              <span className="sm:hidden" />
             )}
             <button
               type="button"
               onClick={() => void load(period)}
               disabled={loading}
               aria-label="Muat ulang papan peringkat"
-              className="w-8 h-8 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer disabled:opacity-50"
+              className="shrink-0 w-9 h-9 rounded-xl bg-black/50 hover:bg-black/80 border border-white/10 text-gray-300 hover:text-white flex items-center justify-center cursor-pointer disabled:opacity-50 transition-colors"
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-          <div>
-            <h2 className="text-lg sm:text-xl font-black text-white flex items-center gap-2">
+        {/* Judul papan + jumlah pemain */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="shrink-0 w-11 h-11 rounded-2xl bg-yellow-400/15 border border-yellow-300/30 flex items-center justify-center">
               <Trophy className="w-5 h-5 text-yellow-300" />
-              Papan Peringkat {activeTab.label}
-            </h2>
-            <p className="text-[11px] text-gray-400 mt-0.5">{activeTab.hint}</p>
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-black text-white leading-snug">
+                Papan Peringkat {activeTab.label}
+              </h2>
+              <p className="text-[11px] text-gray-400 mt-0.5">{activeTab.hint}</p>
+            </div>
           </div>
           {data && data.totalPlayers > 0 && (
-            <span className="flex items-center gap-1.5 text-[11px] text-gray-300 font-mono">
-              <Users className="w-3.5 h-3.5" /> {data.totalPlayers.toLocaleString('id-ID')} pemain
+            <span className="self-start sm:self-auto shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/50 border border-white/10 text-[11px] text-gray-200 font-mono whitespace-nowrap">
+              <Users className="w-3.5 h-3.5 shrink-0" />
+              {data.totalPlayers.toLocaleString('id-ID')} pemain
             </span>
           )}
         </div>
