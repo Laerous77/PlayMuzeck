@@ -2,7 +2,7 @@
 // Generator berkas HTML mandiri (PlayMuzeck_Quiz.html)
 // Ukuran file terjamin >= 5 MB dengan buffer instrumen akustik densitas tinggi.
 // Desain UI, Header, Dasbor Profil, Tema 6 Gelap & 6 Terang, Album Bingkai 20 Misi,
-// dan 4 Mode Gameplay 100% konsisten, simetris (2x2 grid), dan bebas bug avatar.
+// dan 5 Mode Gameplay 100% konsisten, simetris (2x2 grid), dan bebas bug avatar.
 
 import { Deck } from '../types';
 
@@ -263,10 +263,10 @@ export function generateStandaloneQuizHtml(
           <div>
             <div class="home-card-header">
               <div class="home-card-icon" style="color: var(--accent2);">⚡</div>
-              <span class="home-card-badge">4 Mode Bermain</span>
+              <span class="home-card-badge">5 Mode Bermain</span>
             </div>
             <div class="home-card-title">1. Mainkan Kuis</div>
-            <p class="home-card-desc">4 Mode: Langsung Main (Solo &amp; Lawan Bot), Pass &amp; Play bergiliran, Host / Kuis Master, dan Multiplayer Online.</p>
+            <p class="home-card-desc">5 Mode: Langsung Main (Solo &amp; Lawan Bot), Pass &amp; Play bergiliran, Arena Global, Mode Undangan, dan Host / Kuis Master.</p>
           </div>
           <div class="home-card-footer">
             <span>Pilih Mode Permainan</span>
@@ -356,8 +356,9 @@ export function generateStandaloneQuizHtml(
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px;">
           <button class="btn-accent" onclick="showSoloSetup()">⚡ 1. Langsung Main</button>
           <button class="btn-outline" onclick="showPassPlaySetup()">📱 2. Pass &amp; Play</button>
-          <button class="btn-outline" onclick="showHostSetup()">🎙️ 3. Host / Kuis Master</button>
-          <button class="btn-outline" onclick="startMultiplayerOnline()">🌐 4. Multiplayer Online</button>
+          <button class="btn-outline" onclick="startArenaGlobal()">🌐 3. Arena Global</button>
+          <button class="btn-outline" onclick="startInviteMode()">💌 4. Mode Undangan</button>
+          <button class="btn-outline" onclick="showHostSetup()">🎙️ 5. Host / Kuis Master</button>
         </div>
 
         <div id="solo-config" style="display: none; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border);">
@@ -991,7 +992,7 @@ export function generateStandaloneQuizHtml(
 
     const HERO_META = {
       menu: { icon: '🏠', title: 'Menu Utama', sub: 'Pilih salah satu menu di bawah untuk memulai arena wawasan.' },
-      play_select: { icon: '▶️', title: 'Mainkan Kuis', sub: 'Konfigurasi mode solo, pass & play, host juri, atau multiplayer.' },
+      play_select: { icon: '▶️', title: 'Mainkan Kuis', sub: 'Pilih 5 mode: Langsung Main, Pass & Play, Arena Global, Mode Undangan, atau Host / Kuis Master.' },
       game: { icon: '⚡', title: 'Arena Kuis', sub: 'Pilih jawaban yang paling tepat sebelum batas waktu habis.' },
       history: { icon: '🕘', title: 'Riwayat Hasil', sub: 'Skor dan tinjauan kunci jawaban dari sesi sebelumnya.' },
       library: { icon: '📚', title: 'Perpustakaan Kuis', sub: 'Koleksi deck luring bawaan dan jelajah kuis daring terbaru.' },
@@ -1202,14 +1203,36 @@ export function generateStandaloneQuizHtml(
     let teamScores = [];
     let pointStep = 10;
 
-    function startMultiplayerOnline() {
+    function hideLocalSetups() {
+      document.getElementById('solo-config').style.display = 'none';
+      document.getElementById('pass-play-config').style.display = 'none';
+      document.getElementById('host-config').style.display = 'none';
+    }
+
+    // Mode 3: Arena Global (multiplayer publik tanpa kode ruangan, skor masuk Papan Peringkat)
+    function startArenaGlobal() {
+      SoundEngine.click();
+      hideLocalSetups();
       if (!navigator.onLine) {
-        alert('Multiplayer Online memerlukan koneksi internet aktif.');
+        alert('Arena Global memerlukan koneksi internet aktif.');
         return;
       }
       const idx = document.getElementById('deck-select').value;
       const deck = DECKS[idx] || DECKS[0];
       openWebApp('/quiz?multiplayer=1&deckId=' + encodeURIComponent(deck.id));
+    }
+
+    // Mode 4: Mode Undangan (ruangan berkode untuk teman/kelas, skor tidak masuk Papan Peringkat)
+    function startInviteMode() {
+      SoundEngine.click();
+      hideLocalSetups();
+      if (!navigator.onLine) {
+        alert('Mode Undangan memerlukan koneksi internet aktif.');
+        return;
+      }
+      const idx = document.getElementById('deck-select').value;
+      const deck = DECKS[idx] || DECKS[0];
+      openWebApp('/quiz?invite=1&deckId=' + encodeURIComponent(deck.id));
     }
 
     function startMode(mode) {

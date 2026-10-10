@@ -484,7 +484,7 @@ const about = `
 <h3>Pad Editor</h3>
 <p>Drum pad dan chord pad dengan sequencer hingga 64 bar, banyak instrumen General MIDI, dan rekam live, untuk menyusun ritme dan progresi akor langsung di browser.</p>
 <h3>Pusat Kuis</h3>
-<p>Perpustakaan kuis trivia berbahasa Indonesia (sains, sejarah, musik, seni, kuliner, dan lainnya), mode solo, pass and play, host kuis hingga 10 regu, multiplayer online, serta Aula Komunitas untuk kuis buatan pengguna dan papan peringkat.</p>
+<p>Perpustakaan kuis trivia berbahasa Indonesia (sains, sejarah, musik, seni, kuliner, dan lainnya), lima mode permainan (solo, pass and play, Arena Global, mode undangan, dan host kuis hingga 10 regu), serta Aula Komunitas untuk kuis buatan pengguna dan papan peringkat.</p>
 
 <h2>Prinsip kami</h2>
 <ul>

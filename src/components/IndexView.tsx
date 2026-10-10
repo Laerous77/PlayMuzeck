@@ -56,7 +56,7 @@ const PROBLEMS = [
     icon: Brain,
     problem: 'Ingin belajar sambil bersenang-senang?',
     solution:
-      'Pusat Kuis punya mode solo (bisa lawan bot), pass & play, host kuis, dan multiplayer online, lengkap dengan timer per soal, komunitas kuis, dan papan peringkat multiplayer.',
+      'Pusat Kuis punya 5 mode: solo (bisa lawan bot), pass & play, Arena Global, mode undangan, dan host kuis, lengkap dengan timer per soal, komunitas kuis, dan papan peringkat multiplayer.',
   },
 ];
 
@@ -75,7 +75,7 @@ const AUDIO_POINTS = [
 ];
 
 const QUIZ_POINTS = [
-  { title: '4 mode permainan', desc: 'Solo (opsional lawan bot), pass & play, host kuis hingga 10 regu, dan multiplayer online, lengkap dengan timer per soal.' },
+  { title: '5 mode permainan', desc: 'Solo (opsional lawan bot), pass & play, Arena Global, mode undangan, dan host kuis hingga 10 regu, lengkap dengan timer per soal.' },
   { title: 'Riwayat hasil', desc: 'Simpan hasil permainan dan tinjau jawaban per soal kapan saja.' },
   { title: 'Perpustakaan: belasan topik trivia', desc: 'Sains, sejarah, musik, seni, teknologi, kuliner, dan lainnya. 3 starter deck bawaan siap main, deck tambahan tersedia di Perpustakaan.' },
   { title: 'Bisa dipasang & dimainkan luring', desc: 'Pasang sebagai PWA atau unduh berkas standalone. Multiplayer online tetap butuh internet.' },

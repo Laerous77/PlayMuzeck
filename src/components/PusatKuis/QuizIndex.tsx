@@ -305,7 +305,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
             </h1>
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'pwa' && 'Pusat instalasi aplikasi web mandiri PWA & berkas aplikasi luring utuh.'}
-              {activeSection === 'play' && 'Pilih paket kuis yang dimuat, tentukan 4 mode permainan, dan mainkan langsung.'}
+              {activeSection === 'play' && 'Pilih paket kuis yang dimuat, tentukan 5 mode permainan, dan mainkan langsung.'}
               {activeSection === 'all' && 'Katalog seluruh tema kuis, 3 starter deck bawaan, dan kreator kuis kustom.'}
               {activeSection === 'community' && 'Mainkan & bagikan kuis buatan pengguna (setelah lolos pemeriksaan), dan lihat peringkat pemain Arena Global: harian, bulanan, dan sepanjang waktu.'}
             </p>
@@ -328,7 +328,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               <Play className="w-4 h-4 text-emerald-400" />
               <div className="flex flex-col">
                 <span className="text-[10px] font-mono font-bold text-gray-400 uppercase tracking-wider">Mode Bermain</span>
-                <span className="text-xs font-black text-emerald-400">4 Pilihan Mode Aktif</span>
+                <span className="text-xs font-black text-emerald-400">5 Pilihan Mode Aktif</span>
               </div>
             </div>
           )}
@@ -485,7 +485,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
               </button>
             </div>
 
-            {/* Pilihan 4 Mode Permainan */}
+            {/* Pilihan 5 Mode Permainan */}
             <div className="space-y-3">
               <span className="text-xs font-bold text-gray-300 uppercase tracking-wider block">
                 Pilih Mode Permainan:
