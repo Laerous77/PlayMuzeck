@@ -195,6 +195,25 @@ const INITIAL_TOTAL_STEPS = INITIAL_STEPS_PER_BAR * TOTAL_BARS;
 const DEFAULT_PATTERN_BARS = 4; // pola bawaan mengisi 4 bar pertama
 const DEFAULT_LOOP_END_BAR = 4;
 
+// Ikon tombol Belah: satu not panjang yang dibelah garis vertikal menjadi dua. Gaya garis sama dengan lucide-react.
+const SplitNoteIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className={className}
+  >
+    <rect x="2" y="8" width="6" height="8" rx="1.5" />
+    <rect x="16" y="8" width="6" height="8" rx="1.5" />
+    <path d="M12 3v18" />
+  </svg>
+);
+
 // Ikon tombol Efek: pedal efek (stompbox) dengan dua knob, label, dan footswitch. Gaya garis sama dengan lucide-react.
 const FxPedalIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -3294,6 +3313,62 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     return { count, len };
   }, [activeSel, chordTracks]);
 
+  // Ada not akor terpilih yang cukup panjang (>= 2 step) untuk dibelah?
+  const canSplit = useMemo(() => {
+    if (!activeSel || activeSel.tab !== 'chord') return false;
+    let ok = false;
+    groupCellsByRow(activeSel.cells).forEach((steps, r) => {
+      const t = chordTracks[r];
+      if (!t || !t.enabled) return;
+      if (steps.some((st) => t.steps[st] >= 0 && (t.lens[st] || 1) >= 2)) ok = true;
+    });
+    return ok;
+  }, [activeSel, chordTracks]);
+
+  // Belah: tiap not akor terpilih yang panjangnya >= 2 step dibelah di tengah menjadi dua not berurutan dengan akor
+  // dan dinamika yang sama (panjang ganjil: bagian pertama lebih panjang 1 step). Kedua bagian tetap terpilih,
+  // jadi tombol bisa ditekan lagi untuk membelah lebih kecil. Satu langkah Undo.
+  const splitNotesOfTrack = (t: ChordTrackState, starts: number[]) => {
+    const steps = [...t.steps];
+    const lens = [...t.lens];
+    const vels = t.vels ? [...t.vels] : Array<number>(t.steps.length).fill(0);
+    const created: number[] = [];
+    starts.forEach((st) => {
+      const len = lens[st] || 1;
+      if (steps[st] < 0 || len < 2) return;
+      const first = Math.ceil(len / 2);
+      const at = st + first;
+      if (at >= steps.length || steps[at] >= 0) return;
+      steps[at] = steps[st];
+      lens[at] = len - first;
+      vels[at] = vels[st] || 0;
+      lens[st] = first;
+      created.push(at);
+    });
+    return { track: created.length > 0 ? { ...t, steps, lens, vels } : t, created };
+  };
+
+  const splitSelection = () => {
+    const cur = selRef.current;
+    if (!cur || cur.tab !== 'chord') return;
+    const byRow = groupCellsByRow(cur.cells);
+    const added: number[] = [];
+    chordTracks.forEach((t, ti) => {
+      const starts = byRow.get(ti);
+      if (!starts || !t.enabled) return;
+      splitNotesOfTrack(t, starts).created.forEach((at) => added.push(cellKey(ti, at)));
+    });
+    if (added.length === 0) return;
+    setChordTracks((prev) =>
+      prev.map((t, ti) => {
+        const starts = byRow.get(ti);
+        if (!starts || !t.enabled) return t;
+        return splitNotesOfTrack(t, starts).track;
+      })
+    );
+    setSel(makeSel('chord', [...cur.cells, ...added]));
+  };
+
   const setSelectedNotesLength = (newLen: number) => {
     const cur = selRef.current;
     if (!cur || cur.tab !== 'chord') return;
@@ -5661,6 +5736,17 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   label="Semua"
                   title={activeTab === 'drum' ? 'Ctrl+A — pilih semua bagian drum (klik lagi untuk melepas)' : 'Ctrl+A — pilih semua instrumen akor (klik lagi untuk melepas)'}
                   onClick={() => selectAll(true)}
+                />
+                <ToolBtn
+                  icon={SplitNoteIcon}
+                  label="Belah"
+                  title={
+                    activeTab === 'chord'
+                      ? 'Belah not akor yang panjang jadi dua bagian sama panjang (bisa ditekan lagi untuk membelah lebih kecil)'
+                      : 'Belah hanya untuk not akor di Chord Pad (pad drum tidak punya panjang not)'
+                  }
+                  onClick={splitSelection}
+                  disabled={!canSplit}
                 />
                 <ToolBtn icon={Scissors} label="Potong" title="Ctrl+X" onClick={cutSelection} disabled={!activeSel} />
                 <ToolBtn icon={Copy} label="Salin" title="Ctrl+C" onClick={copySelection} disabled={!activeSel} />
