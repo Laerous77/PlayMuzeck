@@ -5,6 +5,11 @@
 // pemeriksaan kontras. Simpanan tema tetap berisi pilihan asli pengguna; penyesuaian dilakukan
 // saat menerapkan (resolvePalette), jadi tidak ada data yang diubah diam-diam.
 //
+// PRINSIP TAMBAHAN (v3): warna pilihan pengguna adalah ISIAN yang dihormati apa adanya. Yang disesuaikan
+// hanyalah hal yang PASTI bermasalah: label di atas tombol (dipilih dari warna palet sendiri), aksen
+// yang dipakai sebagai TEKS/GARIS, dan aksen yang praktis sama dengan panel/latar (< 1.12:1). Pastel tetap
+// pastel, merah tetap merah; palet yang sudah bagus lolos tanpa diubah satu karakter pun.
+//
 // Cara kerjanya:
 //   1. Dari palette (3 warna, atau 5 warna di mode Kustom) dihitung "Resolved": warna efektif
 //      yang sudah dijamin terbaca (teks ≥ 4.5:1, aksen terlihat ≥ 3:1, dst).
@@ -191,6 +196,12 @@ function oklchToHex(L: number, C: number, h: number): string {
   return linToHex(at(lo));
 }
 
+/** Jarak warna perseptual (Euclid di OKLab). ≈ 0.02 baru terlihat beda, ≥ 0.05 jelas beda (walau terang-gelapnya sama). */
+export function colorDistance(a: string, b: string): number {
+  const A = hexToOklab(a), B = hexToOklab(b);
+  return Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+}
+
 /** Campur di ruang OKLab (lebih rata daripada sRGB). */
 export function mixOk(a: string, b: string, t: number): string {
   const A = hexToOklab(a), B = hexToOklab(b);
@@ -223,6 +234,22 @@ export const readableOn = (hex: string) =>
   contrastRatio(hex, '#000000') >= contrastRatio(hex, '#ffffff') ? '#000000' : '#ffffff';
 
 /**
+ * Tinta label di atas isian `fill`, dipilih dari warna palet sendiri (`pool`): yang terdalam kalau isian terang,
+ * yang paling terang kalau isian gelap. Digeser (rona dipertahankan) sampai ≥ 7:1 bila bisa; bagaimanapun ≥ 4.5:1
+ * (jatuh ke hitam/putih kalau palet tidak punya tinta yang cukup).
+ */
+export function inkOn(fill: string, pool: string[]): string {
+  const sorted = [...pool].sort((a, b) => relLum(a) - relLum(b));
+  const dark = sorted[0], light = sorted[sorted.length - 1];
+  let ink = contrastRatio(dark, fill) >= contrastRatio(light, fill) ? dark : light;
+  if (contrastRatio(ink, fill) < INK_GOOD) {
+    const pushed = pushReq(ink, [[fill, INK_GOOD]]);
+    if (contrastRatio(pushed, fill) >= contrastRatio(ink, fill)) ink = pushed;
+  }
+  return contrastRatio(ink, fill) >= TEXT_MIN ? ink : readableOn(fill);
+}
+
+/**
  * Geser `hex` (rona dipertahankan) sampai SEMUA syarat kontras terpenuhi.
  * Arah (ke putih/ke hitam) dipilih otomatis dari yang paling memungkinkan, jadi tidak bergantung
  * pada asumsi "gelap/terang". Kalau tidak ada warna yang bisa memenuhi semuanya (mis. latar campuran
@@ -252,19 +279,54 @@ export function pushReq(hex: string, req: Req): string {
   return best;
 }
 
+/**
+ * Geser KETERANGAN saja (OKLCH): rona dan kroma dipertahankan sejauh gamut sRGB memungkinkan, jadi pastel
+ * tetap pastel dan merah tetap merah (tidak berubah jadi abu-abu kusam seperti campuran ke hitam/putih).
+ * Dipilih arah dan jarak terkecil yang memenuhi semua syarat. null = tidak ada yang memenuhi.
+ */
+function shiftLightness(hex: string, req: Req): string | null {
+  if (slack(hex, req) >= 1) return hex;
+  const [L0, a, b] = hexToOklab(hex);
+  const C = Math.hypot(a, b), h = (Math.atan2(b, a) * 180) / Math.PI;
+  let best: string | null = null, bestD = Infinity;
+  for (const end of [0, 1]) {
+    if (slack(oklchToHex(end, C, h), req) < 1) continue;   // arah ini tidak pernah cukup
+    const STEPS_N = 40;
+    let prev = L0, hit = -1;
+    for (let i = 1; i <= STEPS_N; i++) {
+      const L = L0 + (end - L0) * (i / STEPS_N);
+      if (slack(oklchToHex(L, C, h), req) >= 1) { hit = L; break; }
+      prev = L;
+    }
+    if (hit < 0) continue;
+    let lo = prev, hi = hit;
+    for (let i = 0; i < 12; i++) {
+      const mid = (lo + hi) / 2;
+      if (slack(oklchToHex(mid, C, h), req) >= 1) hi = mid; else lo = mid;
+    }
+    const cand = oklchToHex(hi, C, h);
+    if (slack(cand, req) >= 1 && Math.abs(hi - L0) < bestD) { best = cand; bestD = Math.abs(hi - L0); }
+  }
+  return best;
+}
+
 /** Versi sederhana: satu rasio minimum untuk semua latar. */
 export const pushContrast = (hex: string, bgs: string[], min: number): string =>
   pushReq(hex, bgs.map((b) => [b, min] as [string, number]));
 
 const TEXT_MIN = 4.5;
 
-/** Teks berwarna di atas latar utama (≥ 4.5:1) dan di atas noda warna yang sama (≥ 3.5:1). */
-function pushText(hex: string, grounds: string[], tint: string): string {
-  const strict: Req = [...grounds.map((g) => [g, TEXT_MIN] as [string, number]), [tint, 3.5]];
-  const r = pushReq(hex, strict);
+/**
+ * Teks berwarna di atas latar utama (≥ `min`, bawaan 4.5:1) dan di atas noda warna yang sama (≥ `tintMin`).
+ * `keepChroma` menggeser terang-gelapnya saja (rona & kroma dipertahankan) supaya pastel tidak jadi abu-abu.
+ */
+function pushText(hex: string, grounds: string[], tint: string, keepChroma = false, min = TEXT_MIN, tintMin = 3.5): string {
+  const fix = (rq: Req) => (keepChroma ? shiftLightness(hex, rq) : null) ?? pushReq(hex, rq);
+  const strict: Req = [...grounds.map((g) => [g, min] as [string, number]), [tint, tintMin]];
+  const r = fix(strict);
   if (slack(r, strict) >= 1) return r;
   // Panel bernada menengah: utamakan latar & panel, noda hanya pelengkap.
-  return pushReq(hex, grounds.map((g) => [g, TEXT_MIN] as [string, number]));
+  return fix(grounds.map((g) => [g, min] as [string, number]));
 }
 
 /** Cari warna ber-rona `h` & kroma `C` yang luminans relatifnya ≈ `target`. */
@@ -319,20 +381,41 @@ export interface Resolved {
   deep: string;      // panel yang lebih dalam dari surface
   text: string;      // teks utama (jadi "white" di kelas lama)
   fg: string;        // teks dasar body
-  accent: string;    // aksen untuk isian/garis (sudah dipastikan terlihat)
+  accent: string;    // aksen untuk ISIAN (tombol, lencana): warna pilihan pengguna, digeser hanya kalau nyaris tak terlihat
   accent2: string;
+  accentLine: string;  // aksen untuk GARIS/CINCIN/ikon: kontras ≥ 3:1 di atas panel dan latar
+  accent2Line: string;
   accentText: string;  // aksen versi teks (kontras ≥ 4.5 di atas panel)
   accent2Text: string;
-  onAccent: string;    // teks di atas tombol aksen
+  accentDisplay: string;  // aksen untuk TEKS BESAR/judul (≥ 3:1, ambang WCAG untuk teks besar): pastel tetap terasa pastel
+  accent2Display: string;
+  onAccent: string;    // teks di atas tombol aksen (diambil dari warna palet sendiri; ≥ 4.5:1, dan ≥ 7:1 bila memungkinkan)
   onAccent2: string;
+  scrim: string;       // warna tirai di belakang popup pada tema terang (hitam di tema gelap)
   /** Penjelasan penyesuaian otomatis untuk ditampilkan ke pengguna. */
   notes: string[];
 }
 
 const TEXT_GOOD = 7;
-const ACCENT_MIN = 3;
+const ACCENT_MIN = 3;   // garis, cincin fokus, ikon
+const FILL_DELTA = 0.05; // ...atau jelas beda RONA/kroma (pink di atas panel lavender: terang sama, tetap terlihat)
+const FILL_MIN = 1.12;   // isian aksen: hanya digeser kalau praktis sama dengan panel/latar. Labelnya sudah dijamin terbaca,
+                         // jadi pastel di atas panel abu-abu (±1.2:1) TIDAK boleh digelapkan.
+const DISPLAY_MIN = 3;   // teks besar (judul bergradasi)
+const INK_GOOD = 7;
 
+const resolveCache = new Map<string, Resolved>();
 export function resolvePalette(p: Palette): Resolved {
+  const key = JSON.stringify(normalizePalette(p));
+  const hit = resolveCache.get(key);
+  if (hit) return hit;
+  const out = computeResolved(p);
+  if (resolveCache.size >= 16) resolveCache.delete(resolveCache.keys().next().value as string);
+  resolveCache.set(key, out);
+  return out;
+}
+
+function computeResolved(p: Palette): Resolved {
   const notes: string[] = [];
   const surface = p.surface.toLowerCase();
   const custom = isCustom(p);
@@ -386,24 +469,45 @@ export function resolvePalette(p: Palette): Resolved {
   const fg = custom ? text : fixText(fg0);
   if (custom && text !== text0) notes.push('Warna teks disesuaikan otomatis agar terbaca di atas latar dan panel.');
 
-  // Aksen untuk isian/garis: minimal terlihat jelas (3:1) di atas panel dan latar.
+  // Aksen punya DUA versi. Isian (tombol/lencana berlabel hitam atau putih) cukup 1,6:1 terhadap panel/latar:
+  // labelnya sudah terbaca, jadi pastel boleh tetap pastel. Garis, cincin fokus, dan ikon butuh 3:1.
+  // Keduanya hanya digeser terang-gelapnya (rona & kroma dipertahankan).
   const fixAccent = (c: string, label: string) => {
-    const eff = pushContrast(c.toLowerCase(), [surface, bg], ACCENT_MIN);
-    if (eff !== c.toLowerCase()) notes.push(`${label} terlalu mirip warna panel/latar, jadi dicerahkan atau digelapkan sedikit agar terlihat.`);
-    return eff;
+    const raw = c.toLowerCase();
+    const rf: Req = [[surface, FILL_MIN], [bg, FILL_MIN]];
+    const rl: Req = [[surface, ACCENT_MIN], [bg, ACCENT_MIN]];
+    // Isian sudah terlihat kalau terang-gelapnya cukup ATAU warnanya jelas berbeda dari panel dan latar: dibiarkan apa adanya.
+    const visible = [surface, bg].every((g) => contrastRatio(raw, g) >= FILL_MIN || colorDistance(raw, g) >= FILL_DELTA);
+    const fill = visible ? raw : (shiftLightness(raw, rf) ?? pushReq(raw, rf));
+    const line = shiftLightness(raw, rl) ?? pushReq(raw, rl);
+    if (fill !== raw) notes.push(`${label} terlalu mirip warna panel/latar, jadi digeser sedikit terang-gelapnya agar terlihat.`);
+    return { fill, line };
   };
-  const accent = fixAccent(p.accent, 'Aksen Audio');
-  const accent2 = fixAccent(p.accent2, 'Aksen Kuis');
+  const a1 = fixAccent(p.accent, 'Aksen Audio');
+  const a2 = fixAccent(p.accent2, 'Aksen Kuis');
+  const accent = a1.fill, accent2 = a2.fill;
 
   // Aksen sebagai TEKS (text-accent): kontras 4.5:1 di atas panel, latar, dan panel bernoda aksen.
-  const accentText = pushText(accent, grounds, mixOk(surface, accent, 0.25));
-  const accent2Text = pushText(accent2, grounds, mixOk(surface, accent2, 0.25));
+  const accentText = pushText(accent, grounds, mixOk(surface, accent, 0.25), true);
+  const accent2Text = pushText(accent2, grounds, mixOk(surface, accent2, 0.25), true);
+
+  // Judul besar bergradasi aksen: ambang teks besar (3:1) cukup, jadi sage tetap sage dan pink tetap pink.
+  const accentDisplay = pushText(accent, grounds, mixOk(surface, accent, 0.25), true, DISPLAY_MIN, 2);
+  const accent2Display = pushText(accent2, grounds, mixOk(surface, accent2, 0.25), true, DISPLAY_MIN, 2);
+
+  // Label tombol: tinta diambil dari warna palet sendiri (teks/latar/panel), bukan hitam-putih mentah.
+  const inkPool = [text, bg, surface, deep];
+  const onAccent = inkOn(accent, inkPool);
+  const onAccent2 = inkOn(accent2, inkPool);
+
+  // Tirai di belakang popup: tema terang butuh tirai gelap sungguhan (bg-black/NN di sana = warna latar terang).
+  const scrim = tone === 'light' ? mixOk(text, '#000000', 0.55) : '#000000';
 
   return {
     tone, custom, surface, bg, deep, text, fg,
-    accent, accent2, accentText, accent2Text,
-    onAccent: readableOn(accent),
-    onAccent2: readableOn(accent2),
+    accent, accent2, accentLine: a1.line, accent2Line: a2.line, accentText, accent2Text,
+    accentDisplay, accent2Display,
+    onAccent, onAccent2, scrim,
     notes,
   };
 }
@@ -522,8 +626,13 @@ export function paletteVars(p: Palette): Record<string, string> {
     '--t-surface': r.surface,
     '--t-accent': r.accent,
     '--t-accent2': r.accent2,
+    '--t-accent-line': r.accentLine,
+    '--t-accent2-line': r.accent2Line,
     '--t-accent-text': r.accentText,
     '--t-accent2-text': r.accent2Text,
+    '--t-accent-display': r.accentDisplay,
+    '--t-accent2-display': r.accent2Display,
+    '--t-scrim': r.scrim,
     '--t-on-accent': r.onAccent,
     '--t-on-accent2': r.onAccent2,
     '--t-deep': r.deep,
@@ -585,8 +694,8 @@ export function auditPalette(p: Palette): ContrastRow[] {
     rows.push(row('text-bg', 'Teks di atas latar', rawText, r.bg, TEXT_MIN));
     rows.push(row('text-surface', 'Teks di atas panel', rawText, r.surface, TEXT_MIN));
   }
-  rows.push(row('accent', 'Aksen Audio di atas panel', p.accent, r.surface, ACCENT_MIN));
-  rows.push(row('accent2', 'Aksen Kuis di atas panel', p.accent2, r.surface, ACCENT_MIN));
+  rows.push(row('accent', 'Aksen Audio terlihat di atas panel', p.accent, r.surface, FILL_MIN));
+  rows.push(row('accent2', 'Aksen Kuis terlihat di atas panel', p.accent2, r.surface, FILL_MIN));
   rows.push(row('on-accent', 'Teks di tombol Aksen Audio', r.onAccent, r.accent, TEXT_MIN));
   rows.push(row('on-accent2', 'Teks di tombol Aksen Kuis', r.onAccent2, r.accent2, TEXT_MIN));
   return rows;

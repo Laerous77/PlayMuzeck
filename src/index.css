@@ -12,8 +12,13 @@
   --t-surface: #14213D;
   --t-accent: #FCA311;
   --t-accent2: #FC1212;
+  --t-accent-line: #FCA311;   /* aksen untuk garis/cincin/ikon: dijamin ≥ 3:1. Isian (bg-accent) dihormati apa adanya. */
+  --t-accent2-line: #FC1212;
   --t-accent-text: #FCA311;   /* aksen versi TEKS: dijamin kontras ≥ 4.5:1 di atas panel */
   --t-accent2-text: #FF483A;
+  --t-accent-display: #FCA311; /* aksen untuk teks BESAR/judul bergradasi: dijamin ≥ 3:1 */
+  --t-accent2-display: #FF483A;
+  --t-scrim: #000000;          /* tirai di belakang popup (tema terang: gelap sungguhan) */
   --t-on-accent: #000000;
   --t-on-accent2: #000000;
   --t-deep: #0d1528;   /* panel lebih dalam dari surface */
@@ -56,6 +61,48 @@ html[data-mode="light"] { color-scheme: light; }
   .fill-red-500\/80 { fill: color-mix(in srgb, var(--color-red-400) 80%, transparent); }
   .group:hover .group-hover\:text-accent { color: var(--t-accent-text); }
 
+  /* Garis, cincin fokus, dan kontrol formulir memakai versi aksen yang dijamin terlihat (≥ 3:1),
+     sedangkan isian (bg-accent) tetap memakai warna pilihan pengguna. */
+  .border-accent, .focus\:border-accent:focus, .hover\:border-accent:hover, .focus-within\:border-accent:focus-within { border-color: var(--t-accent-line); }
+  .border-accent2, .focus\:border-accent2:focus, .hover\:border-accent2:hover { border-color: var(--t-accent2-line); }
+  .ring-accent { --tw-ring-color: var(--t-accent-line); }
+  .ring-accent2 { --tw-ring-color: var(--t-accent2-line); }
+  .accent-accent { accent-color: var(--t-accent-line); }
+  .accent-accent2 { accent-color: var(--t-accent2-line); }
+  .stroke-accent { stroke: var(--t-accent-line); }
+  .stroke-accent2 { stroke: var(--t-accent2-line); }
+
+  /* Judul bergradasi aksen (teks transparan + bg-clip-text) adalah teks BESAR: ambang 3:1 cukup, jadi warnanya
+     tetap terasa seperti warna pilihan pengguna (sage tetap sage, pink tetap pink) dan tidak jadi abu-abu kusam. */
+  .bg-clip-text.from-accent { --tw-gradient-from: var(--t-accent-display); }
+  .bg-clip-text.to-accent2 { --tw-gradient-to: var(--t-accent2-display); }
+
+  /* Garis & cincin BERALFA (border-accent/40, ring-accent/40, …): isian pastel pada alfa 30-40% nyaris hilang di atas
+     panel terang, jadi garisnya memakai versi GARIS (≥ 3:1) dengan alfa yang sama. Di tema bawaan keduanya identik. */
+  .border-accent\/20 { border-color: color-mix(in srgb, var(--t-accent-line) 20%, transparent); }
+  .border-accent\/25 { border-color: color-mix(in srgb, var(--t-accent-line) 25%, transparent); }
+  .border-accent\/30 { border-color: color-mix(in srgb, var(--t-accent-line) 30%, transparent); }
+  .border-accent\/40 { border-color: color-mix(in srgb, var(--t-accent-line) 40%, transparent); }
+  .border-accent\/50 { border-color: color-mix(in srgb, var(--t-accent-line) 50%, transparent); }
+  .border-accent\/60 { border-color: color-mix(in srgb, var(--t-accent-line) 60%, transparent); }
+  .border-accent\/70 { border-color: color-mix(in srgb, var(--t-accent-line) 70%, transparent); }
+  .border-accent\/90 { border-color: color-mix(in srgb, var(--t-accent-line) 90%, transparent); }
+  .border-accent2\/30 { border-color: color-mix(in srgb, var(--t-accent2-line) 30%, transparent); }
+  .border-accent2\/40 { border-color: color-mix(in srgb, var(--t-accent2-line) 40%, transparent); }
+  .border-accent2\/50 { border-color: color-mix(in srgb, var(--t-accent2-line) 50%, transparent); }
+  .border-accent2\/60 { border-color: color-mix(in srgb, var(--t-accent2-line) 60%, transparent); }
+  .hover\:border-accent\/30:hover { border-color: color-mix(in srgb, var(--t-accent-line) 30%, transparent); }
+  .hover\:border-accent\/40:hover { border-color: color-mix(in srgb, var(--t-accent-line) 40%, transparent); }
+  .hover\:border-accent\/50:hover { border-color: color-mix(in srgb, var(--t-accent-line) 50%, transparent); }
+  .hover\:border-accent\/60:hover { border-color: color-mix(in srgb, var(--t-accent-line) 60%, transparent); }
+  .hover\:border-accent2\/50:hover { border-color: color-mix(in srgb, var(--t-accent2-line) 50%, transparent); }
+  .focus\:border-accent\/60:focus { border-color: color-mix(in srgb, var(--t-accent-line) 60%, transparent); }
+  .open\:border-accent\/40:is([open], :popover-open, :open) { border-color: color-mix(in srgb, var(--t-accent-line) 40%, transparent); }
+  .ring-accent\/40 { --tw-ring-color: color-mix(in srgb, var(--t-accent-line) 40%, transparent); }
+  .ring-accent\/50 { --tw-ring-color: color-mix(in srgb, var(--t-accent-line) 50%, transparent); }
+  .ring-accent2\/40 { --tw-ring-color: color-mix(in srgb, var(--t-accent2-line) 40%, transparent); }
+  .focus\:ring-accent\/50:focus { --tw-ring-color: color-mix(in srgb, var(--t-accent-line) 50%, transparent); }
+
   /* Tombol beraksen dengan teks putih/hitam tertulis langsung di kelas: pakai warna yang pasti terbaca. */
   .bg-accent.text-white, .bg-accent.text-black { color: var(--t-on-accent); }
   .bg-accent2.text-white, .bg-accent2.text-black { color: var(--t-on-accent2); }
@@ -76,11 +123,19 @@ html[data-mode="light"] { color-scheme: light; }
   .hover\:bg-\[\#e58e00\]:hover { background-color: color-mix(in srgb, var(--t-accent) 80%, transparent); }
   .text-\[\#FCA311\] { color: var(--t-accent-text); }
   .text-\[\#E5E5E5\] { color: var(--t-fg); }
-  .border-\[\#FCA311\], .focus\:border-\[\#FCA311\]:focus, .focus-within\:border-\[\#FCA311\]:focus-within { border-color: var(--t-accent); }
-  .ring-\[\#FCA311\] { --tw-ring-color: var(--t-accent); }
-  .ring-\[\#FC1212\] { --tw-ring-color: var(--t-accent2); }
+  .border-\[\#FCA311\], .focus\:border-\[\#FCA311\]:focus, .focus-within\:border-\[\#FCA311\]:focus-within { border-color: var(--t-accent-line); }
+  .ring-\[\#FCA311\] { --tw-ring-color: var(--t-accent-line); }
+  .ring-\[\#FC1212\] { --tw-ring-color: var(--t-accent2-line); }
   .ring-\[\#14213D\] { --tw-ring-color: var(--t-surface); }
   .via-\[\#FC1212\] { --tw-gradient-via: var(--t-accent2); }
+}
+
+/* Tema TERANG: di sana "bg-black/NN" berarti warna latar yang terang, jadi tirai popup tidak menggelapkan apa pun.
+   Beri tirai gelap sungguhan (warna dari teks tema, bukan hitam pekat) supaya popup tetap terpisah dari halaman. */
+@layer utilities {
+  html[data-mode="light"] .fixed.inset-0[class*="bg-black/"] {
+    background-color: color-mix(in srgb, var(--t-scrim) 55%, transparent);
+  }
 }
 
 @layer base {
@@ -202,7 +257,7 @@ html[data-mode="light"] { color-scheme: light; }
    Penanda ketukan yang sedang berbunyi dipasang lewat atribut DOM (bukan state React),
    supaya grid 600+ sel tidak dirender ulang di setiap ketukan. */
 [data-step][data-playing="1"] {
-  box-shadow: inset 0 0 0 2px #ffffff;
+  box-shadow: inset 0 0 0 2px var(--color-white); /* = warna teks tema: putih di tema gelap, gelap di tema terang */
   position: relative;
   z-index: 10;
 }
@@ -215,7 +270,7 @@ button[data-seek][data-playing="1"] {
 /* ── Dropdown bawaan browser: judul grup (optgroup) ikut warna tema, bukan putih bawaan ── */
 select optgroup {
   background-color: var(--t-surface);
-  color: var(--t-accent);
+  color: var(--t-accent-text);
   font-style: normal;
   font-weight: 800;
 }
