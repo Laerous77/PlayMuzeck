@@ -208,7 +208,7 @@ const Leaderboard: React.FC<{
         return (
           <div
             key={p.id}
-            className={`flex items-center justify-between p-3 rounded-xl border ${
+            className={`flex items-center justify-between gap-2 p-3 rounded-xl border ${
               rank === 0 ? 'bg-accent/10 border-accent/40' : p.id === myId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'
             }`}
           >
@@ -919,13 +919,13 @@ export const MultiplayerInviteModal: React.FC<MultiplayerInviteModalProps> = ({
           </AnimatePresence>
         </div>
 
-        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-accent2 text-on-accent2 shadow-md shadow-accent2/20">
+        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/50 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-accent2 text-on-accent2 shadow-md shadow-accent2/20 shrink-0">
               <Users className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
                 <h3 className="text-base sm:text-lg font-bold text-white">Multiplayer Arena</h3>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent2/20 text-accent2 border border-accent2/30">
                   Online Match
@@ -935,7 +935,7 @@ export const MultiplayerInviteModal: React.FC<MultiplayerInviteModalProps> = ({
             </div>
           </div>
 
-          <button onClick={onClose} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/60 transition-colors cursor-pointer">
+          <button onClick={onClose} className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/60 transition-colors cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1251,22 +1251,22 @@ export const MultiplayerInviteModal: React.FC<MultiplayerInviteModalProps> = ({
               <div className="space-y-2">
                 <span className="text-xs font-bold text-gray-300 uppercase tracking-wider">Pemain di Ruangan ({room.players.length})</span>
                 {room.players.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 rounded-xl bg-black/40 border border-white/[0.08]">
-                    <div className="flex items-center gap-2.5">
+                  <div key={p.id} className="flex items-center justify-between gap-2 p-3 rounded-xl bg-black/40 border border-white/[0.08]">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       <PlayerAvatar player={p} size="md" />
-                      <span className="text-sm font-bold text-white">
+                      <span className="text-sm font-bold text-white truncate min-w-0">
                         {p.name}
                         {p.id === mySocketId && <span className="text-[10px] text-gray-400 ml-1">(Kamu)</span>}
                       </span>
-                      {p.isHost && <Crown className="w-3.5 h-3.5 text-accent" />}
-                      {p.observer && <span className="text-[10px] font-bold text-sky-300 px-1.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">Pengawas</span>}
+                      {p.isHost && <Crown className="w-3.5 h-3.5 text-accent shrink-0" />}
+                      {p.observer && <span className="shrink-0 text-[10px] font-bold text-sky-300 px-1.5 py-0.5 rounded-full bg-sky-500/15 border border-sky-500/30">Pengawas</span>}
                       {p.connected === false && <span className="text-[10px] text-amber-300/80">offline</span>}
                     </div>
                     {canKick(p) && (
                       <button
                         onClick={() => setKickTarget(p)}
                         title="Keluarkan pemain"
-                        className="p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 cursor-pointer"
+                        className="shrink-0 p-1.5 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-300 cursor-pointer"
                       >
                         <UserX className="w-3.5 h-3.5" />
                       </button>

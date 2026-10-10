@@ -460,8 +460,8 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
         transition={{ type: 'spring', damping: 30, stiffness: 350 }}
         className="relative z-10 w-full max-w-lg bg-surface border-l border-white/[0.08] shadow-2xl flex flex-col h-full overflow-hidden"
       >
-        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/40 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/40 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
             {currentStep !== 'cart' && currentStep !== 'success' && !(currentStep === 'payment_process' && pendingOrder && !demoFlow) && (
               <button
                 onClick={() => {
@@ -473,17 +473,17 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
                 <ChevronLeft className="w-5 h-5" />
               </button>
             )}
-            <div className="p-2 rounded-xl bg-accent text-on-accent">
+            <div className="p-2 rounded-xl bg-accent text-on-accent shrink-0">
               <ShoppingBag className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-base font-bold text-white">
                 {currentStep === 'cart' && 'Keranjang Belanja'}
                 {currentStep === 'buyer_data' && 'Konfirmasi & QRIS Midtrans'}
                 {currentStep === 'payment_process' && (pendingOrder && !demoFlow ? 'Menunggu Pembayaran' : 'Pindai QRIS Midtrans')}
                 {currentStep === 'success' && 'Pembayaran Terverifikasi'}
               </h3>
-              <p className="text-xs text-gray-400 font-medium">
+              <p className="text-xs text-gray-400 font-medium truncate">
                 {currentStep === 'success'
                   ? 'Transaksi Lunas Terverifikasi'
                   : currentStep === 'payment_process' && pendingOrder && !demoFlow
@@ -495,7 +495,7 @@ TOTAL PEMBAYARAN : ${formatIDR(completedOrder.total)}
 
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/60 transition-colors cursor-pointer"
+            className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/60 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>

@@ -595,12 +595,12 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
       {deckToView && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="w-full max-w-2xl max-h-[85dvh] bg-surface border border-white/15 rounded-3xl p-4 sm:p-6 shadow-2xl flex flex-col space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <div>
-                <h3 className="text-lg font-black text-white">{deckToView.title}</h3>
+            <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
+              <div className="min-w-0">
+                <h3 className="text-lg font-black text-white break-words">{deckToView.title}</h3>
                 <p className="text-xs text-gray-400">Pratinjau Kuis • {deckToView.cardCount} Kartu Pertanyaan</p>
               </div>
-              <button onClick={() => setDeckToView(null)} className="p-1.5 rounded-lg text-gray-400 hover:text-white cursor-pointer">
+              <button onClick={() => setDeckToView(null)} className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-white cursor-pointer">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -608,9 +608,9 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
             <div className="flex-1 overflow-y-auto space-y-4 pr-1 text-xs">
               {(deckToView.questions || []).slice(0, canAccess(deckToView) ? undefined : 3).map((q, qIdx) => (
                 <div key={q.id || qIdx} className="p-4 rounded-2xl bg-black/40 border border-white/5 space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-accent2">Soal #{qIdx + 1}</span>
-                    {q.category && <span className="text-[10px] text-gray-400 font-mono">{q.category}</span>}
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="font-bold text-accent2 shrink-0">Soal #{qIdx + 1}</span>
+                    {q.category && <span className="text-[10px] text-gray-400 font-mono truncate min-w-0">{q.category}</span>}
                   </div>
                   <p className="text-white font-medium text-sm leading-relaxed">{q.question}</p>
 

@@ -488,15 +488,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
           </AnimatePresence>
         </div>
 
-        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-accent2 text-on-accent2 shadow-md shadow-accent2/20">
+        <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/50 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2.5 rounded-xl bg-accent2 text-on-accent2 shadow-md shadow-accent2/20 shrink-0">
               <Globe className="w-5 h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="min-w-0">
+              <div className="flex items-center gap-x-2 gap-y-1 flex-wrap">
                 <h3 className="text-base sm:text-lg font-bold text-white">Arena Global</h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent2/20 text-accent2 border border-accent2/30">
+                <span className="max-w-full truncate text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent2/20 text-accent2 border border-accent2/30">
                   {arena ? arena.channel : 'Tanpa kode ruangan'}
                 </span>
               </div>
@@ -505,7 +505,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
               </p>
             </div>
           </div>
-          <button onClick={handleClose} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/60 transition-colors cursor-pointer" aria-label="Tutup">
+          <button onClick={handleClose} className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-black/60 transition-colors cursor-pointer" aria-label="Tutup">
             <X className="w-5 h-5" />
           </button>
         </div>

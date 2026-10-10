@@ -574,19 +574,19 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
         />
 
         {/* Header Atas */}
-        <div className="p-4 sm:p-5 border-b border-white/10 bg-black/50 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-accent2 text-on-accent2 flex items-center justify-center shadow-lg shadow-accent2/20 font-black">
+        <div className="p-4 sm:p-5 border-b border-white/10 bg-black/50 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 shrink-0 rounded-xl bg-accent2 text-on-accent2 flex items-center justify-center shadow-lg shadow-accent2/20 font-black">
               <Sliders className="w-5 h-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h3 className="text-base sm:text-lg font-black text-white">Studio Quiz Editor Mandiri</h3>
               <p className="text-xs text-gray-400">
                 Alur bertahap: Tema → Topik → Info Kuis → Pengaturan → Soal → Review
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-2 rounded-xl text-gray-400 hover:text-white hover:bg-black/60 cursor-pointer">
+          <button onClick={onClose} className="shrink-0 p-2 rounded-xl text-gray-400 hover:text-white hover:bg-black/60 cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
