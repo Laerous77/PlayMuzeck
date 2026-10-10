@@ -1,5 +1,6 @@
 // Tes Arena Global: siklus lobi -> soal -> jeda -> podium, kunci jawaban tidak bocor, pencatatan skor oleh server,
-// dan sumber kuis HANYA kuis Komunitas yang disetujui (deck bawaan gratis/berbayar tidak pernah dipakai).
+// dan sumber kuis HANYA kuis Komunitas yang disetujui + deck preset Arena buatan admin (deck bawaan gratis/berbayar tidak pernah dipakai).
+// Tes khusus deck preset (12 tema x 20 soal, rute admin, pemilih campuran) ada di tests/arenaPreset.test.ts.
 // Memakai io/socket palsu dan jam terkendali, jadi tidak butuh jaringan. Jalankan: npx tsx tests/globalArena.test.ts
 import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
 

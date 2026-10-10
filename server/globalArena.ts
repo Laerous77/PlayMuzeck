@@ -5,11 +5,14 @@
 // Cara kerja:
 //   - Pemain menekan "Gabung Arena Global"; server menempatkan mereka ke kanal yang masih punya tempat. Tidak ada kode,
 //     tidak ada host, tidak ada daftar ruangan: pemain tidak perlu memilih apa pun.
-//   - Server yang memilih kuis dan mengacak soalnya. Sumber kuis HANYA kuis Komunitas yang SUDAH DISETUJUI moderasi.
-//     Deck bawaan (3 starter gratis maupun 12 deck berbayar) TIDAK PERNAH dipakai di Arena Global, supaya isi deck
-//     berbayar tidak bisa dimainkan gratis lewat arena. Klien tidak pernah mengirim soal, jadi skor tidak bisa
+//   - Server yang memilih kuis dan mengacak soalnya. Sumber kuis ada DUA:
+//       1. kuis Komunitas yang SUDAH DISETUJUI moderasi, dan
+//       2. DECK PRESET ARENA: 12 tema x 20 soal yang diatur admin (server/arenaPresetRoutes.ts, tabel arena_preset_decks).
+//     Deck preset tidak pernah muncul di Perpustakaan dan tidak bisa dimainkan di luar Arena Global.
+//     Deck bawaan Pusat Kuis (3 starter gratis maupun 12 deck berbayar) TIDAK PERNAH dipakai di Arena Global, supaya isi
+//     deck berbayar tidak bisa dimainkan gratis lewat arena. Klien tidak pernah mengirim soal, jadi skor tidak bisa
 //     dipalsukan lewat soal buatan sendiri.
-//   - Bila belum ada kuis Komunitas yang disetujui, lobi menunggu dan server mencoba lagi berkala.
+//   - Bila belum ada kuis sama sekali (Komunitas kosong dan belum ada preset aktif), lobi menunggu dan server mencoba lagi berkala.
 //   - Permainan berjalan terus dalam siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI.
 //   - Pemain yang masuk saat permainan berjalan menonton dulu (tanpa kunci jawaban) dan ikut di permainan berikutnya.
 //   - Saat permainan TUNTAS sampai soal terakhir, skor tiap akun yang ikut dari awal dicatat ke Papan Peringkat oleh server
@@ -21,6 +24,7 @@ import type { Server, Socket } from 'socket.io';
 import { randomBytes, randomInt } from 'crypto';
 import { ruleScan } from './quizModeration';
 import { isBadName } from './nameFilter';
+import { ARENA_THEME_IDS } from '../src/data/quiz/arenaThemes';
 
 /* ───────────────────────────── Pengaturan ───────────────────────────── */
 
@@ -41,8 +45,10 @@ const MIN_POINTS_PERCENT = 0.3;
 const NO_DECK_RETRY_MS = 10_000;
 /** Berapa kali undian diulang bila hasilnya sama dengan kuis permainan sebelumnya. */
 const REPEAT_REROLLS = 3;
-/** Id deck Arena Global yang sah: deck-custom-shared-shq_<12 hex> (kuis Komunitas). Id deck bawaan/starter ditolak. */
+/** Id kuis Komunitas yang sah: deck-custom-shared-shq_<12 hex>. */
 const COMMUNITY_DECK_ID_RE = /^deck-custom-shared-shq_[0-9a-f]{12}$/;
+/** Id deck preset Arena yang sah: arena-preset-<id tema> (hanya 12 tema resmi). Id deck bawaan/starter ditolak. */
+const PRESET_DECK_ID_RE = new RegExp(`^arena-preset-(?:${ARENA_THEME_IDS.join('|')})$`);
 const EMPTY_CHANNEL_MS = 10 * 60_000;
 const ALLOWED_EMOJIS = new Set(['🔥', '👏', '😂', '😭', '😮', '😞', '😡', '💀', '❤️']);
 
@@ -63,12 +69,12 @@ export interface ArenaQuestion {
 }
 
 export interface ArenaDeck {
-  /** Id yang dipakai papan peringkat: "deck-custom-shared-shq_xxx" (kuis Komunitas yang disetujui). */
+  /** Id yang dipakai papan peringkat: "deck-custom-shared-shq_xxx" (kuis Komunitas) atau "arena-preset-<tema>" (deck preset admin). */
   deckId: string;
   title: string;
-  /** Arena Global hanya memakai kuis Komunitas. */
-  source: 'community';
-  /** Pembuat kuis komunitas (tampil di layar). */
+  /** Arena Global hanya memakai kuis Komunitas yang disetujui dan deck preset Arena buatan admin. */
+  source: 'community' | 'preset';
+  /** Pembuat kuis komunitas (tampil di layar). Kosong untuk deck preset. */
   ownerName?: string;
   questions: ArenaQuestion[];
 }
@@ -87,7 +93,7 @@ export interface ArenaFinishedGame {
 }
 
 export interface ArenaDeps {
-  /** Pilih satu kuis komunitas yang sudah disetujui, acak (null = tidak ada). */
+  /** Pilih satu kuis acak dari gabungan kuis Komunitas yang disetujui + deck preset Arena aktif (null = tidak ada). */
   pickCommunityDeck?: () => Promise<ArenaDeck | null>;
   /** Dipanggil saat permainan tuntas; hasilnya (per userId) dikirim ke pemain di layar podium. */
   onFinished?: (game: ArenaFinishedGame) => Promise<Record<string, ArenaOutcome> | void>;
@@ -223,12 +229,15 @@ function validQuestion(q: any): q is ArenaQuestion {
   );
 }
 
-/** Deck yang sah untuk Arena Global: kuis Komunitas dengan id sah dan cukup soal yang valid. Deck bawaan/starter ditolak. */
+/**
+ * Deck yang sah untuk Arena Global: kuis Komunitas (id shq_...) ATAU deck preset Arena (id arena-preset-<tema>),
+ * dengan cukup soal yang valid. Id dan sumber harus cocok; deck bawaan/starter selalu ditolak.
+ */
 export function isArenaEligibleDeck(d: ArenaDeck | null | undefined): d is ArenaDeck {
   return Boolean(
     d &&
-      d.source === 'community' &&
-      COMMUNITY_DECK_ID_RE.test(String(d.deckId)) &&
+      ((d.source === 'community' && COMMUNITY_DECK_ID_RE.test(String(d.deckId))) ||
+        (d.source === 'preset' && PRESET_DECK_ID_RE.test(String(d.deckId)))) &&
       Array.isArray(d.questions) &&
       d.questions.filter(validQuestion).length >= ARENA_MIN_QUESTIONS
   );
@@ -260,7 +269,7 @@ function publicState(ch: Channel) {
     deckTitle: ch.deck?.title ?? '',
     deckSource: ch.deck?.source ?? null,
     ownerName: ch.deck?.ownerName ?? '',
-    /** Lobi menunggu karena belum ada kuis Komunitas yang disetujui. */
+    /** Lobi menunggu karena belum ada kuis (Komunitas kosong dan belum ada deck preset aktif). */
     waitingForQuiz: ch.phase === 'lobby' && !ch.deck && ch.noDeck,
     currentQIndex: ch.currentQIndex,
     totalQuestions: ch.questions.length,
@@ -381,7 +390,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
   }
 
   /**
-   * Pilih kuis berikutnya: HANYA kuis Komunitas yang sudah disetujui. Deck bawaan (starter gratis & berbayar) tidak
+   * Pilih kuis berikutnya: kuis Komunitas yang sudah disetujui + deck preset Arena. Deck bawaan (starter gratis & berbayar) tidak
    * pernah dipakai. Undian diulang beberapa kali bila sama dengan kuis sebelumnya (kecuali memang hanya ada satu).
    */
   async function chooseDeck(ch: Channel): Promise<ArenaDeck | null> {
@@ -394,7 +403,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
         if (d.deckId !== ch.lastDeckId) return d;
         fallback = d;
       } catch (e: any) {
-        console.error('[arena] gagal memilih kuis komunitas:', e?.message || e);
+        console.error('[arena] gagal memilih kuis arena:', e?.message || e);
         break;
       }
     }

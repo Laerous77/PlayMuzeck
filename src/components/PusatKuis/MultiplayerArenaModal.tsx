@@ -3,7 +3,7 @@
 // ARENA GLOBAL — multiplayer publik TANPA kode ruangan (server/globalArena.ts).
 //
 // Pemain cukup menekan "Gabung Arena Global". Server menempatkan pemain di kanal yang masih punya tempat, memilih
-// kuisnya (HANYA kuis Komunitas yang SUDAH DISETUJUI; deck bawaan gratis/berbayar tidak dipakai), mengacak soalnya, dan menjalankan
+// kuisnya (kuis Komunitas yang SUDAH DISETUJUI + deck preset Arena dari admin; deck bawaan gratis/berbayar tidak dipakai), mengacak soalnya, dan menjalankan
 // siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI berikutnya.
 // Tidak ada host, tidak ada kode, tidak ada daftar ruangan, dan klien tidak pernah mengirim soal.
 //
@@ -53,9 +53,9 @@ interface ArenaState {
   channel: string;
   phase: Phase;
   deckTitle: string;
-  deckSource: 'community' | null;
+  deckSource: 'community' | 'preset' | null;
   ownerName: string;
-  /** Lobi menunggu karena belum ada kuis Komunitas yang disetujui. */
+  /** Lobi menunggu karena belum ada kuis (Komunitas kosong dan belum ada deck preset aktif). */
   waitingForQuiz?: boolean;
   currentQIndex: number;
   totalQuestions: number;
@@ -683,12 +683,18 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
 
   /* ───────── Tampilan ───────── */
 
-  const deckBadge = arena?.deckSource === 'community' ? (
-    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
-      <ShieldCheck className="w-3 h-3" />
-      Kuis Komunitas{arena.ownerName ? ` oleh ${arena.ownerName}` : ''}
-    </span>
-  ) : null;
+  const deckBadge =
+    arena?.deckSource === 'community' ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+        <ShieldCheck className="w-3 h-3" />
+        Kuis Komunitas{arena.ownerName ? ` oleh ${arena.ownerName}` : ''}
+      </span>
+    ) : arena?.deckSource === 'preset' ? (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30">
+        <ShieldCheck className="w-3 h-3" />
+        Kuis Pilihan Arena
+      </span>
+    ) : null;
 
   const connectedAndIdle = connection === 'connected' && !arena;
 
@@ -757,7 +763,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                 <p className="text-sm font-black text-white">Cara kerja</p>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Tidak ada kode, host, atau daftar ruangan. Server menempatkanmu di kanal yang ramai dan memilihkan kuisnya.</li>
-                  <li>Kuis berasal dari kuis Komunitas yang <strong className="text-white">sudah lolos pemeriksaan</strong>. Permainan berjalan terus: lobi, soal, jeda, podium.</li>
+                  <li>Kuis berasal dari kuis Komunitas yang <strong className="text-white">sudah lolos pemeriksaan</strong> dan kuis pilihan Arena dari admin. Permainan berjalan terus: lobi, soal, jeda, podium.</li>
                   <li>Masuk saat permainan berjalan? Kamu menonton dulu dan ikut di permainan berikutnya.</li>
                   <li>Skor akun login masuk <strong className="text-white">Papan Peringkat</strong> bila permainan tuntas dan minimal 2 pemain yang masuk akun ikut bermain.</li>
                 </ul>
@@ -809,9 +815,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                 ) : arena.waitingForQuiz ? (
                   <div className="max-w-sm mx-auto p-4 rounded-2xl bg-black/40 border border-white/[0.08] space-y-1.5">
                     <Hourglass className="w-5 h-5 text-accent mx-auto" aria-hidden="true" />
-                    <p className="text-sm font-bold text-white">Belum ada kuis Komunitas yang tersedia</p>
+                    <p className="text-sm font-bold text-white">Belum ada kuis yang tersedia</p>
                     <p className="text-[11px] text-gray-400 leading-relaxed">
-                      Arena Global hanya memakai kuis Komunitas yang sudah disetujui. Server mencari lagi otomatis, jadi kamu bisa menunggu di sini.
+                      Arena Global memakai kuis Komunitas yang sudah disetujui dan kuis pilihan Arena dari admin. Server mencari lagi otomatis, jadi kamu bisa menunggu di sini.
                     </p>
                   </div>
                 ) : (

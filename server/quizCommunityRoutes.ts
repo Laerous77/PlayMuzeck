@@ -41,6 +41,8 @@ import {
 } from './quizModeration';
 import { notifyUser } from './notifications';
 import type { ArenaDeck } from './globalArena';
+import { parsePresetDeckId } from '../src/data/quiz/arenaThemes';
+import { ensureArenaPresetSchema } from './arenaPresetRoutes';
 
 type Db = Pick<Pool, 'query'>;
 
@@ -239,7 +241,7 @@ export function sanitizeSharedSettings(raw: any): { penaltyPercent: number; scor
 /* ───────────────────────── Skor Arena Global ───────────────────────── */
 
 export interface FinishedMultiplayerGame {
-  /** Id deck bawaan, atau "deck-custom-shared-shq_xxx" untuk kuis komunitas. */
+  /** Id deck bawaan, "deck-custom-shared-shq_xxx" untuk kuis komunitas, atau "arena-preset-<tema>" untuk deck preset Arena. */
   deckId: string;
   /** Soal yang dimainkan (dipilih server; bawaan diverifikasi ulang terhadap data server). */
   questions: unknown[];
@@ -266,12 +268,15 @@ export function checkMultiplayerEligibility(g: {
   }
   const builtinKnown = isBuiltinDeckKnown(g.deckId);
   const sharedId = parseSharedDeckId(g.deckId);
-  if (builtinKnown) {
+  const presetTheme = parsePresetDeckId(g.deckId);
+  if (presetTheme) {
+    // Deck preset Arena (12 tema x 20 soal, diatur admin): soal dipilih server sendiri; keberadaannya dicek ke database di recordMultiplayerGame.
+  } else if (builtinKnown) {
     if (!verifyBuiltinQuestions(g.deckId, g.questions)) {
       return { ok: false, reason: 'not_eligible', message: 'Soal permainan tidak cocok dengan deck bawaan, jadi skor tidak dihitung.' };
     }
   } else if (!sharedId) {
-    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan, starter, dan kuis Komunitas yang sudah disetujui yang masuk papan peringkat.' };
+    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan, starter, deck preset Arena, dan kuis Komunitas yang sudah disetujui yang masuk papan peringkat.' };
   }
   if (g.accountCount < MIN_MULTIPLAYER_ACCOUNTS) {
     return { ok: false, reason: 'few_players', message: `Skor dicatat bila minimal ${MIN_MULTIPLAYER_ACCOUNTS} pemain yang masuk akun ikut bermain.` };
@@ -312,7 +317,16 @@ export async function recordMultiplayerGame(db: Db, game: FinishedMultiplayerGam
   let title = builtinDeckTitle(game.deckId);
   let ownerEmail = '';
   const sharedId = parseSharedDeckId(game.deckId);
-  if (sharedId) {
+  const presetTheme = parsePresetDeckId(game.deckId);
+  if (presetTheme) {
+    await ensureArenaPresetSchema(db);
+    const { rows } = await db.query(`SELECT title, enabled FROM arena_preset_decks WHERE theme_id = $1`, [presetTheme]);
+    if (!rows.length || rows[0].enabled !== true) {
+      return rejectAll('unavailable', 'Deck Arena ini sudah tidak aktif, jadi skor tidak dihitung.');
+    }
+    deckKey = `arena-preset:${presetTheme}`;
+    title = String(rows[0].title);
+  } else if (sharedId) {
     const { rows } = await db.query(`SELECT title, owner_email, moderation_status FROM shared_quizzes WHERE id = $1`, [sharedId]);
     if (!rows.length || rows[0].moderation_status !== 'approved') {
       return rejectAll('unavailable', 'Kuis komunitas ini sudah tidak tersedia atau belum disetujui, jadi skor tidak dihitung.');

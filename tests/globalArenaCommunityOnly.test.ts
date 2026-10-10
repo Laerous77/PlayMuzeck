@@ -1,5 +1,5 @@
-// Tes: Arena Global HANYA memakai kuis Komunitas yang disetujui. Tanpa kuis Komunitas, lobi menunggu (tidak jatuh ke
-// deck bawaan gratis/berbayar). Memakai io/socket palsu dan jam terkendali. Jalankan: npx tsx tests/globalArenaCommunityOnly.test.ts
+// Tes: Arena Global tidak pernah memakai deck bawaan gratis/berbayar. Tanpa kuis sama sekali (Komunitas kosong dan tidak ada
+// deck preset aktif), lobi menunggu. Memakai io/socket palsu dan jam terkendali. Jalankan: npx tsx tests/globalArenaCommunityOnly.test.ts
 import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
 
 let bad = 0;

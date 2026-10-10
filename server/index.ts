@@ -29,6 +29,7 @@ import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
 import { isDeliverableEmail } from './auth/emailCheck';
 import { turnstileEnabled } from './auth/turnstile';
 import { createPaymentRouter } from './paymentRoutes';
+import { createArenaPresetRouter, ensureArenaPresetSchema, pickArenaDeck } from './arenaPresetRoutes';
 import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame, pickApprovedCommunityDeck } from './quizCommunityRoutes';
 import {
   sendCustomAudioInquiryNotifications,
@@ -201,7 +202,9 @@ Promise.resolve(initDatabase())
   .then(() => ensureNotificationSchema(pool))
   .catch((err) => console.error('[DB] ensureNotificationSchema gagal:', err))
   .then(() => ensureQuizCommunitySchema(pool))
-  .catch((err) => console.error('[DB] ensureQuizCommunitySchema gagal:', err));
+  .catch((err) => console.error('[DB] ensureQuizCommunitySchema gagal:', err))
+  .then(() => ensureArenaPresetSchema(pool))
+  .catch((err) => console.error('[DB] ensureArenaPresetSchema gagal:', err));
 
 const uploadsDir = path.resolve(process.cwd(), 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
@@ -323,6 +326,8 @@ app.use(createPaymentRouter({
 }));
 app.use(createAdminOpsRouter({ pool, requireAdmin, requireSuperAdmin, getDonationTiers: () => DONATION_FRAME_TIERS }));
 app.use(createDonationGoalRouter({ pool }));
+// ---- Deck preset Arena Global (12 tema x 20 soal), hanya bisa diatur admin; tidak muncul di Perpustakaan (server/arenaPresetRoutes.ts) ----
+app.use(createArenaPresetRouter({ db: pool, requireAdmin }));
 
 // ---- Pusat Kuis: papan peringkat (harian/bulanan/sepanjang waktu) + Komunitas Kuis (server/quizCommunityRoutes.ts) ----
 // Baca = publik; bagikan kuis = hanya pemilik Kuis Editor (dicek di server); catat skor = akun login.
@@ -1483,9 +1488,9 @@ attachMultiplayerSocket(
       }
     });
   }),
-  // Arena Global: kuis Komunitas yang SUDAH DISETUJUI ikut rotasi, dan skor (dinilai server) dicatat ke papan peringkat saat tuntas.
+  // Arena Global: kuis Komunitas yang SUDAH DISETUJUI + deck preset Arena (12 tema x 20 soal) ikut rotasi, dan skor (dinilai server) dicatat ke papan peringkat saat tuntas.
   {
-    pickCommunityDeck: () => pickApprovedCommunityDeck(pool),
+    pickCommunityDeck: () => pickArenaDeck(pool, () => pickApprovedCommunityDeck(pool)),
     onFinished: (game) => recordMultiplayerGame(pool, game),
   }
 );
