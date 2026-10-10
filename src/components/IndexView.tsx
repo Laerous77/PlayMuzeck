@@ -175,9 +175,6 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
-          <p className="text-[11px] text-gray-400">
-            Perlu masuk dengan akun gratis. Drum Pad dan Chord Pad (Bar 1) serta 20 Audio Tools bisa dicoba tanpa biaya (2x per alat per hari); editor penuh dan modul lengkap bersifat berbayar.
-          </p>
         </motion.div>
       </section>
 

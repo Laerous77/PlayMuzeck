@@ -1706,12 +1706,13 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
 );
 
 // Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
-const BAR_BOX = 'shrink-0 max-w-full whitespace-nowrap flex items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
-// Varian untuk kotak yang ikut melebar supaya baris kontrol sejajar dengan lebar toolbar di bawahnya.
-const BAR_BOX_GROW = `${BAR_BOX} flex-1 justify-center`;
-// Kotak berisi beberapa kelompok kecil: antar-kelompok boleh turun baris, isi tiap kelompok tidak pernah pecah.
-const BAR_BOX_MULTI = `${BAR_BOX} flex-wrap flex-1 justify-center gap-x-3 gap-y-1.5`;
+const BAR_BASE = 'shrink-0 max-w-full whitespace-nowrap text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
+const BAR_BOX = `${BAR_BASE} flex items-center gap-1.5`;
+// Toolbar step bar: di HP berupa grid 2 kolom (tiap kotak mengisi satu/dua kolom), di layar >= lg satu baris.
+// Kotak berisi baris-baris bergaris sama (label + pasangan Bar/Step) supaya kolomnya sejajar.
 const BAR_PAIR = 'flex items-center gap-1.5 shrink-0';
+const BAR_ROW = 'flex items-center justify-between gap-2 lg:justify-start lg:gap-1.5';
+const BAR_LABEL = 'w-9 lg:w-auto shrink-0 text-[11px] font-bold uppercase tracking-wide';
 
 // Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–300), (2) tombol − / + (tahan = terus berubah),
 // (3) panah ↑ / ↓ di keyboard (Shift = ±10), (4) Tap Tempo: ketuk tombol Tap sesuai ketukan lagu (minimal 2 kali).
@@ -1794,7 +1795,7 @@ const TempoControl: React.FC<{ bpm: number; setBpm: React.Dispatch<React.SetStat
   const stepBtn =
     'p-1.5 rounded-lg bg-white/5 hover:bg-white/15 active:bg-accent active:text-black text-gray-200 border border-white/10 disabled:opacity-40 cursor-pointer touch-none select-none';
   return (
-    <div className={BAR_BOX}>
+    <div className={`${BAR_BOX} col-span-2 justify-between lg:col-auto lg:justify-start`}>
       <span className="text-[11px] font-bold text-gray-400 select-none">TEMPO</span>
       <button
         type="button"
@@ -5481,9 +5482,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
           {/* Satu baris, dirapatkan supaya muat di layar laptop tanpa scroll. Gulir ke samping hanya jadi cadangan di layar sangat sempit. */}
-          <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 lg:gap-1.5 lg:overflow-x-auto lg:pb-2 whitespace-nowrap">
+          <div className="grid grid-cols-2 gap-2 lg:flex lg:flex-nowrap items-center lg:justify-between lg:gap-1.5 lg:overflow-x-auto lg:pb-2 whitespace-nowrap">
             <TempoControl bpm={bpm} setBpm={setBpm} />
-            <div className={BAR_BOX}>
+            <div className={`${BAR_BOX} justify-center`}>
               <select
                 value={timeSigId}
                 onChange={(e) => changeTimeSignature(e.target.value)}
@@ -5498,7 +5499,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </select>
             </div>
             {!isUnlocked8Bar && (
-              <div className="shrink-0 flex items-center gap-[2px]" role="group" aria-label={`Peta ${TOTAL_BARS} bar (gratis: hanya Bar 1)`}>
+              <div className="col-span-2 lg:col-auto shrink-0 flex items-center justify-center gap-[2px]" role="group" aria-label={`Peta ${TOTAL_BARS} bar (gratis: hanya Bar 1)`}>
                 <button
                   type="button"
                   title="Bar 1 (gratis)"
@@ -5518,7 +5519,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </div>
             )}
             <div
-              className={BAR_BOX}
+              className={`${BAR_BOX} justify-between lg:justify-start`}
               role="group"
               aria-label="Jendela tampilan grid"
               title={`Sedang menampilkan Bar ${viewStartBar + 1}–${viewStartBar + barsPerView} dari ${TOTAL_BARS} (${timeSig.label})`}
@@ -5528,32 +5529,41 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
               </div>
             </div>
-            <div className={BAR_BOX_MULTI} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
-              <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Loop</span>
-              <div className={BAR_PAIR}>
-                <span className="text-[10px] text-gray-400">Bar</span>
-                <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
-                <span className="text-[10px] text-gray-400">Step</span>
-                <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
+            <div className={`${BAR_BASE} flex flex-col items-stretch gap-2 col-span-2 lg:col-auto lg:flex-row lg:items-center lg:flex-1 lg:justify-center lg:gap-3`} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
+              <div className={BAR_ROW}>
+                <span className={`${BAR_LABEL} text-gray-400`}>Loop</span>
+                <div className={BAR_PAIR}>
+                  <span className="text-[10px] text-gray-400">Bar</span>
+                  <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
+                </div>
+                <div className={BAR_PAIR}>
+                  <span className="text-[10px] text-gray-400">Step</span>
+                  <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
+                </div>
               </div>
-              <div className={BAR_PAIR}>
-                <span className="text-[10px] text-gray-500">s/d</span>
-                <span className="text-[10px] text-gray-400">Bar</span>
-                <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
-                <span className="text-[10px] text-gray-400">Step</span>
-                <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
+              <div className={BAR_ROW}>
+                <span className={`${BAR_LABEL} text-gray-500`}>s/d</span>
+                <div className={BAR_PAIR}>
+                  <span className="text-[10px] text-gray-400">Bar</span>
+                  <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
+                </div>
+                <div className={BAR_PAIR}>
+                  <span className="text-[10px] text-gray-400">Step</span>
+                  <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
+                </div>
               </div>
             </div>
             {!isUnlocked8Bar && (
-              <button type="button" onClick={onUnlockEditor} className="shrink-0 text-[11px] text-accent hover:underline font-semibold cursor-pointer">
+              <button type="button" onClick={onUnlockEditor} className="col-span-2 lg:col-auto shrink-0 text-center py-1 text-[11px] text-accent hover:underline font-semibold cursor-pointer">
                 Buka 64-Bar →
               </button>
             )}
             <div
-              className={BAR_BOX_MULTI}
+              className={`${BAR_BOX} col-span-2 lg:col-auto lg:flex-1 lg:justify-center`}
               title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
             >
-              <span className="text-[11px] font-bold text-accent uppercase tracking-wide">Pos</span>
+              <div className={`${BAR_ROW} w-full lg:w-auto lg:gap-1.5`}>
+              <span className={`${BAR_LABEL} text-accent`}>Pos</span>
               <div className={BAR_PAIR}>
               <span className="text-[10px] text-gray-400">Bar</span>
               <div className="flex items-stretch">
@@ -5596,27 +5606,36 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 />
               </div>
               </div>
+              </div>
               <button
                 type="button"
                 onClick={jumpToPlayhead}
                 title="Tampilkan halaman grid yang memuat posisi ini"
-                className="px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/15 text-gray-200 font-bold cursor-pointer"
+                className="hidden lg:inline-flex px-2 py-1 rounded-lg border border-white/10 bg-white/5 hover:bg-white/15 text-gray-200 font-bold cursor-pointer"
               >
                 Lihat
               </button>
             </div>
             <button
               type="button"
+              onClick={jumpToPlayhead}
+              title="Tampilkan halaman grid yang memuat posisi ini"
+              className="lg:hidden px-3 py-2.5 rounded-xl text-xs font-bold border border-white/10 bg-white/5 hover:bg-white/10 text-gray-200 cursor-pointer"
+            >
+              Lihat posisi
+            </button>
+            <button
+              type="button"
               onClick={() => setFollowPlayhead((f) => !f)}
               aria-pressed={followPlayhead}
               title="Halaman grid otomatis mengikuti playhead saat diputar"
-              className={`shrink-0 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+              className={`shrink-0 px-3 py-2.5 lg:py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
                 followPlayhead ? 'bg-accent/20 text-accent border-accent/40' : 'bg-white/5 text-gray-300 border-white/10 hover:bg-white/10'
               }`}
             >
               Ikuti
             </button>
-            <div className={BAR_BOX}>
+            <div className={`${BAR_BOX} col-span-2 justify-center lg:col-auto`}>
               <button
                 type="button"
                 onClick={() => shiftView(-1)}
