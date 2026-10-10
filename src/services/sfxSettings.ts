@@ -9,7 +9,7 @@
 // Aturan produk:
 //  - Default: semua bagian HENING.
 //  - Mode "Bawaan": audio = 2 efek unik, kuis = 2 efek unik, lainnya = 1 efek.
-//  - Mode "Nada GM" (hanya jika punya Full 16-Bar Editor): 1 slot per bagian,
+//  - Mode "Nada GM" (hanya jika punya Full 64-Bar Editor): 1 slot per bagian,
 //    tiap slot = 1 nada dari salah satu 128 instrumen GM. Bisa disamakan untuk
 //    semua bagian atau dibedakan, bisa diacak, bisa diatur manual.
 

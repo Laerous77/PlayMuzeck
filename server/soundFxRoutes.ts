@@ -8,7 +8,7 @@
 //   app.use(createSoundFxRouter({ db: pool, requireUser }));
 //
 // Penjagaan mode "Nada GM" DILAKUKAN DI SINI (bukan cuma di UI): server mengecek
-// sendiri apakah akun memiliki Full 16-Bar Editor dari tabel user_collections,
+// sendiri apakah akun memiliki Full 64-Bar Editor dari tabel user_collections,
 // dengan aturan yang sama persis seperti GET /api/user/collections.
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { Pool } from 'pg';
@@ -124,7 +124,7 @@ export function createSoundFxRouter({
     const settings = sanitizeSfx(req.body?.settings);
     const gmUnlocked = await ownsPadEditor(email);
     if (settings.mode === 'gm' && !gmUnlocked) {
-      return res.status(403).json({ error: 'Mode Nada GM butuh Full 16-Bar Editor.' });
+      return res.status(403).json({ error: 'Mode Nada GM butuh Full 64-Bar Editor.' });
     }
 
     const { rowCount } = await db.query(

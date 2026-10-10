@@ -199,7 +199,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
             </h1>
             <p className="text-xs text-gray-300 font-medium mt-0.5">
               {activeSection === 'assets' && 'Katalog lagu orisinal, stem mixer & lisensi modular.'}
-              {activeSection === 'pad' && 'Drum Pad & Chord Pad (gratis di Bar 1), rekam live ke sequencer, 11 birama, dinamika, undo/redo. Editor penuh: 16 bar, 4 track akor, ekspor, dan simpan proyek.'}
+              {activeSection === 'pad' && 'Drum Pad & Chord Pad (gratis di Bar 1), rekam live ke sequencer, 11 birama, dinamika, undo/redo. Editor penuh: 64 bar, 4 track akor, ekspor, dan simpan proyek.'}
               {activeSection === 'tools' && '20 alat dalam 6 kelompok: potong & susun, perbaiki suara, nada & tempo, format & ukuran, rekam & analisis, latihan musik.'}
               {activeSection === 'pricing' && 'Buka modul produksi lengkap dengan kepemilikan permanen.'}
             </p>

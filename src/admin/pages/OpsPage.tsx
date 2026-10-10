@@ -112,7 +112,7 @@ const INQUIRY_STATUSES = [
   { id: 'selesai', label: 'Selesai', cls: 'bg-emerald-500/20 text-emerald-300' },
 ] as const;
 
-// Produk audio PER LAGU. Editor 8 Bar & Audio Tools sekali beli = permanen untuk semua lagu,
+// Produk audio PER LAGU. Editor 64 Bar & Audio Tools sekali beli = permanen untuk semua lagu,
 // jadi dipilih sebagai jenis produk tersendiri (bukan per track).
 const AUDIO_PRODUCTS = [
   { key: 'fullMaster', label: 'Full Master' },
@@ -126,7 +126,7 @@ const KEY_LABEL: Record<string, string> = {
   loopVersion: 'Loop',
   separatedStems: 'Stems',
   sheetMusic: 'Partitur',
-  fullEditor8Bar: 'Editor 8 Bar',
+  fullEditor8Bar: 'Editor 64 Bar',
   audioToolsSuite: 'Audio Tools',
   quizCreatorSuite: 'Kreator Kuis',
   all: 'Bundle',
@@ -376,7 +376,7 @@ export const OpsPage: React.FC = () => {
         item = { key: `audio|${t.id}|${[...f.audioKeys].sort().join(',')}`, ref: { kind: 'audio', trackId: t.id, keys: f.audioKeys }, label: `${t.title} — ${names}`, price };
       }
     } else if (f.itemKind === 'editor8Bar') {
-      item = { key: 'editor8Bar', ref: { kind: 'editor8Bar' }, label: 'Editor 8 Bar (permanen, semua lagu)', price: catalog.features.editor8Bar };
+      item = { key: 'editor8Bar', ref: { kind: 'editor8Bar' }, label: 'Editor 64 Bar (permanen, semua lagu)', price: catalog.features.editor8Bar };
     } else if (f.itemKind === 'audioTools') {
       item = { key: 'audioTools', ref: { kind: 'audioTools' }, label: 'Audio Tools (permanen)', price: catalog.features.audioTools };
     } else if (f.itemKind === 'quizCreator') {
@@ -753,7 +753,7 @@ export const OpsPage: React.FC = () => {
                     <select className={inputCls} value={orderForm.itemKind} onChange={(e) => setOrderForm({ ...orderForm, itemKind: e.target.value as ItemKind, refId: '' })}>
                       <optgroup label="Audio">
                         <option value="audio">Lagu (Master / Loop / Stems / Partitur)</option>
-                        <option value="editor8Bar">Editor 8 Bar — sekali beli, permanen</option>
+                        <option value="editor8Bar">Editor 64 Bar — sekali beli, permanen</option>
                         <option value="audioTools">Audio Tools — sekali beli, permanen</option>
                       </optgroup>
                       <optgroup label="Kuis">
@@ -783,7 +783,7 @@ export const OpsPage: React.FC = () => {
                           <div className="space-y-2">
                             <label className="flex items-center gap-2 text-xs text-gray-300">
                               <input type="checkbox" checked={orderForm.bundle} onChange={(e) => setOrderForm({ ...orderForm, bundle: e.target.checked })} />
-                              Bundle lengkap (semua produk lagu + Editor 8 Bar + Audio Tools){t ? ` — ${rupiah(t.bundle)}` : ''}
+                              Bundle lengkap (semua produk lagu + Editor 64 Bar + Audio Tools){t ? ` — ${rupiah(t.bundle)}` : ''}
                             </label>
                             {!orderForm.bundle && (
                               <div className="flex flex-wrap gap-2">
@@ -810,7 +810,7 @@ export const OpsPage: React.FC = () => {
                   )}
 
                   {orderForm.itemKind === 'editor8Bar' && (
-                    <p className="text-xs text-gray-300 bg-black/30 rounded-lg p-2">Editor 8 Bar · {rupiah(catalog.features.editor8Bar)} · sekali beli, terbuka permanen untuk SEMUA lagu di akun ini. Kalau sudah dimiliki, tidak dobel.</p>
+                    <p className="text-xs text-gray-300 bg-black/30 rounded-lg p-2">Editor 64 Bar · {rupiah(catalog.features.editor8Bar)} · sekali beli, terbuka permanen untuk SEMUA lagu di akun ini. Kalau sudah dimiliki, tidak dobel.</p>
                   )}
                   {orderForm.itemKind === 'audioTools' && (
                     <p className="text-xs text-gray-300 bg-black/30 rounded-lg p-2">Audio Tools · {rupiah(catalog.features.audioTools)} · sekali beli, terbuka permanen di akun ini.</p>

@@ -1178,7 +1178,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   <div className="flex items-center gap-2.5">
                     <div className="w-9 h-9 rounded-xl bg-accent/15 text-accent flex items-center justify-center"><Sliders className="w-4 h-4" /></div>
                     <div>
-                      <h4 className="text-xs font-bold text-white leading-tight">Full 16-Bar Editor</h4>
+                      <h4 className="text-xs font-bold text-white leading-tight">Full 64-Bar Editor</h4>
                       <p className="text-[10px] text-gray-400">Status: {dbData.features.full16BarEditor ? 'Aktif' : 'Belum Aktif'}</p>
                     </div>
                   </div>

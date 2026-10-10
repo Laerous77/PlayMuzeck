@@ -24,7 +24,7 @@ export const DRUM_KITS = [
   'Hiphop',
 ];
 
-export const TOTAL_BARS = 16;
+export const TOTAL_BARS = 64;
 
 
 export interface TimeSignatureDef {

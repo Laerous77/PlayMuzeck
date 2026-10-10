@@ -482,7 +482,7 @@ const about = `
 <h3>Aset Audio</h3>
 <p>Katalog lagu orisinal dengan lisensi komersial non-eksklusif. Kamu bisa membeli hanya yang dibutuhkan: master, versi loop, stem, atau partitur PDF. Setiap pembelian menyertakan berkas lisensi yang sebaiknya dibaca sebelum dipakai di proyekmu.</p>
 <h3>Pad Editor</h3>
-<p>Drum pad dan chord pad dengan sequencer hingga 16 bar, banyak instrumen General MIDI, dan rekam live, untuk menyusun ritme dan progresi akor langsung di browser.</p>
+<p>Drum pad dan chord pad dengan sequencer hingga 64 bar, banyak instrumen General MIDI, dan rekam live, untuk menyusun ritme dan progresi akor langsung di browser.</p>
 <h3>Pusat Kuis</h3>
 <p>Perpustakaan kuis trivia berbahasa Indonesia (sains, sejarah, musik, seni, kuliner, dan lainnya), mode solo, pass and play, host kuis hingga 10 regu, multiplayer online, serta Aula Komunitas untuk kuis buatan pengguna dan papan peringkat.</p>
 

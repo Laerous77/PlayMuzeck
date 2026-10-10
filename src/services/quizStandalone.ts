@@ -555,7 +555,7 @@ export function generateStandaloneQuizHtml(
             <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:18px;">
               <div style="padding:14px; border-radius:16px; background:rgba(0,0,0,0.4); border:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
                 <div>
-                  <h4 style="font-size:12px; font-weight:800; color:#fff;">Full 16-Bar Editor</h4>
+                  <h4 style="font-size:12px; font-weight:800; color:#fff;">Full 64-Bar Editor</h4>
                   <p style="font-size:10px; color:var(--muted);">Status: Belum Aktif</p>
                 </div>
                 <span style="font-size:9px; font-weight:800; background:rgba(255,255,255,0.06); padding:4px 8px; border-radius:6px; color:#888;">BELUM AKTIF</span>

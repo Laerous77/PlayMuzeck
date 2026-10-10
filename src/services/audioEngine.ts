@@ -414,7 +414,7 @@ class AudioEngine {
       if (effect.kind === 'builtin') {
         playBuiltinClick(ctx, out, effect.id, volume);
       } else {
-        // Sampel diambil dari bank SF2 yang sama dengan Full 16-Bar Editor.
+        // Sampel diambil dari bank SF2 yang sama dengan Full 64-Bar Editor.
         const meta = this.soundfontInstance ? this.getSampleMetadata(effect.note, effect.program) : null;
         playGmClick(ctx, out, meta, effect.note, volume);
       }

@@ -78,7 +78,7 @@ export function playBuiltinClick(ctx: AudioContext, out: AudioNode, id: BuiltinS
 }
 
 /**
- * Satu nada pendek dari program GM (bank SF2 yang sama dengan Full 16-Bar Editor).
+ * Satu nada pendek dari program GM (bank SF2 yang sama dengan Full 64-Bar Editor).
  * Sengaja TIDAK memakai playChordNotes/activeVoices: klik tidak boleh memotong
  * chord yang sedang diputar, dan stopAllChords() tidak boleh mematikan klik.
  * `meta` null = bank belum siap -> nada sinus/segitiga sederhana sebagai cadangan.

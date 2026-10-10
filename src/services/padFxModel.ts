@@ -135,6 +135,89 @@ export const FX_DEFS: Record<FxId, FxDef> = {
 };
 
 // ---------------------------------------------------------------------------
+// PRESET BAWAAN
+// Setiap efek punya beberapa preset siap pakai (nilai SEMUA parameter diisi lengkap). Memilih preset menyalakan efek
+// dan mengisi parameternya; pengguna tetap bebas menggeser slider sesudahnya.
+// ---------------------------------------------------------------------------
+export interface FxPreset {
+  id: string;
+  label: string; // singkat, tampil di tombol
+  desc: string; // tooltip
+  p: Record<string, number>;
+}
+
+export const FX_PRESETS: Record<FxId, FxPreset[]> = {
+  eq: [
+    { id: 'bass-boost', label: 'Bass Boost', desc: 'Bass tebal dan berisi.', p: { low: 7, lowMid: 2, highMid: 0, high: -1 } },
+    { id: 'hangat', label: 'Hangat', desc: 'Suara empuk, treble dilembutkan.', p: { low: 3, lowMid: 2, highMid: -1, high: -2 } },
+    { id: 'jernih', label: 'Jernih', desc: 'Bass dirampingkan, bagian atas lebih jelas.', p: { low: -2, lowMid: -1, highMid: 3, high: 4 } },
+    { id: 'cerah', label: 'Cerah', desc: 'Treble menonjol, terdengar berkilau.', p: { low: -1, lowMid: 0, highMid: 3, high: 6 } },
+    { id: 'smiley', label: 'Smiley (V)', desc: 'Bass dan treble naik, mid dipangkas.', p: { low: 5, lowMid: -4, highMid: -2, high: 5 } },
+    { id: 'bersih', label: 'Bersihkan Mid', desc: 'Mengurangi suara "kotak" / berlumpur.', p: { low: -3, lowMid: -5, highMid: 1, high: 2 } },
+    { id: 'telepon', label: 'Telepon', desc: 'Bass dan treble dibuang, hanya mid.', p: { low: -12, lowMid: 5, highMid: 6, high: -10 } },
+  ],
+  reverb: [
+    { id: 'kamar', label: 'Ruang Kecil', desc: 'Pantulan pendek, terasa dekat.', p: { size: 0.6, pre: 5, damp: 7000, mix: 18 } },
+    { id: 'studio', label: 'Studio', desc: 'Ruang rekaman yang natural.', p: { size: 1.2, pre: 10, damp: 8000, mix: 22 } },
+    { id: 'plate', label: 'Plate', desc: 'Reverb plat klasik, terang dan halus.', p: { size: 1.8, pre: 0, damp: 10000, mix: 28 } },
+    { id: 'hall', label: 'Hall Konser', desc: 'Gedung konser yang lapang.', p: { size: 2.8, pre: 25, damp: 6000, mix: 30 } },
+    { id: 'katedral', label: 'Katedral', desc: 'Ruang sangat besar, ekor panjang.', p: { size: 6, pre: 45, damp: 5000, mix: 40 } },
+    { id: 'melayang', label: 'Melayang', desc: 'Ambient gelap yang panjang dan tebal.', p: { size: 7, pre: 60, damp: 3000, mix: 55 } },
+  ],
+  delay: [
+    { id: 'slapback', label: 'Slapback', desc: 'Gema sangat cepat, satu kali pantul.', p: { time: 90, fb: 12, tone: 7000, mix: 22 } },
+    { id: 'pendek', label: 'Echo Pendek', desc: 'Gema ringan yang rapat.', p: { time: 250, fb: 35, tone: 5000, mix: 28 } },
+    { id: 'panjang', label: 'Echo Panjang', desc: 'Gema lebar dan jelas.', p: { time: 500, fb: 45, tone: 4500, mix: 30 } },
+    { id: 'tape', label: 'Tape Echo', desc: 'Gema hangat ala pita analog.', p: { time: 380, fb: 50, tone: 2800, mix: 32 } },
+    { id: 'ambient', label: 'Ambient', desc: 'Gema panjang yang meluas.', p: { time: 750, fb: 60, tone: 3500, mix: 40 } },
+    { id: 'dub', label: 'Dub', desc: 'Pengulangan banyak dan redup.', p: { time: 600, fb: 70, tone: 2000, mix: 38 } },
+  ],
+  chorus: [
+    { id: 'halus', label: 'Halus', desc: 'Penebalan tipis, nyaris tak terasa.', p: { rate: 0.6, depth: 25, mix: 30 } },
+    { id: 'klasik', label: 'Klasik', desc: 'Chorus standar yang seimbang.', p: { rate: 1.2, depth: 50, mix: 50 } },
+    { id: 'ensemble', label: 'Ensemble', desc: 'Terdengar seperti beberapa pemain sekaligus.', p: { rate: 0.4, depth: 60, mix: 60 } },
+    { id: 'lebar', label: 'Lebar', desc: 'Suara tebal dan lebar.', p: { rate: 0.8, depth: 75, mix: 55 } },
+    { id: 'dreamy', label: 'Dreamy', desc: 'Goyangan lambat yang mengambang.', p: { rate: 0.25, depth: 85, mix: 65 } },
+    { id: 'vibrato', label: 'Vibrato', desc: 'Pitch bergetar cepat.', p: { rate: 5.5, depth: 35, mix: 100 } },
+  ],
+  filter: [
+    { id: 'teredam', label: 'Teredam', desc: 'Treble dipotong, suara empuk.', p: { type: 0, cutoff: 1800, q: 0.7 } },
+    { id: 'bawah-air', label: 'Bawah Air', desc: 'Seperti terdengar dari dalam air.', p: { type: 0, cutoff: 500, q: 2 } },
+    { id: 'sapuan', label: 'Resonan', desc: 'Low-pass dengan resonansi menonjol.', p: { type: 0, cutoff: 900, q: 8 } },
+    { id: 'tipis', label: 'Tipis', desc: 'Bass dibuang, suara ramping.', p: { type: 1, cutoff: 300, q: 0.7 } },
+    { id: 'radio', label: 'Radio', desc: 'Hanya frekuensi tengah, ala radio lawas.', p: { type: 2, cutoff: 1800, q: 1.5 } },
+    { id: 'telepon', label: 'Telepon', desc: 'Band-pass sempit seperti suara telepon.', p: { type: 2, cutoff: 1200, q: 3 } },
+    { id: 'hisap-mid', label: 'Hisap Mid', desc: 'Memotong area tengah yang sempit.', p: { type: 3, cutoff: 1000, q: 2 } },
+  ],
+  distortion: [
+    { id: 'saturasi', label: 'Saturasi Tipis', desc: 'Menambah kehangatan tanpa terdengar pecah.', p: { drive: 15, tone: 9000, level: -1, mix: 40 } },
+    { id: 'overdrive', label: 'Overdrive', desc: 'Gigitan ringan yang hangat.', p: { drive: 25, tone: 7000, level: -2, mix: 60 } },
+    { id: 'lofi', label: 'Lo-Fi', desc: 'Kasar dan kusam ala kaset.', p: { drive: 35, tone: 2500, level: -3, mix: 70 } },
+    { id: 'crunch', label: 'Crunch', desc: 'Garang tapi tetap jelas.', p: { drive: 50, tone: 6000, level: -4, mix: 80 } },
+    { id: 'berat', label: 'Distorsi Berat', desc: 'Agresif dan tebal.', p: { drive: 80, tone: 5000, level: -6, mix: 100 } },
+    { id: 'fuzz', label: 'Fuzz', desc: 'Pecah total, sangat kasar.', p: { drive: 95, tone: 3500, level: -8, mix: 100 } },
+  ],
+  limiter: [
+    { id: 'pengaman', label: 'Pengaman', desc: 'Hanya menahan puncak agar tidak pecah.', p: { thr: -1.5, rel: 100, gain: 0 } },
+    { id: 'alami', label: 'Alami', desc: 'Pengendalian lembut, dinamika terjaga.', p: { thr: -5, rel: 250, gain: 1 } },
+    { id: 'keras', label: 'Keras', desc: 'Volume lebih tebal dan kencang.', p: { thr: -8, rel: 80, gain: 4 } },
+    { id: 'punchy', label: 'Punchy', desc: 'Respons cepat, pukulan terasa menghentak.', p: { thr: -10, rel: 30, gain: 5 } },
+    { id: 'super', label: 'Super Keras', desc: 'Sangat dipadatkan, volume maksimal.', p: { thr: -14, rel: 50, gain: 7 } },
+  ],
+};
+
+/** Unit efek siap pakai dari sebuah preset: menyala, semua parameter terisi dan dijepit ke rentang sah. */
+export const unitFromPreset = (id: FxId, preset: FxPreset): FxUnit => {
+  const p: Record<string, number> = {};
+  FX_DEFS[id].params.forEach((d) => (p[d.key] = clampParam(d, preset.p[d.key] ?? d.def)));
+  return { on: true, p };
+};
+
+/** Apakah nilai parameter sekarang sama persis dengan preset ini (untuk menandai preset yang sedang dipakai). */
+export const isPresetActive = (id: FxId, unit: FxUnit | undefined, preset: FxPreset): boolean =>
+  !!unit && unit.on && FX_DEFS[id].params.every((d) => Math.abs((unit.p[d.key] ?? d.def) - clampParam(d, preset.p[d.key] ?? d.def)) < 1e-9);
+
+// ---------------------------------------------------------------------------
 // STATE
 // ---------------------------------------------------------------------------
 export interface FxUnit {

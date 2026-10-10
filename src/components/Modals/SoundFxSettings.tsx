@@ -27,7 +27,7 @@ import {
 
 interface Props {
   isLoggedIn: boolean;
-  /** Dipanggil saat pengguna menekan ajakan membuka Full 16-Bar Editor. */
+  /** Dipanggil saat pengguna menekan ajakan membuka Full 64-Bar Editor. */
   onGetPadEditor?: () => void;
 }
 
@@ -272,7 +272,7 @@ export const SoundFxSettings: React.FC<Props> = ({ isLoggedIn, onGetPadEditor })
       {!padUnlocked && (
         <div className="p-3.5 rounded-2xl bg-black/30 border border-dashed border-white/15 text-xs text-gray-300 leading-relaxed space-y-2">
           <p>
-            <b className="text-white">Mode Nada GM terkunci.</b> Buka dengan memiliki <b className="text-white">Full 16-Bar Editor</b>: tiap
+            <b className="text-white">Mode Nada GM terkunci.</b> Buka dengan memiliki <b className="text-white">Full 64-Bar Editor</b>: tiap
             bagian bisa memakai satu nada dari salah satu 128 instrumen GM, diacak atau diatur sendiri.
           </p>
           {onGetPadEditor && (
@@ -281,7 +281,7 @@ export const SoundFxSettings: React.FC<Props> = ({ isLoggedIn, onGetPadEditor })
               onClick={onGetPadEditor}
               className="px-3 py-1.5 rounded-lg bg-accent/20 hover:bg-accent text-accent hover:text-on-accent font-bold cursor-pointer transition-colors"
             >
-              Lihat Full 16-Bar Editor →
+              Lihat Full 64-Bar Editor →
             </button>
           )}
         </div>

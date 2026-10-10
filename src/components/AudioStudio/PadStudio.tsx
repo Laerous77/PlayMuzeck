@@ -42,7 +42,6 @@ import {
   MousePointer2,
   Eraser,
   Hand,
-  Sparkles,
 } from 'lucide-react';
 import { AudioEntitlements } from '../../types';
 import {
@@ -196,9 +195,30 @@ const INITIAL_TOTAL_STEPS = INITIAL_STEPS_PER_BAR * TOTAL_BARS;
 const DEFAULT_PATTERN_BARS = 4; // pola bawaan mengisi 4 bar pertama
 const DEFAULT_LOOP_END_BAR = 4;
 
+// Ikon tombol Efek: pedal efek (stompbox) dengan dua knob, label, dan footswitch. Gaya garis sama dengan lucide-react.
+const FxPedalIcon: React.FC<{ className?: string }> = ({ className }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={2}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    className={className}
+  >
+    <rect x="5" y="2.5" width="14" height="19" rx="2.5" />
+    <circle cx="9" cy="6.6" r="1.3" />
+    <circle cx="15" cy="6.6" r="1.3" />
+    <path d="M9 10.8h6" />
+    <circle cx="12" cy="16.5" r="2" />
+  </svg>
+);
+
 // Jumlah bar yang digambar sekaligus (dipilih supaya sel tetap cukup lebar dan DOM tetap kecil).
 const MAX_BARS_PER_VIEW = 8;
-const MAX_SHIFT_BARS = TOTAL_BARS / 2; // sekali geser maksimal separuh dari 16 bar
+const MAX_SHIFT_BARS = TOTAL_BARS / 2; // sekali geser maksimal separuh dari total bar (64 / 2 = 32)
 
 const INSTRUMENT_CATEGORIES = Array.from(new Set(INSTRUMENTS_128.map((inst) => inst.category)));
 
@@ -275,7 +295,7 @@ function buildDefaultChordSteps(ts: TimeSignatureDef): { steps: number[]; lens: 
 // OPTIMASI PERFORMA SEQUENCER
 // - Sel grid dibuat komponen ter-memo: mengubah satu sel hanya me-render ulang satu sel itu,
 //   dan ketukan berjalan TIDAK me-render ulang grid sama sekali (playhead digambar lewat atribut DOM).
-// - Hanya bar yang sedang tampil (jendela) yang digambar di DOM, bukan semua 16 bar.
+// - Hanya bar yang sedang tampil (jendela) yang digambar di DOM, bukan seluruh bar proyek.
 // - Suara dijadwalkan dengan jam AudioContext (lookahead), bukan setInterval per ketukan.
 // - Detak scheduler berjalan di Web Worker supaya tidak ikut tertahan saat UI sibuk / tab di latar.
 // ---------------------------------------------------------------------------
@@ -5432,22 +5452,23 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </select>
             </div>
             {!isUnlocked8Bar && (
-              <div className="shrink-0 flex items-center gap-[2px]" role="group" aria-label="Peta 16 bar (gratis: hanya Bar 1)">
-                {Array.from({ length: TOTAL_BARS }, (_, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    onClick={i === 0 ? undefined : onUnlockEditor}
-                    title={i === 0 ? 'Bar 1 (gratis)' : `Bar ${i + 1} terkunci — buka editor penuh`}
-                    className={`w-5 h-5 sm:w-4 sm:h-4 rounded text-[8px] font-bold leading-none flex items-center justify-center ${
-                      i === 0
-                        ? 'bg-accent text-on-accent cursor-default'
-                        : 'bg-black/50 text-gray-500 border border-white/10 hover:border-accent/50 cursor-pointer'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
+              <div className="shrink-0 flex items-center gap-[2px]" role="group" aria-label={`Peta ${TOTAL_BARS} bar (gratis: hanya Bar 1)`}>
+                <button
+                  type="button"
+                  title="Bar 1 (gratis)"
+                  className="w-5 h-5 sm:w-4 sm:h-4 rounded text-[8px] font-bold leading-none flex items-center justify-center bg-accent text-on-accent cursor-default"
+                >
+                  1
+                </button>
+                <button
+                  type="button"
+                  onClick={onUnlockEditor}
+                  title={`Bar 2–${TOTAL_BARS} terkunci — buka editor penuh`}
+                  className="h-5 sm:h-4 px-1.5 rounded text-[8px] font-bold leading-none flex items-center gap-0.5 bg-black/50 text-gray-500 border border-white/10 hover:border-accent/50 cursor-pointer"
+                >
+                  <Lock className="w-2.5 h-2.5" />
+                  2–{TOTAL_BARS}
+                </button>
               </div>
             )}
             <div
@@ -5475,7 +5496,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </div>
             {!isUnlocked8Bar && (
               <button type="button" onClick={onUnlockEditor} className="shrink-0 text-[11px] text-accent hover:underline font-semibold cursor-pointer">
-                Buka 16-Bar →
+                Buka 64-Bar →
               </button>
             )}
             <div
@@ -5552,7 +5573,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <SpinField min={1} max={MAX_SHIFT_BARS} value={shiftBars} onChange={setShiftBars} ariaLabel="Jumlah bar sekali geser (maksimal 8)" />
+              <SpinField min={1} max={MAX_SHIFT_BARS} value={shiftBars} onChange={setShiftBars} ariaLabel={`Jumlah bar sekali geser (maksimal ${MAX_SHIFT_BARS})`} />
               <button
                 type="button"
                 onClick={() => shiftView(1)}
@@ -5785,7 +5806,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 title="Efek: Equalizer, Reverb, Delay, Chorus, Filter, Distortion, Limiter (per bagian drum / instrumen, atau semuanya)"
                 className={`${TOOL_BTN} ${fxCount > 0 ? TOOL_BTN_ON : `${TOOL_BTN_IDLE} hover:text-white`}`}
               >
-                <Sparkles className="w-4 h-4 shrink-0" />
+                <FxPedalIcon className="w-4 h-4 shrink-0" />
                 <span>Efek</span>
                 {fxCount > 0 && (
                   <span className="min-w-[1.1rem] h-[1.1rem] px-1 rounded-full bg-accent text-on-accent text-[10px] font-black flex items-center justify-center">

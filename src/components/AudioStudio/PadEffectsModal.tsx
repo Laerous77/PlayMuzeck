@@ -11,6 +11,7 @@ import { X, Play, Square, Volume2, RotateCcw, Copy, ChevronDown, ChevronUp, Minu
 import { ModalPortal } from './ModalPortal';
 import {
   FX_DEFS,
+  FX_PRESETS,
   FX_UI_ORDER,
   FX_TARGET_ALL,
   EMPTY_CHAIN,
@@ -21,13 +22,16 @@ import {
   emptyFx,
   getChain,
   isChainActive,
+  isPresetActive,
   setChain,
   setUnit,
   totalActiveFx,
+  unitFromPreset,
   type FxChain,
   type FxDomain,
   type FxId,
   type FxParamDef,
+  type FxPreset,
   type PadFxState,
 } from '../../services/padFxModel';
 
@@ -222,6 +226,38 @@ const ParamRow: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
+// Deretan tombol preset (ditaruh di bawah slider terakhir tiap efek). Membungkus ke baris baru bila sempit.
+// ---------------------------------------------------------------------------
+const PresetRow: React.FC<{
+  presets: FxPreset[];
+  isActive: (p: FxPreset) => boolean;
+  onPick: (p: FxPreset) => void;
+}> = ({ presets, isActive, onPick }) => (
+  <div className="space-y-1.5 pt-1" role="group" aria-label="Preset">
+    <span className="text-[11px] font-bold text-gray-400">Preset</span>
+    <div className="flex flex-wrap gap-1.5">
+      {presets.map((pr) => {
+        const on = isActive(pr);
+        return (
+          <button
+            key={pr.id}
+            type="button"
+            aria-pressed={on}
+            title={pr.desc}
+            onClick={() => onPick(pr)}
+            className={`max-w-full px-2.5 py-1.5 rounded-lg text-[11px] font-bold leading-tight border cursor-pointer transition-colors ${
+              on ? 'bg-accent text-on-accent border-accent' : 'bg-black/40 text-gray-300 border-white/10 hover:border-white/25 hover:text-white'
+            }`}
+          >
+            <span className="block truncate">{pr.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
 // Popup utama
 // ---------------------------------------------------------------------------
 export const PadEffectsModal: React.FC<PadEffectsModalProps> = ({
@@ -267,6 +303,10 @@ export const PadEffectsModal: React.FC<PadEffectsModalProps> = ({
     const nextOn = !base.on;
     onChange(setUnit(fx, domain, target, id, { ...base, on: nextOn }));
     if (nextOn) setOpen((o) => ({ ...o, [id]: true }));
+  };
+
+  const applyPreset = (id: FxId, preset: FxPreset) => {
+    onChange(setUnit(fx, domain, target, id, unitFromPreset(id, preset)));
   };
 
   const resetTarget = () => onChange(setChain(fx, domain, target, emptyChain()));
@@ -459,7 +499,7 @@ export const PadEffectsModal: React.FC<PadEffectsModalProps> = ({
                   {expanded && (
                     <div className={`px-3 pb-3 pt-1 space-y-3 border-t border-white/[0.06] ${unit.on ? '' : 'opacity-60'}`}>
                       {!unit.on && (
-                        <p className="text-[11px] text-gray-400 pt-2">Efek mati. Mengubah nilai di bawah akan menyalakannya otomatis.</p>
+                        <p className="text-[11px] text-gray-400 pt-2">Efek mati. Mengubah nilai atau memilih preset di bawah akan menyalakannya otomatis.</p>
                       )}
                       <div className="space-y-3 pt-1">
                         {def.params.map((pd) => (
@@ -472,6 +512,11 @@ export const PadEffectsModal: React.FC<PadEffectsModalProps> = ({
                             onReset={() => patchParam(id, pd.key, pd.def, false)}
                           />
                         ))}
+                        <PresetRow
+                          presets={FX_PRESETS[id]}
+                          isActive={(pr) => isPresetActive(id, unit, pr)}
+                          onPick={(pr) => applyPreset(id, pr)}
+                        />
                       </div>
                     </div>
                   )}

@@ -60,7 +60,7 @@ const KEY_LABEL: Record<string, string> = {
   loopVersion: 'Loop',
   separatedStems: 'Stems',
   sheetMusic: 'Partitur',
-  fullEditor8Bar: 'Editor 8 Bar',
+  fullEditor8Bar: 'Editor 64 Bar',
   audioToolsSuite: 'Audio Tools',
   quizCreatorSuite: 'Kreator Kuis',
   all: 'Bundle',

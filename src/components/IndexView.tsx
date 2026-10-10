@@ -69,9 +69,9 @@ const STEPS = [
 const AUDIO_POINTS = [
   { title: 'Aset Audio: katalog & lisensi', desc: 'Lagu orisinal berlisensi komersial non-eksklusif. Beli per lagu: master (WAV, FLAC, MP3, M4A), loop, stem, atau partitur PDF.' },
   { title: 'Stem mixer interaktif', desc: 'Campur stem multi-track tiap lagu di browser: atur volume, pan, mute, dan solo per instrumen.' },
-  { title: 'Pad Editor: drum, akor & rekam live', desc: '10 pad drum, 128 akor, 4 track akor 128 instrumen GM, sequencer 16 bar, rekam live. Gratis: Bar 1, 3 kit drum, 1 track Grand Piano.' },
+  { title: 'Pad Editor: drum, akor & rekam live', desc: '10 pad drum, 128 akor, 4 track akor 128 instrumen GM, sequencer 64 bar, rekam live. Gratis: Bar 1, 3 kit drum, 1 track Grand Piano.' },
   { title: '20 Audio Tools', desc: 'Potong, gabung, pitch, tempo, vokal isolator, konversi, kompres, deteksi BPM & kunci, tuner, dan lainnya. Diproses di perangkatmu, gratis 2x per alat per hari.' },
-  { title: 'Harga & lisensi modular', desc: 'Beli sekali, berlaku permanen: modul per lagu, Full 16-Bar Editor, Audio Tools tanpa batas harian, atau paket bundle 6 produk.' },
+  { title: 'Harga & lisensi modular', desc: 'Beli sekali, berlaku permanen: modul per lagu, Full 64-Bar Editor, Audio Tools tanpa batas harian, atau paket bundle 6 produk.' },
 ];
 
 const QUIZ_POINTS = [
@@ -92,7 +92,7 @@ const ECOSYSTEM = [
 const FAQ = [
   {
     q: 'Apa saja yang gratis dan apa yang berbayar?',
-    a: 'Gratis: akun, 3 starter deck, Drum Pad dan Chord Pad di Bar 1 (3 kit drum, 1 track akor Grand Piano, rekam live, dinamika, undo/redo), dan 2 penggunaan per alat per hari di Audio Tools (20 alat). Kuota Audio Tools dicatat di server; bila server tidak terjangkau, alat belum bisa dipakai sampai koneksi pulih. Berbayar (beli sekali): modul per lagu seperti master, loop, stem, dan partitur; Full 16-Bar Editor (16 bar, 7 kit drum, 4 track akor dengan 128 instrumen, ekspor MIDI/audio, simpan dan muat proyek); Audio Tools tanpa batas harian; serta deck topik tambahan. Donasi bersifat sukarela.',
+    a: 'Gratis: akun, 3 starter deck, Drum Pad dan Chord Pad di Bar 1 (3 kit drum, 1 track akor Grand Piano, rekam live, dinamika, undo/redo), dan 2 penggunaan per alat per hari di Audio Tools (20 alat). Kuota Audio Tools dicatat di server; bila server tidak terjangkau, alat belum bisa dipakai sampai koneksi pulih. Berbayar (beli sekali): modul per lagu seperti master, loop, stem, dan partitur; Full 64-Bar Editor (64 bar, 7 kit drum, 4 track akor dengan 128 instrumen, ekspor MIDI/audio, simpan dan muat proyek); Audio Tools tanpa batas harian; serta deck topik tambahan. Donasi bersifat sukarela.',
   },
   {
     q: 'Apakah berkas audio saya diunggah ke server?',

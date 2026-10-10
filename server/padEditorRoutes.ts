@@ -2,7 +2,7 @@
 // Aturan akses PAD EDITOR (Drum Pad + Chord Pad) — SUMBER KEBENARAN ADA DI SERVER, bukan di UI / localStorage.
 //
 //   Gratis  : Bar 1 saja • kit drum 80s Kit / Ambient / Industrial • akor hanya Grand Piano, 1 dari 4 slot • toolbar bebas
-//   Berbayar: 16 bar • semua kit & instrumen • 4 slot akor • Ekspor Pola • Simpan Proyek • Muat Proyek
+//   Berbayar: 64 bar • semua kit & instrumen • 4 slot akor • Ekspor Pola • Simpan Proyek • Muat Proyek
 //
 // Status berbayar DIBACA ULANG DARI DATABASE di setiap permintaan (tabel user_collections, aturan yang sama dengan
 // server/soundFxRoutes.ts dan GET /api/user/collections). Tidak ada cache, jadi refund / pembelian berlaku seketika
@@ -50,7 +50,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS pad_settings JSONB;
 export const ensurePadEditorSchema = (db: Db) => db.query(PAD_SCHEMA_SQL);
 
 // ── Harus sama dengan src/services/padPolicy.ts ─────────────────────────────
-const TOTAL_BARS = 16;
+const TOTAL_BARS = 64;
 const FREE_MAX_BARS = 1;
 const ALL_DRUM_KITS = ['80s Kit', 'Ambient', 'Industrial', 'Breakbeat', 'Jazzy', 'Electro', 'Hiphop'];
 const FREE_DRUM_KITS = ['80s Kit', 'Ambient', 'Industrial'];
@@ -96,10 +96,10 @@ export function sanitizePadSettings(raw: any): PadSettings {
 // Daftar pelanggaran batas gratis (kosong = sah).
 function freeViolations(s: PadSettings): string[] {
   const out: string[] = [];
-  if (!FREE_DRUM_KITS.includes(s.drumKit)) out.push(`Kit "${s.drumKit}" butuh Full 16-Bar Editor.`);
+  if (!FREE_DRUM_KITS.includes(s.drumKit)) out.push(`Kit "${s.drumKit}" butuh Full 64-Bar Editor.`);
   s.chord.forEach((c, i) => {
-    if (c.enabled && i >= FREE_CHORD_SLOTS) out.push(`Slot instrumen akor ${i + 1} butuh Full 16-Bar Editor.`);
-    if (c.enabled && !FREE_CHORD_PROGRAMS.includes(c.program)) out.push('Instrumen akor selain Grand Piano butuh Full 16-Bar Editor.');
+    if (c.enabled && i >= FREE_CHORD_SLOTS) out.push(`Slot instrumen akor ${i + 1} butuh Full 64-Bar Editor.`);
+    if (c.enabled && !FREE_CHORD_PROGRAMS.includes(c.program)) out.push('Instrumen akor selain Grand Piano butuh Full 64-Bar Editor.');
   });
   return out;
 }
@@ -181,7 +181,7 @@ export function createPayloadCodec(): PayloadCodec | null {
 }
 
 // ── Validasi ketat permintaan Ekspor MIDI (nilai asing dibuang / ditolak) ───────────────────────────────
-const MAX_EVENTS = 30000;
+const MAX_EVENTS = 120000; // 4x lipat dari batas 16 bar (30000) karena editor kini 64 bar
 const MAX_STEP = 4095;
 const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
 
@@ -343,7 +343,7 @@ export function createPadEditorRouter({
     if (!PAID_ACTIONS.includes(action)) return res.status(400).json({ error: 'Aksi tidak dikenal.' });
     if (!(await ownsPadEditor(email))) {
       console.warn('[pad] aksi berbayar ditolak:', email, action);
-      return res.status(403).json({ ok: false, error: 'Fitur ini butuh Full 16-Bar Editor.' });
+      return res.status(403).json({ ok: false, error: 'Fitur ini butuh Full 64-Bar Editor.' });
     }
     res.json({ ok: true, action });
   }));
@@ -362,7 +362,7 @@ export function createPadEditorRouter({
     }
     if (!(await ownsPadEditor(email))) {
       console.warn('[pad] aksi berbayar ditolak:', email, bucket);
-      res.status(403).json({ ok: false, error: 'Fitur ini butuh Full 16-Bar Editor.' });
+      res.status(403).json({ ok: false, error: 'Fitur ini butuh Full 64-Bar Editor.' });
       return null;
     }
     const codec = createPayloadCodec();

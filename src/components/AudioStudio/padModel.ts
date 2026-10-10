@@ -289,7 +289,7 @@ export interface Selection {
   cells: ReadonlySet<number>;
 }
 
-export const CELL_STRIDE = 2048; // > jumlah step maksimum (12/8 x 16 bar = 384)
+export const CELL_STRIDE = 2048; // > jumlah step maksimum (12/8 x 64 bar = 1536)
 export const cellKey = (row: number, step: number): number => row * CELL_STRIDE + step;
 export const cellRow = (key: number): number => Math.floor(key / CELL_STRIDE);
 export const cellStep = (key: number): number => key % CELL_STRIDE;
