@@ -1243,7 +1243,7 @@ function MainApp() {
                     setCurrentMode(l.mode);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="hover:text-white transition-colors cursor-pointer"
+                  className="text-[13px] font-bold tracking-wide text-white underline decoration-transparent decoration-2 underline-offset-[6px] hover:decoration-accent transition-colors cursor-pointer"
                 >
                   {l.label}
                 </button>

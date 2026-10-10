@@ -41,35 +41,48 @@ const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 // Skrip ini berjalan SEBELUM <body> digambar supaya tidak ada kedipan warna.
 // Rumusnya sama persis dengan paletteVars() di src/theme/theme.ts.
 const THEME_SCRIPT = `(function(){try{
+var r=document.documentElement,H=/^#[0-9a-fA-F]{6}$/;
+function put(v){for(var k in v)r.style.setProperty(k,v[k]);}
+function meta(c){var m=document.querySelector('meta[name="theme-color"]');if(m&&c)m.setAttribute('content',c);}
+// 1) Jalur utama: warna HASIL HITUNG yang ditulis aplikasi ('pm_theme_vars'), sama persis dengan di layar aplikasi.
+var c=JSON.parse(localStorage.getItem('pm_theme_vars')||'null');
+if(c&&c.vars&&H.test(c.vars['--t-surface']||'')&&H.test(c.vars['--t-bg']||'')&&H.test(c.vars['--color-white']||'')){
+put(c.vars);r.setAttribute('data-mode',c.mode==='light'?'light':'dark');meta(c.vars['--t-surface']);return;}
+// 2) Cadangan (belum pernah membuka aplikasi sejak pembaruan): hitung dari palet tersimpan, termasuk latar & teks Kustom.
 var p=JSON.parse(localStorage.getItem('pm_palette')||'null');
-var H=/^#[0-9a-fA-F]{6}$/;
 if(!p||!H.test(p.surface)||!H.test(p.accent)||!H.test(p.accent2))return;
 function rgb(x){var n=parseInt(x.slice(1),16);return[n>>16,(n>>8)&255,n&255];}
-function lum(x){var c=rgb(x);return .299*c[0]+.587*c[1]+.114*c[2];}
+function lum(x){var q=rgb(x);return .299*q[0]+.587*q[1]+.114*q[2];}
 function mix(a,b,t){var A=rgb(a),B=rgb(b);return '#'+A.map(function(v,i){return Math.round(v+(B[i]-v)*t).toString(16).padStart(2,'0');}).join('');}
 function on(x){return lum(x)>150?'#000000':'#ffffff';}
-var light=lum(p.surface)>140,r=document.documentElement;
-var v={'--t-surface':p.surface,'--t-accent':p.accent,'--t-accent2':p.accent2,'--t-on-accent':on(p.accent),'--t-on-accent2':on(p.accent2),
-'--t-deep':mix(p.surface,'#000000',light?0.035:0.35),'--t-bg':light?mix(p.surface,'#000000',0.05):'#000000','--t-fg':light?'#1f2937':'#E5E5E5'};
-for(var k in v)r.style.setProperty(k,v[k]);
-r.setAttribute('data-mode',light?'light':'dark');
+var custom=H.test(p.bg||'')||H.test(p.text||'');
+var sl=lum(p.surface)>140;
+var bg=H.test(p.bg||'')?p.bg:(sl?mix(p.surface,'#000000',0.05):'#000000');
+var tx=H.test(p.text||'')?p.text:(lum(bg)>150?'#0f172a':'#ffffff');
+var light=custom?lum(bg)>lum(tx):sl;
+var fg=custom?tx:(light?'#1f2937':'#E5E5E5');
+var deep=custom?mix(p.surface,bg,0.4):mix(p.surface,'#000000',sl?0.035:0.35);
+put({'--t-surface':p.surface,'--t-accent':p.accent,'--t-accent2':p.accent2,'--t-accent-text':p.accent,'--t-on-accent':on(p.accent),'--t-on-accent2':on(p.accent2),
+'--t-deep':deep,'--t-bg':bg,'--t-fg':fg,'--color-white':tx,'--color-black':bg,'--color-gray-400':mix(tx,bg,0.325),'--color-gray-500':mix(tx,bg,0.507)});
+r.setAttribute('data-mode',light?'light':'dark');meta(p.surface);
 }catch(e){}})();`;
 
 const CSS = `
 :root{
-  --t-surface:#14213D;--t-accent:#FCA311;--t-accent2:#FC1212;--t-on-accent:#000000;--t-on-accent2:#ffffff;
+  --t-surface:#14213D;--t-accent:#FCA311;--t-accent2:#FC1212;--t-accent-text:#FCA311;--t-on-accent:#000000;--t-on-accent2:#ffffff;
   --t-deep:#0d1628;--t-bg:#000000;--t-fg:#E5E5E5;
-  --ink:#ffffff;--muted:#9ca3af;--faint:#6b7280;--line:rgba(255,255,255,.1);--foot-bg:rgba(0,0,0,.3);
+  /* Token netral yang sama dengan aplikasi (white = tinta, black = latar, gray = teks redup). Diisi skrip tema di <head>. */
+  --color-white:#ffffff;--color-black:#000000;--color-gray-400:#9ca3af;--color-gray-500:#6b7280;
+  --ink:var(--color-white);--muted:var(--color-gray-400);--faint:var(--color-gray-500);
+  --line:color-mix(in srgb,var(--color-white) 10%,transparent);
+  --foot-bg:color-mix(in srgb,var(--color-black) 30%,transparent);
   color-scheme:dark;
 }
-html[data-mode="light"]{
-  --ink:#0f172a;--muted:#4b5563;--faint:#6b7280;--line:rgba(15,23,42,.14);--foot-bg:rgba(15,23,42,.04);
-  color-scheme:light;
-}
+html[data-mode="light"]{color-scheme:light}
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;background:var(--t-bg);color:var(--t-fg);font:16px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
-a{color:var(--t-accent)}
+a{color:var(--t-accent-text)}
 code{font-size:.85em;word-break:break-all}
 
 /* Header: sama dengan header aplikasi (bg panel + blur, logo + nama di kiri, satu tombol aksi di kanan).
@@ -82,7 +95,7 @@ header.top .in{width:100%;display:flex;align-items:center;justify-content:space-
 .brand .logo img{width:100%;height:100%;object-fit:contain;border-radius:.75rem;display:block}
 .brand .name{display:flex;flex-direction:column;min-width:0}
 .brand .name b{font-size:1rem;font-weight:900;letter-spacing:-.025em;line-height:1;color:var(--ink);white-space:nowrap}
-.brand .name b i{font-style:normal;color:var(--t-accent)}
+.brand .name b i{font-style:normal;color:var(--t-accent-text)}
 .brand .name small{font:400 .625rem ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.05em;color:var(--muted);white-space:nowrap}
 @media (max-width:399px){header.top .brand .name{display:none}}
 /* Tombol di header: ukuran & gaya sama dengan tombol "Tentang Kami" di header aplikasi */
@@ -125,6 +138,9 @@ footer.bot .row.legal{color:var(--faint)}
 footer.bot a{color:inherit;text-decoration:none}
 footer.bot a:hover{color:var(--ink)}
 footer.bot a[aria-current]{color:var(--ink)}
+/* Baris utama footer (Beranda, Audio Studio, Pusat Kuis): lebih menonjol dari baris tautan hukum */
+footer.bot .row.main a{font-size:.8125rem;font-weight:800;letter-spacing:.02em;color:var(--ink);text-decoration:underline;text-decoration-color:transparent;text-decoration-thickness:2px;text-underline-offset:.4em;transition:text-decoration-color .15s}
+footer.bot .row.main a:hover,footer.bot .row.main a[aria-current]{text-decoration-color:var(--t-accent-text)}
 footer.bot .brand .name b{font-size:.875rem;font-weight:800}
 footer.bot .brand .name{display:flex}
 footer.bot .brand:hover .logo{transform:none}
@@ -205,7 +221,7 @@ ${body}
 <footer class="bot"><div class="in">
 ${brandBlock(false)}
 <div class="mid">
-<nav class="row" aria-label="Navigasi footer">${FOOT_MAIN.map(plain).join('')}</nav>
+<nav class="row main" aria-label="Navigasi footer">${FOOT_MAIN.map(plain).join('')}</nav>
 <nav class="row legal" aria-label="Tautan hukum">${FOOT_LEGAL.map(plain).join('')}</nav>
 </div>
 <span class="copy">&copy; ${new Date().getFullYear()} ${SITE}</span>

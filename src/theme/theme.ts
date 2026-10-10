@@ -705,16 +705,40 @@ export function auditPalette(p: Palette): ContrastRow[] {
 // Hanya untuk menghindari kedipan saat halaman dibuka. Sumber kebenarannya
 // tetap server; cache dibuang saat logout.
 const CACHE_KEY = 'pm_palette';
+// Warna HASIL HITUNG (sama persis dengan yang dipakai aplikasi di layar) untuk halaman statis
+// (/privacy, /terms, /support, dst). Halaman itu dibuat oleh scripts/generate-legal-pages.mjs dan
+// tidak memuat mesin warna ini, jadi ia membaca nilai jadi ini supaya warnanya selalu sama dengan aplikasi,
+// termasuk tema Kustom (latar & teks pilihan sendiri).
+const VARS_CACHE_KEY = 'pm_theme_vars';
+const STATIC_PAGE_VARS = [
+  '--t-surface', '--t-accent', '--t-accent2', '--t-accent-line', '--t-accent-text', '--t-accent-display',
+  '--t-on-accent', '--t-on-accent2', '--t-deep', '--t-bg', '--t-fg', '--t-scrim',
+  '--color-white', '--color-black', '--color-gray-300', '--color-gray-400', '--color-gray-500',
+] as const;
+
+function cacheResolvedVars(p: Palette) {
+  try {
+    const all = paletteVars(p);
+    const vars: Record<string, string> = {};
+    for (const k of STATIC_PAGE_VARS) if (all[k]) vars[k] = all[k];
+    localStorage.setItem(VARS_CACHE_KEY, JSON.stringify({ mode: resolvePalette(p).tone, vars }));
+  } catch { /* storage penuh/diblokir */ }
+}
 
 export function cachePalette(p: Palette) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify(p)); } catch { /* storage penuh/diblokir */ }
+  cacheResolvedVars(p);
 }
 export function clearCachedPalette() {
   try { localStorage.removeItem(CACHE_KEY); } catch { /* abaikan */ }
+  try { localStorage.removeItem(VARS_CACHE_KEY); } catch { /* abaikan */ }
 }
 /** Pasang tema tersimpan; kalau belum ada (tamu / pengunjung baru), pasang tema bawaan supaya semua token tersedia. */
 export function applyCachedPalette() {
   let p: unknown = null;
   try { p = JSON.parse(localStorage.getItem(CACHE_KEY) || 'null'); } catch { /* abaikan */ }
-  applyPalette(isPalette(p) ? p : BUILTIN_THEME.palette);
+  const effective = isPalette(p) ? p : BUILTIN_THEME.palette;
+  applyPalette(effective);
+  // Selaraskan juga salinan untuk halaman statis (pengguna lama yang belum punya salinannya ikut terisi di sini).
+  cacheResolvedVars(effective);
 }
