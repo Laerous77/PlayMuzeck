@@ -911,7 +911,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
   const isAnySoloActive = Object.values(channelStates).some((s) => s.isSolo);
 
   return (
-    <div className="rounded-3xl bg-surface border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl bg-surface border border-white/10 p-6 sm:p-8 space-y-6 shadow-2xl">
       {stems.map((stem) => (
         <audio
           key={stem.id}
@@ -930,9 +930,9 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
       {/* Header Panel */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-5">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-2xl font-black text-white">{activeTrack?.title || 'Stem Mixer'}</h2>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+            <h2 className="text-2xl font-black text-white break-words">{activeTrack?.title || 'Stem Mixer'}</h2>
             {isStemsUnlocked ? (
               <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
                 <CheckCircle2 className="w-3 h-3" /> Full Multi-Track Aktif
@@ -948,7 +948,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3 min-w-0">
           {/* Tombol Master FX Rack (tanpa tulisan Terkunci) */}
           <button
             onClick={() => {
@@ -996,9 +996,9 @@ export const StemMixer: React.FC<StemMixerProps> = ({
       </div>
 
       {/* Scrubber & Master Controls */}
-      <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-3">
+      <div className="bg-black/40 p-4 rounded-2xl border border-white/5 space-y-3 min-w-0">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
+          <span className="text-xs font-mono text-gray-400 w-10 shrink-0 text-right">{formatTime(currentTime)}</span>
           <input
             type="range"
             min={0}
@@ -1006,13 +1006,13 @@ export const StemMixer: React.FC<StemMixerProps> = ({
             step={0.1}
             value={currentTime}
             onChange={handleSeek}
-            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
+            className="flex-1 min-w-0 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
           />
-          <span className="text-xs font-mono text-gray-400 w-10">{formatTime(effectiveMaxDuration)}</span>
+          <span className="text-xs font-mono text-gray-400 w-10 shrink-0">{formatTime(effectiveMaxDuration)}</span>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3 min-w-0 max-w-full">
             <button
               onClick={togglePlayAll}
               className="w-12 h-12 rounded-2xl bg-accent text-on-accent flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-accent/20 cursor-pointer"
@@ -1045,8 +1045,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
               <span>{isLooping ? 'Loop On' : 'Loop'}</span>
             </button>
 
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-              <Volume2 className="w-4 h-4 text-gray-400" />
+            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 w-full sm:w-auto min-w-0">
+              <Volume2 className="w-4 h-4 text-gray-400 shrink-0" />
               <input
                 type="range"
                 min={0}
@@ -1054,13 +1054,13 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 step={0.01}
                 value={masterVolume}
                 onChange={(e) => setMasterVolume(Number(e.target.value))}
-                className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
+                className="flex-1 min-w-0 sm:flex-none sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
               />
-              <span className="text-xs font-mono text-gray-300 font-semibold">{Math.round(masterVolume * 100)}%</span>
+              <span className="text-xs font-mono text-gray-300 font-semibold w-9 shrink-0 text-right">{Math.round(masterVolume * 100)}%</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 bg-white/5 px-3 py-2 rounded-xl border border-white/5 w-full sm:w-auto min-w-0">
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-gray-400 font-semibold">Tempo:</span>
               <input
@@ -1069,12 +1069,12 @@ export const StemMixer: React.FC<StemMixerProps> = ({
                 max={240}
                 value={targetBpm}
                 onChange={(e) => setTargetBpm(Math.max(40, Math.min(240, Number(e.target.value) || baseBpm)))}
-                className="w-14 bg-black/60 border border-white/15 rounded px-1.5 py-0.5 text-xs text-white font-mono text-center outline-none focus:border-accent"
+                className="w-16 bg-black/60 border border-white/15 rounded px-1.5 py-0.5 text-xs text-white font-mono text-center outline-none focus:border-accent"
               />
-              <span className="text-xs text-gray-400 font-mono">BPM ({playbackSpeed.toFixed(2)}x)</span>
+              <span className="text-xs text-gray-400 font-mono whitespace-nowrap">BPM ({playbackSpeed.toFixed(2)}x)</span>
             </div>
 
-            <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer pl-2 border-l border-white/10">
+            <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer sm:pl-3 sm:border-l border-white/10 whitespace-nowrap">
               <input
                 type="checkbox"
                 checked={keepPitch}

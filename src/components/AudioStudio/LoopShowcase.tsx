@@ -423,7 +423,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
   };
 
   return (
-    <div className="rounded-3xl bg-gradient-to-b from-surface/80 via-black to-deep border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6">
+    <div className="w-full max-w-full min-w-0 overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-black to-deep border border-white/10 p-6 sm:p-8 shadow-2xl space-y-6">
       <audio
         ref={audioRef}
         src={loopAudioUrl}
@@ -435,12 +435,12 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
       />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/10 pb-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent shadow-inner">
+        <div className="flex items-center gap-3.5 min-w-0">
+          <div className="w-12 h-12 shrink-0 rounded-2xl bg-accent/15 border border-accent/30 flex items-center justify-center text-accent shadow-inner">
             <Radio className="w-6 h-6 animate-pulse" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight">
                 Seamless Loop Version
               </h3>
@@ -460,7 +460,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
           {isLoopUnlocked ? (
             <>
               <div className="relative">
@@ -508,7 +508,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
               id="btn-unlock-loop-header"
               type="button"
               onClick={() => onNavigateToPricing('loopVersion')}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-on-accent font-extrabold text-xs hover:brightness-110 shadow-lg shadow-accent/20 cursor-pointer transition-all duration-300"
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-accent text-on-accent font-extrabold text-xs hover:brightness-110 shadow-lg shadow-accent/20 cursor-pointer transition-all duration-300 max-w-full"
             >
               <Repeat className="w-3.5 h-3.5" />
               <span>Buka Seamless Loop</span>
@@ -517,9 +517,9 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
         </div>
       </div>
 
-      <div className="space-y-2 bg-black/40 p-4 rounded-2xl border border-white/5">
+      <div className="space-y-2 bg-black/40 p-4 rounded-2xl border border-white/5 min-w-0">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-gray-400 w-10 text-right">{formatTime(currentTime)}</span>
+          <span className="text-xs font-mono text-gray-400 w-10 shrink-0 text-right">{formatTime(currentTime)}</span>
           <input
             type="range"
             min={0}
@@ -527,13 +527,13 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
             step={0.1}
             value={currentTime}
             onChange={handleSeek}
-            className="flex-1 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
+            className="flex-1 min-w-0 h-2 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
           />
-          <span className="text-xs font-mono text-gray-400 w-10">{formatTime(effectiveMaxDuration)}</span>
+          <span className="text-xs font-mono text-gray-400 w-10 shrink-0">{formatTime(effectiveMaxDuration)}</span>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-4 pt-1">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-3 min-w-0 max-w-full">
             <button
               onClick={togglePlay}
               className="w-12 h-12 rounded-2xl bg-accent text-on-accent flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shadow-accent/20 cursor-pointer"
@@ -556,7 +556,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
             </button>
 
             {/* Selector Ulangi Loop (1x Gratis, 2x & 3x Mengarahkan ke Buka Seamless Loop) */}
-            <div className="flex items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/5">
+            <div className="flex flex-wrap items-center gap-1.5 bg-white/5 px-2.5 py-1.5 rounded-xl border border-white/5 max-w-full">
               <Repeat className="w-3.5 h-3.5 text-accent" />
               <span className="text-xs text-gray-300 font-bold mr-1">Ulangi:</span>
               {([1, 2, 3] as const).map((count) => {
@@ -596,8 +596,8 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-            <Volume2 className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 w-full sm:w-auto min-w-0">
+            <Volume2 className="w-4 h-4 text-gray-400 shrink-0" />
             <input
               type="range"
               min={0}
@@ -609,9 +609,9 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
                 setVolume(v);
                 if (audioRef.current) audioRef.current.volume = v;
               }}
-              className="w-20 sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
+              className="flex-1 min-w-0 sm:flex-none sm:w-24 h-1.5 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-accent"
             />
-            <span className="text-xs font-mono text-gray-300 w-9 text-right font-semibold">
+            <span className="text-xs font-mono text-gray-300 w-9 shrink-0 text-right font-semibold">
               {Math.round(volume * 100)}%
             </span>
           </div>
@@ -626,7 +626,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
             </h3>
           </div>
 
-          <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-4 bg-black/60 p-4 rounded-2xl border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-black/60 p-4 rounded-2xl border border-white/10">
             <div className="space-y-1.5">
               <label className="text-xs text-gray-400 flex justify-between">
                 <span>Speed Audio</span>

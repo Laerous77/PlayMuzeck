@@ -456,7 +456,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
   };
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-black to-surface border border-white/10 p-6 sm:p-8 shadow-2xl">
+    <div className="relative w-full max-w-full min-w-0 overflow-hidden rounded-3xl bg-gradient-to-b from-surface/80 via-black to-surface border border-white/10 p-6 sm:p-8 shadow-2xl">
       <audio
         ref={audioRef}
         key={activeTrack?.id}
@@ -468,8 +468,8 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
         onEnded={() => !isLooping && setIsPlaying(false)}
       />
 
-      <div className="grid lg:grid-cols-[auto_1fr] items-center gap-8">
-        <div className="relative flex justify-center items-center">
+      <div className="grid grid-cols-1 min-w-0 lg:grid-cols-[auto_minmax(0,1fr)] items-center gap-8">
+        <div className="relative flex justify-center items-center pb-3">
           <div
             className={`relative w-44 h-44 sm:w-52 sm:h-52 rounded-full bg-gradient-to-tr from-surface via-surface to-black border-4 border-white/10 shadow-[0_0_50px_rgba(0,0,0,0.8)] flex items-center justify-center transition-transform duration-700 ${
               isPlaying ? 'animate-[spin_4s_linear_infinite]' : ''
@@ -501,22 +501,22 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs px-2.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/30 font-semibold">
                   {activeTrack?.genre || 'General'}
                 </span>
                 <span className="text-xs text-gray-400">{activeTrack?.bpm || 120} BPM</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-black text-white mt-1 tracking-tight">
+              <h1 className="text-2xl sm:text-4xl font-black text-white mt-1 tracking-tight break-words">
                 {activeTrack?.title || 'Pilih Lagu'}
               </h1>
               <p className="text-sm text-gray-400">Diproduksi oleh {activeTrack?.artist || 'PlayMuzeck Studio'}</p>
             </div>
 
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               {isMasterUnlocked ? (
                 <>
                   <div className="relative">
@@ -571,7 +571,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
               ) : (
                 <button
                   onClick={onUnlockMaster}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs hover:brightness-110 shadow-lg shadow-accent/10 cursor-pointer"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-accent text-on-accent font-bold text-xs hover:brightness-110 shadow-lg shadow-accent/10 cursor-pointer max-w-full"
                 >
                   <Unlock className="w-3.5 h-3.5" /> Buka Full Audio Master
                 </button>
@@ -579,9 +579,9 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
             </div>
           </div>
 
-          <div className="space-y-2 bg-black/40 p-4 rounded-2xl border border-white/5">
+          <div className="space-y-2 bg-black/40 p-4 rounded-2xl border border-white/5 min-w-0">
             <div className="flex items-center gap-3">
-              <span className="text-xs font-mono text-gray-400 w-10 text-right">
+              <span className="text-xs font-mono text-gray-400 w-10 shrink-0 text-right">
                 {formatTime(currentTime)}
               </span>
               <input
@@ -591,14 +591,14 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 step={0.1}
                 value={currentTime}
                 onChange={handleSeek}
-                className="flex-1 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
+                className="flex-1 min-w-0 h-2 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
               />
-              <span className="text-xs font-mono text-gray-400 w-10">
+              <span className="text-xs font-mono text-gray-400 w-10 shrink-0">
                 {formatTime(effectiveMaxDuration)}
               </span>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               <div className="flex items-center gap-3">
                 <button
                   onClick={togglePlay}
@@ -631,8 +631,8 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5">
-                <Volume2 className="w-4 h-4 text-gray-400" />
+              <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-xl border border-white/5 w-full sm:w-auto min-w-0">
+                <Volume2 className="w-4 h-4 text-gray-400 shrink-0" />
                 <input
                   type="range"
                   min={0}
@@ -647,9 +647,9 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                     // audioRef.current.volume (yang akan bikin slider terasa tidak linear).
                     if (!audioCtxRef.current && audioRef.current) audioRef.current.volume = v;
                   }}
-                  className="w-20 sm:w-24 h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
+                  className="flex-1 min-w-0 sm:flex-none sm:w-24 h-1.5 bg-black/40 rounded-lg appearance-none cursor-pointer accent-accent"
                 />
-                <span className="text-xs font-mono text-gray-300 w-9 text-right font-semibold">
+                <span className="text-xs font-mono text-gray-300 w-9 shrink-0 text-right font-semibold">
                   {Math.round(volume * 100)}%
                 </span>
               </div>
@@ -666,7 +666,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
             </h3>
           </div>
 
-          <div className="grid sm:grid-cols-2 md:grid-cols-5 gap-4 bg-black/60 p-4 rounded-2xl border border-white/10">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 bg-black/60 p-4 rounded-2xl border border-white/10">
             <div className="space-y-1.5">
               <label className="text-xs text-gray-400 flex justify-between">
                 <span>Speed Audio</span>
@@ -691,7 +691,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
                   onChange={(e) => setKeepPitch(e.target.checked)}
                   className="accent-accent rounded cursor-pointer"
                 />
-                <span>Kunci Nada (Keep Pitch)</span>
+                <span className="min-w-0">Kunci Nada (Keep Pitch)</span>
               </label>
             </div>
 

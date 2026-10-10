@@ -4965,11 +4965,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
-            <div className="flex items-center bg-black/60 p-1 rounded-xl border border-white/[0.08] shrink-0">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 min-w-0">
+            <div className="flex items-center bg-black/60 p-1 rounded-xl border border-white/[0.08] w-full sm:w-auto">
               <button
                 onClick={() => setActiveTab('drum')}
-                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                className={`flex-1 sm:flex-none px-4 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   activeTab === 'drum' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
@@ -4977,7 +4977,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
               <button
                 onClick={() => setActiveTab('chord')}
-                className={`px-3 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
+                className={`flex-1 sm:flex-none justify-center px-4 py-2 sm:py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer ${
                   activeTab === 'chord' ? 'bg-accent text-on-accent shadow-sm' : 'text-gray-300 hover:text-white'
                 }`}
               >
@@ -4985,7 +4985,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end gap-2 sm:ml-auto w-full sm:w-auto min-w-0">
             <button
               type="button"
               onClick={() => {
@@ -4995,7 +4995,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 }
                 setIsExportMenuOpen(true);
               }}
-              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-accent shadow cursor-pointer shrink-0"
+              className="col-span-2 sm:col-span-1 justify-center px-3.5 py-2.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-accent shadow cursor-pointer whitespace-nowrap"
             >
               {isUnlocked8Bar ? <Download className="w-3.5 h-3.5 text-accent" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
               <span>Ekspor Pola</span>
@@ -5005,7 +5005,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               type="button"
               onClick={() => void saveProject()}
               title="Simpan seluruh proyek (pola, mixer, ADSR, akor) ke berkas MIDI di perangkat Anda"
-              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer shrink-0"
+              className="justify-center px-3.5 py-2.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer whitespace-nowrap"
             >
               {isUnlocked8Bar ? <Save className="w-3.5 h-3.5 text-accent" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
               <span>Simpan Proyek</span>
@@ -5015,7 +5015,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               type="button"
               onClick={openProjectPicker}
               title="Muat proyek dari berkas MIDI (hasil Simpan Proyek / Ekspor MIDI, atau MIDI lain)"
-              className="px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer shrink-0"
+              className="justify-center px-3.5 py-2.5 sm:py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 bg-black/60 hover:bg-black/90 border border-white/[0.12] text-gray-200 shadow cursor-pointer whitespace-nowrap"
             >
               {isUnlocked8Bar ? <FolderOpen className="w-3.5 h-3.5 text-accent" /> : <Lock className="w-3.5 h-3.5 text-accent" />}
               <span>Muat Proyek</span>

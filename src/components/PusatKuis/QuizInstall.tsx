@@ -108,10 +108,10 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
 
       {/* INFORMASI 3 PAKET STARTER TANPA TOMBOL MAIN (DIARAHKAN KE PERPUSTAKAAN) */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-black text-white flex items-center gap-2">
-              <Layers className="w-4 h-4 text-accent2" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <h3 className="text-lg font-black text-white flex items-start gap-2">
+              <Layers className="w-4 h-4 text-accent2 shrink-0 mt-1.5" />
               <span>3 Paket Kuis Bawaan (Starter Decks)</span>
             </h3>
             <p className="text-xs text-gray-400">
@@ -122,7 +122,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
           <button
             type="button"
             onClick={onNavigateLibrary}
-            className="px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center gap-1.5 cursor-pointer shadow-md shadow-accent2/20 active:scale-95 transition-all"
+            className="self-start sm:self-auto shrink-0 whitespace-nowrap px-4 py-2 rounded-xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-md shadow-accent2/20 active:scale-95 transition-all"
           >
             <span>Buka Perpustakaan</span>
             <ArrowRight className="w-3.5 h-3.5" />
