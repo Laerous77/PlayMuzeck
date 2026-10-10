@@ -810,7 +810,7 @@ export function generateStandaloneQuizHtml(
       }
     } catch {}
 
-    // 20+ ALBUM BINGKAI LENGKAP & SISTEM MISI (Identik Web)
+    // 19 BINGKAI + 'none' — daftar id/nama/syarat HARUS sama dengan PROFILE_FRAMES di ProfileDashboardModal.tsx
     const USER_UNLOCKED_FRAMES = ${userUnlockedFramesJson};
     const USER_PURCHASED_THEMES = ${userPurchasedThemesJson};
 
@@ -820,6 +820,8 @@ export function generateStandaloneQuizHtml(
       { id: 'frame-neon', name: 'Voltase Neon Kreatif', icon: '⚡', badge: 'Energi Kreatif', unlocked: USER_UNLOCKED_FRAMES.includes('frame-neon'), desc: 'Terbuka setelah berdonasi Energi Kreatif (Rp 25.000).' },
       { id: 'frame-warp', name: 'Quantum Warp Grid', icon: '🌀', badge: 'Server Boost', unlocked: USER_UNLOCKED_FRAMES.includes('frame-warp'), desc: 'Terbuka setelah berdonasi Server Boost (Rp 50.000).' },
       { id: 'frame-sultan', name: 'Mahkota Imperial Sultan', icon: '👑', badge: 'Pendukung Sultan', unlocked: USER_UNLOCKED_FRAMES.includes('frame-sultan'), desc: 'Terbuka setelah berdonasi Pendukung Sultan (Rp 100.000).' },
+      { id: 'frame-contact', name: 'Sinyal Resonansi Pengembang', icon: '📡', badge: 'Koneksi Developer', unlocked: USER_UNLOCKED_FRAMES.includes('frame-contact'), desc: 'Terbuka setelah mengirim masukan, ide kustom, atau aduan.' },
+      { id: 'frame-bundle', name: 'Hexaprima Omniverse', icon: '💎', badge: 'Kolektor 6 Produk', unlocked: USER_UNLOCKED_FRAMES.includes('frame-bundle'), desc: 'Terbuka setelah memiliki paket bundle lengkap 6 produk.' },
       { id: 'frame-olahraga', name: 'Gelora Arena Juara', icon: '⚽', badge: 'Tema Olahraga', unlocked: USER_PURCHASED_THEMES.includes('olahraga'), desc: 'Terbuka setelah membeli kuis Olahraga.' },
       { id: 'frame-sehari-hari', name: 'Harmoni Graha Harian', icon: '🏠', badge: 'Tema Sehari-hari', unlocked: USER_PURCHASED_THEMES.includes('sehari_hari'), desc: 'Terbuka setelah membeli kuis Sehari-hari.' },
       { id: 'frame-alam', name: 'Biosfer Belantara Purba', icon: '🌿', badge: 'Tema Alam', unlocked: USER_PURCHASED_THEMES.includes('alam'), desc: 'Terbuka setelah membeli kuis Alam.' },
@@ -831,6 +833,7 @@ export function generateStandaloneQuizHtml(
       { id: 'frame-bahasa', name: 'Aksara Poliglot Dunia', icon: '🗣️', badge: 'Tema Bahasa', unlocked: USER_PURCHASED_THEMES.includes('bahasa'), desc: 'Terbuka setelah membeli kuis Bahasa.' },
       { id: 'frame-sosial', name: 'Episentrum Sosiokultural', icon: '👥', badge: 'Tema Sosial', unlocked: USER_PURCHASED_THEMES.includes('sosial'), desc: 'Terbuka setelah membeli kuis Sosial.' },
       { id: 'frame-fiksi', name: 'Mitologi Arkana Kosmik', icon: '📖', badge: 'Tema Fiksi', unlocked: USER_PURCHASED_THEMES.includes('fiksi'), desc: 'Terbuka setelah membeli kuis Fiksi.' },
+      { id: 'frame-lainnya', name: 'Enigma Spektrum Semesta', icon: '✨', badge: 'Tema Lainnya', unlocked: USER_PURCHASED_THEMES.includes('lainnya'), desc: 'Terbuka setelah membeli kuis Lainnya.' },
       { id: 'frame-quiz-editor', name: 'Mahkota Arsitek Kuis', icon: '👑', badge: 'Quiz Editor', unlocked: ${hasEditor ? 'true' : 'false'}, desc: 'Terbuka jika memiliki lisensi Quiz Editor.' }
     ];
 

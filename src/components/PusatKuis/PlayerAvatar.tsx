@@ -1,7 +1,7 @@
 // src/components/PusatKuis/PlayerAvatar.tsx
 // Avatar pemain (foto profil / inisial) dengan bingkai profil, dipakai papan peringkat & Komunitas Kuis.
 import React, { useState } from 'react';
-import { PROFILE_FRAMES, FrameOrnament } from '../Modals/ProfileDashboardModal';
+import { PROFILE_FRAMES, FrameOrnament, frameBoxClass } from '../Modals/ProfileDashboardModal';
 
 interface PlayerAvatarProps {
   name: string;
@@ -21,7 +21,7 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ name, avatarUrl, fra
   return (
     <div className={`relative shrink-0 ${SIZE_CLASS[size]}`}>
       <div
-        className={`w-full h-full rounded-xl overflow-hidden flex items-center justify-center bg-[#0a1120] font-black text-on-accent ${frame.borderClass}`}
+        className={`w-full h-full rounded-xl overflow-hidden flex items-center justify-center bg-[#0a1120] font-black text-on-accent ${frameBoxClass(frame, true)}`}
       >
         {showImg ? (
           <img src={avatarUrl as string} alt="" onError={() => setBroken(true)} className="w-full h-full object-cover" loading="lazy" />
@@ -29,11 +29,8 @@ export const PlayerAvatar: React.FC<PlayerAvatarProps> = ({ name, avatarUrl, fra
           <div className="w-full h-full bg-linear-to-tr from-accent to-accent/70 flex items-center justify-center">{initial}</div>
         )}
       </div>
-      {size !== 'sm' && (
-        <span className="absolute -top-1.5 -right-1.5 z-10 flex items-center justify-center pointer-events-none">
-          <FrameOrnament iconType={frame.iconType} size="sm" />
-        </span>
-      )}
+      {/* Ornamen sudah `absolute` sendiri: tanpa wrapper absolute (lihat catatan di Header). */}
+      {size !== 'sm' && <FrameOrnament frame={frame} size="sm" />}
     </div>
   );
 };

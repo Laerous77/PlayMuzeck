@@ -105,7 +105,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Energi Kreatif',
     description: 'Kilatan petir amber berdaya tinggi yang memicu inspirasi.',
     requirement: 'Terbuka setelah berdonasi Energi Kreatif (Rp 25.000).',
-    borderClass: 'pm-frame border-2 border-yellow-300 ring-4 ring-[#fca311] shadow-[0_0_22px_rgba(252,163,17,0.85)] animate-pulse',
+    borderClass: 'pm-frame border-2 border-yellow-300 ring-4 ring-[#fca311] shadow-[0_0_22px_rgba(252,163,17,0.85)] pm-frame-glow',
     iconType: 'neon',
   },
   {
@@ -183,7 +183,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Musik',
     description: 'Gelombang frekuensi nada murni sang maestro instrumen dan partitur melodi.',
     requirement: 'Terbuka setelah membeli kuis tema Musik.',
-    borderClass: 'pm-frame border-2 border-violet-300 ring-4 ring-purple-950 shadow-[0_0_28px_rgba(168,85,247,0.9)] animate-pulse',
+    borderClass: 'pm-frame border-2 border-violet-300 ring-4 ring-purple-950 shadow-[0_0_28px_rgba(168,85,247,0.9)] pm-frame-glow',
     iconType: 'theme-musik',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-purple-950 via-violet-600 to-fuchsia-300', border: 'border-violet-200', shadow: 'shadow-[0_0_18px_rgba(168,85,247,0.9)]', emoji: '🎵' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('musik'),
@@ -216,7 +216,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Teknologi',
     description: 'Kilau sirkuit semikonduktor masa depan, kecerdasan buatan, dan arsitektur kode.',
     requirement: 'Terbuka setelah membeli kuis tema Teknologi.',
-    borderClass: 'pm-frame border-2 border-cyan-300 ring-4 ring-teal-950 shadow-[0_0_28px_rgba(34,211,238,0.9)] animate-pulse',
+    borderClass: 'pm-frame border-2 border-cyan-300 ring-4 ring-teal-950 shadow-[0_0_28px_rgba(34,211,238,0.9)] pm-frame-glow',
     iconType: 'theme-teknologi',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-cyan-950 via-cyan-600 to-teal-200', border: 'border-cyan-200', shadow: 'shadow-[0_0_18px_rgba(34,211,238,0.9)]', emoji: '💻', animate: 'animate-pulse' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('teknologi'),
@@ -282,12 +282,19 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Quiz Editor Suite',
     description: 'Mahkota megah perancang kuis mandiri dengan kendali mutlak 12 tema, media, dan sistem skor.',
     requirement: 'Terbuka setelah membeli lisensi Quiz Editor (Rp 10.000).',
-    borderClass: 'pm-frame border-3 border-red-400 ring-4 ring-[#fc1212] shadow-[0_0_35px_rgba(252,18,18,0.95)] animate-pulse',
+    borderClass: 'pm-frame border-3 border-red-400 ring-4 ring-[#fc1212] shadow-[0_0_35px_rgba(252,18,18,0.95)] pm-frame-glow',
     iconType: 'quiz-editor-crown',
     ornamentStyle: { type: 'crown', bg: 'bg-gradient-to-r from-red-800 via-[#fc1212] to-amber-500', border: 'border-yellow-200', shadow: 'shadow-[0_0_24px_rgba(252,18,18,1)]', emoji: '👑', animate: 'animate-pulse' },
     checkUnlocked: (col) => col.features.quizEditor,
   },
 ];
+
+/**
+ * Kelas kotak avatar + bingkai. `compact` = avatar kecil (≤ 40px): ring & border ditipiskan lewat `.pm-frame-compact`
+ * (src/index.css). Semua tempat yang menampilkan bingkai WAJIB memakai ini supaya tampilannya seragam.
+ */
+export const frameBoxClass = (frame: ProfileFrame, compact = false): string =>
+  compact && frame.id !== 'none' ? `${frame.borderClass} pm-frame-compact` : frame.borderClass;
 
 export interface FrameOrnamentProps {
   iconType?: string;
@@ -974,11 +981,11 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
           <div className="relative shrink-0">
             <FrameOrnament frame={currentFrameObj} size="lg" />
 
-            <div className={`w-20 h-20 sm:w-22 sm:h-22 rounded-2xl flex items-center justify-center text-black font-black text-3xl shadow-xl overflow-hidden transition-all bg-[#0a1120] ${currentFrameObj.borderClass}`}>
+            <div className={`w-20 h-20 sm:w-22 sm:h-22 rounded-2xl flex items-center justify-center text-on-accent font-black text-3xl overflow-hidden transition-all bg-[#0a1120] ${currentFrameObj.borderClass}`}>
               {editAvatar ? (
                 <img src={editAvatar} alt="Foto Profil" className="w-full h-full object-cover" />
               ) : (
-                <div className="w-full h-full bg-gradient-to-tr from-accent via-accent/70 to-accent/70 flex items-center justify-center text-black font-black text-3xl">
+                <div className="w-full h-full bg-gradient-to-tr from-accent to-accent/70 flex items-center justify-center text-on-accent font-black text-3xl">
                   {userInitial}
                 </div>
               )}
@@ -1291,10 +1298,10 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
                   return (
                     <div key={frame.id} className={`p-3.5 rounded-2xl border transition-all flex flex-col justify-between gap-3 relative ${isEquipped ? 'bg-accent/10 border-accent' : isUnlocked ? 'bg-black/50 border-white/10 hover:border-white/25' : 'bg-black/30 border-white/[0.04] opacity-75'}`}>
                       <div className="flex items-start gap-3.5">
-                        <div className="relative shrink-0 pt-1">
+                        <div className="relative shrink-0 pt-2">
                           <FrameOrnament frame={frame} size="sm" />
-                          <div className={`w-13 h-13 rounded-xl flex items-center justify-center text-black font-black text-sm overflow-hidden bg-[#0a1120] ${frame.borderClass}`}>
-                            {editAvatar ? <img src={editAvatar} alt="Pratinjau" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-tr from-accent via-accent/70 to-accent/70 flex items-center justify-center text-black font-black text-base">{userInitial}</div>}
+                          <div className={`w-13 h-13 rounded-xl flex items-center justify-center text-on-accent font-black text-sm overflow-hidden bg-[#0a1120] ${frame.borderClass}`}>
+                            {editAvatar ? <img src={editAvatar} alt="Pratinjau" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gradient-to-tr from-accent to-accent/70 flex items-center justify-center text-on-accent font-black text-base">{userInitial}</div>}
                           </div>
                         </div>
                         <div className="space-y-0.5 min-w-0 flex-1">

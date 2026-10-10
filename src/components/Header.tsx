@@ -19,7 +19,7 @@ import {
   Compass,
 } from 'lucide-react';
 import { AppMode, CartItem, UserSession, AudioEntitlements } from '../types';
-import { PROFILE_FRAMES, FrameOrnament } from './Modals/ProfileDashboardModal';
+import { PROFILE_FRAMES, FrameOrnament, frameBoxClass } from './Modals/ProfileDashboardModal';
 import { audioEngine } from '../services/audioEngine';
 import { NotificationBell } from './NotificationBell';
 import type { QuizSegment } from './PusatKuis/quizSegments';
@@ -451,7 +451,7 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <div className="relative shrink-0 w-7 h-7 sm:w-9 sm:h-9">
               <div
-                className={`w-full h-full rounded-xl flex items-center justify-center text-on-accent font-black text-xs overflow-hidden transition-all bg-[#0a1120] ${currentFrameObj.borderClass}`}
+                className={`w-full h-full rounded-xl flex items-center justify-center text-on-accent font-black text-xs overflow-hidden transition-all bg-[#0a1120] ${frameBoxClass(currentFrameObj, true)}`}
               >
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Profil" className="w-full h-full object-cover" />
@@ -462,10 +462,9 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
               </div>
 
-              {/* Ornamen bingkai: lencana kecil di pojok kanan atas */}
-              <span className="absolute -top-1.5 -right-1.5 z-10 flex items-center justify-center pointer-events-none">
-                <FrameOrnament iconType={currentFrameObj.iconType} size="sm" />
-              </span>
+              {/* Ornamen bingkai: sudah `absolute` sendiri (mahkota di tengah atas, lencana di pojok kanan atas),
+                  jadi JANGAN dibungkus elemen absolute lain — wrapper nol-ukuran itulah yang menggeser mahkota ke kanan. */}
+              <FrameOrnament frame={currentFrameObj} size="sm" />
             </div>
 
             <span className="text-xs font-bold text-white max-w-[140px] truncate leading-none hidden sm:block group-hover:text-accent transition-colors">

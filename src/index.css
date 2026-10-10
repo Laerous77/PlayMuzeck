@@ -63,6 +63,21 @@
   --color-rose-50: #fff1f2; --color-rose-100: #ffe4e6; --color-rose-200: #fecdd3; --color-rose-300: #fda4af; --color-rose-400: #fb7185; --color-rose-500: #f43f5e; --color-rose-600: #e11d48; --color-rose-700: #be123c; --color-rose-800: #9f1239; --color-rose-900: #881337; --color-rose-950: #4c0519;
 }
 
+/* Bingkai berdenyut: yang berdenyut CAHAYA-nya saja (brightness), bukan opasitas. `animate-pulse` bawaan Tailwind
+   menurunkan opacity hingga 50% sehingga foto profil ikut memudar/transparan; kelas ini menggantikannya. */
+@keyframes pmFrameGlow {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.28) saturate(1.2); }
+}
+.pm-frame-glow { animation: pmFrameGlow 2s ease-in-out infinite; }
+
+/* Varian ringkas untuk avatar kecil (≤ 40px: Header, papan peringkat, lobi). `ring-4` + `border-3` terlalu tebal
+   untuk ukuran itu dan menelan hampir seluruh foto. Selektor 2 kelas + di luar @layer = menang atas utilitas Tailwind. */
+.pm-frame.pm-frame-compact.ring-4 {
+  --tw-ring-shadow: var(--tw-ring-inset,) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
+}
+.pm-frame.pm-frame-compact.border-3 { border-width: 2px; }
+
 html[data-mode="dark"] { color-scheme: dark; }
 html[data-mode="light"] { color-scheme: light; }
 
@@ -251,7 +266,7 @@ html[data-mode="light"] { color-scheme: light; }
 
 @media (prefers-reduced-motion: reduce) {
   .pm-spotlight { animation: none; }
-  .pm-shine::before, .animate-in { animation: none !important; }
+  .pm-shine::before, .animate-in, .pm-frame-glow { animation: none !important; }
 }
 
 /* Custom scrollbar

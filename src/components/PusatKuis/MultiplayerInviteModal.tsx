@@ -10,7 +10,7 @@ import {
   DEFAULT_QUESTION_TIME,
 } from '../../services/questionTime';
 import { QuestionTimerSetting } from './QuestionTimerSetting';
-import { PROFILE_FRAMES, FrameOrnament } from '../Modals/ProfileDashboardModal';
+import { PROFILE_FRAMES, FrameOrnament, frameBoxClass } from '../Modals/ProfileDashboardModal';
 import { addSavedResult, AnswerLogEntry, SavedQuizResult } from '../../services/quizResultsStore';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -167,22 +167,26 @@ const REACTION_EMOJIS = ['🔥', '👏', '😂', '😭', '😮', '😞', '😡',
 const PlayerAvatar: React.FC<{ player: RoomPlayer; size?: 'sm' | 'md' }> = ({ player, size = 'sm' }) => {
   const frame = PROFILE_FRAMES.find((f) => f.id === player.frameId) || PROFILE_FRAMES[0];
   const dim = size === 'md' ? 'w-9 h-9' : 'w-6 h-6';
+  // Bentuk & ketebalan bingkai disamakan dengan avatar lain (kotak membulat + varian ringkas), bukan lingkaran.
+  const shape = size === 'md' ? 'rounded-xl' : 'rounded-lg';
+  const box = frameBoxClass(frame, true);
   return (
     <div className={`relative ${dim} shrink-0 ${player.connected === false ? 'opacity-40' : ''}`}>
       {player.avatarUrl ? (
         <img
           src={player.avatarUrl}
           alt={player.name}
-          className={`${dim} rounded-full object-cover ${frame.borderClass || 'border-2 border-white/20'}`}
+          className={`${dim} ${shape} object-cover bg-[#0a1120] ${box}`}
         />
       ) : (
         <div
-          className={`${dim} rounded-full ${fallbackColorFor(player.id)} ${frame.borderClass || 'border-2 border-white/20'} flex items-center justify-center text-white font-bold text-[10px]`}
+          className={`${dim} ${shape} ${fallbackColorFor(player.id)} ${box} flex items-center justify-center text-white font-bold text-[10px]`}
         >
           {(player.name || '?').charAt(0).toUpperCase()}
         </div>
       )}
-      <FrameOrnament iconType={frame.iconType} size={size === 'md' ? 'lg' : 'sm'} />
+      {/* Sama seperti PlayerAvatar lain: avatar terkecil tanpa ornamen agar mahkota tidak menimpa baris di sebelahnya. */}
+      {size !== 'sm' && <FrameOrnament frame={frame} size="sm" />}
     </div>
   );
 };
