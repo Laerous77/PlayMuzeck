@@ -3,7 +3,7 @@
 // ARENA GLOBAL — multiplayer publik TANPA kode ruangan (server/globalArena.ts).
 //
 // Pemain cukup menekan "Gabung Arena Global". Server menempatkan pemain di kanal yang masih punya tempat, memilih
-// kuisnya (deck bawaan / starter, atau kuis Komunitas yang SUDAH DISETUJUI), mengacak soalnya, dan menjalankan
+// kuisnya (HANYA kuis Komunitas yang SUDAH DISETUJUI; deck bawaan gratis/berbayar tidak dipakai), mengacak soalnya, dan menjalankan
 // siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI berikutnya.
 // Tidak ada host, tidak ada kode, tidak ada daftar ruangan, dan klien tidak pernah mengirim soal.
 //
@@ -11,7 +11,7 @@
 // Skor akun login dicatat server ke Papan Peringkat saat permainan tuntas sampai soal terakhir.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Users, WifiOff, Crown, Loader2, Lightbulb, Globe, LogOut, Eye, Save, Check, Timer, Flame, ShieldCheck } from 'lucide-react';
+import { X, Users, WifiOff, Crown, Loader2, Lightbulb, Globe, LogOut, Eye, Save, Check, Timer, Flame, ShieldCheck, Trophy, Hourglass } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { PlayerAvatar } from './PlayerAvatar';
 import { addSavedResult, type AnswerLogEntry, type SavedQuizResult } from '../../services/quizResultsStore';
@@ -53,8 +53,10 @@ interface ArenaState {
   channel: string;
   phase: Phase;
   deckTitle: string;
-  deckSource: 'builtin' | 'community' | null;
+  deckSource: 'community' | null;
   ownerName: string;
+  /** Lobi menunggu karena belum ada kuis Komunitas yang disetujui. */
+  waitingForQuiz?: boolean;
   currentQIndex: number;
   totalQuestions: number;
   phaseEndsAt: number | null;
@@ -117,6 +119,234 @@ const getClientId = (): string => {
 };
 
 const isRunning = (p: Phase) => p === 'question' || p === 'reveal';
+
+/** Lama layar podium di server (ARENA_PODIUM_SEC) — hanya untuk bilah hitung mundur. */
+const PODIUM_SEC = 15;
+
+interface FloatingReaction {
+  id: string;
+  emoji: string;
+  name: string;
+  /** Posisi horizontal (persen lebar panggung), diundi sekali saat reaksi muncul. */
+  x: number;
+}
+
+/** Peringkat gaya kompetisi: skor sama = peringkat sama (1, 2, 2, 4). `players` harus sudah terurut menurun. */
+const withRanks = (players: ArenaPlayer[]) => {
+  const out: { player: ArenaPlayer; rank: number }[] = [];
+  players.forEach((p, i) => out.push({ player: p, rank: i > 0 && players[i - 1].score === p.score ? out[i - 1].rank : i + 1 }));
+  return out;
+};
+
+const MedalIcon: React.FC<{ rank: number; className?: string }> = ({ rank, className = '' }) =>
+  rank === 1 ? <Crown className={`text-accent ${className}`} aria-hidden="true" /> : <span className={`font-mono font-black text-gray-300 ${className}`}>{rank}</span>;
+
+/** Panggung reaksi: emoji melayang HANYA di dalam kotak ini, jadi tidak pernah menutupi nama atau skor. */
+const ReactionStage: React.FC<{ items: FloatingReaction[] }> = ({ items }) => (
+  <div className="pointer-events-none relative h-16 w-full max-w-sm mx-auto overflow-hidden rounded-xl" aria-hidden="true">
+    <AnimatePresence>
+      {items.map((r) => (
+        <motion.div
+          key={r.id}
+          initial={{ opacity: 0, y: 40, scale: 0.7 }}
+          animate={{ opacity: 1, y: -6, scale: 1 }}
+          exit={{ opacity: 0, y: -24 }}
+          transition={{ duration: 1.6, ease: 'easeOut' }}
+          className="absolute bottom-0 flex flex-col items-center -translate-x-1/2"
+          style={{ left: `${r.x}%` }}
+        >
+          <span className="text-2xl leading-none">{r.emoji}</span>
+          <span className="mt-0.5 max-w-[72px] truncate text-[9px] text-gray-400">{r.name}</span>
+        </motion.div>
+      ))}
+    </AnimatePresence>
+  </div>
+);
+
+/** Layar akhir pertandingan: ringkasan kamu, podium 3 besar, daftar sisanya, reaksi, dan aksi. */
+const PodiumView: React.FC<{
+  deckTitle: string;
+  deckBadge: React.ReactNode;
+  ranked: ArenaPlayer[];
+  myId: string;
+  iAmPlaying: boolean;
+  correctCount: number;
+  totalQuestions: number;
+  outcome: LeaderboardOutcome | null;
+  isLoggedIn: boolean;
+  secLeft: number;
+  floating: FloatingReaction[];
+  canSave: boolean;
+  saved: boolean;
+  onReact: (emoji: string) => void;
+  onSave: () => void;
+  onLeave: () => void;
+}> = ({ deckTitle, deckBadge, ranked, myId, iAmPlaying, correctCount, totalQuestions, outcome, isLoggedIn, secLeft, floating, canSave, saved, onReact, onSave, onLeave }) => {
+  const rows = withRanks(ranked);
+  const top = rows.slice(0, 3);
+  const rest = rows.slice(3);
+  const mine = rows.find((r) => r.player.id === myId);
+  // Urutan tampil podium: juara 2 - juara 1 - juara 3.
+  const stage = top.length === 3 ? [top[1], top[0], top[2]] : top.length === 2 ? [top[1], top[0]] : top;
+  const pedestal: Record<number, string> = { 1: 'h-20', 2: 'h-14', 3: 'h-10' };
+  const progress = Math.min(100, Math.max(0, ((PODIUM_SEC - secLeft) / PODIUM_SEC) * 100));
+
+  return (
+    <div className="space-y-5 text-center">
+      {/* Judul */}
+      <div className="space-y-1.5">
+        <div className="mx-auto w-11 h-11 rounded-2xl bg-accent/15 border border-accent/30 flex items-center justify-center">
+          <Trophy className="w-5 h-5 text-accent" aria-hidden="true" />
+        </div>
+        <h3 className="text-xl font-black text-white">Pertandingan Selesai</h3>
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1">
+          <p className="text-xs text-gray-400 max-w-full truncate">{deckTitle}</p>
+          {deckBadge}
+        </div>
+      </div>
+
+      {/* Ringkasan kamu */}
+      {iAmPlaying && mine ? (
+        <div className="max-w-sm mx-auto grid grid-cols-3 gap-2 text-center">
+          {[
+            { label: 'Peringkatmu', value: `#${mine.rank}`, sub: `dari ${rows.length}` },
+            { label: 'Poin', value: String(mine.player.score), sub: 'permainan ini' },
+            { label: 'Benar', value: `${correctCount}/${totalQuestions}`, sub: 'soal' },
+          ].map((c) => (
+            <div key={c.label} className="rounded-xl bg-black/40 border border-white/[0.08] px-2 py-2.5">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{c.label}</p>
+              <p className="text-lg font-mono font-black text-accent2 leading-tight">{c.value}</p>
+              <p className="text-[10px] text-gray-500">{c.sub}</p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-[11px] text-sky-200 inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-sky-500/10 border border-sky-500/30">
+          <Eye className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+          Kamu menonton permainan ini. Kamu ikut di permainan berikutnya.
+        </p>
+      )}
+
+      {/* Status Papan Peringkat */}
+      {iAmPlaying && (
+        <div role="status" aria-live="polite" className="flex justify-center">
+          {outcome ? (
+            <p
+              className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border max-w-sm ${
+                outcome.counted ? 'bg-yellow-400/10 border-yellow-400/40 text-yellow-200' : 'bg-black/40 border-white/10 text-gray-300'
+              }`}
+            >
+              {outcome.counted ? `+${outcome.points ?? 0} poin tercatat di Papan Peringkat` : outcome.message || 'Skor permainan ini tidak dihitung ke Papan Peringkat.'}
+            </p>
+          ) : isLoggedIn ? (
+            <p className="text-[11px] text-gray-400 inline-flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" /> Mencatat skor ke Papan Peringkat…
+            </p>
+          ) : (
+            <p className="text-[11px] text-gray-400">Masuk ke akunmu supaya skor tercatat di Papan Peringkat.</p>
+          )}
+        </div>
+      )}
+
+      {/* Podium 3 besar */}
+      {top.length > 0 && (
+        <div className="max-w-md mx-auto flex items-end justify-center gap-2 sm:gap-3 pt-2">
+          {stage.map(({ player: p, rank }) => {
+            const isMe = p.id === myId;
+            return (
+              <div key={p.id} className="flex-1 min-w-0 max-w-[9.5rem] flex flex-col items-center">
+                <div className="mb-1.5 flex flex-col items-center gap-1 min-w-0 w-full">
+                  {rank === 1 && <Crown className="w-4 h-4 text-accent" aria-hidden="true" />}
+                  <PlayerAvatar name={p.name} avatarUrl={p.avatarUrl} frameId={p.frameId} size={rank === 1 ? 'lg' : 'md'} />
+                  <p className="w-full truncate text-xs font-bold text-white" title={p.name}>
+                    {p.name}
+                  </p>
+                  {isMe && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-accent2/20 text-accent2 border border-accent2/30">Kamu</span>}
+                  {!p.connected && <span className="text-[9px] text-amber-300/80">offline</span>}
+                  <p className="text-xs font-mono font-black text-accent2">{p.score} Poin</p>
+                </div>
+                <motion.div
+                  initial={{ scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                  style={{ transformOrigin: 'bottom' }}
+                  className={`w-full ${pedestal[rank] ?? 'h-10'} rounded-t-xl border border-b-0 flex items-start justify-center pt-1.5 ${
+                    rank === 1 ? 'bg-accent/15 border-accent/40' : isMe ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.1]'
+                  }`}
+                >
+                  <MedalIcon rank={rank} className="w-4 h-4 text-sm leading-4" />
+                </motion.div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Peringkat 4 dst. */}
+      {rest.length > 0 && (
+        <div className="max-w-md mx-auto space-y-1.5 text-left max-h-44 overflow-y-auto pr-1" aria-label="Peringkat selanjutnya">
+          {rest.map(({ player: p, rank }) => (
+            <div
+              key={p.id}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border ${p.id === myId ? 'bg-accent2/10 border-accent2/30' : 'bg-black/40 border-white/[0.08]'}`}
+            >
+              <span className="w-5 text-center text-xs font-mono font-bold text-gray-400 shrink-0">{rank}</span>
+              <PlayerAvatar name={p.name} avatarUrl={p.avatarUrl} frameId={p.frameId} size="sm" />
+              <span className="min-w-0 flex-1 truncate text-sm font-bold text-white" title={p.name}>
+                {p.name}
+              </span>
+              {p.id === myId && <span className="shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-accent2/20 text-accent2 border border-accent2/30">Kamu</span>}
+              {!p.connected && <span className="shrink-0 text-[9px] text-amber-300/80">offline</span>}
+              <span className="shrink-0 text-xs font-mono font-black text-accent2">{p.score} Poin</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Reaksi */}
+      <div className="space-y-2">
+        <ReactionStage items={floating} />
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {REACTION_EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={() => onReact(emoji)}
+              aria-label={`Kirim reaksi ${emoji}`}
+              className="w-9 h-9 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:scale-110 active:scale-95 transition-all text-base cursor-pointer"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Aksi */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
+        {iAmPlaying && canSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saved}
+            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
+          >
+            {saved ? <Check className="w-3.5 h-3.5 text-emerald-300" aria-hidden="true" /> : <Save className="w-3.5 h-3.5" aria-hidden="true" />}
+            {saved ? 'Tersimpan di Riwayat' : 'Simpan Hasil'}
+          </button>
+        )}
+        <LeaveButton onLeave={onLeave} />
+      </div>
+
+      {/* Hitung mundur ke permainan berikutnya */}
+      <div className="max-w-xs mx-auto space-y-1.5">
+        <div className="h-1 rounded-full bg-white/[0.08] overflow-hidden" role="progressbar" aria-valuemin={0} aria-valuemax={PODIUM_SEC} aria-valuenow={Math.max(0, PODIUM_SEC - secLeft)}>
+          <div className="h-full bg-accent2 transition-[width] duration-300 ease-linear" style={{ width: `${progress}%` }} />
+        </div>
+        <p className="text-[11px] text-gray-500">Permainan berikutnya dimulai dalam {secLeft} detik.</p>
+      </div>
+    </div>
+  );
+};
 
 /** Papan skor dipakai di layar jeda & podium. */
 const Scoreboard: React.FC<{ players: ArenaPlayer[]; myId: string; limit?: number }> = ({ players, myId, limit }) => {
@@ -185,7 +415,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
   const [outcome, setOutcome] = useState<LeaderboardOutcome | null>(null);
   const [savedGame, setSavedGame] = useState(false);
   const [now, setNow] = useState(() => Date.now());
-  const [floating, setFloating] = useState<{ id: string; emoji: string; name: string }[]>([]);
+  const [floating, setFloating] = useState<FloatingReaction[]>([]);
 
   // Identitas di permainan: nama & foto bisa disamarkan tanpa mengubah akun asli.
   const [displayName, setDisplayName] = useState<string>(userNickname || '');
@@ -303,8 +533,9 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
     socket.on('arena:leaderboard', (o: LeaderboardOutcome) => setOutcome(o));
     socket.on('arena:reactionReceived', (p: { playerId: string; playerName: string; emoji: string }) => {
       const id = `${p.playerId}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-      setFloating((prev) => [...prev.slice(-12), { id, emoji: p.emoji, name: p.playerName }]);
-      window.setTimeout(() => setFloating((prev) => prev.filter((r) => r.id !== id)), 2200);
+      const x = 10 + Math.random() * 80;
+      setFloating((prev) => [...prev.slice(-8), { id, emoji: p.emoji, name: p.playerName, x }]);
+      window.setTimeout(() => setFloating((prev) => prev.filter((r) => r.id !== id)), 1900);
     });
     socket.on('arena:resumeFailed', () => {
       /* Belum terdaftar di arena: tetap di layar sambutan. */
@@ -365,6 +596,8 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
   const hasAnswered = selected !== null;
   const revealNow = revealed[qIndex];
   const isLoggedIn = Boolean(storage.getUserSession()?.isLoggedIn);
+  /** Jawaban benar milikku, dinilai dari kunci yang dikirim server (podium membuka semua kunci). */
+  const myCorrectCount = useMemo(() => Object.entries(answers).filter(([i, sel]) => revealed[Number(i)] !== undefined && revealed[Number(i)].correctIndex === sel).length, [answers, revealed]);
 
   /* ───────── Aksi ───────── */
 
@@ -455,8 +688,6 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
       <ShieldCheck className="w-3 h-3" />
       Kuis Komunitas{arena.ownerName ? ` oleh ${arena.ownerName}` : ''}
     </span>
-  ) : arena?.deckSource === 'builtin' ? (
-    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/10 text-gray-300 border border-white/10">Kuis Bawaan</span>
   ) : null;
 
   const connectedAndIdle = connection === 'connected' && !arena;
@@ -469,25 +700,6 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
         exit={{ opacity: 0, scale: 0.96 }}
         className="w-full max-w-3xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92dvh] relative"
       >
-        {/* Emoji reaksi melayang */}
-        <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
-          <AnimatePresence>
-            {floating.map((r) => (
-              <motion.div
-                key={r.id}
-                initial={{ opacity: 0, y: 0, x: Math.random() * 80 - 40 }}
-                animate={{ opacity: 1, y: -140 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 2 }}
-                className="absolute bottom-24 left-1/2 text-3xl"
-                title={r.name}
-              >
-                {r.emoji}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-
         <div className="p-4 sm:p-5 border-b border-white/[0.08] bg-black/50 flex items-center justify-between gap-2">
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2.5 rounded-xl bg-accent2 text-on-accent2 shadow-md shadow-accent2/20 shrink-0">
@@ -545,7 +757,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                 <p className="text-sm font-black text-white">Cara kerja</p>
                 <ul className="list-disc pl-5 space-y-1">
                   <li>Tidak ada kode, host, atau daftar ruangan. Server menempatkanmu di kanal yang ramai dan memilihkan kuisnya.</li>
-                  <li>Kuis berasal dari deck bawaan dan kuis Komunitas yang <strong className="text-white">sudah lolos pemeriksaan</strong>. Permainan berjalan terus: lobi, soal, jeda, podium.</li>
+                  <li>Kuis berasal dari kuis Komunitas yang <strong className="text-white">sudah lolos pemeriksaan</strong>. Permainan berjalan terus: lobi, soal, jeda, podium.</li>
                   <li>Masuk saat permainan berjalan? Kamu menonton dulu dan ikut di permainan berikutnya.</li>
                   <li>Skor akun login masuk <strong className="text-white">Papan Peringkat</strong> bila permainan tuntas dan minimal 2 pemain yang masuk akun ikut bermain.</li>
                 </ul>
@@ -594,6 +806,14 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                     <h4 className="text-lg font-black text-white">{arena.deckTitle}</h4>
                     {deckBadge}
                   </>
+                ) : arena.waitingForQuiz ? (
+                  <div className="max-w-sm mx-auto p-4 rounded-2xl bg-black/40 border border-white/[0.08] space-y-1.5">
+                    <Hourglass className="w-5 h-5 text-accent mx-auto" aria-hidden="true" />
+                    <p className="text-sm font-bold text-white">Belum ada kuis Komunitas yang tersedia</p>
+                    <p className="text-[11px] text-gray-400 leading-relaxed">
+                      Arena Global hanya memakai kuis Komunitas yang sudah disetujui. Server mencari lagi otomatis, jadi kamu bisa menunggu di sini.
+                    </p>
+                  </div>
                 ) : (
                   <p className="text-sm text-gray-300 flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" /> Memilih kuis…
@@ -625,48 +845,24 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
             </div>
           ) : phase === 'podium' ? (
             /* ───────── Podium ───────── */
-            <div className="space-y-4 text-center">
-              <h3 className="text-xl font-black text-white">Pertandingan Selesai</h3>
-              <p className="text-xs text-gray-400">{arena.deckTitle}</p>
-              {iAmPlaying && outcome && (
-                <p
-                  role="status"
-                  className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border inline-block ${
-                    outcome.counted ? 'bg-yellow-400/10 border-yellow-400/40 text-yellow-200' : 'bg-black/40 border-white/10 text-gray-300'
-                  }`}
-                >
-                  {outcome.counted ? `+${outcome.points ?? 0} poin tercatat di Papan Peringkat` : outcome.message || 'Skor permainan ini tidak dihitung ke Papan Peringkat.'}
-                </p>
-              )}
-              {iAmPlaying && !outcome && !isLoggedIn && <p className="text-[11px] text-gray-400">Masuk ke akunmu supaya skor tercatat di Papan Peringkat.</p>}
-              {!iAmPlaying && <p className="text-[11px] text-sky-200">Kamu menonton permainan ini. Kamu ikut di permainan berikutnya.</p>}
-
-              <Scoreboard players={ranked} myId={myId} />
-
-              <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
-                {REACTION_EMOJIS.map((emoji) => (
-                  <button key={emoji} onClick={() => handleReaction(emoji)} className="w-9 h-9 rounded-full bg-black/40 border border-white/10 hover:bg-white/10 hover:scale-110 transition-all text-base cursor-pointer">
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                {iAmPlaying && questions.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleSaveResult}
-                    disabled={savedGame}
-                    className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-60 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
-                  >
-                    {savedGame ? <Check className="w-3.5 h-3.5 text-emerald-300" /> : <Save className="w-3.5 h-3.5" />}
-                    {savedGame ? 'Tersimpan di Riwayat' : 'Simpan Hasil'}
-                  </button>
-                )}
-                <LeaveButton onLeave={handleLeave} />
-              </div>
-              <p className="text-[11px] text-gray-500">Permainan berikutnya dimulai dalam {secLeft} detik.</p>
-            </div>
+            <PodiumView
+              deckTitle={arena.deckTitle}
+              deckBadge={deckBadge}
+              ranked={ranked}
+              myId={myId}
+              iAmPlaying={iAmPlaying}
+              correctCount={myCorrectCount}
+              totalQuestions={questions.length || arena.totalQuestions}
+              outcome={outcome}
+              isLoggedIn={isLoggedIn}
+              secLeft={secLeft}
+              floating={floating}
+              canSave={questions.length > 0}
+              saved={savedGame}
+              onReact={handleReaction}
+              onSave={handleSaveResult}
+              onLeave={handleLeave}
+            />
           ) : (
             /* ───────── Soal & jeda ───────── */
             <div className="space-y-5">
@@ -789,7 +985,7 @@ const LeaveButton: React.FC<{ onLeave: () => void; label?: string }> = ({ onLeav
   <button
     type="button"
     onClick={onLeave}
-    className="px-4 py-2 rounded-xl bg-black/60 hover:bg-black/90 border border-white/[0.08] text-gray-300 text-xs font-bold flex items-center gap-2 cursor-pointer mx-auto"
+    className="px-4 py-2 rounded-xl bg-black/60 hover:bg-black/90 border border-white/[0.08] text-gray-300 text-xs font-bold inline-flex items-center gap-2 cursor-pointer"
   >
     <LogOut className="w-3.5 h-3.5" />
     <span>{label}</span>

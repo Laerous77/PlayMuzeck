@@ -1,4 +1,5 @@
-// Tes Arena Global: siklus lobi -> soal -> jeda -> podium, kunci jawaban tidak bocor, pencatatan skor oleh server.
+// Tes Arena Global: siklus lobi -> soal -> jeda -> podium, kunci jawaban tidak bocor, pencatatan skor oleh server,
+// dan sumber kuis HANYA kuis Komunitas yang disetujui (deck bawaan gratis/berbayar tidak pernah dipakai).
 // Memakai io/socket palsu dan jam terkendali, jadi tidak butuh jaringan. Jalankan: npx tsx tests/globalArena.test.ts
 import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
 
@@ -23,6 +24,21 @@ const advance = (ms: number) => {
 const flush = () => new Promise<void>((r) => setImmediate(r));
 
 const arena = await import('../server/globalArena.ts');
+
+// ── Kuis Komunitas palsu (isi soal dipinjam dari data bawaan hanya sebagai bahan uji) ──
+const communityDeck = (suffix: string, from: number) => ({
+  deckId: `deck-custom-shared-shq_${suffix}`,
+  title: `Kuis Komunitas ${suffix}`,
+  source: 'community' as const,
+  ownerName: 'Pembuat Uji',
+  questions: (BUILTIN_DECKS as any[])[from].questions,
+});
+let pickCalls = 0;
+let communityPool: any[] = [communityDeck('aaaaaaaaaaaa', 3), communityDeck('bbbbbbbbbbbb', 4)];
+const pickCommunityDeck = async () => {
+  pickCalls++;
+  return communityPool.length ? communityPool[pickCalls % communityPool.length] : null;
+};
 
 // ── io/socket palsu ──
 class FakeSocket {
@@ -83,8 +99,11 @@ class FakeIo {
 ok('poin penuh bila dijawab seketika', arena.arenaPoints(0) === 100);
 ok('poin turun linear sampai 30%', arena.arenaPoints(1) === 30 && arena.arenaPoints(0.5) === 65);
 ok('poin tidak keluar rentang', arena.arenaPoints(-1) === 100 && arena.arenaPoints(9) === 30);
-const deck = arena.pickBuiltinDeck()!;
-ok('deck bawaan terpilih', Boolean(deck) && deck.source === 'builtin' && deck.questions.length >= arena.ARENA_MIN_QUESTIONS);
+const deck = communityDeck('aaaaaaaaaaaa', 3);
+ok('deck komunitas sah untuk arena', arena.isArenaEligibleDeck(deck));
+ok('deck bawaan/starter DITOLAK arena (gratis & berbayar)', (BUILTIN_DECKS as any[]).every((d) => !arena.isArenaEligibleDeck({ deckId: d.id, title: d.title, source: 'builtin', questions: d.questions } as any)));
+ok('deck bawaan ditolak walau berpura-pura source community', (BUILTIN_DECKS as any[]).every((d) => !arena.isArenaEligibleDeck({ deckId: d.id, title: d.title, source: 'community', questions: d.questions } as any)));
+ok('deck komunitas dengan soal terlalu sedikit ditolak', !arena.isArenaEligibleDeck({ ...deck, questions: deck.questions.slice(0, arena.ARENA_MIN_QUESTIONS - 1) }));
 const qs = arena.buildMatchQuestions(deck);
 ok('soal permainan maksimal ARENA_QUESTIONS', qs.length === Math.min(arena.ARENA_QUESTIONS, deck.questions.length));
 ok('pengacakan pilihan menjaga kunci jawaban', qs.every((q) => {
@@ -96,6 +115,7 @@ ok('pengacakan pilihan menjaga kunci jawaban', qs.every((q) => {
 const io = new FakeIo();
 const finished: any[] = [];
 arena.attachGlobalArena(io as any, {
+  pickCommunityDeck,
   onFinished: async (game) => {
     finished.push(game);
     return Object.fromEntries(game.players.map((p) => [p.userId, { counted: true, points: p.correct * 10 }]));
@@ -116,6 +136,8 @@ ok('pemain masuk tanpa kode ruangan', Boolean(joined1) && !('code' in joined1.st
 ok('keadaan awal: lobi dengan kuis terpilih server', joined1.state.phase === 'lobby');
 await flush();
 ok('server memilih kuis untuk lobi berikutnya', Boolean(s1.last('arena:update')?.deckTitle));
+ok('kuis terpilih berasal dari Komunitas', s1.last('arena:update').deckSource === 'community' && String(s1.last('arena:update').deckTitle).startsWith('Kuis Komunitas'));
+ok('lobi tidak menunggu kuis bila kuis tersedia', s1.last('arena:update').waitingForQuiz === false);
 ok('avatar berbahaya dibuang', s1.last('arena:update').players.every((p: any) => p.avatarUrl === ''));
 ok('dua pemain berada di kanal yang sama', s1.last('arena:update').players.length === 2);
 
@@ -172,7 +194,7 @@ ok('podium membuka seluruh kunci jawaban', Object.keys(ended.revealed).length ==
 await flush();
 ok('skor dicatat SEKALI oleh server', finished.length === 1);
 const g = finished[0];
-ok('catatan memuat id deck & soal dari server', g.deckId === deck.deckId || BUILTIN_DECKS.some((d: any) => d.id === g.deckId));
+ok('catatan memuat id kuis Komunitas (bukan deck bawaan)', /^deck-custom-shared-shq_[0-9a-f]{12}$/.test(g.deckId) && !BUILTIN_DECKS.some((d: any) => d.id === g.deckId));
 ok('hanya akun login peserta yang dicatat (tamu penonton tidak)', g.players.length === 2 && g.players.every((p: any) => p.userId.startsWith('user-')));
 ok('jawaban benar dihitung server', g.players.find((p: any) => p.userId === 'user-1').correct === total && g.players.find((p: any) => p.userId === 'user-2').correct === 0);
 ok('hasil peringkat dikirim ke pemain di podium', s1b.last('arena:leaderboard')?.points === total * 10);

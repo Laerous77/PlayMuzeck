@@ -5,8 +5,11 @@
 // Cara kerja:
 //   - Pemain menekan "Gabung Arena Global"; server menempatkan mereka ke kanal yang masih punya tempat. Tidak ada kode,
 //     tidak ada host, tidak ada daftar ruangan: pemain tidak perlu memilih apa pun.
-//   - Server yang memilih kuis (deck bawaan/starter, atau kuis Komunitas yang SUDAH DISETUJUI) dan mengacak soalnya.
-//     Klien tidak pernah mengirim soal, jadi skor tidak bisa dipalsukan lewat soal buatan sendiri.
+//   - Server yang memilih kuis dan mengacak soalnya. Sumber kuis HANYA kuis Komunitas yang SUDAH DISETUJUI moderasi.
+//     Deck bawaan (3 starter gratis maupun 12 deck berbayar) TIDAK PERNAH dipakai di Arena Global, supaya isi deck
+//     berbayar tidak bisa dimainkan gratis lewat arena. Klien tidak pernah mengirim soal, jadi skor tidak bisa
+//     dipalsukan lewat soal buatan sendiri.
+//   - Bila belum ada kuis Komunitas yang disetujui, lobi menunggu dan server mencoba lagi berkala.
 //   - Permainan berjalan terus dalam siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI.
 //   - Pemain yang masuk saat permainan berjalan menonton dulu (tanpa kunci jawaban) dan ikut di permainan berikutnya.
 //   - Saat permainan TUNTAS sampai soal terakhir, skor tiap akun yang ikut dari awal dicatat ke Papan Peringkat oleh server
@@ -16,7 +19,6 @@
 // batas laju per socket; nama/avatar divalidasi; emoji dibatasi daftar putih.
 import type { Server, Socket } from 'socket.io';
 import { randomBytes, randomInt } from 'crypto';
-import { BUILTIN_DECKS } from '../src/data/quiz/index';
 import { ruleScan } from './quizModeration';
 import { isBadName } from './nameFilter';
 
@@ -35,8 +37,12 @@ const ALL_ANSWERED_GRACE_MS = 3000;
 const GRACE_MS = 45_000;
 const BASE_POINTS = 100;
 const MIN_POINTS_PERCENT = 0.3;
-/** Kuis komunitas muncul sekitar sepertiga dari seluruh permainan (bila ada yang disetujui). */
-const COMMUNITY_SHARE = 1 / 3;
+/** Jeda sebelum server mencari kuis Komunitas lagi saat belum ada yang tersedia. */
+const NO_DECK_RETRY_MS = 10_000;
+/** Berapa kali undian diulang bila hasilnya sama dengan kuis permainan sebelumnya. */
+const REPEAT_REROLLS = 3;
+/** Id deck Arena Global yang sah: deck-custom-shared-shq_<12 hex> (kuis Komunitas). Id deck bawaan/starter ditolak. */
+const COMMUNITY_DECK_ID_RE = /^deck-custom-shared-shq_[0-9a-f]{12}$/;
 const EMPTY_CHANNEL_MS = 10 * 60_000;
 const ALLOWED_EMOJIS = new Set(['🔥', '👏', '😂', '😭', '😮', '😞', '😡', '💀', '❤️']);
 
@@ -57,10 +63,11 @@ export interface ArenaQuestion {
 }
 
 export interface ArenaDeck {
-  /** Id yang dipakai papan peringkat: id deck bawaan, atau "deck-custom-shared-shq_xxx" untuk kuis komunitas. */
+  /** Id yang dipakai papan peringkat: "deck-custom-shared-shq_xxx" (kuis Komunitas yang disetujui). */
   deckId: string;
   title: string;
-  source: 'builtin' | 'community';
+  /** Arena Global hanya memakai kuis Komunitas. */
+  source: 'community';
   /** Pembuat kuis komunitas (tampil di layar). */
   ownerName?: string;
   questions: ArenaQuestion[];
@@ -80,7 +87,7 @@ export interface ArenaFinishedGame {
 }
 
 export interface ArenaDeps {
-  /** Pilih satu kuis komunitas yang sudah disetujui (null = tidak ada). */
+  /** Pilih satu kuis komunitas yang sudah disetujui, acak (null = tidak ada). */
   pickCommunityDeck?: () => Promise<ArenaDeck | null>;
   /** Dipanggil saat permainan tuntas; hasilnya (per userId) dikirim ke pemain di layar podium. */
   onFinished?: (game: ArenaFinishedGame) => Promise<Record<string, ArenaOutcome> | void>;
@@ -125,6 +132,11 @@ interface Channel {
   emptySince: number | null;
   /** Mencegah dua pemilihan deck bersamaan. */
   preparing: boolean;
+  /** Belum ada kuis Komunitas yang tersedia; server mencoba lagi pada `deckRetryAt`. */
+  noDeck: boolean;
+  deckRetryAt: number | null;
+  /** Kuis permainan terakhir, supaya undian berikutnya tidak mengulang kuis yang sama bila ada pilihan lain. */
+  lastDeckId: string | null;
   gameNo: number;
 }
 
@@ -211,12 +223,15 @@ function validQuestion(q: any): q is ArenaQuestion {
   );
 }
 
-/** Pilih deck bawaan acak yang cukup soalnya. */
-export function pickBuiltinDeck(): ArenaDeck | null {
-  const pool = (BUILTIN_DECKS as any[]).filter((d) => Array.isArray(d.questions) && d.questions.filter(validQuestion).length >= ARENA_MIN_QUESTIONS);
-  if (!pool.length) return null;
-  const d = pool[randomInt(pool.length)];
-  return { deckId: String(d.id), title: String(d.title), source: 'builtin', questions: d.questions.filter(validQuestion) };
+/** Deck yang sah untuk Arena Global: kuis Komunitas dengan id sah dan cukup soal yang valid. Deck bawaan/starter ditolak. */
+export function isArenaEligibleDeck(d: ArenaDeck | null | undefined): d is ArenaDeck {
+  return Boolean(
+    d &&
+      d.source === 'community' &&
+      COMMUNITY_DECK_ID_RE.test(String(d.deckId)) &&
+      Array.isArray(d.questions) &&
+      d.questions.filter(validQuestion).length >= ARENA_MIN_QUESTIONS
+  );
 }
 
 /** Ambil soal permainan dari deck: acak soal & urutan pilihan, maksimal ARENA_QUESTIONS. */
@@ -245,6 +260,8 @@ function publicState(ch: Channel) {
     deckTitle: ch.deck?.title ?? '',
     deckSource: ch.deck?.source ?? null,
     ownerName: ch.deck?.ownerName ?? '',
+    /** Lobi menunggu karena belum ada kuis Komunitas yang disetujui. */
+    waitingForQuiz: ch.phase === 'lobby' && !ch.deck && ch.noDeck,
     currentQIndex: ch.currentQIndex,
     totalQuestions: ch.questions.length,
     phaseEndsAt: ch.phaseEndsAt,
@@ -342,6 +359,9 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       phaseEndsAt: null,
       emptySince: null,
       preparing: false,
+      noDeck: false,
+      deckRetryAt: null,
+      lastDeckId: null,
       gameNo: 0,
     };
     channels.set(ch.id, ch);
@@ -360,28 +380,62 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     return open[0] ?? newChannel();
   }
 
-  async function chooseDeck(): Promise<ArenaDeck | null> {
-    if (deps.pickCommunityDeck && Math.random() < COMMUNITY_SHARE) {
+  /**
+   * Pilih kuis berikutnya: HANYA kuis Komunitas yang sudah disetujui. Deck bawaan (starter gratis & berbayar) tidak
+   * pernah dipakai. Undian diulang beberapa kali bila sama dengan kuis sebelumnya (kecuali memang hanya ada satu).
+   */
+  async function chooseDeck(ch: Channel): Promise<ArenaDeck | null> {
+    if (!deps.pickCommunityDeck) return null;
+    let fallback: ArenaDeck | null = null;
+    for (let i = 0; i <= REPEAT_REROLLS; i++) {
       try {
         const d = await deps.pickCommunityDeck();
-        if (d && d.questions.filter(validQuestion).length >= ARENA_MIN_QUESTIONS) return d;
+        if (!isArenaEligibleDeck(d)) continue;
+        if (d.deckId !== ch.lastDeckId) return d;
+        fallback = d;
       } catch (e: any) {
         console.error('[arena] gagal memilih kuis komunitas:', e?.message || e);
+        break;
       }
     }
-    return pickBuiltinDeck();
+    return fallback;
   }
 
-  /** Masuk lobi: pilih kuis berikutnya lalu mulai hitung mundur. */
-  async function enterLobby(ch: Channel) {
+  /** Cari kuis untuk lobi ini lalu mulai hitung mundur. Bila belum ada kuis, coba lagi setelah NO_DECK_RETRY_MS. */
+  async function prepareDeck(ch: Channel) {
     if (ch.preparing) return;
     ch.preparing = true;
+    try {
+      const deck = await chooseDeck(ch);
+      // Kanal bisa sudah ditutup atau berpindah fase selagi menunggu.
+      if (!channels.has(ch.id) || ch.phase !== 'lobby') return;
+      ch.deck = deck;
+      if (deck) {
+        ch.noDeck = false;
+        ch.deckRetryAt = null;
+        ch.phaseEndsAt = Date.now() + ARENA_LOBBY_SEC * 1000;
+      } else {
+        ch.noDeck = true;
+        ch.deckRetryAt = Date.now() + NO_DECK_RETRY_MS;
+        ch.phaseEndsAt = null;
+      }
+      broadcast(ch);
+    } finally {
+      ch.preparing = false;
+    }
+  }
+
+  /** Masuk lobi: bersihkan sisa permainan lalu pilih kuis berikutnya. */
+  async function enterLobby(ch: Channel) {
+    if (ch.preparing) return;
     ch.phase = 'lobby';
     ch.questions = [];
     ch.currentQIndex = 0;
     ch.roundStartedAt = null;
     ch.phaseEndsAt = null;
     ch.deck = null;
+    ch.noDeck = false;
+    ch.deckRetryAt = null;
     for (const p of ch.players.values()) {
       p.score = 0;
       p.streak = 0;
@@ -394,28 +448,23 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     // Pemain yang offline sejak permainan lalu dilepas.
     for (const p of Array.from(ch.players.values())) if (!p.connected) ch.players.delete(p.key);
     broadcast(ch);
-    try {
-      const deck = await chooseDeck();
-      // Kanal bisa sudah ditutup selagi menunggu.
-      if (!channels.has(ch.id)) return;
-      ch.deck = deck;
-      ch.phaseEndsAt = Date.now() + ARENA_LOBBY_SEC * 1000;
-      broadcast(ch);
-    } finally {
-      ch.preparing = false;
-    }
+    await prepareDeck(ch);
   }
 
   function startGame(ch: Channel) {
-    if (!ch.deck) return void enterLobby(ch);
+    if (!isArenaEligibleDeck(ch.deck)) {
+      ch.deck = null;
+      return void prepareDeck(ch);
+    }
     const questions = buildMatchQuestions(ch.deck);
     const players = Array.from(ch.players.values()).filter((p) => p.connected);
     if (questions.length < ARENA_MIN_QUESTIONS || !players.length) {
-      // Belum ada peserta / soal: ulangi lobi.
+      // Belum ada peserta / soal: ulangi hitung mundur lobi.
       ch.phaseEndsAt = Date.now() + ARENA_LOBBY_SEC * 1000;
       return void broadcast(ch);
     }
     ch.gameNo += 1;
+    ch.lastDeckId = ch.deck.deckId;
     ch.questions = questions;
     ch.currentQIndex = 0;
     for (const p of ch.players.values()) {
@@ -595,8 +644,8 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
         answers: {},
       };
       ch.players.set(key, p);
-      // Kanal kosong yang baru dibuat / baru dihuni: mulai siklus.
-      if (ch.phase === 'lobby' && !ch.deck && !ch.preparing) void enterLobby(ch);
+      // Kanal kosong yang baru dibuat / baru dihuni: mulai mencari kuis (menghormati jeda coba-ulang).
+      if (ch.phase === 'lobby' && !ch.deck && !ch.preparing && (!ch.deckRetryAt || Date.now() >= ch.deckRetryAt)) void prepareDeck(ch);
       attach(ch, p);
     });
 
@@ -684,6 +733,8 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
         // Tidak ada yang menonton: akhiri tanpa mencatat skor dan kembali ke lobi saat ada yang masuk lagi.
         ch.phase = 'lobby';
         ch.deck = null;
+        ch.noDeck = false;
+        ch.deckRetryAt = null;
         ch.questions = [];
         ch.phaseEndsAt = null;
         ch.roundStartedAt = null;
@@ -720,8 +771,10 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       switch (ch.phase) {
         case 'lobby':
           if (ch.preparing) break;
-          if (!ch.deck) void enterLobby(ch);
-          else if (ch.phaseEndsAt && now >= ch.phaseEndsAt) startGame(ch);
+          if (!ch.deck) {
+            // Belum ada kuis: cari lagi secara berkala (bukan tiap 250 ms) supaya database tidak dibebani.
+            if (!ch.deckRetryAt || now >= ch.deckRetryAt) void prepareDeck(ch);
+          } else if (ch.phaseEndsAt && now >= ch.phaseEndsAt) startGame(ch);
           break;
         case 'question':
           trimIfAllAnswered(ch);
