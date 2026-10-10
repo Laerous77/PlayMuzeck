@@ -1706,7 +1706,7 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
 );
 
 // Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
-const BAR_BOX = 'shrink-0 whitespace-nowrap flex items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
+const BAR_BOX = 'shrink-0 max-w-full whitespace-nowrap flex flex-wrap items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
 // Varian untuk kotak yang ikut melebar supaya baris kontrol sejajar dengan lebar toolbar di bawahnya.
 const BAR_BOX_GROW = `${BAR_BOX} flex-1 justify-center`;
 
@@ -2099,11 +2099,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Teks posisi playhead ("Bar 2 · Step 5"), ditulis langsung ke DOM supaya tidak memicu render ulang tiap ketukan.
   const posBarRef = useRef<HTMLInputElement | null>(null);
-  // Baris "Instrumen live + Bank akor": dipakai mendeteksi apakah Bank akor sudah turun ke baris bawah.
-  const chordRowRef = useRef<HTMLDivElement | null>(null);
-  const liveInstRef = useRef<HTMLDivElement | null>(null);
-  const bankGroupRef = useRef<HTMLDivElement | null>(null);
-  const [bankWrapped, setBankWrapped] = useState(false);
   const posStepRef = useRef<HTMLInputElement | null>(null);
 
   // Tandai kolom ketukan yang sedang berbunyi langsung di DOM (tanpa render ulang React).
@@ -4544,31 +4539,6 @@ export const PadStudio: React.FC<PadStudioProps> = ({
     setViewStartBar((v) => Math.max(0, Math.min(TOTAL_BARS - n, v)));
   };
 
-  // Deteksi Bank akor yang overflow (turun ke baris bawah instrumen live). Tidak bergantung pada kelas rata kiri/kanan,
-  // jadi hasilnya stabil dan tidak bolak-balik.
-  useLayoutEffect(() => {
-    if (activeTab !== 'chord') return;
-    const row = chordRowRef.current;
-    const inst = liveInstRef.current;
-    const bank = bankGroupRef.current;
-    if (!row || !inst || !bank) return;
-    const measure = () => {
-      // Bank akor dianggap turun bila posisinya sudah di bawah blok instrumen live (bukan sejajar dengannya).
-      const wrapped = bank.offsetTop >= inst.offsetTop + inst.offsetHeight - 2;
-      setBankWrapped((prev) => (prev === wrapped ? prev : wrapped));
-    };
-    measure();
-    if (typeof ResizeObserver === 'undefined') {
-      window.addEventListener('resize', measure);
-      return () => window.removeEventListener('resize', measure);
-    }
-    const ro = new ResizeObserver(measure);
-    ro.observe(row);
-    ro.observe(inst);
-    ro.observe(bank);
-    return () => ro.disconnect();
-  }, [activeTab, chordTracks]);
-
   // Rentang loop dijaga urut: awal tidak bisa melewati akhir dan akhir tidak bisa mendahului awal. Bila diubah melewati
   // batas, nilai yang sedang diubah berhenti di nilai pasangannya (awal dan akhir jadi sama).
   const loopPos = (bar: number, beat: number) => (bar - 1) * stepsPerBar + (beat - 1);
@@ -5169,9 +5139,9 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             <>
               {/* Satu baris: instrumen live di kiri, bank akor di kanan. Bila Bank akor overflow dan turun ke baris
                   bawah, Bank akor rata kiri sedangkan keterangan "Pad #… dari …" tetap di kanan. */}
-              <div ref={chordRowRef} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <div className="flex flex-col gap-3">
               {/* Pemilih instrumen live: satu chip per instrumen yang sedang dipakai di sequencer */}
-              <div ref={liveInstRef} className="flex flex-wrap items-center gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[11px] font-bold text-gray-300 mr-1">Instrumen live:</span>
                 {chordTracks.map((t, i) => {
                   if (!t.enabled) return null;
@@ -5260,13 +5230,14 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               {/* Bank akor 1–8 + keterangan pad dalam SATU unit. Bila unit ini tidak muat sejajar dengan instrumen live
                   (sudah 2 instrumen atau lebih / layar sempit), seluruh unit turun ke baris bawah: Bank akor rata kiri,
                   keterangan "Pad #… dari …" tetap di kanan. Selagi muat (1 instrumen), Bank akor di kanan. */}
-              <div ref={bankGroupRef} className="flex flex-auto items-center gap-x-3">
-                <div
-                  className={`flex flex-wrap items-center justify-start gap-1.5 min-w-0 ${bankWrapped ? '' : 'ml-auto'}`}
-                  role="tablist"
-                  aria-label="Bank akor"
-                >
-                  <span className="text-[11px] font-bold text-gray-300 mr-1">Bank akor:</span>
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[11px] font-bold text-gray-300">Bank akor:</span>
+                  <span className="text-[10px] font-mono text-gray-500 whitespace-nowrap">
+                    Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 sm:grid-cols-8 gap-1.5 min-w-0" role="tablist" aria-label="Bank akor">
                   {Array.from({ length: PAD_BANKS }, (_, bank) => (
                     <button
                       key={bank}
@@ -5275,20 +5246,17 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       aria-selected={padBank === bank}
                       onClick={() => setPadBank(bank)}
                       title={`Pad #${bank * PADS_PER_BANK + 1}–${(bank + 1) * PADS_PER_BANK}`}
-                      className={`flex flex-col items-center leading-tight px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
+                      className={`flex flex-col items-center justify-center min-w-0 leading-tight px-1.5 py-1.5 rounded-lg border text-[11px] font-bold cursor-pointer transition-colors ${
                         padBank === bank ? 'bg-accent text-on-accent border-accent shadow' : 'bg-black/50 text-gray-300 border-white/10 hover:border-white/25'
                       }`}
                     >
                       <span>{bank + 1}</span>
-                      <span className={`text-[9px] font-mono font-normal ${padBank === bank ? 'opacity-80' : 'text-gray-500'}`}>
+                      <span className={`max-w-full truncate text-[9px] font-mono font-normal ${padBank === bank ? 'opacity-80' : 'text-gray-500'}`}>
                         {padInfo[bank * PADS_PER_BANK]?.displayName}
                       </span>
                     </button>
                   ))}
                 </div>
-                <span className={`shrink-0 text-[10px] font-mono text-gray-500 whitespace-nowrap ${bankWrapped ? 'ml-auto' : ''}`}>
-                  Pad #{padBank * PADS_PER_BANK + 1}–{(padBank + 1) * PADS_PER_BANK} dari {PAD_BANKS * PADS_PER_BANK}
-                </span>
               </div>
               </div>
             </>
@@ -5510,7 +5478,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
             {activeTab === 'drum' ? 'Step Sequencer Pola Ketukan' : 'Step Sequencer Progresi Akor (4 Instrumen)'}
           </h4>
           {/* Satu baris, dirapatkan supaya muat di layar laptop tanpa scroll. Gulir ke samping hanya jadi cadangan di layar sangat sempit. */}
-          <div className="flex flex-nowrap items-center justify-between gap-1.5 overflow-x-auto pb-1 whitespace-nowrap">
+          <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-2 lg:gap-1.5 lg:overflow-x-auto lg:pb-2 whitespace-nowrap">
             <TempoControl bpm={bpm} setBpm={setBpm} />
             <div className={BAR_BOX}>
               <select
