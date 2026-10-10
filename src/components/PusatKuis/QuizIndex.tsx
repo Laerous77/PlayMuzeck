@@ -378,11 +378,11 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                   Pilih paket kuis yang ingin dimuat, lalu tentukan cara bermain yang Anda inginkan.
                 </p>
               </div>
-              <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
+              <div className="grid grid-cols-1 min-[480px]:grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsHistoryOpen(true)}
-                  className="px-3 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  className="px-3 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                 >
                   <History className="w-3.5 h-3.5" />
                   <span>Riwayat Hasil</span>
@@ -390,7 +390,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
                 <button
                   type="button"
                   onClick={() => onSectionChange?.('all')}
-                  className="px-3 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-center whitespace-nowrap"
+                  className="px-3 sm:px-4 py-2.5 sm:py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-colors cursor-pointer flex items-center justify-center text-center"
                 >
                   Buka Perpustakaan Kuis →
                 </button>

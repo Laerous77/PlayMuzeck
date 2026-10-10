@@ -1706,9 +1706,12 @@ const SpinField: React.FC<{ value: number; min: number; max: number; onChange: (
 );
 
 // Kotak kelompok yang dipakai bersama oleh seluruh grup di baris step bar.
-const BAR_BOX = 'shrink-0 max-w-full whitespace-nowrap flex flex-wrap items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
+const BAR_BOX = 'shrink-0 max-w-full whitespace-nowrap flex items-center gap-1.5 text-xs text-gray-300 bg-black/40 border border-white/10 rounded-xl px-2 py-1';
 // Varian untuk kotak yang ikut melebar supaya baris kontrol sejajar dengan lebar toolbar di bawahnya.
 const BAR_BOX_GROW = `${BAR_BOX} flex-1 justify-center`;
+// Kotak berisi beberapa kelompok kecil: antar-kelompok boleh turun baris, isi tiap kelompok tidak pernah pecah.
+const BAR_BOX_MULTI = `${BAR_BOX} flex-wrap flex-1 justify-center gap-x-3 gap-y-1.5`;
+const BAR_PAIR = 'flex items-center gap-1.5 shrink-0';
 
 // Tempo: (1) ketik angka langsung di kotaknya (tempo berubah seketika selama angkanya 60–300), (2) tombol − / + (tahan = terus berubah),
 // (3) panah ↑ / ↓ di keyboard (Shift = ±10), (4) Tap Tempo: ketuk tombol Tap sesuai ketukan lagu (minimal 2 kali).
@@ -5142,7 +5145,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               <div className="flex flex-col gap-3">
               {/* Pemilih instrumen live: satu chip per instrumen yang sedang dipakai di sequencer */}
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] font-bold text-gray-300 mr-1">Instrumen live:</span>
+                <span className="w-full text-[11px] font-bold text-gray-300">Instrumen live:</span>
                 {chordTracks.map((t, i) => {
                   if (!t.enabled) return null;
                   const name = INSTRUMENTS_128.find((x) => x.id === t.program)?.name || 'Piano';
@@ -5525,17 +5528,21 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <SpinField min={1} max={isUnlocked8Bar ? MAX_BARS_PER_VIEW : FREE_MAX_BARS} value={barsPerView} onChange={changeBarsPerView} ariaLabel="Banyak bar yang ditampilkan" />
               </div>
             </div>
-            <div className={BAR_BOX_GROW} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
+            <div className={BAR_BOX_MULTI} title="Rentang loop: dari Bar / Step awal sampai Bar / Step akhir">
               <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">Loop</span>
-              <span className="text-[10px] text-gray-400">Bar</span>
-              <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
-              <span className="text-[10px] text-gray-400">Step</span>
-              <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
-              <span className="text-gray-500">—</span>
-              <span className="text-[10px] text-gray-400">Bar</span>
-              <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
-              <span className="text-[10px] text-gray-400">Step</span>
-              <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
+              <div className={BAR_PAIR}>
+                <span className="text-[10px] text-gray-400">Bar</span>
+                <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopStartBar} onChange={(v) => changeLoopStart(v, loopStartBeat)} ariaLabel="Loop mulai bar" />
+                <span className="text-[10px] text-gray-400">Step</span>
+                <SpinField min={1} max={stepsPerBar} value={loopStartBeat} onChange={(v) => changeLoopStart(loopStartBar, v)} ariaLabel="Loop mulai step" />
+              </div>
+              <div className={BAR_PAIR}>
+                <span className="text-[10px] text-gray-500">s/d</span>
+                <span className="text-[10px] text-gray-400">Bar</span>
+                <SpinField min={1} max={isUnlocked8Bar ? TOTAL_BARS : FREE_MAX_BARS} value={loopEndBar} onChange={(v) => changeLoopEnd(v, loopEndBeat)} ariaLabel="Loop sampai bar" />
+                <span className="text-[10px] text-gray-400">Step</span>
+                <SpinField min={1} max={stepsPerBar} value={loopEndBeat} onChange={(v) => changeLoopEnd(loopEndBar, v)} ariaLabel="Loop sampai step" />
+              </div>
             </div>
             {!isUnlocked8Bar && (
               <button type="button" onClick={onUnlockEditor} className="shrink-0 text-[11px] text-accent hover:underline font-semibold cursor-pointer">
@@ -5543,10 +5550,11 @@ export const PadStudio: React.FC<PadStudioProps> = ({
               </button>
             )}
             <div
-              className={BAR_BOX_GROW}
+              className={BAR_BOX_MULTI}
               title="Posisi playhead. Ketik angka atau pakai tombol atas-bawah untuk pindah posisi. Aktifkan Ikuti agar grid ikut berpindah."
             >
               <span className="text-[11px] font-bold text-accent uppercase tracking-wide">Pos</span>
+              <div className={BAR_PAIR}>
               <span className="text-[10px] text-gray-400">Bar</span>
               <div className="flex items-stretch">
                 <input
@@ -5566,6 +5574,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onDown={() => nudgePosition(posBarRef.current, -1, 1, TOTAL_BARS)}
                 />
               </div>
+              </div>
+              <div className={BAR_PAIR}>
               <span className="text-[10px] text-gray-400">Step</span>
               <div className="flex items-stretch">
                 <input
@@ -5584,6 +5594,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                   onUp={() => nudgePosition(posStepRef.current, 1, 1, stepsPerBar)}
                   onDown={() => nudgePosition(posStepRef.current, -1, 1, stepsPerBar)}
                 />
+              </div>
               </div>
               <button
                 type="button"
