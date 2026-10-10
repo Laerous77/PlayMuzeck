@@ -1201,8 +1201,8 @@ export const StemMixer: React.FC<StemMixerProps> = ({
 
       {/* Banner Preview jika Belum Beli */}
       {!isStemsUnlocked && (
-        <div className="p-3.5 rounded-2xl bg-accent/10 border border-accent/30 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-xs text-accent">
+        <div className="p-3.5 rounded-2xl bg-accent/10 border border-accent/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 text-xs text-accent min-w-0">
             <Lock className="w-4 h-4 shrink-0" />
             <span>
               Mode Preview 7 Detik aktif. Buka paket <strong>Separated Stems</strong> untuk mixing durasi penuh, akses rak efek, dan ekspor multi-track.

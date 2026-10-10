@@ -409,7 +409,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
 
       {/* Navigasi Paginasi */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between p-3 rounded-2xl bg-surface/60 border border-white/[0.08]">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-surface/60 border border-white/[0.08]">
           <button
             type="button"
             disabled={safeCurrentPage === 0}
@@ -420,10 +420,10 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
             className="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-bold flex items-center gap-1.5 text-gray-200 transition-colors cursor-pointer"
           >
             <ChevronLeft className="w-4 h-4" />
-            <span>Sebelumnya (8 Kartu)</span>
+            <span>Sebelumnya<span className="hidden sm:inline"> (8 Kartu)</span></span>
           </button>
 
-          <div className="flex items-center gap-1.5">
+          <div className="order-last sm:order-none w-full sm:w-auto flex flex-wrap items-center justify-center gap-1.5">
             {Array.from({ length: totalPages }).map((_, idx) => (
               <button
                 key={idx}
@@ -452,7 +452,7 @@ export const AudioCatalogCarousel: React.FC<AudioCatalogCarouselProps> = ({
             }}
             className="px-4 py-2 rounded-xl bg-accent hover:bg-accent/80 disabled:opacity-30 disabled:cursor-not-allowed text-xs font-black text-on-accent flex items-center gap-1.5 transition-colors cursor-pointer shadow-md"
           >
-            <span>Selanjutnya (8 Kartu)</span>
+            <span>Selanjutnya<span className="hidden sm:inline"> (8 Kartu)</span></span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </div>
