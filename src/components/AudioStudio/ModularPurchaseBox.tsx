@@ -377,7 +377,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end z-10">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 w-full sm:w-auto justify-between sm:justify-end z-10">
           {!pricing.isFullyOwned ? (
             <>
               <div className="text-right">
@@ -395,7 +395,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
                 disabled={Boolean(bundleConflict)}
                 onClick={handleBuyBundle}
                 title={bundleConflict || undefined}
-                className={`px-6 py-3.5 rounded-2xl font-black text-xs whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                className={`px-4 sm:px-6 py-3.5 rounded-2xl font-black text-xs whitespace-nowrap transition-all flex items-center justify-center gap-1.5 ${
                   bundleConflict
                     ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 cursor-not-allowed'
                     : 'bg-gradient-to-r from-accent to-accent/70 text-black hover:brightness-110 shadow-xl shadow-accent/30 cursor-pointer active:scale-95'

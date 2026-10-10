@@ -83,7 +83,7 @@ export const CustomAudioModal: React.FC<CustomAudioModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <AnimatePresence mode="wait">
             {isSubmitted ? (
               <motion.div

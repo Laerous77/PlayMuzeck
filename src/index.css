@@ -128,6 +128,14 @@ html[data-mode="light"] {
     min-height: 100vh;
     min-height: 100dvh;
     -webkit-font-smoothing: antialiased;
+    /* Kata/URL/email panjang dipatahkan alih-alih mendorong kartu melebar */
+    overflow-wrap: break-word;
+  }
+
+  /* iOS Safari mengabaikan overflow-x pada body; "clip" memotong tanpa membuat kontainer scroll
+     (sticky header tetap aman). */
+  @supports (overflow: clip) {
+    html { overflow-x: clip; }
   }
 
   html {
@@ -245,7 +253,16 @@ html:has(.fixed.inset-0[class*="bg-black/"]) body { overflow: hidden; }
   .fixed.inset-0[class*="bg-black/"] {
     padding-left: max(0.75rem, env(safe-area-inset-left));
     padding-right: max(0.75rem, env(safe-area-inset-right));
+    padding-top: max(0.75rem, env(safe-area-inset-top));
     padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+/* Tablet & HP landscape: popup tetap di luar area notch / bilah gestur */
+@media (min-width: 641px) {
+  .fixed.inset-0[class*="bg-black/"] {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
 
@@ -259,4 +276,29 @@ html:has(.fixed.inset-0[class*="bg-black/"]) body { overflow: hidden; }
 /* Layar sentuh: beri umpan balik visual saat tombol ditekan */
 @media (hover: none) {
   button:active, [role="button"]:active { opacity: 0.85; }
+}
+
+/* ── Lapisan responsif tambahan (HP, tablet, layar sempit) ─────────────────
+   Sengaja ditulis di luar @layer agar bisa menimpa utilitas Tailwind pada
+   rentang lebar tertentu tanpa mengedit ratusan className. Hanya menyentuh
+   padding & ukuran dasar; varian sm:/md:/lg: tidak terpengaruh.            */
+
+/* HP sangat sempit (≤359px, mis. 320px): skala rem sedikit diperkecil supaya
+   toolbar, tab, dan baris tombol tidak melewati tepi layar. */
+@media (max-width: 359px) {
+  html { font-size: 15px; }
+}
+
+/* HP (<480px): kartu & popup dengan padding 1.5–2rem terlalu boros ruang. */
+@media (max-width: 479px) {
+  .p-6  { padding: 1rem; }
+  .px-6 { padding-left: 1rem; padding-right: 1rem; }
+  .p-8  { padding: 1.25rem; }
+  .px-8 { padding-left: 1.25rem; padding-right: 1.25rem; }
+  .p-10, .p-12 { padding: 1.5rem; }
+}
+
+/* HP landscape (tinggi sangat pendek): header tidak ikut menempel supaya area kerja tidak habis */
+@media (max-height: 480px) and (orientation: landscape) and (max-width: 1023px) {
+  header.sticky { position: static; }
 }

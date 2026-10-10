@@ -83,7 +83,7 @@ export const QuizCommunityHub: React.FC<QuizCommunityHubProps> = ({
               tabIndex={on ? 0 : -1}
               onClick={() => selectTab(t.key)}
               onKeyDown={onTabKeyDown}
-              className={`px-3 sm:px-5 py-2.5 rounded-xl text-xs font-black flex items-center justify-center gap-2 transition-all cursor-pointer whitespace-nowrap ${
+              className={`min-w-0 px-2 sm:px-5 py-2.5 rounded-xl text-[11px] sm:text-xs leading-tight text-center font-black flex items-center justify-center gap-1.5 sm:gap-2 transition-all cursor-pointer sm:whitespace-nowrap ${
                 on ? 'bg-accent2 text-on-accent2 shadow' : 'text-gray-300 hover:text-white hover:bg-white/10'
               }`}
             >

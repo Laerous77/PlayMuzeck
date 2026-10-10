@@ -69,7 +69,7 @@ export const DonationCard: React.FC<Props> = ({ onDonate, variant = 'card', clas
     return (
       <div className={`relative flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-white/[0.08] bg-black/50 px-4 py-3 pr-10 ${className}`}>
         <Heart className="w-4 h-4 text-accent shrink-0" aria-hidden />
-        <p className="text-xs text-gray-300 flex-1 min-w-[14rem]">
+        <p className="text-xs text-gray-300 flex-1 min-w-[min(14rem,100%)]">
           <strong className="text-white">PlayMuzeck bebas iklan.</strong> Biaya server dan penyimpanan ditopang dari pembelian aset dan donasi pengguna.
           {g?.goal ? <> Bulan ini baru <strong className="text-white">{rupiah(g.raised)}</strong> dari {rupiah(g.goal)}.</> : null}
         </p>

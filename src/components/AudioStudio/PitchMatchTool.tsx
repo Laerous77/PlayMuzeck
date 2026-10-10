@@ -635,7 +635,7 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
             {/* Target Nada Acuan */}
             <div className="p-4 rounded-xl bg-black/40 border border-accent/40 space-y-1">
               <span className="text-[10px] uppercase font-bold text-accent tracking-wider block">Target Nada Lagu</span>
-              <div className="text-4xl font-black text-white font-mono">
+              <div className="text-3xl sm:text-4xl font-black text-white font-mono">
                 {matchFeedback?.refNoteName || '—'}
               </div>
               <span className="text-[11px] text-gray-400 block font-mono">
@@ -658,7 +658,7 @@ export const PitchMatchTool: React.FC<PitchMatchToolProps> = ({ gate, onSuccessT
                 : 'bg-black/40 border-white/10 text-gray-400'
             }`}>
               <span className="text-[10px] uppercase font-bold tracking-wider block">Vokal Kamu</span>
-              <div className="text-4xl font-black font-mono">
+              <div className="text-3xl sm:text-4xl font-black font-mono">
                 {matchFeedback?.userNoteName || '—'}
               </div>
               <span className="text-[11px] block font-mono">

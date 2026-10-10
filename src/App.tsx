@@ -1109,7 +1109,7 @@ function MainApp() {
         accentQuiz={siteSettings.accentQuiz}
       />
 
-      <main className="flex-1 min-w-0 w-full px-[20px] pt-4 sm:pt-6">
+      <main className="flex-1 min-w-0 w-full pl-[max(14px,env(safe-area-inset-left))] pr-[max(14px,env(safe-area-inset-right))] min-[400px]:pl-[max(20px,env(safe-area-inset-left))] min-[400px]:pr-[max(20px,env(safe-area-inset-right))] pt-4 sm:pt-6">
         <AnimatePresence mode="wait">
           {currentMode === 'index' ? (
             <motion.div

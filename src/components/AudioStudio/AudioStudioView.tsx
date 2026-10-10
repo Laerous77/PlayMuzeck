@@ -312,7 +312,7 @@ export const AudioStudioView: React.FC<AudioStudioViewProps> = ({
                 <button
                   type="button"
                   onClick={handleGoToBundlePricing}
-                  className="px-6 py-3 rounded-xl font-extrabold text-sm transition-all whitespace-nowrap bg-accent text-on-accent hover:bg-accent/80 cursor-pointer shadow-lg shadow-accent/20 flex items-center gap-2 active:scale-95"
+                  className="w-full sm:w-auto justify-center px-4 sm:px-6 py-3 rounded-xl font-extrabold text-sm transition-all whitespace-nowrap bg-accent text-on-accent hover:bg-accent/80 cursor-pointer shadow-lg shadow-accent/20 flex items-center gap-2 active:scale-95"
                 >
                   <span>Beli Bundle Sekarang</span>
                   <ArrowRight className="w-4 h-4" />

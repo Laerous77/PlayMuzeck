@@ -230,7 +230,7 @@ export const IndexView: React.FC<IndexViewProps> = ({ onNavigateAudio, onNavigat
         </div>
 
         {/* Tujuan menu "Eksplor Fitur": dua kartu produk (Audio Studio & Pusat Kuis). */}
-        <div id="index-products-section" className="grid grid-cols-1 lg:grid-cols-2 gap-6 scroll-mt-20">
+        <div id="index-products-section" className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5 lg:gap-6 scroll-mt-20">
           {[
             {
               id: 'index-audio-section',

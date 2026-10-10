@@ -188,7 +188,7 @@ const LiveReading: React.FC<{
   const clamped = Math.max(-50, Math.min(50, cents));
   return (
     <div className="rounded-xl bg-black/50 border border-white/5 p-5 text-center space-y-3">
-      <div className={`text-6xl font-black tabular-nums ${inTune ? 'text-emerald-400' : 'text-white'}`}>
+      <div className={`text-5xl sm:text-6xl font-black tabular-nums ${inTune ? 'text-emerald-400' : 'text-white'}`}>
         {midi !== null ? <>{noteName(midi).replace(/-?\d+$/, '')}<span className="text-2xl text-gray-400">{noteName(midi).match(/-?\d+$/)?.[0]}</span></> : '—'}
       </div>
       <div className="text-xs text-gray-400 tabular-nums">
@@ -514,7 +514,7 @@ export const PitchDetectTool: React.FC<{ gate?: QuotaGate; toast?: (m: string) =
       {summary && segments && !running && (
         <div className="space-y-4">
           <p className="text-xs text-emerald-300 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" />Selesai: {summary.noteCount} nada terdeteksi dalam {fmtSec(summary.totalSungSeconds)} bernada.</p>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <StatCard label="NADA TERENDAH" value={summary.lowest ? noteName(summary.lowest.midi) : '—'} sub={summary.lowest ? midiHz(summary.lowest.midi, a4) : undefined} />
             <StatCard label="NADA TERTINGGI" value={summary.highest ? noteName(summary.highest.midi) : '—'} sub={summary.highest ? midiHz(summary.highest.midi, a4) : undefined} />
             <StatCard label="PALING SERING" value={summary.mostSung ? noteName(summary.mostSung.midi) : '—'} sub={summary.mostSung ? `${summary.mostSung.seconds.toFixed(1)} detik` : undefined} />
@@ -624,7 +624,7 @@ export const VocalRangeResult: React.FC<{
     <div className="space-y-5">
       <p className="text-xs text-emerald-300 flex items-center gap-1.5"><CheckCircle className="w-4 h-4" />Tes selesai. Ini hasil jangkauan suaramu.</p>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatCard label="RENTANG SUARA" value={`${noteName(result.lo)}–${noteName(result.hi)}`} sub={`${midiHz(result.lo)} – ${midiHz(result.hi)}`} />
         <StatCard label="JANGKAUAN" value={describeSpan(result.span)} sub={`${result.span} semiton`} />
         <StatCard label={result.tess.measured ? 'WILAYAH NYAMAN' : 'WILAYAH NYAMAN (PERKIRAAN)'} value={`${noteName(result.tess.low)}–${noteName(result.tess.high)}`} sub={result.tess.measured ? 'Dari nyanyianmu di langkah 3' : '60% bagian tengah rentang'} />

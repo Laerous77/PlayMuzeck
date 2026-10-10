@@ -601,7 +601,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                 )}
               </div>
               {arena.phaseEndsAt && (
-                <div className="inline-flex flex-col items-center px-8 py-4 rounded-2xl bg-black/40 border border-white/10">
+                <div className="inline-flex flex-col items-center px-5 sm:px-8 py-4 rounded-2xl bg-black/40 border border-white/10">
                   <span className="text-4xl font-mono font-black text-white">{secLeft}</span>
                   <span className="text-[11px] text-gray-400">detik lagi mulai</span>
                 </div>

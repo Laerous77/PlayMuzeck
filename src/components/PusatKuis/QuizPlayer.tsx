@@ -519,7 +519,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
         transition={{ duration: 0.2 }}
         className="w-full max-w-2xl rounded-2xl bg-surface border border-white/[0.1] shadow-2xl overflow-hidden flex flex-col my-auto"
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-black/50">
+        <div className="flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-white/[0.08] bg-black/50">
           <div className="flex items-center gap-2 min-w-0">
             <span className="text-xs font-bold text-accent2 uppercase tracking-wider shrink-0">
               {modeLabel}
@@ -574,7 +574,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
 
         {/* Bilah giliran pemain khusus Pass & Play */}
         {phase === 'quiz' && !isFinished && isPassPlayMode && questions.length > 0 && (
-          <div className="px-6 py-2.5 bg-blue-950/30 border-b border-blue-500/20 flex items-center justify-between flex-wrap gap-2">
+          <div className="px-4 sm:px-6 py-2.5 bg-blue-950/30 border-b border-blue-500/20 flex items-center justify-between flex-wrap gap-2">
             <div className="flex items-center gap-2 text-xs font-bold text-blue-200">
               <Users className="w-3.5 h-3.5" />
               <span>Giliran: {playerNamesState[activePlayerIndex]}</span>
@@ -598,7 +598,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
 
         {/* Bilah skor Solo vs Bot */}
         {phase === 'quiz' && !isFinished && isSoloMode && vsBotEnabled && questions.length > 0 && (
-          <div className="px-6 py-2.5 bg-purple-950/30 border-b border-purple-500/20 flex items-center justify-between gap-2">
+          <div className="px-4 sm:px-6 py-2.5 bg-purple-950/30 border-b border-purple-500/20 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 text-xs font-bold text-white">
               <User className="w-3.5 h-3.5 text-emerald-400" /> Kamu: {score}
             </span>
@@ -608,7 +608,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
           </div>
         )}
 
-        <div className="p-6 sm:p-8">
+        <div className="p-4 sm:p-6 md:p-8">
           {phase === 'setup' ? (
             // ================= LAYAR SETUP: ATUR NAMA / LAWAN SEBELUM MULAI =================
             <div className="space-y-6">
@@ -1284,7 +1284,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                         ))}
                     </div>
                   ) : vsBotEnabled ? (
-                    <div className="p-6 rounded-2xl bg-black/50 border border-white/[0.08] max-w-sm mx-auto flex items-center justify-around">
+                    <div className="p-4 sm:p-6 rounded-2xl bg-black/50 border border-white/[0.08] max-w-sm mx-auto flex items-center justify-around">
                       <div>
                         <span className="text-3xl sm:text-4xl font-black text-emerald-400 font-mono">{score}</span>
                         <span className="text-[11px] text-gray-400 block mt-0.5 flex items-center gap-1 justify-center">
@@ -1300,7 +1300,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                       </div>
                     </div>
                   ) : (
-                    <div className="p-6 rounded-2xl bg-black/50 border border-white/[0.08] max-w-sm mx-auto flex items-center justify-around">
+                    <div className="p-4 sm:p-6 rounded-2xl bg-black/50 border border-white/[0.08] max-w-sm mx-auto flex items-center justify-around">
                       <div>
                         <span className="text-3xl sm:text-4xl font-black text-accent2 font-mono">
                           {scorePercentage}%

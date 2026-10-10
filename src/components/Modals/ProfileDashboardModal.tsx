@@ -962,7 +962,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         </button>
 
         {/* 1. HEADER AVATAR */}
-        <div className="shrink-0 p-6 sm:p-7 bg-gradient-to-b from-black/85 to-transparent border-b border-white/[0.08] flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
+        <div className="shrink-0 p-4 sm:p-7 bg-gradient-to-b from-black/85 to-transparent border-b border-white/[0.08] flex flex-col sm:flex-row items-center sm:items-start gap-5 text-center sm:text-left">
           <div className="relative shrink-0">
             <FrameOrnament frame={currentFrameObj} size="lg" />
 
@@ -1075,7 +1075,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         )}
 
         {/* 3. TAB NAVIGASI */}
-        <div className="shrink-0 flex items-center border-b border-white/[0.08] bg-black/40 px-6 overflow-x-auto no-scrollbar">
+        <div className="shrink-0 flex items-center border-b border-white/[0.08] bg-black/40 px-2 sm:px-6 overflow-x-auto no-scrollbar">
           <button type="button" onClick={() => setActiveTab('collection')} className={`py-3 px-3.5 text-xs font-bold flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${activeTab === 'collection' ? 'border-accent text-accent' : 'border-transparent text-gray-400 hover:text-white'}`}>
             <Library className="w-4 h-4" /> Koleksi Saya
             <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/10 text-white font-mono">{totalCollectionCount}</span>
@@ -1099,7 +1099,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
         </div>
 
         {/* 4. KONTEN TAB UTAMA */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-5 sm:space-y-6">
           {deletion && (
             <div className="p-4 rounded-2xl bg-orange-500/10 border border-orange-400/50 space-y-2">
               <div className="flex items-center gap-2 text-orange-300 font-black text-sm">

@@ -133,7 +133,7 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
       <div className="rounded-3xl bg-surface border border-white/10 p-5 sm:p-7 shadow-2xl space-y-5">
         {/* Tab periode */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div role="tablist" aria-label="Periode papan peringkat" className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-black/50 border border-white/10">
+          <div role="tablist" aria-label="Periode papan peringkat" className="grid grid-cols-3 gap-1 sm:gap-1.5 p-1 rounded-2xl bg-black/50 border border-white/10 min-w-0">
             {TABS.map((t) => {
               const on = t.key === period;
               return (
@@ -143,7 +143,7 @@ export const QuizLeaderboard: React.FC<QuizLeaderboardProps> = ({ isLoggedIn, on
                   role="tab"
                   aria-selected={on}
                   onClick={() => setPeriod(t.key)}
-                  className={`px-3 sm:px-5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
+                  className={`min-w-0 px-1.5 sm:px-5 py-2 rounded-xl text-[11px] sm:text-xs leading-tight text-center font-black transition-all cursor-pointer sm:whitespace-nowrap ${
                     on ? 'bg-accent2 text-on-accent2 shadow' : 'text-gray-300 hover:text-white hover:bg-white/10'
                   }`}
                 >

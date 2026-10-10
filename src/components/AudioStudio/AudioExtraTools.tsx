@@ -865,7 +865,7 @@ const CleanTool: React.FC<ExtraFileToolProps> = ({ gate, toast, isActive = false
         }
       >
         {buffer && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="rounded-xl bg-black/50 border border-white/5 p-3 space-y-2">
               <label className="flex items-center gap-2 text-xs font-bold text-white cursor-pointer"><input type="checkbox" checked={doSilence} onChange={(e) => { setDoSilence(e.target.checked); setOut(null); }} />Hapus jeda hening</label>
               <Field label={`Threshold: ${thr} dB`}><input type="range" min={-70} max={-20} value={thr} onChange={(e) => { setThr(+e.target.value); setOut(null); }} className={sliderCls} disabled={!doSilence} /></Field>
@@ -1310,7 +1310,7 @@ const TunerTool: React.FC<{ gate?: AudioExtraToolsProps['gate']; isActive?: bool
         : <button type="button" onClick={stop} className="px-5 py-2 rounded-xl bg-red-500 hover:bg-red-400 text-white text-xs font-black inline-flex items-center gap-1.5 cursor-pointer shadow-md w-fit"><X className="w-4 h-4" /><span>Hentikan</span></button>}
       <ErrorNote msg={err} />
       <div className="rounded-xl bg-black/50 border border-white/5 p-5 text-center space-y-3">
-        <div className={`text-6xl font-black tabular-nums ${inTune ? 'text-emerald-400' : 'text-white'}`}>
+        <div className={`text-5xl sm:text-6xl font-black tabular-nums ${inTune ? 'text-emerald-400' : 'text-white'}`}>
           {note ? (
             <>
               {ns ? ns.string.label.replace(/\d+$/, '') : note.name}

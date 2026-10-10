@@ -4115,8 +4115,8 @@ export const PadStudio: React.FC<PadStudioProps> = ({
   const selectionLabel = activeSel ? `${activeSel.cells.size} ${activeTab === 'drum' ? 'pad' : 'sel'} terpilih` : 'Belum ada pilihan';
   // Kontrol panjang akor (tab Akor): diletakkan di baris atas toolbar, di tempat teks jumlah pilihan sebelumnya.
   const chordLenControls = (
-    <div className="flex flex-nowrap items-center justify-end gap-2.5 whitespace-nowrap">
-      <label className="flex items-center gap-1 text-xs font-bold text-gray-300" title="Panjang akor baru: panjang default akor yang baru dipasang">
+    <div className="flex flex-wrap items-center justify-end gap-x-2.5 gap-y-1.5">
+      <label className="flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-300" title="Panjang akor baru: panjang default akor yang baru dipasang">
         Panjang baru
         <select
           value={newChordLen}
@@ -4136,7 +4136,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
         </select>
         <span className="font-mono text-gray-500 font-normal">step</span>
       </label>
-      <label className="flex items-center gap-1 text-xs font-bold text-gray-300" title="Panjang akor terpilih: ubah panjang semua akor yang sedang dipilih">
+      <label className="flex items-center gap-1 whitespace-nowrap text-xs font-bold text-gray-300" title="Panjang akor terpilih: ubah panjang semua akor yang sedang dipilih">
         Terpilih
         <IntField
           value={selectedNoteInfo.len}
@@ -5665,7 +5665,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
           <div className="flex flex-col gap-2.5 rounded-xl bg-black/40 border border-white/[0.06] p-3">
             {/* Baris 1: mode & edit. Semua tombol melebar rata mengisi lebar toolbar. */}
             <div className="flex flex-wrap items-stretch gap-2">
-              <div className="flex flex-[1.4] items-stretch min-w-[200px] bg-black/60 border border-white/10 rounded-lg p-0.5" role="tablist" aria-label="Mode editor">
+              <div className="flex flex-[1.4] items-stretch min-w-[min(200px,100%)] bg-black/60 border border-white/10 rounded-lg p-0.5" role="tablist" aria-label="Mode editor">
                 {([
                   { id: 'edit', label: 'Edit', Icon: Pencil, tip: 'Klik sel untuk memasang / mengubah' },
                   {
@@ -5769,7 +5769,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
             {/* Baris 2: pemutaran & rekaman. Tombol juga melebar rata. */}
             <div className="flex flex-wrap items-stretch gap-2">
-              <div className="flex flex-[2.4] items-stretch gap-1.5 min-w-[300px] bg-black/60 border border-white/10 rounded-lg p-1">
+              <div className="flex flex-[2.4] items-stretch gap-1.5 min-w-[min(300px,100%)] bg-black/60 border border-white/10 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() => void togglePlay()}
@@ -5851,7 +5851,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                 <span>{countdownLeft !== null ? `Batal (${countdownLeft})` : isRecording ? 'Stop Rekam' : 'Rekam'}</span>
               </button>
               <label
-                className="flex flex-1 items-center justify-center gap-2 min-w-[110px] px-3 py-2 rounded-lg text-xs font-bold text-gray-300 bg-black/60 border border-white/10"
+                className="flex flex-1 items-center justify-center gap-2 min-w-[min(110px,100%)] px-3 py-2 rounded-lg text-xs font-bold text-gray-300 bg-black/60 border border-white/10"
                 title="Hitung mundur sebelum rekaman dimulai (0–15 detik; 0 = langsung mulai)"
               >
                 <Timer className="w-4 h-4 text-gray-400" />
@@ -6333,7 +6333,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
       {editingPadIndex !== null && (
         <ModalPortal>
-          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain shadow-2xl p-6 space-y-5">
+          <div className="bg-surface border border-white/20 rounded-2xl w-full max-w-2xl max-h-[92dvh] overflow-y-auto overscroll-contain shadow-2xl p-4 sm:p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Sliders className="w-5 h-5 text-accent" />
