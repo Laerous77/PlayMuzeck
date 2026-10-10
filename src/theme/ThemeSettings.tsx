@@ -29,9 +29,11 @@ const Card: React.FC<CardProps> = ({ title, sub, palette, selected, inUse, onCli
   >
     <div className="flex gap-1 mb-2 h-4 items-center">
       {palette ? (
-        [palette.surface, palette.accent, palette.accent2].map((c, i) => (
-          <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
-        ))
+        [palette.bg, palette.surface, palette.accent, palette.accent2]
+          .filter((c): c is string => !!c)
+          .map((c, i) => (
+            <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
+          ))
       ) : (
         <Plus className="w-4 h-4 text-gray-500" />
       )}
@@ -121,7 +123,7 @@ export const ThemeSettings: React.FC<{ embedded?: boolean }> = ({ embedded = fal
         <div>
           <h3 className="font-bold text-white">Tema saya</h3>
           <p className="text-xs text-gray-400">
-            Tema bawaan + maksimal {maxMine} tema buatanmu. Tersimpan di akun, jadi tetap sama waktu login lagi.
+            Tema bawaan + maksimal {maxMine} tema buatanmu (gelap, terang, atau kustom bebas). Tersimpan di akun, jadi tetap sama waktu login lagi.
           </p>
         </div>
         <button

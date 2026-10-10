@@ -7,6 +7,10 @@
 //   app.use(createThemeRouter({ db: pool, requireUser, requireAdmin }));
 //
 // Batas (maks 7 tema admin, 2 tema per pengguna) DITEGAKKAN DI SINI, bukan cuma di UI.
+//
+// Tema punya 3 warna wajib (surface, accent, accent2) dan 2 warna opsional untuk mode Kustom
+// (bg = latar halaman, text = warna teks). Kolom opsional ditambahkan otomatis oleh ensureThemeSchema
+// (ALTER TABLE ... IF NOT EXISTS), jadi data lama tetap aman dan tidak perlu migrasi manual.
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { Pool } from 'pg';
 
@@ -30,6 +34,8 @@ CREATE TABLE IF NOT EXISTS themes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS themes_owner_idx ON themes (scope, owner_email);
+ALTER TABLE themes ADD COLUMN IF NOT EXISTS bg_color TEXT;
+ALTER TABLE themes ADD COLUMN IF NOT EXISTS text_color TEXT;
 CREATE TABLE IF NOT EXISTS user_theme_prefs (
   email TEXT PRIMARY KEY,
   active_theme_id INTEGER REFERENCES themes(id) ON DELETE SET NULL,
@@ -39,16 +45,23 @@ CREATE TABLE IF NOT EXISTS user_theme_prefs (
 
 export const ensureThemeSchema = (db: Db) => db.query(THEME_SCHEMA_SQL);
 
-interface Palette { surface: string; accent: string; accent2: string }
+interface Palette { surface: string; accent: string; accent2: string; bg?: string; text?: string }
 interface ParsedTheme { name: string; palette: Palette }
 
 const isHex = (v: unknown): v is string => typeof v === 'string' && HEX.test(v);
+const isOptHex = (v: unknown) => v === undefined || v === null || v === '' || isHex(v);
 
 const toTheme = (r: any) => ({
   id: r.id,
   name: r.name,
   scope: r.scope,
-  palette: { surface: r.surface, accent: r.accent, accent2: r.accent2 },
+  palette: {
+    surface: r.surface,
+    accent: r.accent,
+    accent2: r.accent2,
+    ...(r.bg_color ? { bg: r.bg_color } : {}),
+    ...(r.text_color ? { text: r.text_color } : {}),
+  },
 });
 
 function parseThemeBody(body: any): ParsedTheme | { error: string } {
@@ -58,9 +71,18 @@ function parseThemeBody(body: any): ParsedTheme | { error: string } {
   if (!p || !isHex(p.surface) || !isHex(p.accent) || !isHex(p.accent2)) {
     return { error: 'Warna tidak valid (format #RRGGBB).' };
   }
+  if (!isOptHex(p.bg) || !isOptHex(p.text)) {
+    return { error: 'Warna latar/teks tidak valid (format #RRGGBB).' };
+  }
   return {
     name,
-    palette: { surface: p.surface.toLowerCase(), accent: p.accent.toLowerCase(), accent2: p.accent2.toLowerCase() },
+    palette: {
+      surface: p.surface.toLowerCase(),
+      accent: p.accent.toLowerCase(),
+      accent2: p.accent2.toLowerCase(),
+      ...(isHex(p.bg) ? { bg: p.bg.toLowerCase() } : {}),
+      ...(isHex(p.text) ? { text: p.text.toLowerCase() } : {}),
+    },
   };
 }
 
@@ -102,12 +124,15 @@ export function createThemeRouter({
   async function insertTheme(scope: Scope, owner: string | null, t: ParsedTheme) {
     // Cek batas & insert dalam SATU statement supaya tidak bisa menembus batas.
     const { rows } = await db.query(
-      `INSERT INTO themes (scope, owner_email, name, surface, accent, accent2)
-       SELECT $1::text, $2::text, $3::text, $4::text, $5::text, $6::text
+      `INSERT INTO themes (scope, owner_email, name, surface, accent, accent2, bg_color, text_color)
+       SELECT $1::text, $2::text, $3::text, $4::text, $5::text, $6::text, $7::text, $8::text
        WHERE (SELECT count(*) FROM themes
-              WHERE scope = $1::text AND owner_email IS NOT DISTINCT FROM $2::text) < $7::int
+              WHERE scope = $1::text AND owner_email IS NOT DISTINCT FROM $2::text) < $9::int
        RETURNING *`,
-      [scope, owner, t.name, t.palette.surface, t.palette.accent, t.palette.accent2, LIMITS[scope]],
+      [
+        scope, owner, t.name, t.palette.surface, t.palette.accent, t.palette.accent2,
+        t.palette.bg ?? null, t.palette.text ?? null, LIMITS[scope],
+      ],
     );
     return rows[0] ? toTheme(rows[0]) : null;
   }
@@ -209,9 +234,9 @@ export function createThemeRouter({
     if ('error' in t) return res.status(400).json({ error: t.error });
 
     const { rowCount } = await db.query(
-      `UPDATE themes SET name = $3, surface = $4, accent = $5, accent2 = $6
+      `UPDATE themes SET name = $3, surface = $4, accent = $5, accent2 = $6, bg_color = $7, text_color = $8
        WHERE id = $1 AND scope = 'user' AND owner_email = $2`,
-      [id, email, t.name, t.palette.surface, t.palette.accent, t.palette.accent2]);
+      [id, email, t.name, t.palette.surface, t.palette.accent, t.palette.accent2, t.palette.bg ?? null, t.palette.text ?? null]);
     if (!rowCount) return res.status(404).json({ error: 'Tema tidak ditemukan.' });
     await upsertPref(email, id, false);
     res.json(await loadState(email));
@@ -248,9 +273,9 @@ export function createThemeRouter({
     if (!id) return res.status(400).json({ error: 'Tema tidak valid.' });
     if ('error' in t) return res.status(400).json({ error: t.error });
     const { rows } = await db.query(
-      `UPDATE themes SET name = $2, surface = $3, accent = $4, accent2 = $5
+      `UPDATE themes SET name = $2, surface = $3, accent = $4, accent2 = $5, bg_color = $6, text_color = $7
        WHERE id = $1 AND scope = 'admin' RETURNING *`,
-      [id, t.name, t.palette.surface, t.palette.accent, t.palette.accent2]);
+      [id, t.name, t.palette.surface, t.palette.accent, t.palette.accent2, t.palette.bg ?? null, t.palette.text ?? null]);
     if (!rows[0]) return res.status(404).json({ error: 'Tema tidak ditemukan.' });
     res.json({ theme: toTheme(rows[0]) });
   }));

@@ -16,7 +16,8 @@
     "test:dsp": "tsx tests/audioExtraDsp.test.ts && tsx tests/audioLimits.test.ts && tsx tests/audioMetadata.test.ts",
     "test:pad": "tsx tests/padFiles.test.ts",
     "test:quiz": "tsx tests/quizCommunity.test.ts && tsx tests/quizSegments.test.ts",
-    "test:routes": "tsx tests/routes.test.ts"
+    "test:routes": "tsx tests/routes.test.ts",
+    "test:theme": "tsx tests/themeContrast.test.ts"
   },
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",

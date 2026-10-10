@@ -1,10 +1,16 @@
 // src/theme/PalettePicker.tsx
 // Dipakai di sisi pengguna (ThemeSettings) DAN admin (AdminThemeManager).
 // Warna bisa dipilih lewat color picker, kode hex, atau nilai RGB.
-import React, { useEffect, useState } from 'react';
-import { Moon, Sun } from 'lucide-react';
+//
+// Tiga mode:
+//   Gelap / Terang — 3 warna (panel + 2 aksen); latar & teks diturunkan otomatis.
+//   Kustom         — 5 warna bebas (latar, panel, teks, 2 aksen), tidak terikat dasar hitam/putih.
+// Apa pun pilihannya, tampilan yang diterapkan selalu dijaga terbaca (lihat resolvePalette di theme.ts).
+import React, { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Moon, SlidersHorizontal, Sun, TriangleAlert } from 'lucide-react';
 import {
-  Palette, contrastRatio, hexToRgb, modeOf, parseHex, presetsFor, readableOn, rgbToHex, samePalette, withMode,
+  Palette, ThemeMode, auditPalette, hexToRgb, normalizePalette, paletteVars, parseHex, presetsFor,
+  resolvePalette, rgbToHex, samePalette, themeModeOf, toCustom, withMode,
 } from './theme';
 
 interface Props {
@@ -13,11 +19,18 @@ interface Props {
   disabled?: boolean;
 }
 
-const FIELDS: Array<{ key: keyof Palette; label: string }> = [
-  { key: 'surface', label: 'Warna panel' },
-  { key: 'accent', label: 'Aksen Audio' },
-  { key: 'accent2', label: 'Aksen Kuis' },
-];
+type FieldKey = 'bg' | 'surface' | 'text' | 'accent' | 'accent2';
+
+const FIELD_LABEL: Record<FieldKey, string> = {
+  bg: 'Latar halaman',
+  surface: 'Warna panel',
+  text: 'Warna teks',
+  accent: 'Aksen Audio',
+  accent2: 'Aksen Kuis',
+};
+
+const BASIC_FIELDS: FieldKey[] = ['surface', 'accent', 'accent2'];
+const CUSTOM_FIELDS: FieldKey[] = ['bg', 'surface', 'text', 'accent', 'accent2'];
 
 const CHANNELS = ['R', 'G', 'B'] as const;
 
@@ -113,37 +126,64 @@ const ColorField: React.FC<ColorFieldProps> = ({ label, value, onChange }) => {
   );
 };
 
+const MODES: Array<{ id: ThemeMode; label: string; Icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'dark', label: 'Gelap', Icon: Moon },
+  { id: 'light', label: 'Terang', Icon: Sun },
+  { id: 'custom', label: 'Kustom', Icon: SlidersHorizontal },
+];
+
+const MODE_HINT: Record<ThemeMode, string> = {
+  dark: 'Latar hitam, teks terang. Kamu cukup memilih warna panel dan aksen.',
+  light: 'Latar terang, teks gelap. Kamu cukup memilih warna panel dan aksen.',
+  custom:
+    'Bebas dari dasar hitam/putih: tentukan sendiri latar, panel, teks, dan aksen. Kalau ada pasangan warna yang sulit dibaca, tampilan akan disesuaikan otomatis.',
+};
+
 export const PalettePicker: React.FC<Props> = ({ value, onChange, disabled }) => {
-  const mode = modeOf(value.surface);
+  const mode = themeModeOf(value);
   const presets = presetsFor(mode);
-  const weak = (['accent', 'accent2'] as const).filter((k) => contrastRatio(value[k], value.surface) < 3);
+  const resolved = useMemo(() => resolvePalette(value), [value]);
+  const rows = useMemo(() => auditPalette(value), [value]);
+  const fields = mode === 'custom' ? CUSTOM_FIELDS : BASIC_FIELDS;
+  const vars = useMemo(() => paletteVars(value), [value]);
+
+  const pickMode = (m: ThemeMode) => {
+    if (m === mode) return;
+    onChange(m === 'custom' ? toCustom(value) : withMode(value, m));
+  };
+
+  // Nilai awal untuk bg/teks diambil dari yang sedang berlaku, jadi berpindah ke Kustom tidak mengubah tampilan.
+  const valueOf = (k: FieldKey): string => {
+    if (k === 'bg') return value.bg ?? resolved.bg;
+    if (k === 'text') return value.text ?? resolved.text;
+    return value[k];
+  };
 
   return (
     <div className={`space-y-3 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
       <div>
         <p className="text-xs text-gray-400 mb-1.5">Mode tampilan</p>
         <div className="inline-flex rounded-xl border border-white/10 p-0.5">
-          {([['dark', 'Gelap', Moon], ['light', 'Terang', Sun]] as const).map(([m, label, Icon]) => (
+          {MODES.map(({ id, label, Icon }) => (
             <button
-              key={m}
+              key={id}
               type="button"
-              onClick={() => onChange(withMode(value, m))}
+              onClick={() => pickMode(id)}
+              aria-pressed={mode === id}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[10px] text-xs font-bold cursor-pointer ${
-                mode === m ? 'bg-accent text-on-accent' : 'text-gray-300 hover:bg-white/10'
+                mode === id ? 'bg-accent text-on-accent' : 'text-gray-300 hover:bg-white/10'
               }`}
             >
               <Icon className="w-3.5 h-3.5" /> {label}
             </button>
           ))}
         </div>
-        <p className="text-[11px] text-gray-500 mt-1">
-          Mode mengikuti warna panel: panel terang = mode terang. Tombol ini menyesuaikan warna panel dan aksen otomatis.
-        </p>
+        <p className="text-[11px] text-gray-500 mt-1">{MODE_HINT[mode]}</p>
       </div>
 
       <div>
         <p className="text-xs text-gray-400 mb-1.5">
-          Palette siap pakai · mode {mode === 'dark' ? 'gelap' : 'terang'}
+          Palette siap pakai · {mode === 'dark' ? 'gelap' : mode === 'light' ? 'terang' : 'kustom'}
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {presets.map((p) => (
@@ -152,13 +192,15 @@ export const PalettePicker: React.FC<Props> = ({ value, onChange, disabled }) =>
               type="button"
               onClick={() => onChange(p.palette)}
               className={`rounded-xl border p-2.5 text-left cursor-pointer ${
-                samePalette(p.palette, value) ? 'border-accent' : 'border-white/10 hover:border-white/30'
+                samePalette(normalizePalette(p.palette), normalizePalette(value)) ? 'border-accent' : 'border-white/10 hover:border-white/30'
               }`}
             >
               <div className="flex gap-1 mb-1.5">
-                {[p.palette.surface, p.palette.accent, p.palette.accent2].map((c, i) => (
-                  <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
-                ))}
+                {[p.palette.bg, p.palette.surface, p.palette.text, p.palette.accent, p.palette.accent2]
+                  .filter((c): c is string => !!c)
+                  .map((c, i) => (
+                    <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
+                  ))}
               </div>
               <p className="text-xs font-semibold text-white">{p.label}</p>
             </button>
@@ -166,34 +208,76 @@ export const PalettePicker: React.FC<Props> = ({ value, onChange, disabled }) =>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {FIELDS.map((f) => (
+      <div className={`grid grid-cols-1 gap-3 ${mode === 'custom' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'sm:grid-cols-3'}`}>
+        {fields.map((k) => (
           <ColorField
-            key={f.key}
-            label={f.label}
-            value={value[f.key]}
-            onChange={(hex) => onChange({ ...value, [f.key]: hex })}
+            key={k}
+            label={FIELD_LABEL[k]}
+            value={valueOf(k)}
+            onChange={(hex) => onChange({ ...(mode === 'custom' ? toCustom(value) : value), [k]: hex })}
           />
         ))}
       </div>
 
-      {weak.length > 0 && (
-        <p className="text-[11px] text-amber-200">
-          {weak.map((k) => (k === 'accent' ? 'Aksen Audio' : 'Aksen Kuis')).join(' dan ')} kurang kontras dengan warna
-          panel — teks atau ikon berwarna aksen bisa susah dibaca. Pilih warna yang lebih {mode === 'dark' ? 'terang' : 'gelap'}.
+      {/* Pemeriksa kontras: menilai pilihan ASLI pengguna. */}
+      <div className="rounded-xl border border-white/10 p-3 space-y-1.5">
+        <p className="text-xs font-semibold text-white">Keterbacaan</p>
+        <ul className="space-y-1">
+          {rows.map((r) => (
+            <li key={r.id} className="flex items-center gap-2 text-[11px]">
+              {r.ok ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              ) : (
+                <TriangleAlert className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+              )}
+              <span className="text-gray-300 flex-1">{r.label}</span>
+              <span className={`font-mono ${r.ok ? 'text-gray-400' : 'text-amber-300'}`}>
+                {r.ratio.toFixed(1)}:1
+              </span>
+            </li>
+          ))}
+        </ul>
+        {resolved.notes.length > 0 && (
+          <ul className="text-[11px] text-amber-300 space-y-0.5 pt-1">
+            {resolved.notes.map((n) => (
+              <li key={n}>• {n}</li>
+            ))}
+          </ul>
+        )}
+        <p className="text-[10px] text-gray-500">
+          Warna pilihanmu tetap tersimpan apa adanya. Saat dipakai, warna yang terlalu sulit dibaca digeser otomatis (hanya di layar).
         </p>
-      )}
+      </div>
 
-      <div className="rounded-xl p-3 flex flex-wrap items-center gap-2 border border-black/10" style={{ background: value.surface }}>
-        <span className="px-3 py-1 rounded-lg text-xs font-bold" style={{ background: value.accent, color: readableOn(value.accent) }}>
-          Audio
-        </span>
-        <span className="px-3 py-1 rounded-lg text-xs font-bold" style={{ background: value.accent2, color: readableOn(value.accent2) }}>
-          Kuis
-        </span>
-        <span className="text-xs" style={{ color: readableOn(value.surface) }}>
-          Pratinjau tema · mode {mode === 'dark' ? 'gelap' : 'terang'}
-        </span>
+      {/* Pratinjau memakai variabel tema sungguhan, jadi hasilnya sama dengan di situs. */}
+      <div
+        className="rounded-xl p-3 border border-white/10 bg-page text-fg space-y-2"
+        style={vars as React.CSSProperties}
+        aria-label="Pratinjau tema"
+      >
+        <div className="rounded-lg bg-surface border border-white/10 p-3 space-y-2">
+          <p className="text-sm font-bold text-white">Pratinjau tema</p>
+          <p className="text-xs text-gray-300">Teks biasa di atas panel.</p>
+          <p className="text-xs text-gray-400">Teks redup untuk keterangan kecil.</p>
+          <p className="text-xs text-accent">Tautan atau penekanan beraksen Audio</p>
+          <p className="text-xs text-accent2">Penekanan beraksen Kuis</p>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-3 py-1 rounded-lg text-xs font-bold bg-accent text-on-accent">Audio</span>
+            <span className="px-3 py-1 rounded-lg text-xs font-bold bg-accent2 text-on-accent2">Kuis</span>
+            <span className="px-3 py-1 rounded-lg text-xs font-bold bg-emerald-500 text-black">Benar</span>
+            <span className="px-3 py-1 rounded-lg text-xs font-bold bg-red-500 text-white">Salah</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <span className="px-2 py-1 rounded-md text-[11px] bg-emerald-500/20 text-emerald-400">Berhasil disimpan</span>
+            <span className="px-2 py-1 rounded-md text-[11px] bg-red-500/10 text-red-300">Terjadi kesalahan</span>
+            <span className="px-2 py-1 rounded-md text-[11px] bg-amber-500/10 text-amber-300">Perhatian</span>
+          </div>
+          <input
+            readOnly
+            value="Kolom isian"
+            className="w-full rounded-lg bg-black/40 border border-white/10 px-2 py-1 text-xs text-white outline-none"
+          />
+        </div>
       </div>
     </div>
   );
