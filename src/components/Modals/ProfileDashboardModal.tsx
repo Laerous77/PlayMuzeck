@@ -96,7 +96,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Secangkir Kopi',
     description: 'Aroma seduhan kopi hangat penyemangat ritme aransemen.',
     requirement: 'Terbuka setelah berdonasi Secangkir Kopi (Rp 10.000).',
-    borderClass: 'border-2 border-amber-600 ring-4 ring-amber-900/60 shadow-[0_0_18px_rgba(217,119,6,0.6)]',
+    borderClass: 'pm-frame border-2 border-amber-600 ring-4 ring-amber-900/60 shadow-[0_0_18px_rgba(217,119,6,0.6)]',
     iconType: 'coffee',
   },
   {
@@ -105,7 +105,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Energi Kreatif',
     description: 'Kilatan petir amber berdaya tinggi yang memicu inspirasi.',
     requirement: 'Terbuka setelah berdonasi Energi Kreatif (Rp 25.000).',
-    borderClass: 'border-2 border-yellow-300 ring-4 ring-[#FCA311] shadow-[0_0_22px_rgba(252,163,17,0.85)] animate-pulse',
+    borderClass: 'pm-frame border-2 border-yellow-300 ring-4 ring-[#fca311] shadow-[0_0_22px_rgba(252,163,17,0.85)] animate-pulse',
     iconType: 'neon',
   },
   {
@@ -114,7 +114,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Server Boost',
     description: 'Sirkuit matriks kuantum penyokong kecepatan server workstation.',
     requirement: 'Terbuka setelah berdonasi Server Boost (Rp 50.000).',
-    borderClass: 'border-2 border-cyan-300 ring-4 ring-cyan-600/80 shadow-[0_0_22px_rgba(6,182,212,0.8)]',
+    borderClass: 'pm-frame border-2 border-cyan-300 ring-4 ring-cyan-600/80 shadow-[0_0_22px_rgba(6,182,212,0.8)]',
     iconType: 'warp',
   },
   {
@@ -123,7 +123,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Pendukung Sultan',
     description: 'Kemewahan emas murni sang pelindung jagat kreasi seni.',
     requirement: 'Terbuka setelah berdonasi Pendukung Sultan (Rp 100.000).',
-    borderClass: 'border-3 border-yellow-200 ring-4 ring-amber-500 shadow-[0_0_30px_rgba(251,191,36,0.95)]',
+    borderClass: 'pm-frame border-3 border-yellow-200 ring-4 ring-amber-500 shadow-[0_0_30px_rgba(251,191,36,0.95)]',
     iconType: 'sultan',
   },
   {
@@ -132,7 +132,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Koneksi Developer',
     description: 'Frekuensi radar komunikasi langsung dengan tim pengembang.',
     requirement: 'Terbuka setelah mengirim masukan, ide kustom, atau aduan.',
-    borderClass: 'border-2 border-teal-300 ring-4 ring-emerald-600/80 shadow-[0_0_20px_rgba(16,185,129,0.75)]',
+    borderClass: 'pm-frame border-2 border-teal-300 ring-4 ring-emerald-600/80 shadow-[0_0_20px_rgba(16,185,129,0.75)]',
     iconType: 'contact',
   },
   {
@@ -141,7 +141,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Kolektor 6 Produk',
     description: 'Pendaran prisma pelangi holografik penguasa seluruh aset audio.',
     requirement: 'Terbuka setelah memiliki paket bundle lengkap 6 produk.',
-    borderClass: 'border-2 border-violet-200 ring-4 ring-pink-500 shadow-[0_0_28px_rgba(236,72,153,0.9)]',
+    borderClass: 'pm-frame border-2 border-violet-200 ring-4 ring-pink-500 shadow-[0_0_28px_rgba(236,72,153,0.9)]',
     iconType: 'bundle',
   },
   {
@@ -150,7 +150,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Olahraga',
     description: 'Aura kobaran semangat atletis, rekor laga, dan kejuaraan akbar dunia.',
     requirement: 'Terbuka setelah membeli kuis tema Olahraga.',
-    borderClass: 'border-2 border-emerald-400 ring-4 ring-emerald-950 shadow-[0_0_25px_rgba(52,211,153,0.85)]',
+    borderClass: 'pm-frame border-2 border-emerald-400 ring-4 ring-emerald-950 shadow-[0_0_25px_rgba(52,211,153,0.85)]',
     iconType: 'theme-olahraga',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-emerald-900 via-emerald-600 to-green-400', border: 'border-emerald-200', shadow: 'shadow-[0_0_15px_rgba(16,185,129,0.8)]', emoji: '⚽', animate: 'animate-bounce' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('olahraga'),
@@ -161,7 +161,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Kehidupan Sehari-hari',
     description: 'Pendar hangat keteraturan domestik, rutinitas cerdas, dan finansial cermat.',
     requirement: 'Terbuka setelah membeli kuis tema Kehidupan Sehari-hari.',
-    borderClass: 'border-2 border-amber-300 ring-4 ring-amber-950 shadow-[0_0_24px_rgba(251,191,36,0.85)]',
+    borderClass: 'pm-frame border-2 border-amber-300 ring-4 ring-amber-950 shadow-[0_0_24px_rgba(251,191,36,0.85)]',
     iconType: 'theme-sehari-hari',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-amber-900 via-amber-600 to-yellow-300', border: 'border-amber-200', shadow: 'shadow-[0_0_15px_rgba(245,158,11,0.8)]', emoji: '🏠' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('sehari_hari'),
@@ -172,7 +172,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Alam',
     description: 'Rona zamrud ekosistem belantara bumi, keanekaragaman flora, dan fauna.',
     requirement: 'Terbuka setelah membeli kuis tema Alam.',
-    borderClass: 'border-2 border-lime-400 ring-4 ring-green-950 shadow-[0_0_26px_rgba(132,204,22,0.85)]',
+    borderClass: 'pm-frame border-2 border-lime-400 ring-4 ring-green-950 shadow-[0_0_26px_rgba(132,204,22,0.85)]',
     iconType: 'theme-alam',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-green-950 via-emerald-700 to-lime-300', border: 'border-lime-200', shadow: 'shadow-[0_0_16px_rgba(132,204,22,0.85)]', emoji: '🌿', animate: 'animate-pulse' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('alam'),
@@ -183,7 +183,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Musik',
     description: 'Gelombang frekuensi nada murni sang maestro instrumen dan partitur melodi.',
     requirement: 'Terbuka setelah membeli kuis tema Musik.',
-    borderClass: 'border-2 border-violet-300 ring-4 ring-purple-950 shadow-[0_0_28px_rgba(168,85,247,0.9)] animate-pulse',
+    borderClass: 'pm-frame border-2 border-violet-300 ring-4 ring-purple-950 shadow-[0_0_28px_rgba(168,85,247,0.9)] animate-pulse',
     iconType: 'theme-musik',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-purple-950 via-violet-600 to-fuchsia-300', border: 'border-violet-200', shadow: 'shadow-[0_0_18px_rgba(168,85,247,0.9)]', emoji: '🎵' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('musik'),
@@ -194,7 +194,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Matematika',
     description: 'Presisi kalkulus mutlak, deret aljabar murni, dan keindahan geometri aksiomatik.',
     requirement: 'Terbuka setelah membeli kuis tema Matematika.',
-    borderClass: 'border-2 border-sky-300 ring-4 ring-blue-950 shadow-[0_0_25px_rgba(14,165,233,0.85)]',
+    borderClass: 'pm-frame border-2 border-sky-300 ring-4 ring-blue-950 shadow-[0_0_25px_rgba(14,165,233,0.85)]',
     iconType: 'theme-matematika',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-blue-950 via-indigo-600 to-cyan-300', border: 'border-cyan-200', shadow: 'shadow-[0_0_15px_rgba(14,165,233,0.85)]', emoji: '📐' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('matematika'),
@@ -205,7 +205,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Seni',
     description: 'Gradasi palet estetika visual, tata arsitektur megah, dan goresan mahakarya.',
     requirement: 'Terbuka setelah membeli kuis tema Seni.',
-    borderClass: 'border-2 border-rose-300 ring-4 ring-rose-950 shadow-[0_0_26px_rgba(244,63,94,0.85)]',
+    borderClass: 'pm-frame border-2 border-rose-300 ring-4 ring-rose-950 shadow-[0_0_26px_rgba(244,63,94,0.85)]',
     iconType: 'theme-seni',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-rose-950 via-rose-600 to-pink-300', border: 'border-rose-200', shadow: 'shadow-[0_0_16px_rgba(244,63,94,0.85)]', emoji: '🎨' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('seni'),
@@ -216,7 +216,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Teknologi',
     description: 'Kilau sirkuit semikonduktor masa depan, kecerdasan buatan, dan arsitektur kode.',
     requirement: 'Terbuka setelah membeli kuis tema Teknologi.',
-    borderClass: 'border-2 border-cyan-300 ring-4 ring-teal-950 shadow-[0_0_28px_rgba(34,211,238,0.9)] animate-pulse',
+    borderClass: 'pm-frame border-2 border-cyan-300 ring-4 ring-teal-950 shadow-[0_0_28px_rgba(34,211,238,0.9)] animate-pulse',
     iconType: 'theme-teknologi',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-cyan-950 via-cyan-600 to-teal-200', border: 'border-cyan-200', shadow: 'shadow-[0_0_18px_rgba(34,211,238,0.9)]', emoji: '💻', animate: 'animate-pulse' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('teknologi'),
@@ -227,7 +227,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Psikologi',
     description: 'Pendar intrik persepsi batin, dinamika emosi, dan kedalaman psikofisik manusia.',
     requirement: 'Terbuka setelah membeli kuis tema Psikologi.',
-    borderClass: 'border-2 border-fuchsia-300 ring-4 ring-purple-950 shadow-[0_0_26px_rgba(217,70,239,0.85)]',
+    borderClass: 'pm-frame border-2 border-fuchsia-300 ring-4 ring-purple-950 shadow-[0_0_26px_rgba(217,70,239,0.85)]',
     iconType: 'theme-psikologi',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-purple-950 via-fuchsia-600 to-pink-300', border: 'border-fuchsia-200', shadow: 'shadow-[0_0_16px_rgba(217,70,239,0.85)]', emoji: '🧠' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('psikologi'),
@@ -238,7 +238,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Bahasa',
     description: 'Koleksi glosarium etimologi kuno, sintaksis linguistik, dan aksara peradaban.',
     requirement: 'Terbuka setelah membeli kuis tema Bahasa.',
-    borderClass: 'border-2 border-teal-300 ring-4 ring-teal-950 shadow-[0_0_24px_rgba(20,184,166,0.85)]',
+    borderClass: 'pm-frame border-2 border-teal-300 ring-4 ring-teal-950 shadow-[0_0_24px_rgba(20,184,166,0.85)]',
     iconType: 'theme-bahasa',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-teal-950 via-teal-600 to-emerald-200', border: 'border-teal-200', shadow: 'shadow-[0_0_15px_rgba(20,184,166,0.85)]', emoji: '🗣️' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('bahasa'),
@@ -249,7 +249,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Sosial',
     description: 'Jalinan ikatan peradaban umat manusia, sosiologi, dan sejarah pergerakan dunia.',
     requirement: 'Terbuka setelah membeli kuis tema Sosial.',
-    borderClass: 'border-2 border-orange-300 ring-4 ring-orange-950 shadow-[0_0_25px_rgba(249,115,22,0.85)]',
+    borderClass: 'pm-frame border-2 border-orange-300 ring-4 ring-orange-950 shadow-[0_0_25px_rgba(249,115,22,0.85)]',
     iconType: 'theme-sosial',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-orange-950 via-orange-600 to-amber-200', border: 'border-orange-200', shadow: 'shadow-[0_0_16px_rgba(249,115,22,0.85)]', emoji: '👥' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('sosial'),
@@ -260,7 +260,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Fiksi',
     description: 'Gerbang narasi fajar fantasi, legenda semesta novel, dan karakter kisah epik.',
     requirement: 'Terbuka setelah membeli kuis tema Fiksi.',
-    borderClass: 'border-2 border-indigo-300 ring-4 ring-indigo-950 shadow-[0_0_28px_rgba(99,102,241,0.9)]',
+    borderClass: 'pm-frame border-2 border-indigo-300 ring-4 ring-indigo-950 shadow-[0_0_28px_rgba(99,102,241,0.9)]',
     iconType: 'theme-fiksi',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-indigo-950 via-indigo-600 to-purple-300', border: 'border-indigo-200', shadow: 'shadow-[0_0_18px_rgba(99,102,241,0.9)]', emoji: '📖', animate: 'animate-pulse' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('fiksi'),
@@ -271,7 +271,7 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Tema Lainnya',
     description: 'Khazanah trivia tak terduga, ensiklopedia serbaneka, dan wawasan pengetahuan unik.',
     requirement: 'Terbuka setelah membeli kuis tema Lainnya.',
-    borderClass: 'border-2 border-yellow-200 ring-4 ring-amber-950 shadow-[0_0_25px_rgba(234,179,8,0.85)]',
+    borderClass: 'pm-frame border-2 border-yellow-200 ring-4 ring-amber-950 shadow-[0_0_25px_rgba(234,179,8,0.85)]',
     iconType: 'theme-lainnya',
     ornamentStyle: { type: 'badge', bg: 'bg-gradient-to-tr from-amber-950 via-yellow-500 to-amber-100', border: 'border-yellow-200', shadow: 'shadow-[0_0_16px_rgba(234,179,8,0.85)]', emoji: '✨' },
     checkUnlocked: (col) => col.quiz.purchasedThemeIds.includes('lainnya'),
@@ -282,9 +282,9 @@ export const PROFILE_FRAMES: ProfileFrame[] = [
     badge: 'Quiz Editor Suite',
     description: 'Mahkota megah perancang kuis mandiri dengan kendali mutlak 12 tema, media, dan sistem skor.',
     requirement: 'Terbuka setelah membeli lisensi Quiz Editor (Rp 10.000).',
-    borderClass: 'border-3 border-red-400 ring-4 ring-[#FC1212] shadow-[0_0_35px_rgba(252,18,18,0.95)] animate-pulse',
+    borderClass: 'pm-frame border-3 border-red-400 ring-4 ring-[#fc1212] shadow-[0_0_35px_rgba(252,18,18,0.95)] animate-pulse',
     iconType: 'quiz-editor-crown',
-    ornamentStyle: { type: 'crown', bg: 'bg-gradient-to-r from-red-800 via-[#FC1212] to-amber-500', border: 'border-yellow-200', shadow: 'shadow-[0_0_24px_rgba(252,18,18,1)]', emoji: '👑', animate: 'animate-pulse' },
+    ornamentStyle: { type: 'crown', bg: 'bg-gradient-to-r from-red-800 via-[#fc1212] to-amber-500', border: 'border-yellow-200', shadow: 'shadow-[0_0_24px_rgba(252,18,18,1)]', emoji: '👑', animate: 'animate-pulse' },
     checkUnlocked: (col) => col.features.quizEditor,
   },
 ];
@@ -295,7 +295,7 @@ export interface FrameOrnamentProps {
   size: 'lg' | 'sm';
 }
 
-export const FrameOrnament: React.FC<FrameOrnamentProps> = ({ iconType: propIconType, frame: propFrame, size }) => {
+const FrameOrnamentInner: React.FC<FrameOrnamentProps> = ({ iconType: propIconType, frame: propFrame, size }) => {
   const isLg = size === 'lg';
   const frameObj = propFrame || PROFILE_FRAMES.find((f) => f.iconType === propIconType || f.id === propIconType) || null;
   const currentIcon = frameObj?.iconType || propIconType || 'none';
@@ -306,7 +306,7 @@ export const FrameOrnament: React.FC<FrameOrnamentProps> = ({ iconType: propIcon
     const orn = frameObj?.ornamentStyle;
     return (
       <div
-        className={`absolute ${isLg ? '-top-4 left-1/2 -translate-x-1/2 px-2.5 py-0.5' : '-top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2'} rounded-full ${orn?.bg || 'bg-gradient-to-r from-red-700 via-[#FC1212] to-amber-500'} border ${orn?.border || 'border-yellow-200'} flex items-center justify-center gap-1 ${orn?.shadow || 'shadow-[0_0_20px_rgba(252,18,18,1)]'} ${orn?.animate || 'animate-pulse'} z-10`}
+        className={`absolute ${isLg ? '-top-4 left-1/2 -translate-x-1/2 px-2.5 py-0.5' : '-top-2.5 left-1/2 -translate-x-1/2 px-1.5 py-0.2'} rounded-full ${orn?.bg || 'bg-gradient-to-r from-red-700 via-[#fc1212] to-amber-500'} border ${orn?.border || 'border-yellow-200'} flex items-center justify-center gap-1 ${orn?.shadow || 'shadow-[0_0_20px_rgba(252,18,18,1)]'} ${orn?.animate || 'animate-pulse'} z-10`}
         title={frameObj?.name || 'Mahkota Arsitek Kuis'}
       >
         <Crown className={`${isLg ? 'w-4 h-4' : 'w-2.5 h-2.5'} text-yellow-200 fill-yellow-200`} />
@@ -334,6 +334,14 @@ export const FrameOrnament: React.FC<FrameOrnamentProps> = ({ iconType: propIcon
     default: return null;
   }
 };
+
+/**
+ * Hiasan bingkai profil. Warnanya identitas bingkai, BUKAN bagian tema: dibungkus `pm-frame` supaya skala warna
+ * Tailwind kembali ke nilai aslinya (lihat src/index.css), apa pun tema pengguna. `contents` = tidak mengubah tata letak.
+ */
+export const FrameOrnament: React.FC<FrameOrnamentProps> = (props) => (
+  <span className="contents pm-frame"><FrameOrnamentInner {...props} /></span>
+);
 
 interface ProfileDashboardModalProps {
   isOpen: boolean;

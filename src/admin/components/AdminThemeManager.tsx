@@ -30,7 +30,7 @@ const explain = (e: unknown, fallback: string) => {
 const Dots: React.FC<{ p?: Palette }> = ({ p }) => (
   <div className="flex gap-1 mb-2 h-4 items-center">
     {p ? (
-      [p.surface, p.accent, p.accent2].map((c, i) => (
+      [p.bg, p.surface, p.text, p.accent, p.accent2].filter((c): c is string => !!c).map((c, i) => (
         <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
       ))
     ) : (
@@ -390,7 +390,7 @@ export const AdminThemeManager: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 border-t border-white/10 pt-3">
           <span>Tampilan konsol admin sekarang:</span>
-          {[consolePalette.surface, consolePalette.accent, consolePalette.accent2].map((c, i) => (
+          {[consolePalette.bg, consolePalette.surface, consolePalette.text, consolePalette.accent, consolePalette.accent2].filter((c): c is string => !!c).map((c, i) => (
             <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
           ))}
           <button

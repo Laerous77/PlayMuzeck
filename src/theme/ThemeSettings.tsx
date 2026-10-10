@@ -29,7 +29,7 @@ const Card: React.FC<CardProps> = ({ title, sub, palette, selected, inUse, onCli
   >
     <div className="flex gap-1 mb-2 h-4 items-center">
       {palette ? (
-        [palette.bg, palette.surface, palette.accent, palette.accent2]
+        [palette.bg, palette.surface, palette.text, palette.accent, palette.accent2]
           .filter((c): c is string => !!c)
           .map((c, i) => (
             <span key={i} className="w-4 h-4 rounded-full border border-white/20" style={{ background: c }} />
