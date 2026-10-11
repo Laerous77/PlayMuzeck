@@ -19,7 +19,7 @@ export const ARENA_THEMES: readonly ArenaTheme[] = [
   { id: 'alam', title: 'Alam & Lingkungan', description: 'Geologi, cuaca, hewan, tumbuhan, dan fenomena bumi.' },
   { id: 'bahasa', title: 'Bahasa & Linguistik', description: 'Tata bahasa, asal-usul aksara, dan ragam bahasa dunia.' },
   { id: 'fiksi', title: 'Fiksi & Imajinasi', description: 'Novel, dongeng, dan tokoh-tokoh dunia khayal.' },
-  { id: 'kuliner', title: 'Kuliner Dunia', description: 'Makanan, rempah, dan minuman khas Nusantara dan dunia.' },
+  { id: 'lainnya', title: 'Lainnya', description: 'Topik pengetahuan umum dan kategori minat khusus lainnya.' },
   { id: 'matematika', title: 'Matematika Esensial', description: 'Hitungan, geometri, dan logika.' },
   { id: 'musikdunia', title: 'Musik Dunia', description: 'Tokoh, genre, dan instrumen musik dari berbagai benua.' },
   { id: 'olahraga', title: 'Olahraga Dunia', description: 'Aturan, sejarah, dan lambang olahraga dunia.' },
