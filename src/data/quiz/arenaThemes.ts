@@ -16,18 +16,18 @@ export interface ArenaTheme {
 }
 
 export const ARENA_THEMES: readonly ArenaTheme[] = [
-  { id: 'alam', title: 'Alam & Lingkungan', description: 'Geologi, cuaca, hewan, tumbuhan, dan fenomena bumi.' },
-  { id: 'bahasa', title: 'Bahasa & Linguistik', description: 'Tata bahasa, asal-usul aksara, dan ragam bahasa dunia.' },
-  { id: 'fiksi', title: 'Fiksi & Imajinasi', description: 'Novel, dongeng, dan tokoh-tokoh dunia khayal.' },
+  { id: 'alam', title: 'Alam', description: 'Ekosistem, flora, fauna, geografi, iklim, dan konservasi bumi.' },
+  { id: 'bahasa', title: 'Bahasa', description: 'Linguistik, kosakata, tata bahasa, etimologi, dan aksara dunia.' },
+  { id: 'fiksi', title: 'Fiksi', description: 'Dunia fantasi, mitologi, komik, film, karakter novel, dan cerita rekaan.' },
   { id: 'lainnya', title: 'Lainnya', description: 'Topik pengetahuan umum dan kategori minat khusus lainnya.' },
-  { id: 'matematika', title: 'Matematika Esensial', description: 'Hitungan, geometri, dan logika.' },
-  { id: 'musikdunia', title: 'Musik Dunia', description: 'Tokoh, genre, dan instrumen musik dari berbagai benua.' },
-  { id: 'olahraga', title: 'Olahraga Dunia', description: 'Aturan, sejarah, dan lambang olahraga dunia.' },
-  { id: 'psikologi', title: 'Psikologi', description: 'Perilaku, pikiran, kepribadian, dan eksperimen klasik.' },
-  { id: 'seharihari', title: 'Hidup Sehari-hari', description: 'Kesehatan, keuangan, dan urusan rumah tangga.' },
-  { id: 'seni', title: 'Seni & Budaya', description: 'Lukisan, musik, tari, dan warisan budaya dunia.' },
-  { id: 'sosial', title: 'Masyarakat & Organisasi Dunia', description: 'Struktur sosial, organisasi internasional, dan isu kemasyarakatan.' },
-  { id: 'teknologi', title: 'Teknologi Digital', description: 'Komputer, internet, AI, dan penemuan teknologi dunia.' },
+  { id: 'matematika', title: 'Matematika', description: 'Aritmetika, logika, aljabar, geometri, kalkulus, dan probabilitas.' },
+  { id: 'musikdunia', title: 'Musik', description: 'Teori musik, instrumen, genre, musisi legendaris, dan akustik.' },
+  { id: 'olahraga', title: 'Olahraga', description: 'Aktivitas fisik, atletik, kejuaraan, dan cabang olahraga dunia.' },
+  { id: 'psikologi', title: 'Psikologi', description: 'Perilaku kognitif, emosi, kepribadian, persepsi, dan interaksi sosial.' },
+  { id: 'seharihari', title: 'Kehidupan Sehari hari', description: 'Kebiasaan hidup, rutinitas, finansial rumah tangga, dan gaya hidup.' },
+  { id: 'seni', title: 'Seni', description: 'Seni rupa, arsitektur, desain visual, sastra, teater, dan budaya.' },
+  { id: 'sosial', title: 'Sosial', description: 'Sosiologi, hubungan kemasyarakatan, antropologi, dan sejarah dunia.' },
+  { id: 'teknologi', title: 'Teknologi', description: 'Pemrograman, kecerdasan buatan, perangkat keras, dan inovasi web.' },
 ] as const;
 
 export const ARENA_THEME_IDS: readonly string[] = ARENA_THEMES.map((t) => t.id);
