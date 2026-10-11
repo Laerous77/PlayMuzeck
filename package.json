@@ -11,6 +11,7 @@
     "start": "tsx server/index.ts",
     "build": "node scripts/generate-legal-pages.mjs && vite build && node scripts/generate-seo-pages.mjs",
     "preview": "vite preview",
+    "build:standalone": "node scripts/build-standalone.mjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:dsp": "tsx tests/audioExtraDsp.test.ts && tsx tests/audioLimits.test.ts && tsx tests/audioMetadata.test.ts",

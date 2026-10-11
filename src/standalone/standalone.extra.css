@@ -1,0 +1,43 @@
+/* src/standalone/standalone.extra.css
+   Tambahan kecil untuk Pusat Kuis + Profil Pengguna.
+   Dimuat SETELAH standalone.css dan memakai variabel tema yang sama, sehingga standalone.css tetap utuh. */
+
+:focus-visible { outline: 2px solid var(--t-accent-line); outline-offset: 2px; border-radius: 6px; }
+.inp:focus-visible, .rgb-in:focus-visible { outline: none; }
+body.modal-open { overflow: hidden; }
+
+.hdr-in { max-width: 1280px; margin: 0 auto; }
+.seg-2 { grid-template-columns: 1fr 1fr; }
+.stat-v { font-size: 24px; font-weight: 900; color: var(--color-white); line-height: 1.15; }
+.q-text { font-size: 18px; font-weight: 800; color: var(--color-white); line-height: 1.45; word-break: break-word; }
+.q-opt > span:first-child { min-width: 0; }
+.q-opt .t14 { word-break: break-word; }
+.break { word-break: break-word; }
+
+/* Bilah XP & meter */
+.xp-bar { height: 8px; border-radius: 999px; overflow: hidden; background: var(--k60); border: 1px solid var(--w8); }
+.xp-bar > i { display: block; height: 100%; background: linear-gradient(90deg, var(--t-accent), var(--t-accent2)); transition: width .3s; }
+.meter { height: 6px; border-radius: 999px; overflow: hidden; background: var(--k60); }
+.meter > i { display: block; height: 100%; background: var(--t-accent2); }
+
+/* Grafik aktivitas 14 hari */
+.act { display: flex; align-items: flex-end; gap: 4px; height: 84px; }
+.act > div { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.act i { display: block; width: 100%; min-height: 3px; border-radius: 6px 6px 2px 2px; background: var(--w10); }
+.act i.on { background: var(--t-accent2); }
+.act-lbl { display: flex; gap: 4px; margin-top: 4px; }
+.act-lbl span { flex: 1; text-align: center; font-size: 9px; color: var(--color-gray-500); }
+
+/* Hasil kuis */
+.result-hero { text-align: center; padding: 8px 0 4px; }
+.result-score { font-size: 44px; font-weight: 900; color: var(--color-white); line-height: 1.1; }
+
+/* Ruang untuk pita bingkai (pill) di atas avatar besar */
+.avatar-slot { padding-top: 14px; }
+
+@media (max-width: 420px) {
+  .q-text { font-size: 16px; }
+  .result-score { font-size: 36px; }
+}
+
+input[type="radio"] { accent-color: var(--t-accent2); width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }

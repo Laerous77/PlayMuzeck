@@ -34,6 +34,7 @@ import { STARTER_DECKS, BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '.
 import { loadCustomQuizJson } from '../../services/quizJsonStore';
 import { usePurchasedDeckIds } from '../../services/quizPurchases';
 import { storage } from '../../services/storage';
+import { fetchUserCollectionsFromDB, EMPTY_COLLECTIONS } from '../../services/userCollections';
 
 interface QuizIndexProps {
   decks: Deck[];
@@ -252,11 +253,20 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     const logoDataUri = await fetchLogoAsDataUri();
     const currentOrigin = window.location.origin;
     const session = storage.getUserSession();
+
+    // Data akun dari database (bingkai terbuka, tema dibeli, lisensi editor) supaya ikut masuk ke berkas.
+    let col = EMPTY_COLLECTIONS;
+    try {
+      col = await fetchUserCollectionsFromDB(session?.email);
+    } catch {
+      col = EMPTY_COLLECTIONS;
+    }
+    const hasEditor = hasQuizEditor || col.features.quizEditor;
     
-    const htmlString = generateStandaloneQuizHtml(
+    const htmlString = await generateStandaloneQuizHtml(
       accessibleDecks,
       userNickname,
-      hasQuizEditor,
+      hasEditor,
       currentOrigin,
       currentOrigin,
       logoDataUri,
@@ -264,10 +274,12 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
         email: session?.email,
         avatarUrl: (session as any)?.avatarUrl || userAvatarUrl,
         frameId: (session as any)?.frameId || userFrameId || 'none',
-        bio: (session as any)?.bio || 'Heyyo',
-        greeting: (session as any)?.greeting || `Magandang umaga ${userNickname || 'Muhammad Alfathi'}!`,
+        bio: (session as any)?.bio || '',
+        greeting: (session as any)?.greeting || `Magandang umaga ${userNickname || 'Pemain'}!`,
         unlockedDeckIds: allUnlockedIds,
-        hasEditor: hasQuizEditor,
+        unlockedFrameIds: col.frames.unlockedIds,
+        purchasedThemeIds: col.quiz.purchasedThemeIds,
+        hasEditor,
       }
     );
     const blob = new Blob([htmlString], { type: 'text/html;charset=utf-8' });
@@ -281,7 +293,7 @@ export const QuizIndex: React.FC<QuizIndexProps> = ({
     URL.revokeObjectURL(url);
 
     if (onSuccessToast) {
-      onSuccessToast('Berkas aplikasi mandiri PlayMuzeck_Quiz.html (>= 2 MB) berhasil diunduh!');
+      onSuccessToast('Berkas aplikasi mandiri PlayMuzeck_Quiz.html berhasil diunduh!');
     }
   };
 
