@@ -9,6 +9,7 @@ import {
   sanitizeSharedSettings,
   MAX_QUESTIONS_PER_SHARE,
   checkMultiplayerEligibility,
+  recordMultiplayerGame,
 } from '../server/quizCommunityRoutes.ts';
 import { verifyBuiltinQuestions } from '../server/builtinQuizVerify.ts';
 import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
@@ -99,5 +100,35 @@ ok('kuis Komunitas lolos aturan murni (status "disetujui" dicek ke database saat
 ok('kuis pribadi (bukan komunitas) tidak dihitung', (() => { const r = elig({ deckId: 'deck-custom-123' }); return !r.ok && r.reason === 'not_eligible'; })());
 ok('id kuis komunitas yang bentuknya salah tidak dihitung', (() => { const r = elig({ deckId: 'deck-custom-shared-bukan-id' }); return !r.ok && r.reason === 'not_eligible'; })());
 ok('soal dipalsukan pada deck bawaan tidak dihitung', (() => { const r = elig({ questions: [{ question: 'x?', options: ['a', 'b'], correctIndex: 0 }, ...real.slice(1)] }); return !r.ok && r.reason === 'not_eligible'; })());
+
+// ── Permainan campuran Arena Global (id "arena-mix-<tingkat>") ──
+for (const lvl of ['easy', 'normal', 'hard', 'extreme']) {
+  ok(`permainan campuran ${lvl} lolos aturan murni`, elig({ deckId: `arena-mix-${lvl}` }).ok === true);
+}
+ok('id campuran dengan tingkat ngawur ditolak', (() => { const r = elig({ deckId: 'arena-mix-gila' }); return !r.ok && r.reason === 'not_eligible'; })());
+ok('permainan campuran < 5 soal tidak dihitung', (() => { const r = elig({ deckId: 'arena-mix-hard', questions: real.slice(0, 4) }); return !r.ok && r.reason === 'too_short'; })());
+ok('permainan campuran dengan 1 akun tidak dihitung', (() => { const r = elig({ deckId: 'arena-mix-hard', accountCount: 1 }); return !r.ok && r.reason === 'few_players'; })());
+{
+  const inserts: any[][] = [];
+  const users: Record<string, string> = { u1: 'ani@contoh.id', u2: 'budi@contoh.id', u3: 'pembuat@contoh.id' };
+  const db: any = {
+    async query(sql: string, params: any[] = []) {
+      if (/INSERT INTO quiz_leaderboard_scores/.test(sql)) { inserts.push(params); return { rows: [] }; }
+      if (/FROM users WHERE id = ANY/.test(sql)) return { rows: (params[0] as string[]).filter((id) => users[id]).map((id) => ({ id, email: users[id] })) };
+      return { rows: [] };
+    },
+  };
+  const base = { deckId: 'arena-mix-hard', deckTitle: 'x', questions: real, players: [{ userId: 'u1', correct: real.length }, { userId: 'u2', correct: 2 }] };
+  const out = await recordMultiplayerGame(db, base as any);
+  ok('permainan campuran dicatat per tingkat (deck_key arena-mix:hard)', out.u1?.counted === true && out.u2?.counted === true && inserts.length === 2 && inserts.every((p) => p[1] === 'arena-mix:hard' && p[2] === 'Arena Global Sulit'));
+  ok('poin peringkat tetap 10 per benar (+20% bila semua benar)', out.u1.points === computePoints(real.length, real.length) && out.u2.points === 20);
+  inserts.length = 0;
+  const out2 = await recordMultiplayerGame(db, { ...base, players: [...base.players, { userId: 'u3', correct: 3 }], ownerEmails: ['Pembuat@Contoh.ID'] } as any);
+  ok('pembuat soal komunitas yang ikut tidak mendapat poin', out2.u3?.counted === false && out2.u3?.reason === 'own_quiz' && out2.u1?.counted === true);
+  ok('hanya pemain lain yang tercatat di database', inserts.length === 2);
+  inserts.length = 0;
+  const out3 = await recordMultiplayerGame(db, { ...base, players: [{ userId: 'u1', correct: 5 }, { userId: 'u3', correct: 5 }], ownerEmails: ['pembuat@contoh.id'] } as any);
+  ok('bila pemain tersisa kurang dari 2 akun, tidak ada yang dicatat', out3.u1?.counted === false && out3.u1?.reason === 'few_players' && inserts.length === 0);
+}
 
 if (bad) process.exitCode = 1; else console.log('\nSemua tes Komunitas Kuis & papan peringkat multiplayer lulus.');

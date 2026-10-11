@@ -1,6 +1,7 @@
 // Tes Arena Global: siklus lobi -> soal -> jeda -> podium, kunci jawaban tidak bocor, pencatatan skor oleh server,
-// dan sumber kuis HANYA kuis Komunitas yang disetujui + deck preset Arena buatan admin (deck bawaan gratis/berbayar tidak pernah dipakai).
-// Tes khusus deck preset (12 tema x 20 soal, rute admin, pemilih campuran) ada di tests/arenaPreset.test.ts.
+// kanal terpisah per tingkat kesulitan, pengurangan skor di Sulit/Ekstrem, dan sumber soal HANYA soal resmi Arena (deck preset admin)
+// + kuis Komunitas yang disetujui (deck bawaan gratis/berbayar tidak pernah dipakai).
+// Tes aturan tingkat & penyusun soal ada di tests/arenaDifficulty.test.ts; tes deck preset (12 tema x 20 soal, rute admin) di tests/arenaPreset.test.ts.
 // Memakai io/socket palsu dan jam terkendali, jadi tidak butuh jaringan. Jalankan: npx tsx tests/globalArena.test.ts
 import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
 
@@ -26,19 +27,25 @@ const flush = () => new Promise<void>((r) => setImmediate(r));
 
 const arena = await import('../server/globalArena.ts');
 
-// ── Kuis Komunitas palsu (isi soal dipinjam dari data bawaan hanya sebagai bahan uji) ──
+// ── Kumpulan soal palsu (isi soal dipinjam dari data bawaan hanya sebagai bahan uji) ──
+const deckQs = (from: number) => (BUILTIN_DECKS as any[])[from].questions as any[];
 const communityDeck = (suffix: string, from: number) => ({
   deckId: `deck-custom-shared-shq_${suffix}`,
   title: `Kuis Komunitas ${suffix}`,
   source: 'community' as const,
   ownerName: 'Pembuat Uji',
-  questions: (BUILTIN_DECKS as any[])[from].questions,
+  questions: deckQs(from),
 });
-let pickCalls = 0;
-let communityPool: any[] = [communityDeck('aaaaaaaaaaaa', 3), communityDeck('bbbbbbbbbbbb', 4)];
-const pickCommunityDeck = async () => {
-  pickCalls++;
-  return communityPool.length ? communityPool[pickCalls % communityPool.length] : null;
+// Soal resmi: deck 3-5 (90 soal). Soal komunitas: deck 6-8 (90 soal) milik pembuat@contoh.id.
+const poolsNow = {
+  official: [3, 4, 5].flatMap(deckQs),
+  community: [6, 7, 8].flatMap((i) => deckQs(i).map((q) => ({ ...q, ownerEmail: 'pembuat@contoh.id' }))),
+};
+let poolCalls = 0;
+let pools: { official: any[]; community: any[] } = poolsNow;
+const loadQuestionPools = async () => {
+  poolCalls++;
+  return pools;
 };
 
 // ── io/socket palsu ──
@@ -105,18 +112,14 @@ ok('deck komunitas sah untuk arena', arena.isArenaEligibleDeck(deck));
 ok('deck bawaan/starter DITOLAK arena (gratis & berbayar)', (BUILTIN_DECKS as any[]).every((d) => !arena.isArenaEligibleDeck({ deckId: d.id, title: d.title, source: 'builtin', questions: d.questions } as any)));
 ok('deck bawaan ditolak walau berpura-pura source community', (BUILTIN_DECKS as any[]).every((d) => !arena.isArenaEligibleDeck({ deckId: d.id, title: d.title, source: 'community', questions: d.questions } as any)));
 ok('deck komunitas dengan soal terlalu sedikit ditolak', !arena.isArenaEligibleDeck({ ...deck, questions: deck.questions.slice(0, arena.ARENA_MIN_QUESTIONS - 1) }));
-const qs = arena.buildMatchQuestions(deck);
-ok('soal permainan maksimal ARENA_QUESTIONS', qs.length === Math.min(arena.ARENA_QUESTIONS, deck.questions.length));
-ok('pengacakan pilihan menjaga kunci jawaban', qs.every((q) => {
-  const src = deck.questions.find((d) => d.question === q.question)!;
-  return src.options[src.correctIndex] === q.options[q.correctIndex];
-}));
+ok('penalti jawaban salah: 0 / 0 / Sulit / 1,5x Sulit', arena.applyWrongAnswer(50, 0).score === 50 && arena.applyWrongAnswer(50, 20).score === 30 && arena.applyWrongAnswer(50, 30).delta === -30);
+ok('skor tidak pernah turun di bawah 0', arena.applyWrongAnswer(10, 30).score === 0 && arena.applyWrongAnswer(10, 30).delta === -10 && arena.applyWrongAnswer(0, 30).delta === 0);
 
 // ── Simulasi permainan ──
 const io = new FakeIo();
 const finished: any[] = [];
 arena.attachGlobalArena(io as any, {
-  pickCommunityDeck,
+  loadQuestionPools,
   onFinished: async (game) => {
     finished.push(game);
     return Object.fromEntries(game.players.map((p) => [p.userId, { counted: true, points: p.correct * 10 }]));
@@ -126,7 +129,7 @@ arena.attachGlobalArena(io as any, {
 const s1 = io.connect('user-1');
 const s2 = io.connect('user-2');
 const guest = io.connect();
-const ident = (n: string) => ({ clientId: `client-${n}-0000000000`, name: n, avatarUrl: 'javascript:alert(1)', frameId: 'none' });
+const ident = (n: string, difficulty: string = 'easy') => ({ clientId: `client-${n}-0000000000`, name: n, avatarUrl: 'javascript:alert(1)', frameId: 'none', difficulty });
 
 s1.fire('arena:join', ident('Ani'));
 s2.fire('arena:join', ident('Budi'));
@@ -134,10 +137,14 @@ await flush();
 
 const joined1 = s1.last('arena:joined');
 ok('pemain masuk tanpa kode ruangan', Boolean(joined1) && !('code' in joined1.state));
-ok('keadaan awal: lobi dengan kuis terpilih server', joined1.state.phase === 'lobby');
+ok('keadaan awal: lobi dengan permainan disusun server', joined1.state.phase === 'lobby');
 await flush();
-ok('server memilih kuis untuk lobi berikutnya', Boolean(s1.last('arena:update')?.deckTitle));
-ok('kuis terpilih berasal dari Komunitas', s1.last('arena:update').deckSource === 'community' && String(s1.last('arena:update').deckTitle).startsWith('Kuis Komunitas'));
+const lobbyState = s1.last('arena:update');
+ok('server menyusun permainan untuk lobi berikutnya', Boolean(lobbyState?.deckTitle) && Boolean(lobbyState.matchInfo));
+ok('soal permainan campuran (resmi + komunitas), bukan satu kuis utuh', lobbyState.deckSource === 'mixed' && lobbyState.deckTitle === 'Arena Global · Mudah');
+ok('kanal bertingkat Mudah: aturan sesuai tingkat', lobbyState.difficulty === 'easy' && lobbyState.difficultyLabel === 'Mudah' && lobbyState.negativeScoring === false && lobbyState.matchInfo.penalty === 0 && lobbyState.channel.startsWith('Mudah'));
+ok('jumlah soal & waktu di dalam rentang Mudah', lobbyState.matchInfo.questions >= 10 && lobbyState.matchInfo.questions <= 20 && lobbyState.matchInfo.secPerQuestion >= 30 && lobbyState.matchInfo.secPerQuestion <= 60);
+ok('ringkasan permainan tidak memuat soal atau kunci', !('questions' in lobbyState.matchInfo && Array.isArray(lobbyState.matchInfo.questions)) && !JSON.stringify(lobbyState).includes('correctIndex'));
 ok('lobi tidak menunggu kuis bila kuis tersedia', s1.last('arena:update').waitingForQuiz === false);
 ok('avatar berbahaya dibuang', s1.last('arena:update').players.every((p: any) => p.avatarUrl === ''));
 ok('dua pemain berada di kanal yang sama', s1.last('arena:update').players.length === 2);
@@ -151,8 +158,12 @@ ok('tab lama diberi tahu sudah digantikan', s1.all('arena:replaced').length === 
 // Lobi -> permainan dimulai
 advance(arena.ARENA_LOBBY_SEC * 1000 + 1);
 const started = s1b.last('arena:started');
-ok('permainan dimulai otomatis setelah hitung mundur', Boolean(started) && started.questions.length === qs.length);
+const SECS = started.matchInfo.secPerQuestion;
+ok('permainan dimulai otomatis setelah hitung mundur', Boolean(started) && started.questions.length === lobbyState.matchInfo.questions);
 ok('soal yang dikirim TIDAK memuat kunci/penjelasan', started.questions.every((q: any) => !('correctIndex' in q) && !('explanation' in q)));
+ok('email pembuat soal komunitas tidak bocor ke klien', !JSON.stringify(started).includes('pembuat@contoh.id') && started.questions.every((q: any) => !('ownerEmail' in q)));
+ok('tiap soal diberi asal (resmi/komunitas) dan waktu sesuai tingkat', started.questions.every((q: any) => (q.origin === 'official' || q.origin === 'community') && q.timeLimitSec === SECS));
+ok('tidak ada soal kembar dalam satu permainan', new Set(started.questions.map((q: any) => q.question)).size === started.questions.length);
 ok('pemain lobi ikut bermain', started.participating === true);
 
 // Penonton yang masuk saat permainan berjalan
@@ -181,7 +192,7 @@ for (let i = 0; i < total; i++) {
     ok('menjawab dua kali diabaikan', s1b.all('arena:answerResult').length === 1);
   }
   s2.fire('arena:answer', { optionIndex: wrongIdxOf(q) });
-  advance(arena.ARENA_ROUND_SEC * 1000 + 1); // waktu soal habis -> jeda
+  advance(SECS * 1000 + 1); // waktu soal habis -> jeda
   ok(`soal ${i + 1}: jeda menampilkan jawaban benar`, s1b.last('arena:roundEnded')?.currentQIndex === i);
   advance(arena.ARENA_GAP_SEC * 1000 + 1); // jeda habis -> soal berikut / podium
 }
@@ -195,7 +206,8 @@ ok('podium membuka seluruh kunci jawaban', Object.keys(ended.revealed).length ==
 await flush();
 ok('skor dicatat SEKALI oleh server', finished.length === 1);
 const g = finished[0];
-ok('catatan memuat id kuis Komunitas (bukan deck bawaan)', /^deck-custom-shared-shq_[0-9a-f]{12}$/.test(g.deckId) && !BUILTIN_DECKS.some((d: any) => d.id === g.deckId));
+ok('catatan memuat id campuran per tingkat (bukan deck bawaan)', g.deckId === 'arena-mix-easy' && g.difficulty === 'easy' && !BUILTIN_DECKS.some((d: any) => d.id === g.deckId));
+ok('pembuat soal komunitas yang ikut dilaporkan ke pencatat skor', JSON.stringify(g.ownerEmails) === JSON.stringify(g.questions.some((q: any) => q.origin === 'community') ? ['pembuat@contoh.id'] : []));
 ok('hanya akun login peserta yang dicatat (tamu penonton tidak)', g.players.length === 2 && g.players.every((p: any) => p.userId.startsWith('user-')));
 ok('jawaban benar dihitung server', g.players.find((p: any) => p.userId === 'user-1').correct === total && g.players.find((p: any) => p.userId === 'user-2').correct === 0);
 ok('hasil peringkat dikirim ke pemain di podium', s1b.last('arena:leaderboard')?.points === total * 10);
@@ -207,6 +219,7 @@ ok('setelah podium kembali ke lobi dengan kuis baru', s1b.last('arena:update').p
 ok('penonton kini ikut permainan berikutnya', s1b.last('arena:update').players.length === 3);
 advance(arena.ARENA_LOBBY_SEC * 1000 + 1);
 ok('permainan berikutnya berjalan otomatis', s1b.last('arena:started') !== started && guest.last('arena:started')?.participating === true);
+const SECS2 = s1b.last('arena:started').matchInfo.secPerQuestion;
 
 // Keluar di tengah permainan = tidak dicatat
 questions = s1b.last('arena:started').questions;
@@ -214,7 +227,7 @@ s2.fire('arena:leave');
 ok('keluar mengirim arena:left', s2.all('arena:left').length === 1);
 for (let i = 0; i < questions.length; i++) {
   s1b.fire('arena:answer', { optionIndex: correctIdxOf(questions[i]) });
-  advance(arena.ARENA_ROUND_SEC * 1000 + 1);
+  advance(SECS2 * 1000 + 1);
   advance(arena.ARENA_GAP_SEC * 1000 + 1);
 }
 await flush();

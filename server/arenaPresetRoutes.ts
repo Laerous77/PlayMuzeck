@@ -8,13 +8,15 @@
 //   (kunci jawaban tidak dikirim ke klien oleh arena).
 // - Sebuah deck hanya ikut rotasi arena bila `enabled` = true DAN berisi tepat 20 soal valid. Draf (kurang dari 20 soal)
 //   boleh disimpan, tetapi tidak bisa diaktifkan.
-// - pickArenaDeck() menggabungkan kuis Komunitas yang disetujui + deck preset aktif: undian seragam atas seluruh kandidat.
+// - listActivePresetDecks() memberi soal resmi Arena Global: server/arenaQuestionPools.ts mencampurnya dengan soal kuis Komunitas
+//   yang disetujui, lalu server/arenaMatch.ts menyusun permainan per tingkat kesulitan. (pickArenaDeck di bawah masih ada untuk
+//   pemilihan satu deck utuh, tetapi tidak lagi dipakai Arena Global.)
 //
 // Dipasang di server/index.ts:
-//   import { createArenaPresetRouter, ensureArenaPresetSchema, pickArenaDeck } from './arenaPresetRoutes';
+//   import { createArenaPresetRouter, ensureArenaPresetSchema } from './arenaPresetRoutes';
 //   .then(() => ensureArenaPresetSchema(pool))
 //   app.use(createArenaPresetRouter({ db: pool, requireAdmin }));
-//   pickCommunityDeck: () => pickArenaDeck(pool, () => pickApprovedCommunityDeck(pool))
+//   loadQuestionPools: createQuestionPoolLoader(pool)   // server/arenaQuestionPools.ts
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import type { Pool } from 'pg';
 import { randomInt } from 'crypto';

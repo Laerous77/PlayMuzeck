@@ -12,7 +12,7 @@
 //   Mengubah isi kuis yang sudah disetujui = diperiksa ulang. Pemain bisa melaporkan kuis; 3 laporan = ditinjau ulang admin.
 //
 // Dipasang di server/index.ts:
-//   import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame, pickApprovedCommunityDeck } from './quizCommunityRoutes';
+//   import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame } from './quizCommunityRoutes';
 //   .then(() => ensureQuizCommunitySchema(pool))
 //   app.use(createQuizCommunityRouter({ db: pool, requireUser, requireAdmin, resolveEmail: softEmail }));
 //   startQuizCommunitySweeper(pool);
@@ -42,6 +42,7 @@ import {
 import { notifyUser } from './notifications';
 import type { ArenaDeck } from './globalArena';
 import { parsePresetDeckId } from '../src/data/quiz/arenaThemes';
+import { ARENA_DIFFICULTIES, parseMixDeckId } from '../src/data/quiz/arenaDifficulty';
 import { ensureArenaPresetSchema } from './arenaPresetRoutes';
 
 type Db = Pick<Pool, 'query'>;
@@ -241,12 +242,15 @@ export function sanitizeSharedSettings(raw: any): { penaltyPercent: number; scor
 /* ───────────────────────── Skor Arena Global ───────────────────────── */
 
 export interface FinishedMultiplayerGame {
-  /** Id deck bawaan, "deck-custom-shared-shq_xxx" untuk kuis komunitas, atau "arena-preset-<tema>" untuk deck preset Arena. */
+  /** Id deck bawaan, "deck-custom-shared-shq_xxx" untuk kuis komunitas, "arena-preset-<tema>" untuk deck preset Arena,
+   *  atau "arena-mix-<tingkat>" untuk permainan Arena Global yang soalnya dicampur (soal resmi + komunitas). */
   deckId: string;
   /** Soal yang dimainkan (dipilih server; bawaan diverifikasi ulang terhadap data server). */
   questions: unknown[];
   /** Peserta yang masuk akun, dengan jumlah jawaban benar yang DIHITUNG SERVER. */
   players: { userId: string; correct: number }[];
+  /** Email pembuat soal komunitas yang ikut di permainan campuran: akun mereka tidak mendapat poin (tahu jawabannya). */
+  ownerEmails?: string[];
 }
 
 export interface ScoreOutcome {
@@ -269,14 +273,16 @@ export function checkMultiplayerEligibility(g: {
   const builtinKnown = isBuiltinDeckKnown(g.deckId);
   const sharedId = parseSharedDeckId(g.deckId);
   const presetTheme = parsePresetDeckId(g.deckId);
-  if (presetTheme) {
+  if (parseMixDeckId(g.deckId)) {
+    // Permainan Arena Global campuran: soal disusun server dari soal resmi + soal komunitas yang disetujui (server/arenaMatch.ts).
+  } else if (presetTheme) {
     // Deck preset Arena (12 tema x 20 soal, diatur admin): soal dipilih server sendiri; keberadaannya dicek ke database di recordMultiplayerGame.
   } else if (builtinKnown) {
     if (!verifyBuiltinQuestions(g.deckId, g.questions)) {
       return { ok: false, reason: 'not_eligible', message: 'Soal permainan tidak cocok dengan deck bawaan, jadi skor tidak dihitung.' };
     }
   } else if (!sharedId) {
-    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan, starter, deck preset Arena, dan kuis Komunitas yang sudah disetujui yang masuk papan peringkat.' };
+    return { ok: false, reason: 'not_eligible', message: 'Hanya deck bawaan, starter, deck preset Arena, permainan campuran Arena Global, dan kuis Komunitas yang sudah disetujui yang masuk papan peringkat.' };
   }
   if (g.accountCount < MIN_MULTIPLAYER_ACCOUNTS) {
     return { ok: false, reason: 'few_players', message: `Skor dicatat bila minimal ${MIN_MULTIPLAYER_ACCOUNTS} pemain yang masuk akun ikut bermain.` };
@@ -316,9 +322,16 @@ export async function recordMultiplayerGame(db: Db, game: FinishedMultiplayerGam
   let deckKey = game.deckId;
   let title = builtinDeckTitle(game.deckId);
   let ownerEmail = '';
+  /** Pembuat soal yang ikut dimainkan (permainan campuran) tidak mendapat poin. */
+  const ownerEmails = new Set<string>((game.ownerEmails ?? []).map((e) => String(e).toLowerCase()));
   const sharedId = parseSharedDeckId(game.deckId);
   const presetTheme = parsePresetDeckId(game.deckId);
-  if (presetTheme) {
+  const mixLevel = parseMixDeckId(game.deckId);
+  if (mixLevel) {
+    // Soal dipilih server sendiri dan permainan campuran tidak terikat satu kuis, jadi tidak ada yang perlu dicek ke database.
+    deckKey = `arena-mix:${mixLevel}`;
+    title = `Arena Global ${ARENA_DIFFICULTIES[mixLevel].label}`;
+  } else if (presetTheme) {
     await ensureArenaPresetSchema(db);
     const { rows } = await db.query(`SELECT title, enabled FROM arena_preset_decks WHERE theme_id = $1`, [presetTheme]);
     if (!rows.length || rows[0].enabled !== true) {
@@ -345,8 +358,8 @@ export async function recordMultiplayerGame(db: Db, game: FinishedMultiplayerGam
     const email = emailOf.get(userId);
     if (!email) {
       out[userId] = { counted: false, reason: 'no_account', message: 'Akun tidak ditemukan.' };
-    } else if (ownerEmail && email.toLowerCase() === ownerEmail) {
-      out[userId] = { counted: false, reason: 'own_quiz', message: 'Kuis buatan sendiri tidak dihitung ke papan peringkat.' };
+    } else if ((ownerEmail && email.toLowerCase() === ownerEmail) || ownerEmails.has(email.toLowerCase())) {
+      out[userId] = { counted: false, reason: 'own_quiz', message: 'Kuis atau soal buatan sendiri tidak dihitung ke papan peringkat.' };
     } else {
       scorable.push([userId, rawCorrect]);
     }

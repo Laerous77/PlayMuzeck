@@ -1,4 +1,5 @@
-// Tes: Arena Global tidak pernah memakai deck bawaan gratis/berbayar. Tanpa kuis sama sekali (Komunitas kosong dan tidak ada
+// Tes: Arena Global hanya memakai soal dari kumpulan yang diberikan pemuat server (soal resmi Arena + soal Komunitas yang disetujui),
+// tidak pernah deck bawaan gratis/berbayar, dan hanya soal yang layak. Tanpa stok soal yang cukup (Komunitas kosong dan tidak ada
 // deck preset aktif), lobi menunggu. Memakai io/socket palsu dan jam terkendali. Jalankan: npx tsx tests/globalArenaCommunityOnly.test.ts
 import { BUILTIN_DECKS } from '../src/data/quiz/index.ts';
 
@@ -72,14 +73,8 @@ class FakeIo {
 
 // Modul dimuat ulang per skenario supaya daftar kanal (state modul) tidak tercampur.
 const fresh = (tag: string) => import(`../server/globalArena.ts?skenario=${tag}`) as Promise<typeof import('../server/globalArena')>;
-const ident = (n: string) => ({ clientId: `client-${n}-0000000000`, name: n, avatarUrl: '', frameId: 'none' });
-const communityDeck = (suffix: string, from: number) => ({
-  deckId: `deck-custom-shared-shq_${suffix}`,
-  title: `Kuis Komunitas ${suffix}`,
-  source: 'community' as const,
-  ownerName: 'Pembuat Uji',
-  questions: (BUILTIN_DECKS as any[])[from].questions, // hanya bahan uji; bukan sumber arena
-});
+const ident = (n: string) => ({ clientId: `client-${n}-0000000000`, name: n, avatarUrl: '', frameId: 'none', difficulty: 'easy' });
+const communityQs = (from: number) => (BUILTIN_DECKS as any[])[from].questions.map((q: any) => ({ ...q, ownerEmail: 'pembuat@contoh.id' })); // hanya bahan uji; bukan sumber arena
 
 // ── 1. Tanpa kuis Komunitas: lobi menunggu, lalu menemukan kuis saat sudah ada ──
 {
@@ -88,9 +83,9 @@ const communityDeck = (suffix: string, from: number) => ({
   let calls = 0;
   let pool: any[] = [];
   arena.attachGlobalArena(io as any, {
-    pickCommunityDeck: async () => {
+    loadQuestionPools: async () => {
       calls++;
-      return pool[0] ?? null;
+      return { official: [], community: pool };
     },
   });
   const t = io.connect();
@@ -98,33 +93,49 @@ const communityDeck = (suffix: string, from: number) => ({
   await flush();
   await flush();
   const st = t.last('arena:update');
-  ok('tanpa kuis Komunitas: lobi menunggu kuis', st.waitingForQuiz === true && !st.deckTitle);
-  ok('tanpa kuis Komunitas: tidak ada hitung mundur dan tidak ada deck bawaan', st.phaseEndsAt === null && st.deckSource === null);
+  ok('tanpa stok soal: lobi menunggu', st.waitingForQuiz === true && !st.deckTitle && st.matchInfo === null);
+  ok('tanpa stok soal: tidak ada hitung mundur dan tidak ada deck bawaan', st.phaseEndsAt === null && st.deckSource === null);
   const before = calls;
   advance(2_000);
   await flush();
   ok('pencarian ulang dibatasi (tidak tiap tick)', calls === before);
-  pool = [communityDeck('cccccccccccc', 5)];
+  pool = communityQs(5);
   advance(11_000);
   await flush();
   const st2 = t.last('arena:update');
-  ok('kuis Komunitas baru terdeteksi saat dicoba lagi', st2.waitingForQuiz === false && st2.deckSource === 'community' && st2.phaseEndsAt !== null);
+  ok('soal Komunitas baru terdeteksi saat dicoba lagi', st2.waitingForQuiz === false && st2.deckSource === 'mixed' && st2.phaseEndsAt !== null && st2.matchInfo.communityQuestions === st2.matchInfo.questions);
 }
 
-// ── 2. Pemilih yang mengembalikan deck bawaan (walau berpura-pura komunitas) ditolak server ──
+// ── 2. Soal yang tidak layak (kunci rusak, pilihan kembar, media data:) ditolak server; soal bagus yang tersisa < minimum = menunggu ──
 {
-  const arena = await fresh('bawaan');
+  const arena = await fresh('rusak');
   const io = new FakeIo();
-  const first = (BUILTIN_DECKS as any[])[0];
-  arena.attachGlobalArena(io as any, {
-    pickCommunityDeck: async () => ({ deckId: first.id, title: first.title, source: 'community', questions: first.questions }) as any,
-  });
+  const good = communityQs(0).slice(0, 4); // hanya 4 soal layak: di bawah minimum 5
+  const broken = [
+    { question: 'Kunci jawaban di luar rentang?', options: ['a', 'b'], correctIndex: 7 },
+    { question: 'Pilihan kembar atau tidak?', options: ['sama', 'SAMA', 'lain'], correctIndex: 0 },
+    { question: 'Soal dengan media base64?', options: ['a', 'b'], correctIndex: 0, mediaType: 'image', mediaUrl: 'data:image/png;base64,AAAA' },
+  ];
+  arena.attachGlobalArena(io as any, { loadQuestionPools: async () => ({ official: [], community: [...good, ...broken] }) });
   const t = io.connect();
   t.fire('arena:join', ident('Penguji'));
   await flush();
   await flush();
   const st = t.last('arena:update');
-  ok('deck bawaan yang menyelinap lewat pemilih ditolak server', st.waitingForQuiz === true && !st.deckTitle && st.deckSource === null);
+  ok('soal rusak tidak dihitung: stok layak < 5, lobi menunggu', st.waitingForQuiz === true && !st.deckTitle && st.deckSource === null);
+}
+
+// ── 3. Deret soal kembar tidak menambah stok ──
+{
+  const arena = await fresh('kembar');
+  const io = new FakeIo();
+  const one = communityQs(1)[0];
+  arena.attachGlobalArena(io as any, { loadQuestionPools: async () => ({ official: [one, one, one], community: [one, one, one] }) });
+  const t = io.connect();
+  t.fire('arena:join', ident('Penguji'));
+  await flush();
+  await flush();
+  ok('soal yang sama berulang-ulang dihitung satu: stok kurang, lobi menunggu', t.last('arena:update').waitingForQuiz === true);
 }
 
 if (bad) process.exitCode = 1;

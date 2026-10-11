@@ -2,22 +2,33 @@
 //
 // ARENA GLOBAL — multiplayer publik TANPA kode ruangan (server/globalArena.ts).
 //
-// Pemain cukup menekan "Gabung Arena Global". Server menempatkan pemain di kanal yang masih punya tempat, memilih
-// kuisnya (kuis Komunitas yang SUDAH DISETUJUI + deck preset Arena dari admin; deck bawaan gratis/berbayar tidak dipakai), mengacak soalnya, dan menjalankan
-// siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI berikutnya.
-// Tidak ada host, tidak ada kode, tidak ada daftar ruangan, dan klien tidak pernah mengirim soal.
+// Pemain memilih TINGKAT KESULITAN (Mudah / Normal / Sulit / Ekstrem; aturannya di src/data/quiz/arenaDifficulty.ts) lalu menekan
+// "Gabung Arena Global". Server menempatkan pemain di kanal tingkat itu yang masih punya tempat, menyusun soalnya (campuran soal resmi
+// Arena dari admin + soal kuis Komunitas yang SUDAH DISETUJUI; deck bawaan gratis/berbayar tidak dipakai, tidak ada soal kembar dalam satu
+// permainan), dan menjalankan siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI berikutnya.
+// Tingkat Sulit & Ekstrem mengurangi skor untuk jawaban salah. Tidak ada host, tidak ada kode, dan klien tidak pernah mengirim soal.
 //
 // Pemain yang masuk saat permainan berjalan menonton dulu (tanpa kunci jawaban) dan ikut di permainan berikutnya.
 // Skor akun login dicatat server ke Papan Peringkat saat permainan tuntas sampai soal terakhir.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Users, WifiOff, Crown, Loader2, Lightbulb, Globe, LogOut, Eye, Save, Check, Timer, Flame, ShieldCheck, Trophy, Hourglass } from 'lucide-react';
+import { X, Users, WifiOff, Crown, Loader2, Lightbulb, Globe, LogOut, Eye, Save, Check, Timer, Flame, ShieldCheck, Trophy, Hourglass, MinusCircle, ListChecks } from 'lucide-react';
 import { io, Socket } from 'socket.io-client';
 import { PlayerAvatar } from './PlayerAvatar';
 import { addSavedResult, type AnswerLogEntry, type SavedQuizResult } from '../../services/quizResultsStore';
 import { audioEngine } from '../../services/audioEngine';
 import { storage } from '../../services/storage';
 import type { QuizQuestion } from '../../types';
+import {
+  ARENA_DIFFICULTIES,
+  ARENA_DIFFICULTY_IDS,
+  DEFAULT_ARENA_DIFFICULTY,
+  arenaWrongPenalty,
+  formatRange,
+  formatShare,
+  isArenaDifficulty,
+  type ArenaDifficulty,
+} from '../../data/quiz/arenaDifficulty';
 
 interface MultiplayerArenaModalProps {
   isOpen: boolean;
@@ -49,13 +60,28 @@ interface ArenaPlayer {
   loggedIn: boolean;
 }
 
+/** Aturan permainan yang sudah disusun server (tanpa soal dan tanpa kunci). */
+interface MatchInfo {
+  questions: number;
+  secPerQuestion: number;
+  /** Poin yang dikurangi per jawaban salah (0 = tidak aktif). */
+  penalty: number;
+  negativeScoring: boolean;
+  officialQuestions: number;
+  communityQuestions: number;
+}
+
 interface ArenaState {
   channel: string;
+  difficulty: ArenaDifficulty;
+  difficultyLabel: string;
+  negativeScoring: boolean;
   phase: Phase;
   deckTitle: string;
-  deckSource: 'community' | 'preset' | null;
+  deckSource: 'mixed' | null;
   ownerName: string;
-  /** Lobi menunggu karena belum ada kuis (Komunitas kosong dan belum ada deck preset aktif). */
+  matchInfo: MatchInfo | null;
+  /** Lobi menunggu karena stok soal belum cukup (Komunitas kosong dan belum cukup deck preset aktif). */
   waitingForQuiz?: boolean;
   currentQIndex: number;
   totalQuestions: number;
@@ -119,6 +145,38 @@ const getClientId = (): string => {
 };
 
 const isRunning = (p: Phase) => p === 'question' || p === 'reveal';
+
+/** Tingkat terakhir yang dipilih pemain, diingat di perangkat (kenyamanan saja; server tetap yang memutuskan). */
+const DIFFICULTY_KEY = 'muzeck_arena_difficulty';
+const readDifficulty = (): ArenaDifficulty => {
+  try {
+    const v = localStorage.getItem(DIFFICULTY_KEY);
+    return isArenaDifficulty(v) ? v : DEFAULT_ARENA_DIFFICULTY;
+  } catch {
+    return DEFAULT_ARENA_DIFFICULTY;
+  }
+};
+const saveDifficulty = (d: ArenaDifficulty) => {
+  try {
+    localStorage.setItem(DIFFICULTY_KEY, d);
+  } catch {
+    /* penyimpanan tidak tersedia: abaikan */
+  }
+};
+
+/** Warna lencana per tingkat. */
+const DIFFICULTY_TONE: Record<ArenaDifficulty, string> = {
+  easy: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
+  normal: 'bg-sky-500/15 text-sky-300 border-sky-500/30',
+  hard: 'bg-orange-500/15 text-orange-300 border-orange-500/30',
+  extreme: 'bg-red-500/15 text-red-300 border-red-500/30',
+};
+
+/** Teks pendek aturan pengurangan skor. */
+const penaltyText = (d: ArenaDifficulty) => {
+  const p = arenaWrongPenalty(d);
+  return p > 0 ? `Salah −${p} poin` : 'Salah tidak mengurangi skor';
+};
 
 /** Lama layar podium di server (ARENA_PODIUM_SEC) — hanya untuk bilah hitung mundur. */
 const PODIUM_SEC = 15;
@@ -406,6 +464,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
   const [arena, setArena] = useState<ArenaState | null>(null);
   const [joining, setJoining] = useState(false);
   const [myId, setMyId] = useState('');
+  const [difficulty, setDifficulty] = useState<ArenaDifficulty>(readDifficulty);
 
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<number, number>>({});
@@ -611,7 +670,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
       name: displayName.trim().slice(0, 40) || userNickname || 'Pemain',
       avatarUrl: showAvatar ? userAvatarUrl || '' : '',
       frameId: showAvatar ? userFrameId || 'none' : 'none',
+      difficulty,
     });
+  };
+
+  const handlePickDifficulty = (d: ArenaDifficulty) => {
+    if (joining) return;
+    audioEngine.playClickSound();
+    setDifficulty(d);
+    saveDifficulty(d);
   };
 
   const handleAnswer = (idx: number) => {
@@ -683,18 +750,28 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
 
   /* ───────── Tampilan ───────── */
 
-  const deckBadge =
-    arena?.deckSource === 'community' ? (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+  const deckBadge = arena ? (
+    <span className="inline-flex flex-wrap items-center justify-center gap-1.5">
+      <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${DIFFICULTY_TONE[arena.difficulty]}`}>
         <ShieldCheck className="w-3 h-3" />
-        Kuis Komunitas{arena.ownerName ? ` oleh ${arena.ownerName}` : ''}
+        Tingkat {arena.difficultyLabel}
       </span>
-    ) : arena?.deckSource === 'preset' ? (
-      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/30">
-        <ShieldCheck className="w-3 h-3" />
-        Kuis Pilihan Arena
+      {arena.matchInfo && (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/40 text-gray-300 border border-white/10">
+          <ListChecks className="w-3 h-3" />
+          {arena.matchInfo.questions} soal · {arena.matchInfo.secPerQuestion} dtk
+        </span>
+      )}
+      <span
+        className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+          arena.negativeScoring ? 'bg-red-500/10 text-red-300 border-red-500/30' : 'bg-black/40 text-gray-400 border-white/10'
+        }`}
+      >
+        <MinusCircle className="w-3 h-3" />
+        {arena.matchInfo && arena.negativeScoring ? `Salah −${arena.matchInfo.penalty} poin` : penaltyText(arena.difficulty)}
       </span>
-    ) : null;
+    </span>
+  ) : null;
 
   const connectedAndIdle = connection === 'connected' && !arena;
 
@@ -762,12 +839,45 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
               <div className="p-4 rounded-2xl bg-black/40 border border-white/[0.08] space-y-2 text-xs text-gray-300 leading-relaxed">
                 <p className="text-sm font-black text-white">Cara kerja</p>
                 <ul className="list-disc pl-5 space-y-1">
-                  <li>Tidak ada kode, host, atau daftar ruangan. Server menempatkanmu di kanal yang ramai dan memilihkan kuisnya.</li>
-                  <li>Kuis berasal dari kuis Komunitas yang <strong className="text-white">sudah lolos pemeriksaan</strong> dan kuis pilihan Arena dari admin. Permainan berjalan terus: lobi, soal, jeda, podium.</li>
+                  <li>Pilih tingkat kesulitan. Tidak ada kode, host, atau daftar ruangan: server menempatkanmu di kanal tingkat itu yang ramai dan menyusunkan soalnya.</li>
+                  <li>Soal dicampur dari soal resmi Arena dan soal kuis Komunitas yang <strong className="text-white">sudah lolos pemeriksaan</strong>. Tidak ada soal yang sama dalam satu permainan. Permainan berjalan terus: lobi, soal, jeda, podium.</li>
+                  <li>Di tingkat <strong className="text-white">Sulit</strong> dan <strong className="text-white">Ekstrem</strong>, jawaban salah mengurangi skor (skor tidak turun di bawah 0). Tidak menjawab tidak dihukum.</li>
                   <li>Masuk saat permainan berjalan? Kamu menonton dulu dan ikut di permainan berikutnya.</li>
                   <li>Skor akun login masuk <strong className="text-white">Papan Peringkat</strong> bila permainan tuntas dan minimal 2 pemain yang masuk akun ikut bermain.</li>
                 </ul>
               </div>
+
+              <fieldset className="space-y-2">
+                <legend className="text-[11px] font-bold text-gray-300 mb-1">Tingkat kesulitan</legend>
+                <div role="radiogroup" aria-label="Tingkat kesulitan" className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {ARENA_DIFFICULTY_IDS.map((id) => {
+                    const cfg = ARENA_DIFFICULTIES[id];
+                    const active = difficulty === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        disabled={joining}
+                        onClick={() => handlePickDifficulty(id)}
+                        className={`text-left p-3 rounded-xl border transition-all cursor-pointer disabled:opacity-60 ${
+                          active ? 'border-accent2 bg-accent2/15 ring-1 ring-accent2/60' : 'border-white/10 bg-black/40 hover:border-white/30'
+                        }`}
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span className="text-sm font-black text-white">{cfg.label}</span>
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${DIFFICULTY_TONE[id]}`}>{penaltyText(id)}</span>
+                        </span>
+                        <span className="mt-1 block text-[10px] text-gray-400 leading-snug">{cfg.tagline}</span>
+                        <span className="mt-1.5 block text-[10px] font-mono text-gray-300 leading-snug">
+                          {formatRange(cfg.timeSec, ' dtk')}/soal · {formatRange(cfg.questions)} soal · {formatShare(cfg.communityShare)} soal komunitas
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </fieldset>
 
               <div className="space-y-3">
                 <label className="block text-[11px] font-bold text-gray-300">
@@ -799,7 +909,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                 className="w-full py-3 rounded-xl bg-accent2 hover:bg-accent2/80 disabled:opacity-50 text-on-accent2 text-sm font-black cursor-pointer active:scale-[0.99] transition-all flex items-center justify-center gap-2"
               >
                 {joining ? <Loader2 className="w-4 h-4 animate-spin" /> : <Users className="w-4 h-4" />}
-                {joining ? 'Bergabung…' : 'Gabung Arena Global'}
+                {joining ? 'Bergabung…' : `Gabung Arena Global · ${ARENA_DIFFICULTIES[difficulty].label}`}
               </button>
             </div>
           ) : phase === 'lobby' ? (
@@ -811,18 +921,23 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                   <>
                     <h4 className="text-lg font-black text-white">{arena.deckTitle}</h4>
                     {deckBadge}
+                    {arena.matchInfo && (
+                      <p className="text-[11px] text-gray-400">
+                        {arena.matchInfo.officialQuestions} soal resmi + {arena.matchInfo.communityQuestions} soal komunitas, {arena.matchInfo.secPerQuestion} detik per soal.
+                      </p>
+                    )}
                   </>
                 ) : arena.waitingForQuiz ? (
                   <div className="max-w-sm mx-auto p-4 rounded-2xl bg-black/40 border border-white/[0.08] space-y-1.5">
                     <Hourglass className="w-5 h-5 text-accent mx-auto" aria-hidden="true" />
-                    <p className="text-sm font-bold text-white">Belum ada kuis yang tersedia</p>
+                    <p className="text-sm font-bold text-white">Soal belum cukup</p>
                     <p className="text-[11px] text-gray-400 leading-relaxed">
-                      Arena Global memakai kuis Komunitas yang sudah disetujui dan kuis pilihan Arena dari admin. Server mencari lagi otomatis, jadi kamu bisa menunggu di sini.
+                      Arena Global memakai soal resmi Arena dari admin dan soal kuis Komunitas yang sudah disetujui. Server mencari lagi otomatis, jadi kamu bisa menunggu di sini.
                     </p>
                   </div>
                 ) : (
                   <p className="text-sm text-gray-300 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin" /> Memilih kuis…
+                    <Loader2 className="w-4 h-4 animate-spin" /> Menyusun soal…
                   </p>
                 )}
               </div>
@@ -876,7 +991,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                 <span className="px-3 py-1 rounded-full bg-black/40 text-gray-300 font-bold border border-white/[0.08]">
                   Soal {qIndex + 1} / {arena.totalQuestions || questions.length}
                 </span>
-                {deckBadge}
+                <span className={`hidden sm:inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${DIFFICULTY_TONE[arena.difficulty]}`}>{arena.difficultyLabel}</span>
                 <span className="font-mono font-bold text-white flex items-center gap-1">
                   <Timer className="w-3.5 h-3.5 text-gray-400" />
                   {secLeft}s
@@ -892,11 +1007,17 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
               {iAmPlaying && phase === 'question' && ranked.length > 0 && (
                 <p className="text-[11px] text-gray-400">
                   {answeredCount}/{ranked.length} pemain sudah menjawab. Makin cepat menjawab, makin besar poinnya.
+                  {arena.negativeScoring && arena.matchInfo ? ` Hati-hati: jawaban salah mengurangi ${arena.matchInfo.penalty} poin.` : ''}
                 </p>
               )}
 
               {currentQ ? (
                 <>
+                  {(currentQ as any).origin && (
+                    <span className="inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-black/40 text-gray-400 border border-white/10">
+                      {(currentQ as any).origin === 'community' ? 'Soal komunitas' : 'Soal resmi Arena'}
+                    </span>
+                  )}
                   <h4 className="text-base sm:text-lg font-bold text-white leading-relaxed">{currentQ.question}</h4>
 
                   {(currentQ as any).mediaUrl && (currentQ as any).mediaType && (
@@ -944,7 +1065,15 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
                   {iAmPlaying && result && (
                     <div className={`p-3.5 rounded-xl border text-xs space-y-1.5 ${result.isCorrect ? 'bg-emerald-950/30 border-emerald-500/30' : 'bg-accent2/25 border-red-500/30'}`}>
                       <span className={`font-bold block ${result.isCorrect ? 'text-emerald-300' : 'text-red-300'}`}>
-                        {result.isCorrect ? `Benar! +${result.pointsAwarded} poin` : hasAnswered ? 'Kurang tepat, 0 poin.' : 'Waktu habis, 0 poin.'}
+                        {result.isCorrect
+                          ? `Benar! +${result.pointsAwarded} poin`
+                          : hasAnswered
+                            ? result.pointsAwarded < 0
+                              ? `Salah! ${result.pointsAwarded} poin`
+                              : arena.negativeScoring
+                                ? 'Salah, skormu sudah 0 jadi tidak berkurang.'
+                                : 'Kurang tepat, 0 poin.'
+                            : 'Waktu habis, 0 poin (tidak dikurangi).'}
                       </span>
                       {result.explanation && (
                         <div className="flex items-start gap-2 text-gray-300 pt-1 border-t border-white/[0.06]">

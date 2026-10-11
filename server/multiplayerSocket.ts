@@ -2,7 +2,7 @@
 //
 // Pintu masuk multiplayer REAL-TIME (socket.io) Pusat Kuis. Ada DUA mode, satu server socket.io:
 //
-//   1. ARENA GLOBAL (server/globalArena.ts) — ruang publik tanpa kode/host. Server memilih kuisnya dan menilai
+//   1. ARENA GLOBAL (server/globalArena.ts) — ruang publik tanpa kode/host dengan 4 tingkat kesulitan. Server menyusun soalnya dan menilai
 //      jawaban, jadi HANYA mode ini yang dicatat ke Papan Peringkat (onFinished -> recordMultiplayerGame).
 //   2. MODE UNDANGAN (server/inviteRooms.ts) — ruangan berkode buatan host untuk teman/kelas. Tetap multiplayer,
 //      tetapi TIDAK PERNAH masuk Papan Peringkat (kuisnya dikirim host, skornya tidak bisa dipercaya).
@@ -10,7 +10,7 @@
 // File ini hanya:
 //   - membuat server socket.io di atas server HTTP yang sama dengan Express,
 //   - mengenali akun login pemain dari cookie sesi (tamu tetap boleh main; skornya tidak masuk peringkat),
-//   - memasang kedua mode. Kaitan arenaDeps (pickCommunityDeck, onFinished) HANYA diberikan ke Arena Global.
+//   - memasang kedua mode. Kaitan arenaDeps (loadQuestionPools, onFinished) HANYA diberikan ke Arena Global.
 import type { Server as HttpServer } from 'http';
 import { Server } from 'socket.io';
 import { attachGlobalArena, getArenaSummary, type ArenaDeps } from './globalArena';

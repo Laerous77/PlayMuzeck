@@ -1,50 +1,72 @@
 // server/globalArena.ts
 //
-// ARENA GLOBAL — multiplayer publik tanpa kode ruangan.
+// ARENA GLOBAL — multiplayer publik tanpa kode ruangan, dengan EMPAT TINGKAT KESULITAN.
 //
 // Cara kerja:
-//   - Pemain menekan "Gabung Arena Global"; server menempatkan mereka ke kanal yang masih punya tempat. Tidak ada kode,
-//     tidak ada host, tidak ada daftar ruangan: pemain tidak perlu memilih apa pun.
-//   - Server yang memilih kuis dan mengacak soalnya. Sumber kuis ada DUA:
-//       1. kuis Komunitas yang SUDAH DISETUJUI moderasi, dan
-//       2. DECK PRESET ARENA: 12 tema x 20 soal yang diatur admin (server/arenaPresetRoutes.ts, tabel arena_preset_decks).
-//     Deck preset tidak pernah muncul di Perpustakaan dan tidak bisa dimainkan di luar Arena Global.
+//   - Pemain memilih tingkat (Mudah / Normal / Sulit / Ekstrem) lalu menekan "Gabung Arena Global"; server menempatkan
+//     mereka ke kanal TINGKAT ITU yang masih punya tempat. Tidak ada kode, tidak ada host, tidak ada daftar ruangan.
+//   - Aturan tiap tingkat (waktu per soal, jumlah soal, pengurangan skor, porsi soal komunitas) ada di
+//     src/data/quiz/arenaDifficulty.ts; penyusunan soalnya di server/arenaMatch.ts. Server mengundi angka di dalam rentang
+//     tingkat itu SETIAP permainan.
+//   - Soal tiap permainan DICAMPUR dari dua kumpulan (bukan satu kuis utuh):
+//       1. soal resmi Arena Global: deck PRESET ARENA, 12 tema x 20 soal yang diatur admin (server/arenaPresetRoutes.ts), dan
+//       2. soal dari kuis Komunitas yang SUDAH DISETUJUI moderasi dan lolos validasi soal.
 //     Deck bawaan Pusat Kuis (3 starter gratis maupun 12 deck berbayar) TIDAK PERNAH dipakai di Arena Global, supaya isi
 //     deck berbayar tidak bisa dimainkan gratis lewat arena. Klien tidak pernah mengirim soal, jadi skor tidak bisa
 //     dipalsukan lewat soal buatan sendiri.
-//   - Bila belum ada kuis sama sekali (Komunitas kosong dan belum ada preset aktif), lobi menunggu dan server mencoba lagi berkala.
+//   - Dalam satu permainan tidak ada soal yang sama (peluang 0%): soal kembar dibuang sebelum diundi.
+//   - Bila stok soal belum cukup (kurang dari ARENA_MIN_QUESTIONS), lobi menunggu dan server mencoba lagi berkala.
 //   - Permainan berjalan terus dalam siklus:  LOBI (hitung mundur) -> SOAL -> JEDA (jawaban benar + papan skor) -> ... -> PODIUM -> LOBI.
+//   - Tingkat Sulit & Ekstrem: jawaban SALAH mengurangi skor (skor tidak turun di bawah 0). Tidak menjawab sampai waktu
+//     habis tidak dihukum. Tingkat Mudah & Normal tidak mengurangi skor.
 //   - Pemain yang masuk saat permainan berjalan menonton dulu (tanpa kunci jawaban) dan ikut di permainan berikutnya.
 //   - Saat permainan TUNTAS sampai soal terakhir, skor tiap akun yang ikut dari awal dicatat ke Papan Peringkat oleh server
 //     (onFinished -> recordMultiplayerGame). Keluar di tengah permainan = skor tidak dicatat.
 //
 // Keamanan (sama seperti multiplayerSocket.ts): kunci jawaban tidak dikirim bersama soal; `clientId` rahasia & tidak disiarkan;
-// batas laju per socket; nama/avatar divalidasi; emoji dibatasi daftar putih.
+// email pembuat soal komunitas tidak pernah dikirim ke klien; batas laju per socket; nama/avatar divalidasi; emoji dibatasi daftar putih.
 import type { Server, Socket } from 'socket.io';
-import { randomBytes, randomInt } from 'crypto';
+import { randomBytes } from 'crypto';
 import { ruleScan } from './quizModeration';
 import { isBadName } from './nameFilter';
 import { ARENA_THEME_IDS } from '../src/data/quiz/arenaThemes';
+import {
+  ARENA_DIFFICULTIES,
+  ARENA_DIFFICULTY_IDS,
+  arenaNegativeScoring,
+  mixDeckId,
+  parseArenaDifficulty,
+  type ArenaDifficulty,
+} from '../src/data/quiz/arenaDifficulty';
+import {
+  ARENA_MIN_QUESTIONS,
+  composeMatch,
+  hasDuplicateQuestions,
+  isPlayableQuestion,
+  type ArenaQuestion,
+  type ArenaQuestionPools,
+  type ComposedMatch,
+  type MatchQuestion,
+} from './arenaMatch';
+
+export { ARENA_MIN_QUESTIONS };
+export type { ArenaQuestion, ArenaQuestionPools, ComposedMatch, MatchQuestion };
 
 /* ───────────────────────────── Pengaturan ───────────────────────────── */
 
-export const ARENA_QUESTIONS = 10;
-export const ARENA_MIN_QUESTIONS = 5;
 export const ARENA_LOBBY_SEC = 20;
-export const ARENA_ROUND_SEC = 20;
 export const ARENA_GAP_SEC = 6;
 export const ARENA_PODIUM_SEC = 15;
 export const ARENA_CAPACITY = 60;
-const MAX_CHANNELS = 20;
+/** Batas kanal per tingkat (4 tingkat, jadi total paling banyak 4 x ini). */
+export const MAX_CHANNELS_PER_DIFFICULTY = 6;
 const ALL_ANSWERED_GRACE_MS = 3000;
 /** Pemain offline dipertahankan segini lama supaya bisa kembali setelah refresh. */
 const GRACE_MS = 45_000;
 const BASE_POINTS = 100;
 const MIN_POINTS_PERCENT = 0.3;
-/** Jeda sebelum server mencari kuis Komunitas lagi saat belum ada yang tersedia. */
+/** Jeda sebelum server mencari soal lagi saat stok belum cukup. */
 const NO_DECK_RETRY_MS = 10_000;
-/** Berapa kali undian diulang bila hasilnya sama dengan kuis permainan sebelumnya. */
-const REPEAT_REROLLS = 3;
 /** Id kuis Komunitas yang sah: deck-custom-shared-shq_<12 hex>. */
 const COMMUNITY_DECK_ID_RE = /^deck-custom-shared-shq_[0-9a-f]{12}$/;
 /** Id deck preset Arena yang sah: arena-preset-<id tema> (hanya 12 tema resmi). Id deck bawaan/starter ditolak. */
@@ -54,25 +76,11 @@ const ALLOWED_EMOJIS = new Set(['🔥', '👏', '😂', '😭', '😮', '😞', 
 
 /* ───────────────────────────── Tipe ───────────────────────────── */
 
-export interface ArenaQuestion {
-  id?: string;
-  question: string;
-  options: string[];
-  correctIndex: number;
-  explanation?: string;
-  category?: string;
-  timeLimitSec?: number;
-  mediaType?: 'image' | 'audio' | 'video';
-  mediaUrl?: string;
-  mediaCredit?: string;
-  mediaSourceUrl?: string;
-}
-
 export interface ArenaDeck {
-  /** Id yang dipakai papan peringkat: "deck-custom-shared-shq_xxx" (kuis Komunitas) atau "arena-preset-<tema>" (deck preset admin). */
+  /** Id deck: "deck-custom-shared-shq_xxx" (kuis Komunitas) atau "arena-preset-<tema>" (deck preset admin). */
   deckId: string;
   title: string;
-  /** Arena Global hanya memakai kuis Komunitas yang disetujui dan deck preset Arena buatan admin. */
+  /** Sumber soal Arena Global hanyalah kuis Komunitas yang disetujui dan deck preset Arena buatan admin. */
   source: 'community' | 'preset';
   /** Pembuat kuis komunitas (tampil di layar). Kosong untuk deck preset. */
   ownerName?: string;
@@ -86,15 +94,19 @@ export interface ArenaOutcome {
 }
 
 export interface ArenaFinishedGame {
+  /** Id campuran per tingkat: "arena-mix-<tingkat>" (lihat mixDeckId). */
   deckId: string;
   deckTitle: string;
+  difficulty: ArenaDifficulty;
   questions: unknown[];
   players: { userId: string; correct: number }[];
+  /** Email pembuat soal komunitas yang ikut di permainan ini: mereka tidak mendapat poin peringkat (tahu jawabannya). */
+  ownerEmails: string[];
 }
 
 export interface ArenaDeps {
-  /** Pilih satu kuis acak dari gabungan kuis Komunitas yang disetujui + deck preset Arena aktif (null = tidak ada). */
-  pickCommunityDeck?: () => Promise<ArenaDeck | null>;
+  /** Ambil kumpulan soal saat ini: soal resmi (deck preset aktif) + soal kuis Komunitas yang disetujui. */
+  loadQuestionPools?: () => Promise<ArenaQuestionPools>;
   /** Dipanggil saat permainan tuntas; hasilnya (per userId) dikirim ke pemain di layar podium. */
   onFinished?: (game: ArenaFinishedGame) => Promise<Record<string, ArenaOutcome> | void>;
 }
@@ -128,21 +140,21 @@ interface ArenaPlayer {
 interface Channel {
   id: string;
   label: string;
+  difficulty: ArenaDifficulty;
   phase: Phase;
   players: Map<string, ArenaPlayer>;
-  deck: ArenaDeck | null;
-  questions: ArenaQuestion[];
+  /** Permainan yang sudah disusun untuk giliran berikutnya / yang sedang berjalan. */
+  match: ComposedMatch | null;
+  questions: MatchQuestion[];
   currentQIndex: number;
   roundStartedAt: number | null;
   phaseEndsAt: number | null;
   emptySince: number | null;
-  /** Mencegah dua pemilihan deck bersamaan. */
+  /** Mencegah dua penyusunan permainan bersamaan. */
   preparing: boolean;
-  /** Belum ada kuis Komunitas yang tersedia; server mencoba lagi pada `deckRetryAt`. */
+  /** Stok soal belum cukup; server mencoba lagi pada `deckRetryAt`. */
   noDeck: boolean;
   deckRetryAt: number | null;
-  /** Kuis permainan terakhir, supaya undian berikutnya tidak mengulang kuis yang sama bila ada pilihan lain. */
-  lastDeckId: string | null;
   gameNo: number;
 }
 
@@ -186,52 +198,20 @@ function makeLimiter(max: number, windowMs: number) {
   };
 }
 
-function shuffle<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = randomInt(i + 1);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-/** Acak urutan pilihan tanpa menghilangkan kunci jawabannya. */
-function shuffleOptions(q: ArenaQuestion): ArenaQuestion {
-  const idx = shuffle(q.options.map((_, i) => i));
-  return { ...q, options: idx.map((i) => q.options[i]), correctIndex: idx.indexOf(q.correctIndex) };
-}
-
-/** Buang field yang membocorkan jawaban. */
-function publicQuestion(q: ArenaQuestion) {
+/** Buang field yang membocorkan jawaban atau identitas pembuat soal. */
+function publicQuestion(q: MatchQuestion) {
   const out: Record<string, unknown> = {};
   for (const k of Object.keys(q)) {
     if (/correct|answer|explan|kunci|jawaban|penjelasan/i.test(k)) continue;
+    if (k === 'ownerEmail') continue;
     out[k] = (q as any)[k];
   }
   return out;
 }
 
-const roundSecFor = (q: ArenaQuestion | undefined) => {
-  const t = Number(q?.timeLimitSec);
-  return Number.isFinite(t) && t >= 8 ? clamp(Math.round(t), 8, 60) : ARENA_ROUND_SEC;
-};
-
-function validQuestion(q: any): q is ArenaQuestion {
-  return (
-    q &&
-    typeof q.question === 'string' &&
-    Array.isArray(q.options) &&
-    q.options.length >= 2 &&
-    q.options.length <= 6 &&
-    Number.isInteger(q.correctIndex) &&
-    q.correctIndex >= 0 &&
-    q.correctIndex < q.options.length
-  );
-}
-
 /**
- * Deck yang sah untuk Arena Global: kuis Komunitas (id shq_...) ATAU deck preset Arena (id arena-preset-<tema>),
- * dengan cukup soal yang valid. Id dan sumber harus cocok; deck bawaan/starter selalu ditolak.
+ * Deck yang sah sebagai SUMBER soal Arena Global: kuis Komunitas (id shq_...) ATAU deck preset Arena (id arena-preset-<tema>),
+ * dengan cukup soal yang layak. Id dan sumber harus cocok; deck bawaan/starter selalu ditolak.
  */
 export function isArenaEligibleDeck(d: ArenaDeck | null | undefined): d is ArenaDeck {
   return Boolean(
@@ -239,15 +219,8 @@ export function isArenaEligibleDeck(d: ArenaDeck | null | undefined): d is Arena
       ((d.source === 'community' && COMMUNITY_DECK_ID_RE.test(String(d.deckId))) ||
         (d.source === 'preset' && PRESET_DECK_ID_RE.test(String(d.deckId)))) &&
       Array.isArray(d.questions) &&
-      d.questions.filter(validQuestion).length >= ARENA_MIN_QUESTIONS
+      d.questions.filter(isPlayableQuestion).length >= ARENA_MIN_QUESTIONS
   );
-}
-
-/** Ambil soal permainan dari deck: acak soal & urutan pilihan, maksimal ARENA_QUESTIONS. */
-export function buildMatchQuestions(deck: ArenaDeck): ArenaQuestion[] {
-  return shuffle(deck.questions.filter(validQuestion))
-    .slice(0, ARENA_QUESTIONS)
-    .map(shuffleOptions);
 }
 
 /** Poin jawaban benar: turun linear dari 100% ke MIN_POINTS_PERCENT sepanjang waktu soal. */
@@ -256,21 +229,50 @@ export function arenaPoints(elapsedRatio: number): number {
   return clamp(Math.round(BASE_POINTS * (1 - (1 - MIN_POINTS_PERCENT) * r)), Math.round(BASE_POINTS * MIN_POINTS_PERCENT), BASE_POINTS);
 }
 
+/**
+ * Skor setelah jawaban salah: dikurangi `penalty`, tetapi tidak pernah di bawah 0.
+ * Mengembalikan skor baru dan selisih yang benar-benar berlaku (<= 0).
+ */
+export function applyWrongAnswer(score: number, penalty: number): { score: number; delta: number } {
+  const cut = Math.min(Math.max(0, penalty), Math.max(0, score));
+  return { score: score - cut, delta: cut ? -cut : 0 };
+}
+
 /* ───────────────────────────── Status publik ───────────────────────────── */
 
 const channels = new Map<string, Channel>();
 let channelSeq = 0;
 
+/** Ringkasan aturan permainan yang sudah disusun (aman dikirim ke klien: tidak memuat soal maupun kunci). */
+function matchInfoOf(m: ComposedMatch | null) {
+  if (!m) return null;
+  return {
+    questions: m.questions.length,
+    secPerQuestion: m.secPerQuestion,
+    penalty: m.penalty,
+    negativeScoring: m.penalty > 0,
+    officialQuestions: m.officialQuestions,
+    communityQuestions: m.communityQuestions,
+  };
+}
+
+const matchTitle = (d: ArenaDifficulty) => `Arena Global · ${ARENA_DIFFICULTIES[d].label}`;
+
 function publicState(ch: Channel) {
   const list = Array.from(ch.players.values());
   return {
     channel: ch.label,
+    difficulty: ch.difficulty,
+    difficultyLabel: ARENA_DIFFICULTIES[ch.difficulty].label,
+    negativeScoring: arenaNegativeScoring(ch.difficulty),
     phase: ch.phase,
-    deckTitle: ch.deck?.title ?? '',
-    deckSource: ch.deck?.source ?? null,
-    ownerName: ch.deck?.ownerName ?? '',
-    /** Lobi menunggu karena belum ada kuis (Komunitas kosong dan belum ada deck preset aktif). */
-    waitingForQuiz: ch.phase === 'lobby' && !ch.deck && ch.noDeck,
+    deckTitle: ch.match ? matchTitle(ch.difficulty) : '',
+    /** Soal tiap permainan dicampur dari soal resmi Arena dan soal kuis Komunitas. */
+    deckSource: ch.match ? ('mixed' as const) : null,
+    ownerName: '',
+    matchInfo: matchInfoOf(ch.match),
+    /** Lobi menunggu karena stok soal belum cukup (Komunitas kosong dan belum cukup deck preset aktif). */
+    waitingForQuiz: ch.phase === 'lobby' && !ch.match && ch.noDeck,
     currentQIndex: ch.currentQIndex,
     totalQuestions: ch.questions.length,
     phaseEndsAt: ch.phaseEndsAt,
@@ -298,12 +300,19 @@ export function getArenaSummary() {
   const list = Array.from(channels.values());
   const online = list.reduce((s, c) => s + Array.from(c.players.values()).filter((p) => p.connected).length, 0);
   const best = [...list].sort((a, b) => b.players.size - a.players.size)[0];
+  const byDifficulty = Object.fromEntries(
+    ARENA_DIFFICULTY_IDS.map((id) => {
+      const mine = list.filter((c) => c.difficulty === id);
+      return [id, { playersOnline: mine.reduce((s, c) => s + Array.from(c.players.values()).filter((p) => p.connected).length, 0), channels: mine.length }];
+    })
+  ) as Record<ArenaDifficulty, { playersOnline: number; channels: number }>;
   return {
     playersOnline: online,
     channels: list.length,
     phase: best?.phase ?? 'lobby',
-    deckTitle: best?.deck?.title ?? '',
+    deckTitle: best?.match ? matchTitle(best.difficulty) : '',
     phaseEndsAt: best?.phaseEndsAt ?? null,
+    byDifficulty,
   };
 }
 
@@ -353,15 +362,20 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     return undefined;
   };
 
-  function newChannel(): Channel | null {
-    if (channels.size >= MAX_CHANNELS) return null;
+  const channelSeqByDifficulty: Record<ArenaDifficulty, number> = { easy: 0, normal: 0, hard: 0, extreme: 0 };
+
+  function newChannel(difficulty: ArenaDifficulty): Channel | null {
+    const sameLevel = Array.from(channels.values()).filter((c) => c.difficulty === difficulty).length;
+    if (sameLevel >= MAX_CHANNELS_PER_DIFFICULTY) return null;
     channelSeq += 1;
+    channelSeqByDifficulty[difficulty] += 1;
     const ch: Channel = {
       id: `g${channelSeq}`,
-      label: `Global ${channelSeq}`,
+      label: `${ARENA_DIFFICULTIES[difficulty].label} ${channelSeqByDifficulty[difficulty]}`,
+      difficulty,
       phase: 'lobby',
       players: new Map(),
-      deck: null,
+      match: null,
       questions: [],
       currentQIndex: 0,
       roundStartedAt: null,
@@ -370,7 +384,6 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       preparing: false,
       noDeck: false,
       deckRetryAt: null,
-      lastDeckId: null,
       gameNo: 0,
     };
     channels.set(ch.id, ch);
@@ -378,48 +391,45 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
   }
 
   /**
-   * Kanal yang dituju pemain baru: yang paling ramai dan belum penuh, supaya pemain bertemu satu sama lain
-   * (peringkat butuh minimal 2 akun). Pemain yang masuk saat permainan berjalan menonton dulu. Kanal baru
-   * hanya dibuat bila semua kanal penuh.
+   * Kanal yang dituju pemain baru DI TINGKAT YANG DIPILIH: yang paling ramai dan belum penuh, supaya pemain bertemu satu
+   * sama lain (peringkat butuh minimal 2 akun). Pemain yang masuk saat permainan berjalan menonton dulu. Kanal baru
+   * hanya dibuat bila semua kanal tingkat itu penuh.
    */
-  function assignChannel(): Channel | null {
+  function assignChannel(difficulty: ArenaDifficulty): Channel | null {
     const open = Array.from(channels.values())
-      .filter((c) => c.players.size < ARENA_CAPACITY)
+      .filter((c) => c.difficulty === difficulty && c.players.size < ARENA_CAPACITY)
       .sort((a, b) => b.players.size - a.players.size || (a.phase === 'lobby' ? -1 : 0) - (b.phase === 'lobby' ? -1 : 0));
-    return open[0] ?? newChannel();
+    return open[0] ?? newChannel(difficulty);
   }
 
   /**
-   * Pilih kuis berikutnya: kuis Komunitas yang sudah disetujui + deck preset Arena. Deck bawaan (starter gratis & berbayar) tidak
-   * pernah dipakai. Undian diulang beberapa kali bila sama dengan kuis sebelumnya (kecuali memang hanya ada satu).
+   * Susun permainan berikutnya untuk kanal ini dari kumpulan soal (resmi + komunitas). Deck bawaan (starter gratis & berbayar)
+   * tidak pernah dipakai. Null bila stok soal belum cukup.
    */
-  async function chooseDeck(ch: Channel): Promise<ArenaDeck | null> {
-    if (!deps.pickCommunityDeck) return null;
-    let fallback: ArenaDeck | null = null;
-    for (let i = 0; i <= REPEAT_REROLLS; i++) {
-      try {
-        const d = await deps.pickCommunityDeck();
-        if (!isArenaEligibleDeck(d)) continue;
-        if (d.deckId !== ch.lastDeckId) return d;
-        fallback = d;
-      } catch (e: any) {
-        console.error('[arena] gagal memilih kuis arena:', e?.message || e);
-        break;
-      }
+  async function chooseMatch(ch: Channel): Promise<ComposedMatch | null> {
+    if (!deps.loadQuestionPools) return null;
+    try {
+      const pools = await deps.loadQuestionPools();
+      const match = composeMatch(pools, ch.difficulty);
+      // Sabuk pengaman: tidak boleh ada soal kembar dalam satu permainan.
+      if (!match || match.questions.length < ARENA_MIN_QUESTIONS || hasDuplicateQuestions(match.questions)) return null;
+      return match;
+    } catch (e: any) {
+      console.error('[arena] gagal menyusun permainan arena:', e?.message || e);
+      return null;
     }
-    return fallback;
   }
 
-  /** Cari kuis untuk lobi ini lalu mulai hitung mundur. Bila belum ada kuis, coba lagi setelah NO_DECK_RETRY_MS. */
+  /** Susun permainan untuk lobi ini lalu mulai hitung mundur. Bila stok belum cukup, coba lagi setelah NO_DECK_RETRY_MS. */
   async function prepareDeck(ch: Channel) {
     if (ch.preparing) return;
     ch.preparing = true;
     try {
-      const deck = await chooseDeck(ch);
+      const match = await chooseMatch(ch);
       // Kanal bisa sudah ditutup atau berpindah fase selagi menunggu.
       if (!channels.has(ch.id) || ch.phase !== 'lobby') return;
-      ch.deck = deck;
-      if (deck) {
+      ch.match = match;
+      if (match) {
         ch.noDeck = false;
         ch.deckRetryAt = null;
         ch.phaseEndsAt = Date.now() + ARENA_LOBBY_SEC * 1000;
@@ -434,7 +444,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     }
   }
 
-  /** Masuk lobi: bersihkan sisa permainan lalu pilih kuis berikutnya. */
+  /** Masuk lobi: bersihkan sisa permainan lalu susun permainan berikutnya. */
   async function enterLobby(ch: Channel) {
     if (ch.preparing) return;
     ch.phase = 'lobby';
@@ -442,7 +452,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     ch.currentQIndex = 0;
     ch.roundStartedAt = null;
     ch.phaseEndsAt = null;
-    ch.deck = null;
+    ch.match = null;
     ch.noDeck = false;
     ch.deckRetryAt = null;
     for (const p of ch.players.values()) {
@@ -461,20 +471,19 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
   }
 
   function startGame(ch: Channel) {
-    if (!isArenaEligibleDeck(ch.deck)) {
-      ch.deck = null;
+    const match = ch.match;
+    if (!match || match.questions.length < ARENA_MIN_QUESTIONS) {
+      ch.match = null;
       return void prepareDeck(ch);
     }
-    const questions = buildMatchQuestions(ch.deck);
     const players = Array.from(ch.players.values()).filter((p) => p.connected);
-    if (questions.length < ARENA_MIN_QUESTIONS || !players.length) {
-      // Belum ada peserta / soal: ulangi hitung mundur lobi.
+    if (!players.length) {
+      // Belum ada peserta: ulangi hitung mundur lobi.
       ch.phaseEndsAt = Date.now() + ARENA_LOBBY_SEC * 1000;
       return void broadcast(ch);
     }
     ch.gameNo += 1;
-    ch.lastDeckId = ch.deck.deckId;
-    ch.questions = questions;
+    ch.questions = match.questions;
     ch.currentQIndex = 0;
     for (const p of ch.players.values()) {
       p.participating = p.connected;
@@ -492,7 +501,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     ch.phase = 'question';
     ch.currentQIndex = idx;
     ch.roundStartedAt = Date.now();
-    ch.phaseEndsAt = Date.now() + roundSecFor(ch.questions[idx]) * 1000;
+    ch.phaseEndsAt = Date.now() + (ch.match?.secPerQuestion ?? 20) * 1000;
     for (const p of ch.players.values()) {
       p.hasAnswered = false;
       p.lastStatus = undefined;
@@ -501,7 +510,14 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
     if (first) {
       const questions = ch.questions.map(publicQuestion);
       for (const p of ch.players.values()) {
-        toPlayer(p, 'arena:started', { questions, currentQIndex: 0, participating: p.participating, deckTitle: ch.deck?.title ?? '' });
+        toPlayer(p, 'arena:started', {
+          questions,
+          currentQIndex: 0,
+          participating: p.participating,
+          deckTitle: ch.match ? matchTitle(ch.difficulty) : '',
+          difficulty: ch.difficulty,
+          matchInfo: matchInfoOf(ch.match),
+        });
       }
     } else {
       io.to(room(ch)).emit('arena:nextRound', { currentQIndex: idx });
@@ -536,7 +552,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
 
   /** Skor akun yang ikut dari awal dan masih ada di kanal dicatat oleh server (jawaban dinilai server). */
   function reportFinished(ch: Channel) {
-    if (!deps.onFinished || !ch.deck) return;
+    if (!deps.onFinished || !ch.match) return;
     const players: ArenaFinishedGame['players'] = [];
     for (const p of ch.players.values()) {
       if (!p.userId || !p.participating) continue;
@@ -547,7 +563,15 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       players.push({ userId: p.userId, correct });
     }
     if (!players.length) return;
-    const game: ArenaFinishedGame = { deckId: ch.deck.deckId, deckTitle: ch.deck.title, questions: ch.questions, players };
+    const ownerEmails = Array.from(new Set(ch.questions.map((q) => q.ownerEmail).filter((e): e is string => Boolean(e))));
+    const game: ArenaFinishedGame = {
+      deckId: mixDeckId(ch.difficulty),
+      deckTitle: matchTitle(ch.difficulty),
+      difficulty: ch.difficulty,
+      questions: ch.questions,
+      players,
+      ownerEmails,
+    };
     void deps
       .onFinished(game)
       .then((outcomes) => {
@@ -605,7 +629,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       broadcast(ch);
     };
 
-    socket.on('arena:join', (payload: { clientId?: string; name?: string; avatarUrl?: string; frameId?: string }) => {
+    socket.on('arena:join', (payload: { clientId?: string; name?: string; avatarUrl?: string; frameId?: string; difficulty?: string }) => {
       if (!allow() || !allowJoin()) return void socket.emit('arena:error', 'Terlalu banyak percobaan. Coba lagi sebentar.');
       const key = cleanClientId(payload?.clientId);
       if (!key) return void socket.emit('arena:error', 'Identitas pemain tidak valid. Muat ulang halaman.');
@@ -623,8 +647,10 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
         return void attach(existing, p);
       }
 
-      const ch = assignChannel();
-      if (!ch) return void socket.emit('arena:error', 'Arena Global sedang penuh. Coba lagi beberapa saat.');
+      const difficulty = parseArenaDifficulty(payload?.difficulty);
+      if (!difficulty) return void socket.emit('arena:error', 'Tingkat kesulitan tidak dikenal.');
+      const ch = assignChannel(difficulty);
+      if (!ch) return void socket.emit('arena:error', `Arena Global tingkat ${ARENA_DIFFICULTIES[difficulty].label} sedang penuh. Coba lagi beberapa saat atau pilih tingkat lain.`);
 
       const taken = new Set(Array.from(ch.players.values()).map((x) => x.name.toLowerCase()));
       let name = safeDisplayName(payload?.name);
@@ -654,7 +680,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       };
       ch.players.set(key, p);
       // Kanal kosong yang baru dibuat / baru dihuni: mulai mencari kuis (menghormati jeda coba-ulang).
-      if (ch.phase === 'lobby' && !ch.deck && !ch.preparing && (!ch.deckRetryAt || Date.now() >= ch.deckRetryAt)) void prepareDeck(ch);
+      if (ch.phase === 'lobby' && !ch.match && !ch.preparing && (!ch.deckRetryAt || Date.now() >= ch.deckRetryAt)) void prepareDeck(ch);
       attach(ch, p);
     });
 
@@ -689,9 +715,12 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
         me.lastStatus = 'correct';
         me.lastPoints = pts;
       } else {
+        // Sulit & Ekstrem: jawaban salah mengurangi skor (tidak di bawah 0). Mudah & Normal: penalti 0.
+        const cut = applyWrongAnswer(me.score, ch.match?.penalty ?? 0);
+        me.score = cut.score;
         me.streak = 0;
         me.lastStatus = 'wrong';
-        me.lastPoints = 0;
+        me.lastPoints = cut.delta;
       }
       socket.emit('arena:answerResult', {
         currentQIndex: ch.currentQIndex,
@@ -741,7 +770,7 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       if (ch.phase === 'question' || ch.phase === 'reveal') {
         // Tidak ada yang menonton: akhiri tanpa mencatat skor dan kembali ke lobi saat ada yang masuk lagi.
         ch.phase = 'lobby';
-        ch.deck = null;
+        ch.match = null;
         ch.noDeck = false;
         ch.deckRetryAt = null;
         ch.questions = [];
@@ -768,7 +797,9 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       const online = Array.from(ch.players.values()).some((p) => p.connected);
       if (!online) {
         ch.emptySince = ch.emptySince ?? now;
-        if (now - ch.emptySince > EMPTY_CHANNEL_MS && channels.size > 1) {
+        // Tiap tingkat menyisakan minimal satu kanal.
+        const sameLevel = Array.from(channels.values()).filter((c) => c.difficulty === ch.difficulty).length;
+        if (now - ch.emptySince > EMPTY_CHANNEL_MS && sameLevel > 1) {
           channels.delete(ch.id);
           continue;
         }
@@ -780,8 +811,8 @@ export function attachGlobalArena(io: Server, deps: ArenaDeps = {}) {
       switch (ch.phase) {
         case 'lobby':
           if (ch.preparing) break;
-          if (!ch.deck) {
-            // Belum ada kuis: cari lagi secara berkala (bukan tiap 250 ms) supaya database tidak dibebani.
+          if (!ch.match) {
+            // Stok soal belum cukup: cari lagi secara berkala (bukan tiap 250 ms) supaya database tidak dibebani.
             if (!ch.deckRetryAt || now >= ch.deckRetryAt) void prepareDeck(ch);
           } else if (ch.phaseEndsAt && now >= ch.phaseEndsAt) startGame(ch);
           break;

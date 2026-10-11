@@ -29,8 +29,9 @@ import { startUnverifiedSweeper } from './auth/unverifiedSweeper';
 import { isDeliverableEmail } from './auth/emailCheck';
 import { turnstileEnabled } from './auth/turnstile';
 import { createPaymentRouter } from './paymentRoutes';
-import { createArenaPresetRouter, ensureArenaPresetSchema, pickArenaDeck } from './arenaPresetRoutes';
-import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame, pickApprovedCommunityDeck } from './quizCommunityRoutes';
+import { createArenaPresetRouter, ensureArenaPresetSchema } from './arenaPresetRoutes';
+import { createQuestionPoolLoader } from './arenaQuestionPools';
+import { createQuizCommunityRouter, ensureQuizCommunitySchema, startQuizCommunitySweeper, recordMultiplayerGame } from './quizCommunityRoutes';
 import {
   sendCustomAudioInquiryNotifications,
   sendContactFeedbackNotifications,
@@ -1488,9 +1489,10 @@ attachMultiplayerSocket(
       }
     });
   }),
-  // Arena Global: kuis Komunitas yang SUDAH DISETUJUI + deck preset Arena (12 tema x 20 soal) ikut rotasi, dan skor (dinilai server) dicatat ke papan peringkat saat tuntas.
+  // Arena Global (4 tingkat kesulitan): soal tiap permainan dicampur dari soal resmi (deck preset Arena, 12 tema x 20 soal) dan soal kuis
+  // Komunitas yang SUDAH DISETUJUI; skor (dinilai server) dicatat ke papan peringkat saat tuntas.
   {
-    pickCommunityDeck: () => pickArenaDeck(pool, () => pickApprovedCommunityDeck(pool)),
+    loadQuestionPools: createQuestionPoolLoader(pool),
     onFinished: (game) => recordMultiplayerGame(pool, game),
   }
 );

@@ -16,6 +16,7 @@
     "test:dsp": "tsx tests/audioExtraDsp.test.ts && tsx tests/audioLimits.test.ts && tsx tests/audioMetadata.test.ts",
     "test:pad": "tsx tests/padFiles.test.ts",
     "test:quiz": "tsx tests/quizCommunity.test.ts && tsx tests/quizSegments.test.ts",
+    "test:arena": "tsx tests/arenaDifficulty.test.ts && tsx tests/globalArena.test.ts && tsx tests/globalArenaDifficulty.test.ts && tsx tests/globalArenaCommunityOnly.test.ts && tsx tests/arenaPreset.test.ts && tsx tests/inviteRooms.test.ts",
     "test:routes": "tsx tests/routes.test.ts",
     "test:theme": "tsx tests/themeContrast.test.ts"
   },
