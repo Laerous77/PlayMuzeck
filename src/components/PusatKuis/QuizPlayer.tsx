@@ -49,6 +49,7 @@ import {
 } from '../../services/quizResultsStore';
 import { QuizResultHistory, AnswerReviewModal } from './QuizResultHistory';
 import { storage } from '../../services/storage';
+import { notify } from '../../services/notify';
 
 export type QuizPlayMode = 'solo' | 'pass_play' | 'host';
 type PlayPhase = 'setup' | 'quiz' | 'finished';
@@ -501,7 +502,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
     if (ok) {
       setIsResultSaved(true);
     } else {
-      alert('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
+      notify.error('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
     }
   };
 
@@ -1151,8 +1152,8 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                           btnStyle = 'bg-emerald-950/40 border-emerald-500 text-emerald-100 font-semibold shadow-md shadow-emerald-500/10';
                           badgeLetterStyle = 'bg-emerald-500 text-black font-bold';
                         } else if (isSelected && !isCorrectOption) {
-                          btnStyle = 'bg-accent2/40 border-accent2 text-red-100 font-semibold shadow-md shadow-accent2/20';
-                          badgeLetterStyle = 'bg-accent2 text-on-accent2 font-bold';
+                          btnStyle = 'bg-red-950/40 border-red-500 text-red-100 font-semibold shadow-md shadow-red-500/10';
+                          badgeLetterStyle = 'bg-red-500 text-white font-bold';
                         } else {
                           btnStyle = 'bg-black/20 border-white/[0.04] opacity-40 text-gray-400';
                         }
@@ -1182,7 +1183,7 @@ export const QuizPlayer: React.FC<QuizPlayerProps> = ({
                               {isCorrectOption ? (
                                 <CheckCircle className="w-5 h-5 text-emerald-400" />
                               ) : isSelected ? (
-                                <XCircle className="w-5 h-5 text-accent2" />
+                                <XCircle className="w-5 h-5 text-red-400" />
                               ) : null}
                             </div>
                           )}

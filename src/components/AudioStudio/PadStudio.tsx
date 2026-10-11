@@ -93,6 +93,7 @@ import {
   adsrTuple,
   type TimeSignatureDef,
 } from './padContext';
+import { confirmDialog, notify } from '../../services/notify';
 export type { TimeSignatureDef };
 export { DRUM_KITS, TOTAL_BARS, TIME_SIGNATURES };
 import { InstrumentPickerModal } from './InstrumentPickerModal';
@@ -2311,12 +2312,12 @@ export const PadStudio: React.FC<PadStudioProps> = ({
 
   // Hapus baris instrumen (dikosongkan & dinonaktifkan). Minimal satu progresi harus tersisa; slot pertama selalu terisi,
   // jadi bila yang dihapus adalah baris teratas, progresi aktif berikutnya naik menggantikannya.
-  const removeTrack = useCallback((trackIndex: number) => {
+  const removeTrack = useCallback(async (trackIndex: number) => {
     const cur = liveRef.current?.chordTracks;
     if (!cur || !cur[trackIndex]?.enabled) return;
     if (cur.filter((t) => t.enabled).length <= 1) return;
     const hasNotes = cur[trackIndex].steps.some((v) => v >= 0);
-    if (trackIndex === 0 && hasNotes && !window.confirm(`Hapus "${cur[trackIndex].label}" beserta isinya? Riwayat Undo akor akan direset.`)) {
+    if (trackIndex === 0 && hasNotes && !await confirmDialog(`Hapus "${cur[trackIndex].label}" beserta isinya? Riwayat Undo akor akan direset.`)) {
       return;
     }
     try {
@@ -4787,7 +4788,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const made = await saveProjectOnServer(snapshotProject());
       if (made.result === 'denied') return handleServerDenied();
       if (made.result !== 'ok') {
-        alert(`Gagal menyimpan proyek: ${made.message}`);
+        notify.error(`Gagal menyimpan proyek: ${made.message}`);
         return;
       }
       const d = new Date();
@@ -4796,7 +4797,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       downloadBlob(made.value, name);
       onSuccessToast(`Proyek disimpan sebagai "${name}". Simpan berkas ini; muat kembali lewat tombol Muat Proyek.`);
     } catch (err) {
-      alert(`Gagal menyimpan proyek: ${err instanceof Error ? err.message : 'terjadi kesalahan.'}`);
+      notify.error(`Gagal menyimpan proyek: ${err instanceof Error ? err.message : 'terjadi kesalahan.'}`);
     }
   };
 
@@ -4863,7 +4864,7 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      alert('Berkas terlalu besar (maksimal 5 MB).');
+      notify.error('Berkas terlalu besar (maksimal 5 MB).');
       return;
     }
     try {
@@ -4871,15 +4872,15 @@ export const PadStudio: React.FC<PadStudioProps> = ({
       const res = await loadProjectOnServer<PadProject>(file);
       if (res.result === 'denied') return handleServerDenied();
       if (res.result !== 'ok') {
-        alert(`Gagal memuat berkas: ${res.message}`);
+        notify.error(`Gagal memuat berkas: ${res.message}`);
         return;
       }
-      if (!window.confirm(`Memuat "${file.name}" akan mengganti seluruh pola dan pengaturan yang sedang ada. Lanjutkan?`)) return;
+      if (!await confirmDialog(`Memuat "${file.name}" akan mengganti seluruh pola dan pengaturan yang sedang ada. Lanjutkan?`)) return;
       loadProject(res.value.project);
       onSuccessToast(`${res.value.summary} (${file.name})`);
-      if (res.value.warnings.length > 0) alert(`Catatan impor:\n- ${res.value.warnings.join('\n- ')}`);
+      if (res.value.warnings.length > 0) notify.error(`Catatan impor:\n- ${res.value.warnings.join('\n- ')}`);
     } catch (err) {
-      alert(`Gagal memuat berkas: ${err instanceof Error ? err.message : 'berkas tidak dapat dibaca.'}`);
+      notify.error(`Gagal memuat berkas: ${err instanceof Error ? err.message : 'berkas tidak dapat dibaca.'}`);
     }
   };
 
@@ -5185,10 +5186,10 @@ export const PadStudio: React.FC<PadStudioProps> = ({
                       {i !== enabledChordIdx[0] && (
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             if (isRecording) return;
-                            if (t.steps.some((v) => v >= 0) && !window.confirm(`Hapus "${name}" (${t.label}) beserta isinya di sequencer?`)) return;
-                            removeTrack(i);
+                            if (t.steps.some((v) => v >= 0) && !await confirmDialog(`Hapus "${name}" (${t.label}) beserta isinya di sequencer?`)) return;
+                            await removeTrack(i);
                             setLiveSel((prev) => (prev === i ? 0 : prev));
                           }}
                           disabled={isRecording}

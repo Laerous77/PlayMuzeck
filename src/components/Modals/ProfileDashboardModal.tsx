@@ -60,6 +60,7 @@ import {
   UserCollectionsData, 
   EMPTY_COLLECTIONS 
 } from '../../services/userCollections';
+import { confirmDialog, notify } from '../../services/notify';
 
 export interface ProfileFrame {
   id: string;
@@ -748,7 +749,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
   };
 
   const handleEquipFrame = async (frame: ProfileFrame) => {
-    if (!userSession.isLoggedIn) return alert('Silakan masuk ke akun terlebih dahulu.');
+    if (!userSession.isLoggedIn) return notify.error('Silakan masuk ke akun terlebih dahulu.');
     const previousFrameId = activeFrameId;
     setActiveFrameId(frame.id);
 
@@ -945,7 +946,7 @@ export const ProfileDashboardModal: React.FC<ProfileDashboardModalProps> = ({
 
   const handleCancelDonation = async () => {
     if (!pendingDonation || isCancellingDonation) return;
-    if (!confirm('Batalkan pesanan donasi ini?\n\nPembayaran yang belum dilakukan tidak akan diproses. Kamu bisa berdonasi lagi kapan saja.')) return;
+    if (!await confirmDialog('Batalkan pesanan donasi ini?\n\nPembayaran yang belum dilakukan tidak akan diproses. Kamu bisa berdonasi lagi kapan saja.')) return;
     setIsCancellingDonation(true);
     const ok = await cancelPendingOrder(pendingDonation.orderId);
     setIsCancellingDonation(false);

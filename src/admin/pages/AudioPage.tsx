@@ -16,6 +16,7 @@ import { adminFetch } from '../adminApi';
 import { useAdminRole } from '../useAdminRole';
 import { AudioTrackItem } from '../../types';
 import { calculateAudioPricing } from '../../services/pricing';
+import { confirmDialog, notify, promptDialog } from '../../services/notify';
 
 type AdminTrack = AudioTrackItem & {
   isPublished?: boolean;
@@ -157,13 +158,13 @@ export const AudioPage: React.FC = () => {
 
   const handleSaveTrack = async () => {
     if (!form.title?.trim()) {
-      alert('Judul lagu wajib diisi.');
+      notify.error('Judul lagu wajib diisi.');
       return;
     }
 
     const hasMasterAudio = Boolean(form.audioUrl || pendingMasterFile);
     if (!hasMasterAudio) {
-      alert('Wajib memilih berkas Full Audio Master sebelum lagu disimpan.');
+      notify.error('Wajib memilih berkas Full Audio Master sebelum lagu disimpan.');
       return;
     }
 
@@ -230,7 +231,7 @@ export const AudioPage: React.FC = () => {
 
   const removeTrack = async () => {
     if (!selectedId || selectedId === 'new') return;
-    if (!confirm('Hapus permanen track ini dari database?')) return;
+    if (!await confirmDialog('Hapus permanen track ini dari database?')) return;
     await adminFetch(`/api/admin/tracks/${selectedId}`, { method: 'DELETE' });
     setSelectedId(null);
     setForm(emptyTrack());
@@ -347,7 +348,7 @@ export const AudioPage: React.FC = () => {
   };
 
   const addStemSlot = async () => {
-    const stemName = prompt('Nama instrumen stem (misal: Drums, Bass, Melodi Synth):');
+    const stemName = await promptDialog('Nama instrumen stem (misal: Drums, Bass, Melodi Synth):');
     if (!stemName) return;
 
     const newStem = {
@@ -390,7 +391,7 @@ export const AudioPage: React.FC = () => {
 
   const handleUploadStemAudio = async (stemId: string, file: File) => {
     if (!selectedId || selectedId === 'new') {
-      alert('Simpan data track terlebih dahulu sebelum mengunggah stems terpisah.');
+      notify.error('Simpan data track terlebih dahulu sebelum mengunggah stems terpisah.');
       return;
     }
     const dur = await getAudioDuration(file);
@@ -419,7 +420,7 @@ export const AudioPage: React.FC = () => {
     stemId?: string
   ) => {
     if (!selectedId || selectedId === 'new') return;
-    if (!confirm(`Hapus berkas ${kind} ini?`)) return;
+    if (!await confirmDialog(`Hapus berkas ${kind} ini?`)) return;
 
     if (kind === 'license') {
       const updatedForm = { ...form, licenseFileUrl: '', licenseText: '' };

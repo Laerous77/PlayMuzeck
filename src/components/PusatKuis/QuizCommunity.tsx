@@ -39,6 +39,7 @@ import {
   type SharedQuizSummary,
 } from '../../services/quizCommunityApi';
 import { PlayerAvatar } from './PlayerAvatar';
+import { confirmDialog } from '../../services/notify';
 
 interface QuizCommunityProps {
   isLoggedIn: boolean;
@@ -189,7 +190,7 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
     const already = sharedBySource.has(deck.id);
     if (
       !already &&
-      !confirm(
+      !await confirmDialog(
         `Bagikan "${deck.title}" ke Komunitas Kuis?\n\nSoal, pilihan jawaban, dan kunci jawabannya akan bisa dilihat dan dimainkan siapa saja setelah lolos pemeriksaan otomatis (AI) atau admin. Namamu tampil sebagai pembuat.`
       )
     )
@@ -214,7 +215,7 @@ export const QuizCommunity: React.FC<QuizCommunityProps> = ({ isLoggedIn, ownDec
   };
 
   const handleUnshare = async (deck: Deck, sharedId: string) => {
-    if (!confirm(`Hapus "${deck.title}" dari Komunitas Kuis?\n\nKuis tidak akan bisa dimainkan orang lain lagi. Kuis aslimu di Perpustakaan tetap aman.`)) return;
+    if (!await confirmDialog(`Hapus "${deck.title}" dari Komunitas Kuis?\n\nKuis tidak akan bisa dimainkan orang lain lagi. Kuis aslimu di Perpustakaan tetap aman.`)) return;
     setBusyDeckId(deck.id);
     try {
       await unshareQuiz(sharedId);

@@ -13,6 +13,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Deck } from '../../types';
+import { notify } from '../../services/notify';
 
 interface QuizInstallProps {
   starterDecks: Deck[];
@@ -60,7 +61,7 @@ export const QuizInstall: React.FC<QuizInstallProps> = ({
                   // Handler di App menangani semua kasus (prompt native / sudah terinstal / panduan manual).
                   onInstallPwa();
                 } else {
-                  alert('Gunakan menu browser Anda (titik tiga atau tombol bagikan) lalu pilih "Tambahkan ke Layar Utama / Install App".');
+                  notify.info('Gunakan menu browser Anda (titik tiga atau tombol bagikan) lalu pilih "Tambahkan ke Layar Utama / Install App".');
                 }
               }}
               className="px-6 py-3.5 rounded-2xl bg-accent2 hover:bg-accent2/80 text-on-accent2 font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-xl shadow-accent2/30 cursor-pointer active:scale-95 transition-all"

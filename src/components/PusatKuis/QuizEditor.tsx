@@ -32,6 +32,7 @@ import { Deck, Topic, QuizQuestion } from '../../types';
 import { sanitizeInput, storage } from '../../services/storage';
 import { BUILTIN_DECKS } from '../../data/quiz';
 import { saveDeckToJsonStore, findDuplicateQuestions } from '../../services/quizJsonStore';
+import { notify } from '../../services/notify';
 
 export const ADMIN_THEMES = [
   { id: 'olahraga', name: 'Olahraga', icon: '⚽', desc: 'Aktivitas fisik, atletik, kejuaraan, dan cabang olahraga dunia' },
@@ -313,7 +314,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
     }
 
     if (file.size > maxBytes) {
-      alert(`Ukuran berkas melebihi batas maksimal (${Math.round(maxBytes / (1024 * 1024))}MB).`);
+      notify.error(`Ukuran berkas melebihi batas maksimal (${Math.round(maxBytes / (1024 * 1024))}MB).`);
       return;
     }
 
@@ -363,7 +364,7 @@ export const QuizEditor: React.FC<QuizEditorProps> = ({
           const willBeCorrect = !newChoices[choiceIdx].isCorrect;
 
           if (willBeCorrect && currentlyCorrect + 1 >= newChoices.length) {
-            alert(`Maksimal jawaban benar adalah ${newChoices.length - 1} dari ${newChoices.length} pilihan.`);
+            notify.error(`Maksimal jawaban benar adalah ${newChoices.length - 1} dari ${newChoices.length} pilihan.`);
             return q;
           }
 

@@ -23,6 +23,7 @@ import { storage } from '../../services/storage';
 import { BUILTIN_DECKS, BUILTIN_TOPICS, isBuiltinDeckId } from '../../data/quiz';
 import { downloadDeckJson, removeDeckFromJsonStore } from '../../services/quizJsonStore';
 import { deckToCartItem, usePurchasedDeckIds } from '../../services/quizPurchases';
+import { confirmDialog } from '../../services/notify';
 
 // Satu sumber harga Kreator Kuis di sisi klien (harga yang ditagihkan tetap ditentukan server: CREATOR_SUITE_PRICE di server/index.ts).
 const CREATOR_SUITE_PRICE = 10000;
@@ -229,7 +230,7 @@ export const QuizLibrary: React.FC<QuizLibraryProps> = ({
   // 5. Eksekusi Hapus Kuis Seketika dan Bersihkan Topik Kosong di Penyimpanan
   const handleDeleteDeck = async (deck: Deck, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm(`Apakah Anda yakin ingin menghapus kuis "${deck.title}"?`)) return;
+    if (!await confirmDialog(`Apakah Anda yakin ingin menghapus kuis "${deck.title}"?`)) return;
 
     const userEmail = storage.getUserSession()?.email;
     if (!userEmail) {

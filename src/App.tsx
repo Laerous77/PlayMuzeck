@@ -21,7 +21,7 @@ import { AuthModal, announceAccountDeletion } from './components/Modals/AuthModa
 import { CustomAudioModal } from './components/Modals/CustomAudioModal';
 import { ProfileDashboardModal } from './components/Modals/ProfileDashboardModal';
 import { DestinationModal } from './components/Modals/DestinationModal';
-import { Toast } from './components/Toast';
+import { notify } from './services/notify';
 import { ThemeProvider } from './theme/ThemeContext';
 import { AppMode, CartItem, AudioEntitlements, UserSession, Deck, Topic, AudioTrackItem } from './types';
 import { storage } from './services/storage';
@@ -377,13 +377,11 @@ function MainApp() {
   const [isCustomAudioOpen, setIsCustomAudioOpen] = useState(false);
   const [deckToPlay, setDeckToPlay] = useState<Deck | null>(null);
 
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
+  // Semua umpan balik lewat satu sistem (lihat services/notify.ts + components/FeedbackHost.tsx).
+  // Pesan yang berbunyi gagal/peringatan/tidak valid tampil sebagai toast error (merah).
   const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3500);
+    if (/^(peringatan|gagal)|\bgagal\b|tidak valid|kedaluwarsa|bukan administrator/i.test(msg)) notify.error(msg);
+    else notify.success(msg);
   };
 
   useEffect(() => {
@@ -1370,7 +1368,6 @@ function MainApp() {
       )}
 
 
-      <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
     </div>
     </ThemeProvider>
   );

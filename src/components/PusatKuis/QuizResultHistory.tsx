@@ -24,6 +24,7 @@ import {
   loadSavedResults,
   summarizeAnswers,
 } from '../../services/quizResultsStore';
+import { confirmDialog } from '../../services/notify';
 
 const LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J'];
 
@@ -320,8 +321,8 @@ export const QuizResultHistory: React.FC<{ onClose: () => void }> = ({ onClose }
             {results.length > 0 && (
               <div className="pt-3 border-t border-white/10 flex justify-between items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => {
-                    if (confirm('Hapus semua riwayat hasil permainan?')) {
+                  onClick={async () => {
+                    if (await confirmDialog('Hapus semua riwayat hasil permainan?')) {
                       clearSavedResults();
                       setResults([]);
                     }

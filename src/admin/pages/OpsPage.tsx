@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, Trash2, Pencil, X, Check, Loader2, ChevronDown, ChevronRight, Mail, Ban, RotateCcw, ExternalLink, Timer } from 'lucide-react';
 import { adminFetch } from '../adminApi';
 import { useAdminRole, READONLY_MSG } from '../useAdminRole';
+import { confirmDialog, promptDialog } from '../../services/notify';
 
 // ---------- Tipe data ----------
 interface PaymentOrder {
@@ -312,8 +313,9 @@ export const OpsPage: React.FC = () => {
     if (status === order.status) return;
     let revoke = true;
     if (order.status === 'paid' && order.fulfilled) {
-      revoke = confirm(
-        `Pesanan ini sedang "Berhasil" dan penggunanya sudah punya akses.\n\nOK = ubah status DAN cabut akses produknya.\nBatal = jangan ubah apa-apa.`
+      revoke = await confirmDialog(
+        `Pesanan ini sedang "Berhasil" dan penggunanya sudah punya akses.\n\nUbah status DAN cabut akses produknya?`,
+        { danger: true, confirmLabel: 'Ubah & cabut akses', cancelLabel: 'Jangan ubah' }
       );
       if (!revoke) return;
     }
@@ -328,7 +330,7 @@ export const OpsPage: React.FC = () => {
 
   const editAmount = async (order: PaymentOrder) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
-    const v = prompt('Nominal baru (Rp):', String(order.gross_amount));
+    const v = await promptDialog('Nominal baru (Rp):', String(order.gross_amount));
     if (v === null) return;
     const n = Number(v.replace(/[^\d]/g, ''));
     if (!Number.isFinite(n)) return;
@@ -343,10 +345,10 @@ export const OpsPage: React.FC = () => {
 
   const removeOrder = async (order: PaymentOrder) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
-    if (!confirm(`Hapus pesanan ${order.user_email} (${rupiah(order.gross_amount)})?`)) return;
+    if (!await confirmDialog(`Hapus pesanan ${order.user_email} (${rupiah(order.gross_amount)})?`)) return;
     let revoke = false;
     if (order.status === 'paid' && order.fulfilled) {
-      revoke = confirm('Cabut juga akses produk yang diberikan pesanan ini?\n\nOK = cabut akses\nBatal = hapus pesanan saja, akses tetap');
+      revoke = await confirmDialog('Cabut juga akses produk yang diberikan pesanan ini?\n\nPilih "Hapus pesanan saja" untuk membiarkan akses tetap.', { danger: true, confirmLabel: 'Cabut akses', cancelLabel: 'Hapus pesanan saja' });
     }
     try {
       await adminFetch(`/api/admin/payment-orders/${order.order_id}?revoke=${revoke ? 1 : 0}`, { method: 'DELETE' });
@@ -487,7 +489,7 @@ export const OpsPage: React.FC = () => {
 
   const removeInquiry = async (item: InquiryRow) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
-    if (!confirm(`Hapus "${item.title}" dari ${item.email || 'pengirim'}?`)) return;
+    if (!await confirmDialog(`Hapus "${item.title}" dari ${item.email || 'pengirim'}?`)) return;
     try {
       await adminFetch(`/api/admin/inquiries/${item.id}`, { method: 'DELETE' });
       ok('Permintaan dihapus.');
@@ -520,7 +522,7 @@ export const OpsPage: React.FC = () => {
 
   const suspendUser = async (u: UserRow) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
-    const reason = prompt(`Tangguhkan akun ${u.email}?\n\nPengguna langsung ter-logout dan tidak bisa masuk lagi sampai dipulihkan. Produk yang sudah dibeli tetap tersimpan.\n\nAlasan (opsional):`);
+    const reason = await promptDialog(`Tangguhkan akun ${u.email}?\n\nPengguna langsung ter-logout dan tidak bisa masuk lagi sampai dipulihkan. Produk yang sudah dibeli tetap tersimpan.\n\nAlasan (opsional):`);
     if (reason === null) return;
     try {
       await adminFetch(`/api/admin/users/${u.id}/suspend`, { method: 'POST', body: JSON.stringify({ reason }) });
@@ -533,7 +535,7 @@ export const OpsPage: React.FC = () => {
 
   const restoreUser = async (u: UserRow) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
-    if (!confirm(`Pulihkan akun ${u.email}? Pengguna bisa masuk lagi.`)) return;
+    if (!await confirmDialog(`Pulihkan akun ${u.email}? Pengguna bisa masuk lagi.`)) return;
     try {
       await adminFetch(`/api/admin/users/${u.id}/restore`, { method: 'POST' });
       ok(`Akun ${u.email} dipulihkan.`);
@@ -606,7 +608,7 @@ export const OpsPage: React.FC = () => {
   const removeUser = async (u: UserRow) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
     if (
-      !confirm(
+      !await confirmDialog(
         `Jadwalkan penghapusan permanen akun ${u.email}?\n\nAkun baru dihapus 3 hari lagi. Selama itu pengguna masih bisa login & memakai akunnya, dan akan diberi tahu sisa waktunya setiap login. Pengguna (atau admin) bisa membatalkannya kapan saja sebelum waktunya habis.\n\nSetelah terhapus: koleksi produk, donasi, dan kuis buatannya hilang. Riwayat pesanan tetap tersimpan.`
       )
     )
@@ -622,7 +624,7 @@ export const OpsPage: React.FC = () => {
 
   const cancelUserDeletion = async (u: UserRow) => {
     if (!isSuperAdmin) { fail(null, READONLY_MSG); return; }
-    if (!confirm(`Batalkan penghapusan akun ${u.email}?`)) return;
+    if (!await confirmDialog(`Batalkan penghapusan akun ${u.email}?`)) return;
     try {
       await adminFetch(`/api/admin/users/${u.id}/cancel-deletion`, { method: 'POST' });
       ok(`Penghapusan akun ${u.email} dibatalkan.`);

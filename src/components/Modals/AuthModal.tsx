@@ -19,6 +19,7 @@ import { UserSession } from '../../types';
 import { authApi } from '../../services/authToken';
 import { GoogleSignInButton } from '../GoogleSignInButton';
 import { TurnstileWidget, turnstileSiteKey } from '../TurnstileWidget';
+import { notify } from '../../services/notify';
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'reset';
 
@@ -33,7 +34,7 @@ export function announceAccountDeletion(user: any) {
   const left = days > 0 ? `${days} hari ${hours} jam` : hours > 0 ? `${hours} jam ${mins} menit` : `${Math.max(1, mins)} menit`;
   const when = at.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta', dateStyle: 'full', timeStyle: 'short' });
   window.dispatchEvent(new CustomEvent('muzeck:account-deletion', { detail: d }));
-  alert(
+  notify.info(
     `⚠️ AKUNMU AKAN DIHAPUS PERMANEN\n\n` +
       `Sisa waktu: ${left}\nDihapus pada: ${when} WIB\n` +
       `${d.requestedBy === 'self' ? 'Kamu sendiri yang meminta penghapusan ini.' : 'Penghapusan ini dijadwalkan oleh admin.'}\n\n` +

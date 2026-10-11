@@ -11,6 +11,7 @@ import { READONLY_MSG, useAdminRole } from '../useAdminRole';
 import {
   APPLY_TEMPLATES, NOTICE_MESSAGE_MAX, NOTICE_TITLE_MAX, NoticeTemplate, RESET_TEMPLATES, fillNotice,
 } from '../themeNotice';
+import { confirmDialog } from '../../services/notify';
 
 type Sel = number | 'new' | null;
 type TargetMode = 'selected' | 'all';
@@ -182,7 +183,7 @@ export const AdminThemeManager: React.FC = () => {
 
   const remove = async () => {
     if (typeof sel !== 'number') return;
-    if (!confirm('Hapus tema ini? Pengguna yang sedang memakainya akan kembali ke tema bawaan.')) return;
+    if (!await confirmDialog('Hapus tema ini? Pengguna yang sedang memakainya akan kembali ke tema bawaan.')) return;
     setBusy(true); setErr(''); setMsg('');
     try {
       await adminFetch(`/api/admin/themes/${sel}`, { method: 'DELETE' });
@@ -254,7 +255,7 @@ export const AdminThemeManager: React.FC = () => {
       action === 'apply' ? `Terapkan tema "${themeName}"${lock ? ' (dikunci)' : ''}`
       : action === 'reset-previous' ? 'Kembalikan ke tema sebelumnya'
       : 'Kembalikan ke tema bawaan & buka kunci';
-    if (!confirm(`${verb} untuk ${targetLabel}?${notifyOn ? ' Notifikasi akan dikirim ke pengguna.' : ''}`)) return;
+    if (!await confirmDialog(`${verb} untuk ${targetLabel}?${notifyOn ? ' Notifikasi akan dikirim ke pengguna.' : ''}`)) return;
 
     setUBusy(true);
     try {

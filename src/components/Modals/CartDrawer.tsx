@@ -33,6 +33,7 @@ import {
 } from '../../services/payment';
 import { Clock as ClockIcon, Ban as BanIcon, RefreshCw as RefreshIcon } from 'lucide-react';
 import { QrisPanel } from './QrisPanel';
+import { confirmDialog, notify } from '../../services/notify';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -179,7 +180,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     if (cartItems.length === 0) return;
     if (isLoadingPending) return; // tunggu cek pesanan menunggu selesai
     if (!userSession?.isLoggedIn) {
-      alert("Harap login terlebih dahulu untuk melanjutkan proses checkout. Data pembelian akan diikat secara permanen pada akun Anda di database.");
+      notify.error("Harap login terlebih dahulu untuk melanjutkan proses checkout. Data pembelian akan diikat secara permanen pada akun Anda di database.");
       return;
     }
     setCurrentStep('buyer_data');
@@ -309,7 +310,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
         if (onSuccessToast) onSuccessToast(msg || 'Pesanan ini sudah tidak bisa dilanjutkan.');
         return;
       }
-      alert(msg || 'Pembayaran Midtrans QRIS gagal atau dibatalkan.');
+      notify.error(msg || 'Pembayaran Midtrans QRIS gagal atau dibatalkan.');
     },
     // Menutup popup TIDAK membatalkan pesanan: pembeli kembali ke layar "Menunggu Pembayaran".
     onClose: () => setIsProcessingCheckout(false),
@@ -329,7 +330,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   const handleCancelPending = async () => {
     if (!pendingOrder || isCancelling) return;
-    if (!confirm('Batalkan pesanan ini?\n\nPembayaran yang belum dilakukan tidak akan diproses. Item tetap ada di keranjang dan kamu bisa membuat pesanan baru.')) return;
+    if (!await confirmDialog('Batalkan pesanan ini?\n\nPembayaran yang belum dilakukan tidak akan diproses. Item tetap ada di keranjang dan kamu bisa membuat pesanan baru.')) return;
     setIsCancelling(true);
     const ok = await cancelPendingOrder(pendingOrder.orderId);
     setIsCancelling(false);
@@ -349,7 +350,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const handleProceedToPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!buyerName.trim() || !buyerEmail.trim()) {
-      alert('Data akun tidak lengkap. Silakan keluar lalu masuk kembali.');
+      notify.error('Data akun tidak lengkap. Silakan keluar lalu masuk kembali.');
       return;
     }
 
@@ -389,7 +390,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
     setIsProcessingCheckout(false);
     const st = await getPaymentStatus();
     if (st.mode !== 'demo') {
-      alert(
+      notify.error(
         st.mode === 'unreachable'
           ? 'Tidak dapat menghubungi server pembayaran. Coba lagi.'
           : 'Pembayaran online belum aktif di server ini. Hubungi admin.'

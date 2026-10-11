@@ -43,6 +43,7 @@ import {
 import { Deck, QuizQuestion } from '../../types';
 import { audioEngine } from '../../services/audioEngine';
 import { io, Socket } from 'socket.io-client';
+import { confirmDialog, notify } from '../../services/notify';
 
 /** Semua pemberitahuan di modal hilang sendiri setelah 5 detik. */
 const NOTICE_AUTO_HIDE_MS = 5000;
@@ -816,7 +817,7 @@ export const MultiplayerInviteModal: React.FC<MultiplayerInviteModalProps> = ({
       answers,
     };
     if (addSavedResult(entry)) setSavedUpTo(upTo);
-    else alert('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
+    else notify.error('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
   };
 
   /** Host: dijeda / lanjutkan hitung mundur antar soal. */
@@ -836,8 +837,8 @@ export const MultiplayerInviteModal: React.FC<MultiplayerInviteModalProps> = ({
     setKickTarget(null);
   };
   /** Host: akhiri permainan sekarang untuk semua pemain. */
-  const handleEndGame = () => {
-    if (window.confirm('Akhiri permainan sekarang untuk semua pemain?')) socketRef.current?.emit('game:end');
+  const handleEndGame = async () => {
+    if (await confirmDialog('Akhiri permainan sekarang untuk semua pemain?')) socketRef.current?.emit('game:end');
   };
   /** Host: jalankan sesi susulan khusus pemain yang bergabung belakangan. */
   const handleStartMakeup = () => {

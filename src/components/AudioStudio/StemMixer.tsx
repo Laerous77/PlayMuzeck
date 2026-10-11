@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { AudioTrackItem, AudioEntitlements } from '../../types';
 import { exportAudioFile } from '../../services/exporters';
+import { notify } from '../../services/notify';
 
 interface StemMixerProps {
   activeTrack: AudioTrackItem;
@@ -897,7 +898,7 @@ export const StemMixer: React.FC<StemMixerProps> = ({
     } catch (err: unknown) {
       setIsRendering(false);
       const msg = err instanceof Error ? err.message : 'Gagal merender audio.';
-      alert(`Gagal mengekspor audio: ${msg}`);
+      notify.error(`Gagal mengekspor audio: ${msg}`);
     }
   };
 

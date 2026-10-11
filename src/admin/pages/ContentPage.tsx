@@ -19,6 +19,7 @@ import { useAdminRole } from '../useAdminRole';
 import { Deck, Topic, QuizQuestion } from '../../types';
 import { BUILTIN_DECKS } from '../../data/quiz';
 import { findDuplicateQuestions } from '../../services/quizJsonStore';
+import { confirmDialog, notify } from '../../services/notify';
 
 /* -------------------------------------------------------------------------- */
 /*  Konstanta & tipe (diserap dari QuizEditor)                                 */
@@ -367,7 +368,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
 
   /* ------------------------------ navigasi step ---------------------------- */
 
-  const applySettings = (target: WizardStep = 'questions') => {
+  const applySettings = async (target: WizardStep = 'questions') => {
     setErrorMsg(null);
     if (totalQuestions < 1 || totalQuestions > maxQuestions) {
       setErrorMsg(`Jumlah butir soal adalah antara 1 hingga ${maxQuestions}.`);
@@ -377,7 +378,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
     // Jangan diam-diam membuang soal/opsi yang sudah terisi.
     const dropsQuestions = questions.slice(totalQuestions).some((q) => q.text.trim() || q.choices.some((c) => c.text.trim()));
     const dropsChoices = questions.some((q) => q.choices.slice(choicesPerQuestion).some((c) => c.text.trim()));
-    if ((dropsQuestions || dropsChoices) && !window.confirm('Pengaturan ini akan membuang soal atau opsi yang sudah terisi. Lanjutkan?')) {
+    if ((dropsQuestions || dropsChoices) && !await confirmDialog('Pengaturan ini akan membuang soal atau opsi yang sudah terisi. Lanjutkan?')) {
       return;
     }
 
@@ -425,7 +426,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
     // Setiap keluar dari "Pengaturan" menuju soal/review, pengaturan diterapkan ulang
     // supaya jumlah opsi jawaban selalu sinkron.
     if ((target === 'questions' || target === 'review') && (questions.length === 0 || step === 'settings')) {
-      applySettings(target);
+      void applySettings(target);
       return;
     }
     setStep(target);
@@ -490,7 +491,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
       const currentlyCorrect = newChoices.filter((c) => c.isCorrect).length;
       const willBeCorrect = !newChoices[choiceIdx].isCorrect;
       if (willBeCorrect && currentlyCorrect + 1 >= newChoices.length) {
-        alert(`Maksimal jawaban benar adalah ${newChoices.length - 1} dari ${newChoices.length} pilihan.`);
+        notify.error(`Maksimal jawaban benar adalah ${newChoices.length - 1} dari ${newChoices.length} pilihan.`);
         return q;
       }
       newChoices[choiceIdx].isCorrect = willBeCorrect;
@@ -566,7 +567,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
       kind = 'video';
     }
     if (file.size > maxBytes) {
-      alert(`Ukuran berkas melebihi batas maksimal (${Math.round(maxBytes / (1024 * 1024))}MB).`);
+      notify.error(`Ukuran berkas melebihi batas maksimal (${Math.round(maxBytes / (1024 * 1024))}MB).`);
       return;
     }
 
@@ -1319,7 +1320,7 @@ const DeckWizard: React.FC<DeckWizardProps> = ({ deck, topics, allDecks, onSave,
         {!readOnly && deck.id && onDelete && (
           <button
             onClick={async () => {
-              if (!confirm('Hapus deck ini?')) return;
+              if (!await confirmDialog('Hapus deck ini?')) return;
               await onDelete();
             }}
             className="flex items-center gap-2 rounded-xl border border-red-400/40 text-red-300 px-4 py-2"

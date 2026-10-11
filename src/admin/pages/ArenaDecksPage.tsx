@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { AdminSessionError, adminFetch } from '../adminApi';
 import { ARENA_DECK_SIZE } from '../../data/quiz/arenaThemes';
+import { confirmDialog } from '../../services/notify';
 
 /* ───────────────────────────── Tipe ───────────────────────────── */
 
@@ -460,7 +461,7 @@ const DeckEditor: React.FC<EditorProps> = ({ themeId, onClose, onSaved }) => {
   };
 
   const clearDeck = async () => {
-    if (!window.confirm(`Hapus seluruh soal deck "${meta?.themeTitle ?? themeId}"? Deck akan keluar dari rotasi Arena Global.`)) return;
+    if (!await confirmDialog(`Hapus seluruh soal deck "${meta?.themeTitle ?? themeId}"? Deck akan keluar dari rotasi Arena Global.`)) return;
     setSaving(true);
     setError('');
     try {
@@ -552,8 +553,8 @@ const DeckEditor: React.FC<EditorProps> = ({ themeId, onClose, onSaved }) => {
     <div className="space-y-4 max-w-4xl">
       <button
         type="button"
-        onClick={() => {
-          if (dirty && !window.confirm('Ada perubahan yang belum disimpan. Tetap kembali?')) return;
+        onClick={async () => {
+          if (dirty && !await confirmDialog('Ada perubahan yang belum disimpan. Tetap kembali?')) return;
           onClose();
         }}
         className="flex items-center gap-1.5 text-xs font-bold text-gray-300 hover:text-white cursor-pointer"

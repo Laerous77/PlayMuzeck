@@ -4,6 +4,7 @@ import App from './App.tsx';
 import AdminApp from './admin/AdminApp.tsx';
 import { applyCachedPalette } from './theme/theme';
 import { storage } from './services/storage';
+import { FeedbackHost } from './components/FeedbackHost.tsx';
 import './index.css';
 
 // PERBAIKAN: cocokkan "/admin" persis (atau /admin/...), bukan sembarang path berawalan "admin".
@@ -38,6 +39,7 @@ try {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {isAdmin ? <AdminApp /> : <App />}
+    <FeedbackHost />
   </StrictMode>,
 );
 

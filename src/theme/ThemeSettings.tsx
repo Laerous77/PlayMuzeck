@@ -7,6 +7,7 @@ import { PalettePicker } from './PalettePicker';
 import { useTheme } from './ThemeContext';
 import { BUILTIN_THEME, NAME_MAX, Palette } from './theme';
 import { isLocalMode } from './themeApi';
+import { confirmDialog } from '../services/notify';
 
 type Sel = 'builtin' | 'assigned' | 'new' | number;
 
@@ -103,9 +104,9 @@ export const ThemeSettings: React.FC<{ embedded?: boolean }> = ({ embedded = fal
       if (newActive != null) setSel(newActive);
     }, isLocalMode() ? 'Tema disimpan dan dipakai di browser ini.' : 'Tema disimpan dan dipakai. Akan tetap sama setiap kamu login.');
 
-  const onDelete = () => {
+  const onDelete = async () => {
     if (typeof sel !== 'number') return;
-    if (!confirm('Hapus tema ini?')) return;
+    if (!await confirmDialog('Hapus tema ini?')) return;
     const id = sel;
     choose('builtin');
     return guard(() => remove(id), 'Tema dihapus.');

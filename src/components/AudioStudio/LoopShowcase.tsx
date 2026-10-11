@@ -17,6 +17,7 @@ import {
 import { AudioTrackItem, AudioEntitlements } from '../../types';
 import { exportAudioFile } from '../../services/exporters';
 import { timeStretch } from '../../services/audioToolsDsp';
+import { notify } from '../../services/notify';
 
 interface LoopShowcaseProps {
   activeTrack: AudioTrackItem;
@@ -247,7 +248,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
   const togglePlay = () => {
     if (!audioRef.current) return;
     if (!loopAudioUrl) {
-      alert('Berkas loop khusus belum tersedia untuk trek ini.');
+      notify.error('Berkas loop khusus belum tersedia untuk trek ini.');
       return;
     }
 
@@ -410,7 +411,7 @@ export const LoopShowcase: React.FC<LoopShowcaseProps> = ({
       const cleanTitle = (activeTrack.title || 'Track').replace(/[^a-zA-Z0-9_-]/g, '_');
       await exportAudioFile(renderedBuffer, `${cleanTitle}_Loop_${maxLoopCount}x`, format as any, { bitDepth: 24, mp3Kbps: 320 });
     } catch {
-      alert('Gagal mengekspor loop audio.');
+      notify.error('Gagal mengekspor loop audio.');
     } finally {
       setIsExporting(false);
     }

@@ -29,6 +29,7 @@ import {
   isArenaDifficulty,
   type ArenaDifficulty,
 } from '../../data/quiz/arenaDifficulty';
+import { confirmDialog, notify } from '../../services/notify';
 
 interface MultiplayerArenaModalProps {
   isOpen: boolean;
@@ -692,18 +693,18 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
   const handleReaction = (emoji: string) => socketRef.current?.emit('arena:reaction', { emoji });
 
   /** Keluar dari arena (modal tetap terbuka di layar sambutan). Saat bertanding, skor permainan ini tidak dicatat. */
-  const handleLeave = () => {
+  const handleLeave = async () => {
     if (arenaRef.current && iAmPlaying && isRunning(arenaRef.current.phase)) {
-      if (!window.confirm('Keluar dari Arena Global? Skor permainan yang sedang berjalan tidak akan dicatat.')) return;
+      if (!await confirmDialog('Keluar dari Arena Global? Skor permainan yang sedang berjalan tidak akan dicatat.')) return;
     }
     audioEngine.playClickSound();
     socketRef.current?.emit('arena:leave');
   };
 
   /** Menutup modal: bila sedang bertanding, keluar berarti skor permainan ini tidak dicatat. */
-  const handleClose = () => {
+  const handleClose = async () => {
     if (arenaRef.current && iAmPlaying && isRunning(arenaRef.current.phase)) {
-      if (!window.confirm('Keluar dari Arena Global? Skor permainan yang sedang berjalan tidak akan dicatat.')) return;
+      if (!await confirmDialog('Keluar dari Arena Global? Skor permainan yang sedang berjalan tidak akan dicatat.')) return;
     }
     if (arenaRef.current) socketRef.current?.emit('arena:leave');
     onCloseRef.current();
@@ -743,7 +744,7 @@ export const MultiplayerArenaModal: React.FC<MultiplayerArenaModalProps> = ({ is
       answers: log,
     };
     if (addSavedResult(entry)) setSavedGame(true);
-    else alert('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
+    else notify.error('Hasil gagal disimpan: penyimpanan lokal perangkat penuh atau tidak tersedia.');
   };
 
   if (!isOpen) return null;

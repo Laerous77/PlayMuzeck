@@ -3,6 +3,7 @@ import { adminFetch } from '../adminApi';
 import { SiteSettings } from '../../services/cms';
 import { useAdminRole, READONLY_MSG } from '../useAdminRole';
 import { AdminThemeManager } from '../components/AdminThemeManager';
+import { confirmDialog } from '../../services/notify';
 
 export const SettingsPage: React.FC = () => {
   const [settings, setSettings] = useState<SiteSettings | null>(null);
@@ -73,7 +74,7 @@ export const SettingsPage: React.FC = () => {
           <button
             onClick={async () => {
               if (!isSuperAdmin) { setStatus(READONLY_MSG); return; }
-              if (!confirm('Hapus semua event analitik?')) return;
+              if (!await confirmDialog('Hapus semua event analitik?')) return;
               await adminFetch('/api/admin/clear-analytics', { method: 'POST' });
               setStatus('Analitik dikosongkan.');
             }}

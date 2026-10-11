@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ShieldCheck, Trash2, UserPlus, Loader2, RefreshCw } from 'lucide-react';
 import { AdminAccount, AdminSessionError, grantAdmin, listAdmins, revokeAdmin } from '../adminApi';
+import { confirmDialog } from '../../services/notify';
 
 interface AdminsPageProps {
   isSuperAdmin: boolean;
@@ -83,7 +84,7 @@ export const AdminsPage: React.FC<AdminsPageProps> = ({ isSuperAdmin, currentEma
   };
 
   const handleRevoke = async (email: string) => {
-    if (!confirm(`Cabut akses admin dari ${email}?`)) return;
+    if (!await confirmDialog(`Cabut akses admin dari ${email}?`)) return;
     setError('');
     setStatus('');
     setRevoking(email);

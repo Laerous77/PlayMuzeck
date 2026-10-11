@@ -18,6 +18,7 @@ import {
 import { AudioTrackItem, AudioEntitlements } from '../../types';
 import { exportAudioFile } from '../../services/exporters';
 import { timeStretch } from '../../services/audioToolsDsp';
+import { notify } from '../../services/notify';
 
 interface FeaturedShowcaseProps {
   activeTrack: AudioTrackItem;
@@ -263,7 +264,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
     if (!audioRef.current) return;
 
     if (!activeTrack?.audioUrl) {
-      alert('Berkas audio master belum diunggah untuk trek ini di Developer Console.');
+      notify.error('Berkas audio master belum diunggah untuk trek ini di Developer Console.');
       return;
     }
 
@@ -329,7 +330,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
 
   const handleDownloadProcessedAudio = async (format: string) => {
     if (!activeTrack?.audioUrl) {
-      alert('Berkas audio belum tersedia.');
+      notify.error('Berkas audio belum tersedia.');
       return;
     }
     setShowDownloadMenu(false);
@@ -443,7 +444,7 @@ export const FeaturedShowcase: React.FC<FeaturedShowcaseProps> = ({
       await exportAudioFile(renderedBuffer, `${cleanTitle}_Master_DSP`, format as any, { bitDepth: 24, mp3Kbps: 320 });
     } catch (err) {
       console.error('Gagal render audio:', err);
-      alert('Terjadi kendala saat memproses berkas unduhan.');
+      notify.error('Terjadi kendala saat memproses berkas unduhan.');
     } finally {
       setIsExporting(false);
     }

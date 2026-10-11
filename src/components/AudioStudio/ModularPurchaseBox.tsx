@@ -16,6 +16,7 @@ import {
 import { AudioEntitlements, CartItem, AudioTrackItem } from '../../types';
 import { calculateAudioPricing } from '../../services/pricing';
 import { findCartConflict } from '../../services/cartRules';
+import { notify } from '../../services/notify';
 
 interface ModularPurchaseBoxProps {
   activeTrack: AudioTrackItem;
@@ -192,7 +193,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
       onSuccessToast?.(`${p.title} ditambahkan ke keranjang.`);
     } catch (err) {
       console.error('Error saat menambah produk ke keranjang:', err);
-      alert('Gagal menambahkan item ke keranjang.');
+      notify.error('Gagal menambahkan item ke keranjang.');
     }
   };
 
@@ -215,7 +216,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
       onSuccessToast?.(`${itemsToAdd.length} produk berhasil ditambahkan ke keranjang.`);
     } catch (err) {
       console.error('Error saat menambah beberapa item:', err);
-      alert('Gagal menambahkan item ke keranjang.');
+      notify.error('Gagal menambahkan item ke keranjang.');
     }
   };
 
@@ -231,7 +232,7 @@ export const ModularPurchaseBox: React.FC<ModularPurchaseBoxProps> = ({
       onSuccessToast?.(`Bundle berhasil ditambahkan ke keranjang!`);
     } catch (err) {
       console.error('Error bundle:', err);
-      alert('Gagal menambahkan bundle ke keranjang.');
+      notify.error('Gagal menambahkan bundle ke keranjang.');
     }
   };
 

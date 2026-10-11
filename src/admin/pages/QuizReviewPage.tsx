@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, RefreshCw, Loader2, Trash2, ScanSearch, ChevronDown, ChevronUp, Flag } from 'lucide-react';
 import { AdminSessionError, adminFetch } from '../adminApi';
+import { confirmDialog } from '../../services/notify';
 
 type Status = 'pending' | 'approved' | 'rejected';
 
@@ -135,8 +136,8 @@ export const QuizReviewPage: React.FC = () => {
     );
   const rescan = (id: string) =>
     act(id, 'Pemeriksaan ulang selesai.', () => adminFetch(`/api/admin/shared-quizzes/${encodeURIComponent(id)}/rescan`, { method: 'POST', body: '{}' }));
-  const remove = (id: string) => {
-    if (!window.confirm('Hapus kuis ini permanen? Skor peringkat yang berasal darinya ikut terhapus.')) return;
+  const remove = async (id: string) => {
+    if (!await confirmDialog('Hapus kuis ini permanen? Skor peringkat yang berasal darinya ikut terhapus.')) return;
     void act(id, 'Kuis dihapus.', () => adminFetch(`/api/admin/shared-quizzes/${encodeURIComponent(id)}`, { method: 'DELETE' }));
   };
 

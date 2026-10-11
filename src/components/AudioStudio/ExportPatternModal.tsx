@@ -10,6 +10,7 @@ import { createOfflineFx } from '../../services/padFxRuntime';
 import { FX_DEFS, FX_UI_ORDER, fxTailSec, isFxStateActive, type FxChain, type PadFxState } from '../../services/padFxModel';
 import { IntField } from './NumberFields';
 import { DRUM_LEVEL_GAIN, DRUM_LEVEL_MIDI, clampLevel } from './padModel';
+import { notify } from '../../services/notify';
 
 export type ExportScope = 'drum' | 'chord' | 'both';
 
@@ -471,7 +472,7 @@ export const ExportPatternModal: React.FC<ExportPatternModalProps> = ({
       onClose();
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : 'Gagal mengekspor berkas.';
-      alert(`Gagal mengekspor: ${errorMsg}`);
+      notify.error(`Gagal mengekspor: ${errorMsg}`);
     } finally {
       setIsExporting(false);
     }

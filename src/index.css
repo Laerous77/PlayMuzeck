@@ -212,6 +212,16 @@ html[data-mode="light"] { color-scheme: light; }
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Tailwind v4 membuat <button> bercursor default; kembalikan pointer untuk semua kontrol yang bisa diklik. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="range"]:not(:disabled) { cursor: pointer; }
+  button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+
   /* Hindari jeda ketuk-dua-kali di layar sentuh */
   button, a, summary, [role="button"], label { touch-action: manipulation; }
 
