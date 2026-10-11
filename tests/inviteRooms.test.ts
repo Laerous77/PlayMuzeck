@@ -80,6 +80,25 @@ ok('permainan undangan tuntas sampai podium', host.has('game:ended') || host.las
 ok('TIDAK ada pencatatan ke papan peringkat (onFinished Arena tidak terpanggil)', arenaFinished === 0);
 ok('TIDAK ada event game:leaderboard ke pemain', !host.has('game:leaderboard') && !guest.has('game:leaderboard'));
 
+// --- Kapasitas: 100 pemain di luar host (total 101) ---
+{
+  const capHost = io.connect('cap-host');
+  capHost.fire('room:create', { clientId: 'cap-host-client', name: 'HostKap', deckId: 'd', deckTitle: 'Kap', roundTimeSec: 10 });
+  const capCode = capHost.last('room:created').state.code;
+  let joined = 0;
+  for (let i = 1; i <= 100; i++) {
+    const s = io.connect();
+    s.fire('room:join', { clientId: `cap-guest-${String(i).padStart(4, '0')}`, code: capCode, name: `P${i}` });
+    if (s.last('room:joined')?.you) joined++;
+  }
+  ok('100 pemain di luar host semuanya bisa bergabung', joined === 100);
+  ok('total 101 orang (100 pemain + host)', capHost.last('room:update')?.players?.length === 101);
+  const extra = io.connect();
+  extra.fire('room:join', { clientId: 'cap-guest-0101', code: capCode, name: 'P101' });
+  ok('pemain ke-101 (di luar host) ditolak', !extra.last('room:joined') && String(extra.last('room:error') || '').includes('penuh'));
+  ok('jumlah pemain tetap 101 setelah penolakan', capHost.last('room:update')?.players?.length === 101);
+}
+
 const a = io.connect();
 a.fire('arena:join', { clientId: 'arena-client-9', name: 'Budi' });
 ok('Arena Global tetap jalan di server yang sama', Boolean(a.last('arena:joined')?.you));

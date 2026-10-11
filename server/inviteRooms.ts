@@ -7,6 +7,8 @@
 // kuis dikirim oleh host sehingga skornya tidak bisa dipercaya untuk peringkat. Hanya Arena Global (globalArena.ts)
 // yang dinilai server dan dicatat ke peringkat. Ruangan selalu bersifat undangan (hanya lewat kode), tidak ada daftar publik.
 //
+// Kapasitas: maksimal 100 pemain di luar host (total 101 orang bersama host).
+//
 // (Riwayat: v5 pemain dikenali lewat clientId stabil, host bisa menahan pemain / jeda / ganti host, v5.1 kunci jawaban
 // tidak dikirim bersama soal, kode ruangan 4 karakter acak, batas laju event.)
 
@@ -24,7 +26,9 @@ const GRACE_MS = 60_000;
 const MAX_ROOMS = 500;
 /** Reaksi yang diizinkan (urutan sama dengan tombol di klien). Selain ini ditolak. */
 const ALLOWED_EMOJIS = new Set(['🔥', '👏', '😂', '😭', '😮', '😞', '😡', '💀', '❤️']);
-const MAX_PLAYERS = 50;
+/** Batas pemain NON-host per ruangan. Host tidak dihitung, jadi total maksimal 101 orang (100 pemain + 1 host). */
+export const MAX_PLAYERS_EXCL_HOST = 100;
+export const MAX_ROOM_TOTAL = MAX_PLAYERS_EXCL_HOST + 1;
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // tanpa 0/O/1/I agar tidak membingungkan
 /** Ruangan tanpa satu pun pemain online selama ini akan dihapus. */
 const ROOM_IDLE_MS = 10 * 60_000;
@@ -191,6 +195,10 @@ function makeLimiter(max: number, windowMs: number) {
 
 const isHeldIn = (room: Room, p: Player) =>
   room.lockPlayers && isRunning(room) && !p.isHost && !(room.makeupActive && !p.participating);
+
+/** True bila jumlah pemain non-host sudah mencapai batas (host tidak dihitung). */
+const isRoomFull = (room: Room) =>
+  Array.from(room.players.values()).filter((x) => !x.isHost).length >= MAX_PLAYERS_EXCL_HOST;
 
 const isRunning = (room: Room) => room.status === 'in-game' || room.status === 'round-result';
 
@@ -584,7 +592,7 @@ export function attachInviteRooms(io: Server) {
       const room = findRoomOf(key);
       if (!room) {
         for (const r of rooms.values()) {
-          if (r.departed.get(key)?.reason === 'timeout' && isRunning(r) && r.players.size < MAX_PLAYERS) {
+          if (r.departed.get(key)?.reason === 'timeout' && isRunning(r) && !isRoomFull(r)) {
             const back = reviveDeparted(r, key, socket.id);
             if (back) return attach(r, back, 'room:resumed');
           }
@@ -697,7 +705,7 @@ export function attachInviteRooms(io: Server) {
         if (!room) return socket.emit('room:error', 'Kode ruangan tidak ditemukan.');
         if (room.banned.has(key) || (socket.data.userId && room.bannedUsers.has(socket.data.userId))) return socket.emit('room:error', 'Kamu dikeluarkan dari ruangan ini oleh host dan tidak bisa bergabung lagi.');
         // Boleh bergabung di lobby, atau di masa jeda antar soal (termasuk saat dijeda host). Tidak boleh saat soal sedang dijawab.
-        if (isRunning(room) && room.departed.has(key) && room.players.size < MAX_PLAYERS) {
+        if (isRunning(room) && room.departed.has(key) && !isRoomFull(room)) {
           const back = reviveDeparted(room, key, socket.id, payload);
           if (back) {
             const taken = new Set(Array.from(room.players.values()).filter((x) => x !== back).map((x) => x.name.toLowerCase()));
@@ -710,7 +718,7 @@ export function attachInviteRooms(io: Server) {
           }
         }
         if (room.status === 'in-game') return socket.emit('room:error', 'Soal sedang berjalan. Kamu bisa bergabung saat jeda antar soal.');
-        if (room.players.size >= MAX_PLAYERS) return socket.emit('room:error', 'Ruangan sudah penuh.');
+        if (isRoomFull(room)) return socket.emit('room:error', `Ruangan sudah penuh (maksimal ${MAX_PLAYERS_EXCL_HOST} pemain, di luar host).`);
         if (room.visibility === 'global' && room.password) {
           if (cleanText(payload.password, 32) !== room.password) {
             return socket.emit('room:error', 'Password ruangan salah.');
